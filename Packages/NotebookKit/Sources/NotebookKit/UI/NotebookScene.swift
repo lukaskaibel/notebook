@@ -108,6 +108,10 @@ public struct NotebookScene: Scene {
             CommandMenu("Go") {
                 Button { workspace.search.focus() } label: { Label("Search…", systemImage: "magnifyingglass") }
                     .keyboardShortcut("f", modifiers: .command)
+                Button { workspace.togglePalette() } label: { Label("Command Palette…", systemImage: "command") }
+                    .keyboardShortcut("k", modifiers: .command)
+                    .disabled(workspace.locations.isEmpty)
+                Divider()
                 Button { workspace.goBack() } label: { Label("Back", systemImage: "chevron.backward") }
                     .keyboardShortcut("[", modifiers: .command)
                     .disabled(!workspace.canGoBack)
@@ -208,6 +212,10 @@ struct GeneralSettings: View {
                     Text(workspace.index.isBuilding ? "Reading your files…" : "\(workspace.index.count) files")
                         .foregroundStyle(.secondary)
                 }
+                Toggle("Find text in pictures and handwriting", isOn: Bindable(NotebookSettings.shared).readsTextInPictures)
+                Text("Notebook reads the words in pictures, scanned PDFs and drawings on this Mac, in the background, so search finds them.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

@@ -46,6 +46,17 @@ enum DebugRemote {
         }
     }
 
+    /// Search results on one line: each section's title, then its items with where they are or the line found.
+    private static func describe(_ sections: [SearchSection]) -> String {
+        sections.map { section in
+            let items = section.items.map { item -> String in
+                let detail = item.snippet ?? item.place
+                return item.title + (detail.map { " (\($0))" } ?? "")
+            }
+            return "[\(section.title ?? "")] " + items.joined(separator: " | ")
+        }.joined(separator: " ")
+    }
+
     static func log(_ text: String) {
         guard let path = UserDefaults.standard.string(forKey: "debugCommandFile") else { return }
         let url = URL(fileURLWithPath: path + ".log")
@@ -404,15 +415,54 @@ enum DebugRemote {
             default: break
             }
             log("set \(argument)")
-        case "palette":
+        case "searchfocus":
+            // searchfocus: the caret in the toolbar's search field, as ⌘F puts it there.
             workspace?.search.focus()
+        case "palette":
+            // palette: opens or closes ⌘K; palette rows: what it lists.
+            if argument == "rows" {
+                log("palette \(String(describing: workspace?.palette)): " + describe(workspace?.paletteSearch.sections ?? []))
+            } else {
+                workspace?.togglePalette()
+            }
         case "search":
-            // search <text>: what the suggestions menu lists for it.
+            // search <text>: what the toolbar's suggestions menu lists for it, once the search in the background is done.
             if let search = workspace?.search {
                 search.field.stringValue = argument
+                search.session.update(argument)
                 let start = CACurrentMediaTime()
-                let sections = search.sections(for: argument)
-                log(String(format: "search %@ (%.1f ms): ", argument, (CACurrentMediaTime() - start) * 1000) + sections.map { "[\($0.title ?? "")] " + $0.items.map { $0.title + ($0.secondaryTitle.map { " (\($0))" } ?? "") }.joined(separator: " | ") }.joined(separator: " "))
+                func report() {
+                    guard !search.session.isSearching else {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.005, execute: report)
+                        return
+                    }
+                    log(String(format: "search %@ (%.1f ms, in the background %.1f ms): ", argument, (CACurrentMediaTime() - start) * 1000,
+                               search.session.lastDuration * 1000) + describe(search.session.sections))
+                }
+                report()
+            }
+        case "searchtime":
+            // searchtime <text>: how long search takes for every letter of the text, typed one after another.
+            guard let corpus = workspace?.index.corpus else { break }
+            var line = "searchtime (\(corpus.items.count) files, \(corpus.documents.count) texts):"
+            for end in 1...max(1, argument.count) {
+                let typed = String(argument.prefix(end))
+                guard let query = SearchCorpus.Query(typed) else { continue }
+                let start = CACurrentMediaTime()
+                let results = corpus.search(query)
+                line += String(format: " %@=%.1fms(%d+%d+%d)", typed, (CACurrentMediaTime() - start) * 1000, results.files.count, results.texts.count, results.pictures.count)
+            }
+            log(line)
+        case "index":
+            // index: how the index was built and kept since launch, and what search has now.
+            guard let index = workspace?.index else { break }
+            log("index files=\(index.count) building=\(index.isBuilding) search=\(index.corpus.items.count) | " + index.history.joined(separator: " | "))
+        case "recognizer":
+            // recognizer [file]: what reading text in pictures is doing, or what it read in a file.
+            if argument.isEmpty {
+                log("recognizer \(workspace?.recognizer.status ?? "")")
+            } else {
+                log("recognizer \(argument): \(workspace?.recognizer.text(for: argument) ?? "nothing")")
             }
         case "searchfield":
             // searchfield: where the search field, its buttons and the text you type in it are, in the field's points.
@@ -553,8 +603,8 @@ enum DebugRemote {
         case "searchpick":
             // searchpick <n>: chooses the nth suggestion, counted over all sections.
             if let search = workspace?.search, let n = numbers.first.map(Int.init) {
-                let items = search.sections(for: search.field.stringValue).flatMap(\.items)
-                if let item = items[safe: n] { search.run(item.representedValue) }
+                let items = search.session.sections.flatMap(\.items)
+                if let item = items[safe: n] { search.run(item.result) }
             }
         case "newnote":
             workspace?.newNote()
@@ -600,7 +650,7 @@ enum DebugRemote {
         case "pdfinfo":
             // pdfinfo: how far the open PDF is scrolled, its zoom and its insets.
             if let pdf = window?.contentView.flatMap(pdfView), let scrollView = pdf.documentView?.enclosingScrollView {
-                log("pdf clip=\(scrollView.contentView.bounds) scale=\(pdf.scaleFactor) auto=\(pdf.autoScales) insets=\(scrollView.contentInsets) document=\(scrollView.documentView?.frame ?? .zero)")
+                log("pdf clip=\(scrollView.contentView.bounds) scale=\(pdf.scaleFactor) auto=\(pdf.autoScales) insets=\(scrollView.contentInsets) document=\(scrollView.documentView?.frame ?? .zero) selection=\(pdf.currentSelection?.string ?? "none")")
             }
         case "pdfscroll":
             // pdfscroll <y>: scrolls the open PDF, in its pages' points from the top.

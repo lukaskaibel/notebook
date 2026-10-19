@@ -3,16 +3,24 @@ import AppKit
 import SwiftUI
 
 /// The search field in the toolbar: the system's search field with the system's suggestions menu below it. It finds
-/// files by name, then text in notes and PDFs; ⌘F puts the caret in it, arrow keys and Return pick a result.
+/// files and folders by name, headings, and words in notes, PDFs and pictures; ⌘F puts the caret in it, arrow keys and
+/// Return pick a result. The search runs in the background (`SearchSession`), and the menu gets its results when they
+/// are there, so typing never waits for it.
 @MainActor
 final class SearchController: NSObject, NSTextSuggestionsDelegate, NSSearchFieldDelegate {
     typealias SuggestionItemType = SearchResult
 
     let field = ToolbarSearchField()
     private unowned let workspace: Workspace
+    let session: SearchSession
+    /// The menu's request for what was typed last, answered when its results are there.
+    private var respond: ((ItemResponse) -> Void)?
 
     init(workspace: Workspace) {
         self.workspace = workspace
+        session = SearchSession(workspace: workspace)
+        // What fits in a menu below the toolbar.
+        session.limits = SearchCorpus.Limits(files: 5, folders: 3, headings: 3, texts: 5, pictures: 3)
         super.init()
         field.placeholderString = "Search"
         // The toolbar's glass capsule is the field's shape.
@@ -25,6 +33,7 @@ final class SearchController: NSObject, NSTextSuggestionsDelegate, NSSearchField
         field.delegate = self
         field.suggestionsDelegate = self
         field.setAccessibilityLabel("Search notes and files")
+        session.onResults = { [weak self] sections in self?.answer(sections) }
     }
 
     /// ⌘F, also from a note in a window of its own.
@@ -38,9 +47,20 @@ final class SearchController: NSObject, NSTextSuggestionsDelegate, NSSearchField
     // MARK: - Suggestions
 
     func textField(_ textField: NSTextField, provideUpdatedSuggestions responseHandler: @escaping (ItemResponse) -> Void) {
-        var response = ItemResponse(itemSections: sections(for: textField.stringValue))
+        respond = responseHandler
+        if session.query == textField.stringValue, !session.isSearching {
+            answer(session.sections)
+        } else {
+            session.update(textField.stringValue)
+        }
+    }
+
+    private func answer(_ sections: [SearchSection]) {
+        // Only while you are in the field: files changing later mustn't bring the menu back.
+        guard let respond, session.query == field.stringValue, field.currentEditor() != nil else { return }
+        var response = ItemResponse(itemSections: Self.menuSections(sections))
         response.preferredHighlight = .firstSelectableItem
-        responseHandler(response)
+        respond(response)
     }
 
     func textField(_ textField: NSTextField, textCompletionFor item: Item) -> String? {
@@ -52,21 +72,21 @@ final class SearchController: NSObject, NSTextSuggestionsDelegate, NSSearchField
         run(item.representedValue)
     }
 
-    func sections(for text: String) -> [ItemSection] {
-        SearchSection.sections(for: text, in: workspace).map { section in
+    static func menuSections(_ sections: [SearchSection]) -> [ItemSection] {
+        sections.map { section in
             let items = section.items.map { found -> Item in
-                guard let kind = found.kind else {
+                guard found.kind != nil else {
                     var create = NSSuggestionItem(representedValue: found.result, title: found.title)
                     create.image = NSImage(systemSymbolName: "square.and.pencil", accessibilityDescription: nil)
                     return create
                 }
                 guard let snippet = found.snippet else {
-                    return item(found.result, title: found.title, detail: found.place, kind: kind, inCloud: found.isInCloud)
+                    return item(found, detail: found.place)
                 }
-                var result = item(found.result, title: found.title, detail: nil, kind: kind)
+                var result = item(found, detail: nil)
                 // The words you searched for in bold.
                 let text = NSMutableAttributedString(string: snippet)
-                if let match = found.match {
+                for match in found.matches {
                     text.addAttribute(.font, value: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold), range: NSRange(match, in: snippet))
                 }
                 result.attributedSecondaryTitle = try? AttributedString(text, including: \.appKit)
@@ -77,12 +97,13 @@ final class SearchController: NSObject, NSTextSuggestionsDelegate, NSSearchField
         }
     }
 
-    private func item(_ result: SearchResult, title: String, detail: String?, kind: FileKind, inCloud: Bool = false) -> Item {
-        var item = NSSuggestionItem(representedValue: result, title: title)
+    private static func item(_ found: SearchItem, detail: String?) -> Item {
+        var item = NSSuggestionItem(representedValue: found.result, title: found.title)
         item.secondaryTitle = detail
-        let symbol = inCloud ? "icloud.and.arrow.down" : kind.symbol
-        let tint: NSColor = kind == .folder ? .controlAccentColor : kind == .note || kind == .other ? .secondaryLabelColor : kind.tint
-        item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+        let kind = found.kind ?? .other
+        let tint: NSColor = found.symbol != nil ? .secondaryLabelColor : kind == .folder ? .controlAccentColor
+            : kind == .note || kind == .other ? .secondaryLabelColor : kind.tint
+        item.image = NSImage(systemSymbolName: found.image, accessibilityDescription: nil)?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(paletteColors: [tint]))
         return item
     }
@@ -90,27 +111,25 @@ final class SearchController: NSObject, NSTextSuggestionsDelegate, NSSearchField
     // MARK: - Picking
 
     func run(_ result: SearchResult) {
-        switch result {
-        case .file(let url):
-            workspace.open(url)
-        case .newNote(let title):
-            workspace.newNote(title: title)
-        }
         leave()
+        workspace.open(result)
+        // Into what you picked, so you type there.
+        if workspace.note != nil { field.window?.makeFirstResponder(workspace.editor.textView) }
     }
 
-    /// Done searching: the field empties and the caret goes to the note, or out of the field when a PDF or
-    /// picture is open, so you type into what you picked.
+    /// Done searching: the field empties and the caret goes out of it.
     private func leave() {
         field.stringValue = ""
+        session.clear()
+        respond = nil
         field.window?.makeFirstResponder(workspace.note != nil ? workspace.editor.textView : nil)
     }
 
     /// Return with no result chosen opens the best one, as the first suggestion would.
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
         if commandSelector == #selector(NSResponder.insertNewline(_:)),
-           let first = sections(for: field.stringValue).first(where: { !$0.items.isEmpty })?.items.first {
-            run(first.representedValue)
+           let first = session.sections.first(where: { !$0.items.isEmpty })?.items.first {
+            run(first.result)
             return true
         }
         if commandSelector == #selector(NSResponder.cancelOperation(_:)) {

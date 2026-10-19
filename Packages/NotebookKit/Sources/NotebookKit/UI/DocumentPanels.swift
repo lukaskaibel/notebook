@@ -53,7 +53,7 @@ struct EmptyState: View {
             Label("No Note Open", systemImage: "doc.text")
         } description: {
             #if os(macOS)
-            Text("Pick a note in the sidebar, press ⌘N for a new one, or ⌘F to search.")
+            Text("Pick a note in the sidebar, press ⌘N for a new one, ⌘F to search or ⌘K to run a command.")
             #else
             Text("Pick a note in the sidebar, or start a new one.")
             #endif

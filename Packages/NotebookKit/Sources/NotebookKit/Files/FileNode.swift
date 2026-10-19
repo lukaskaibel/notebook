@@ -11,8 +11,25 @@ public enum FileKind: Equatable, Sendable {
     case folder, note, pdf, image, video, audio, other
 
     init(url: URL, isDirectory: Bool) {
-        if isDirectory { self = .folder; return }
-        switch url.pathExtension.lowercased() {
+        self.init(pathExtension: isDirectory ? nil : url.pathExtension)
+    }
+
+    /// From a file's name, as from its address, without making one.
+    init(name: String, isDirectory: Bool) {
+        let dot = name.lastIndex(of: ".")
+        self.init(pathExtension: isDirectory ? nil : dot.map { $0 == name.startIndex ? "" : String(name[name.index(after: $0)...]) } ?? "")
+    }
+
+    /// A file's name without its extension, as `URL.deletingPathExtension` leaves it.
+    static func withoutExtension(_ name: String) -> String {
+        guard let dot = name.lastIndex(of: "."), dot != name.startIndex else { return name }
+        return String(name[..<dot])
+    }
+
+    /// A folder for nil.
+    private init(pathExtension: String?) {
+        guard let pathExtension else { self = .folder; return }
+        switch pathExtension.lowercased() {
         case "md", "markdown": self = .note
         case "pdf": self = .pdf
         case "png", "jpg", "jpeg", "gif", "heic", "heif", "webp", "tiff", "tif", "bmp", "svg", "raw", "dng": self = .image

@@ -318,21 +318,22 @@ struct MoveSheet: View {
     }
 }
 
-/// The search results as a list's content: Recent with an empty field, then Files, In Notes and PDFs, and New Note.
+/// The search results as a list's content: Recent with an empty field, then Files, Folders, Headings, In Notes and
+/// PDFs, In Pictures and Drawings, and New Note. They come from a search in the background, so typing never waits: the
+/// screen with the search field hands what is typed to `workspace.searchSession`.
 struct SearchResultsList: View {
     let workspace: Workspace
     let query: String
     var open: (SearchResult) -> Void
 
     var body: some View {
-        let sections = SearchSection.sections(for: query, in: workspace)
-        ForEach(sections) { section in
+        ForEach(workspace.searchSession.sections) { section in
             Section {
                 ForEach(section.items) { item in
                     Button { open(item.result) } label: { row(item) }
                         .buttonStyle(.plain)
                         .contextMenu {
-                            if case .file(let url) = item.result { FileActions(workspace: workspace, url: url) }
+                            if let url = item.result.url { FileActions(workspace: workspace, url: url) }
                         }
                 }
             } header: {
@@ -348,7 +349,7 @@ struct SearchResultsList: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.title).lineLimit(1)
                     if let snippet = item.snippet {
-                        Text(highlighted(snippet, match: item.match))
+                        Text(highlighted(snippet, matches: item.matches))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
@@ -357,8 +358,9 @@ struct SearchResultsList: View {
                     }
                 }
             } icon: {
-                Image(systemName: item.isInCloud ? "icloud.and.arrow.down" : kind.symbol)
-                    .foregroundStyle(kind == .folder ? Color.accentColor : kind == .note || kind == .other ? Color.secondary : Color.theme(kind.tint))
+                Image(systemName: item.image)
+                    .foregroundStyle(item.symbol != nil ? Color.secondary : kind == .folder ? Color.accentColor
+                                     : kind == .note || kind == .other ? Color.secondary : Color.theme(kind.tint))
             }
             .contentShape(Rectangle())
         } else {
@@ -369,9 +371,10 @@ struct SearchResultsList: View {
     }
 
     /// The words you searched for, in the colour of the text.
-    private func highlighted(_ snippet: String, match: Range<String.Index>?) -> AttributedString {
+    private func highlighted(_ snippet: String, matches: [Range<String.Index>]) -> AttributedString {
         var text = AttributedString(snippet)
-        if let match, let range = Range(match, in: text) {
+        for match in matches {
+            guard let range = Range(match, in: text) else { continue }
             text[range].foregroundColor = .primary
             text[range].font = .subheadline.weight(.semibold)
         }

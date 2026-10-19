@@ -85,7 +85,7 @@ struct DocumentScreen: View {
                     NoteWaitingView(note: workspace.note)
                 }
             }
-        case .pdf: PDFFileView(url: url).id(url)
+        case .pdf: PDFFileView(url: url, find: workspace.find(in: url)).id(url)
         case .image: PictureFileView(url: url).id(url)
         case .video: VideoFileView(url: url).id(url)
         default: QuickLookView(url: url).id(url).ignoresSafeArea(.container, edges: .bottom)

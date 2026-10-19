@@ -37,6 +37,14 @@ struct PhoneBrowser: View {
                     }
                 }
         }
+        .overlay {
+            // ⌘K, from a keyboard: an iPad window as narrow as a phone shows these screens too.
+            PaletteHost(workspace: workspace, actions: PaletteActions(
+                openSettings: { _ in workspace.settingsRequest += 1 },
+                newFolder: { newFolderIn = workspace.folderForNewNote ?? workspace.locations.first?.url },
+                addLocation: { workspace.locationRequest += 1 }
+            ), top: 60)
+        }
         .modifier(FileAlerts(workspace: workspace, newFolderIn: $newFolderIn))
         .onAppear {
             // Back where you were: in the note you had open, with its folders behind it.
@@ -171,6 +179,7 @@ struct HomeScreen: View {
         }
         .navigationTitle("Notebook")
         .searchable(text: $query, isPresented: $isSearching, prompt: "Search")
+        .onChange(of: query, initial: true) { _, query in workspace.searchSession.update(query) }
         .onSubmit(of: .search) { submitSearch() }
         .refreshable { workspace.refresh(thoroughly: true) }
         .toolbar {
@@ -196,6 +205,8 @@ struct HomeScreen: View {
         }
         .sheet(isPresented: $showsSettings) { TouchSettings(workspace: workspace) }
         .folderImporter(isPresented: $addsLocation, workspace: workspace)
+        .onChange(of: workspace.settingsRequest) { _, _ in showsSettings = true }
+        .onChange(of: workspace.locationRequest) { _, _ in addsLocation = true }
         #if DEBUG
         .onReceive(NotificationCenter.default.publisher(for: .notebookDebug)) { notification in
             let argument = notification.userInfo?["argument"] as? String ?? ""
@@ -238,15 +249,12 @@ struct HomeScreen: View {
     }
 
     private func open(_ result: SearchResult) {
-        switch result {
-        case .file(let url): workspace.open(url)
-        case .newNote(let title): workspace.newNote(title: title)
-        }
+        workspace.open(result)
     }
 
     /// Return opens the best match, as on the Mac.
     private func submitSearch() {
-        guard let first = SearchSection.sections(for: query, in: workspace).first?.items.first else { return }
+        guard let first = workspace.searchSession.sections.first?.items.first else { return }
         open(first.result)
     }
 }
@@ -315,8 +323,9 @@ struct FolderScreen: View {
         .animation(.default, value: children.map(\.url))
         .navigationTitle(workspace.folderName(page.url))
         .searchable(text: $query, isPresented: $isSearching, prompt: "Search")
+        .onChange(of: query, initial: true) { _, query in workspace.searchSession.update(query) }
         .onSubmit(of: .search) {
-            if let first = SearchSection.sections(for: query, in: workspace).first?.items.first { open(first.result) }
+            if let first = workspace.searchSession.sections.first?.items.first { open(first.result) }
         }
         .refreshable { await workspace.readAgain(page.url) }
         .sheet(item: $moving) { file in MoveSheet(workspace: workspace, url: file.url) }
@@ -360,9 +369,10 @@ struct FolderScreen: View {
     }
 
     private func open(_ result: SearchResult) {
-        switch result {
-        case .file(let url): workspace.open(url)
-        case .newNote(let title): workspace.newNote(in: page.url, title: title)
+        if case .newNote(let title) = result {
+            workspace.newNote(in: page.url, title: title)
+        } else {
+            workspace.open(result)
         }
     }
 }

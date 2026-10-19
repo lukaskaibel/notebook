@@ -49,6 +49,19 @@ versions follow [semantic versioning](https://semver.org).
   they follow it when you rename or move it in Notebook, and reach your other devices through iCloud.
 - On iPhone and iPad, touch and hold the bar above the keyboard, or tap the sliders after its last tool, to choose its
   tools and their order right there, without going to Settings.
+- ⌘K is back: a field over the window, as Spotlight's, that finds everything search finds and runs commands. Commands
+  for the note that is open (Rename, Move To…, Duplicate, Add to Favorites, Remind Me…, Drawing, Copy Link, Show in
+  Finder, Export, Print, Move to Trash), the text styles, New Note and New Folder, Add Location, Back and Forward, the
+  sidebar, the outline, the text size, the typeface and Settings, each with the keys that do it without ⌘K. A few letters
+  find a command; `>` first lists only commands. Move To… lists the folders to move into as you type. On an iPad with a
+  keyboard too.
+- Search finds every kind of thing: folders, the headings in notes, words in any order (with the notes that have them
+  together first), the text in pictures in your folders and in notes, in scanned PDFs, and handwriting in drawings.
+  Pictures, scans and drawings are read on the device in the background, once each; Settings › General › Search (on
+  iPhone and iPad, Settings › Search) turns it off.
+- A note found by search opens where the words are, scrolled there with them selected, and on the Mac they bounce as
+  Find does in Safari; a PDF opens at the page with them, a heading where it is, and a picture in a note with it
+  selected.
 
 ### Changed
 
@@ -58,6 +71,9 @@ versions follow [semantic versioning](https://semver.org).
   moment later, together with the folders you had open; a folder opens straight away and fills in as it is read; and
   iCloud syncing thousands of files doesn't hold up the window. Folders on screen are read ahead, so they usually open
   with everything already in them.
+- Search has every note and file the moment Notebook opens: what it read is kept between launches, and after launch it
+  reads only the notes and PDFs that changed since. Reading all your files the first time is several times quicker
+  too.
 - On iPhone, a folder that takes a while to read shows a spinner instead of "No Notes".
 - A PDF or picture that is read at once shows at once, as in Preview, instead of fading in; it fades in only after a
   wait you could see, such as a download from iCloud.
@@ -103,6 +119,12 @@ versions follow [semantic versioning](https://semver.org).
 - Opening a note in a location with thousands of folders also waited for Move To to list them all, in the File menu
   and the ⋯ menu, every time. Move To now lists the folders when you open it, indented as in the sidebar's menu.
 - Typing in search with a whole iCloud Drive took most of a second for every letter; it now keeps up with your typing.
+- Search could still lag behind your typing in a large iCloud Drive, as every letter went through every file before
+  the window could go on. It now runs in the background on every core, a few milliseconds a letter, and the results
+  stay until the new ones are there. While Notebook reads your files after launch, search finds what it has read so
+  far instead of nothing.
+- Lines found by search showed their Markdown, such as a picture's address or a table's bars; they now read as in the
+  note.
 - A new folder lost its name field in the sidebar a moment after it came up, so it kept the name New Folder. Renaming
   in the sidebar is no longer ended by changes in other folders either; they show once the name is in.
 - After renaming the folder selected in the sidebar, ⌘N made the folder again under its old name for the new note. A
