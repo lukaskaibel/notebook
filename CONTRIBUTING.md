@@ -40,6 +40,10 @@ Every pull request is reviewed and merged by the maintainer; nothing lands on `m
   change with `-NotebookSlowFolders 2`, `-NotebookSlowFiles 2` and `-NotebookSlowWrites 2`. Nothing that happens as a note opens or as you type goes
   through every file or folder either: a whole iCloud Drive has a hundred thousand. Look things up by name
   (`SearchIndex.resolve`), keep sorted lists ready, and make long menus when they open (`UI/MoveToSubmenu.swift`).
+  Search goes through every file, so it runs in the background on a copy made for it (`Index/SearchCorpus.swift`),
+  and each letter typed stops the search before (`SearchSession`). The index is kept between launches
+  (`Index/KeptIndex.swift`), so search has everything at once and the launch reads only what changed; time it on a big
+  library with `NOTEBOOK_BENCH_LIBRARY=<folder> swift test --filter SearchBenchmarkTests`.
 - **Markdown is a file format, not the interface.** Pictures, links and embeds are objects; marks show only next to
   the caret.
 - **Use what the Mac has.** System components and layout (split view, source list, inspector, toolbar, search field,

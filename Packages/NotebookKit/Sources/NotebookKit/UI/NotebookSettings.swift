@@ -120,6 +120,14 @@ public final class NotebookSettings {
         }
     }
 
+    /// Search finds the words in pictures, scans and handwriting, which Notebook reads in the background.
+    public var readsTextInPictures: Bool {
+        didSet {
+            UserDefaults.standard.set(readsTextInPictures, forKey: "readsTextInPictures")
+            Workspace.shared.readTextInPictures(readsTextInPictures)
+        }
+    }
+
     #if os(iOS)
     /// The tools in the bar above the keyboard, in their order.
     var writingBarTools: [WritingTool] {
@@ -134,6 +142,7 @@ public final class NotebookSettings {
         dimsOtherFiles = defaults.object(forKey: "dimsOtherFiles") as? Bool ?? true
         foldersFirst = defaults.object(forKey: "foldersFirst") as? Bool ?? true
         headingMarks = HeadingMarks(rawValue: defaults.string(forKey: "headingMarks") ?? "") ?? .margin
+        readsTextInPictures = defaults.object(forKey: "readsTextInPictures") as? Bool ?? true
         #if os(iOS)
         writingBarTools = defaults.stringArray(forKey: "writingBarTools")?.compactMap(WritingTool.init(rawValue:)) ?? WritingTool.standard
         #endif

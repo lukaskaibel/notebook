@@ -7,7 +7,8 @@ import PDFKit
 import Synchronization
 
 /// Every file in the locations, with the text of every note (and of PDFs), for search, `[[` and resolving links. Built in
-/// the background when the app starts and kept up to date as files change.
+/// the background when the app starts and kept up to date as files change. It is kept between launches
+/// (`KeptIndex`): search has everything at once, and building it reads only what changed since.
 @MainActor
 @Observable
 public final class SearchIndex {
@@ -20,6 +21,8 @@ public final class SearchIndex {
         public var place: String
         public var locationID: UUID
         public var modified: Date?
+        /// In bytes, with `modified` what tells whether a file changed since it was read; nil for folders.
+        public var size: Int?
         public var isInCloud: Bool
         /// The text, for notes and PDFs; nil for other files.
         public var text: String?
@@ -30,15 +33,33 @@ public final class SearchIndex {
         /// Its address and its folder's, as keys.
         var path: String
         var folder: String
+        /// A note's headings, for search to find a section by.
+        var headings: [Heading] = []
+        /// The pictures and files a note shows from its `.assets` folder, by name: the text read in them is found as
+        /// the note's.
+        var assets: [String] = []
+        /// A PDF's pages without text of their own, such as scanned ones, counted from 0: their text is read from
+        /// their pictures.
+        var pagesWithoutText: [Int] = []
+
+        /// Whether this entry is still right for a file of this kind, date and size: then reading the file again would
+        /// give the same, except a note's text that couldn't be read before (only in iCloud then, now here).
+        func isCurrent(kind: FileKind, modified: Date?, size: Int?, inCloud: Bool) -> Bool {
+            guard kind == self.kind, let modified, modified == self.modified, size == self.size else { return false }
+            if kind == .note, text == nil, !inCloud, (size ?? 0) < SearchIndex.largestNote { return false }
+            return true
+        }
+
+        /// The same file as it was: what search, links and Move To show of it is the same.
+        func isSame(as other: Entry) -> Bool {
+            kind == other.kind && modified == other.modified && size == other.size && isInCloud == other.isInCloud
+                && (text == nil) == (other.text == nil) && locationID == other.locationID && place == other.place
+        }
     }
 
-    public struct TextHit {
-        public var entry: Entry
-        public var snippet: String
-        /// Where the match is in `snippet`.
-        public var match: Range<String.Index>?
-        /// For a PDF, the page with the match.
-        public var page: Int?
+    public struct Heading: Sendable, Equatable {
+        public var level: Int
+        public var title: String
     }
 
     /// Every file, by its address. Only the main thread changes it, and only by the few files that changed: everything
@@ -53,6 +74,17 @@ public final class SearchIndex {
     @ObservationIgnored private var folderPaths: Set<String> = []
     /// Counts changes, for what shows the index to update.
     private(set) var version = 0
+    /// What search goes through: made again in the background after changes, so it can be a moment behind.
+    @ObservationIgnored private(set) var corpus = SearchCorpus.empty
+    @ObservationIgnored private var corpusTask: Task<Void, Never>?
+    @ObservationIgnored private var corpusWanted = false
+    /// Searches showing their results, to be run again on a new corpus.
+    @ObservationIgnored private var corpusObservers: [WeakSearch] = []
+    /// The text read in pictures, scans and drawings, by the file's address (for a picture in a note,
+    /// `folder/.assets/name`).
+    @ObservationIgnored var recognized: [String: PictureText] = [:] {
+        didSet { changed() }
+    }
     /// Counts the times folders came or went, which is far less often than files change.
     private(set) var folderVersion = 0
     /// Called when folders came or went.
@@ -63,7 +95,9 @@ public final class SearchIndex {
     /// Called when folders have been read again: links to what changed in them resolve now.
     @ObservationIgnored var onRefreshed: (() -> Void)?
     /// Folders hidden from the sidebar: what is in them stays out of search, `[[` and Move To, but links still find it.
-    @ObservationIgnored var hiddenPaths: [String] = []
+    @ObservationIgnored var hiddenPaths: [String] = [] {
+        didSet { if hiddenPaths != oldValue { changed() } }
+    }
     @ObservationIgnored private var generation = 0
     /// Folders that changed while the index was being built, read again once it is.
     @ObservationIgnored private var changedWhileBuilding = Set<URL>()
@@ -73,11 +107,18 @@ public final class SearchIndex {
     @ObservationIgnored private var refreshes = 0
     /// A folder went while folders were merged in (one replacing it keeps their number the same).
     @ObservationIgnored private var foldersChanged = false
+    /// Whether the files have been read since launch: until then, the index kept from the last run stands in.
+    @ObservationIgnored private var hasBuilt = false
+    /// Notes larger than this aren't read: a log or a dump, not something written.
+    nonisolated static let largestNote = 4_000_000
 
     public var count: Int {
         _ = version
         return byPath.count
     }
+
+    /// Every file by its address, for work in the background.
+    var byPathSnapshot: [String: Entry] { byPath }
 
     /// Every file, in no particular order.
     public var entries: [Entry] {
@@ -86,14 +127,86 @@ public final class SearchIndex {
     }
 
     nonisolated static func fold(_ string: String) -> String {
-        var folded = string.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
-        // Made Swift's own, not left as Foundation's string, so search goes through it without copying it each time.
-        folded.makeContiguousUTF8()
-        return folded
+        contiguous(string.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil))
+    }
+
+    /// Made Swift's own, not left as Foundation's string, so search goes through its bytes without copying them.
+    nonisolated static func contiguous(_ string: String) -> String {
+        var string = string
+        string.makeContiguousUTF8()
+        return string
+    }
+
+    /// One change more: what shows the index updates, and search gets a new corpus.
+    private func changed() {
+        version += 1
+        scheduleCorpus()
     }
 
     // MARK: - Building
 
+    /// Every file by its address, and the lookups made from them: made in the background, put in place at once.
+    private struct Lookups: Sendable {
+        var byPath: [String: Entry] = [:]
+        var byFolder: [String: Set<String>] = [:]
+        var byName: [String: Set<String>] = [:]
+        var folderPaths: Set<String> = []
+
+        init() {}
+
+        /// Made from many entries at once, each lookup on a core of its own.
+        init(all entries: [Entry]) {
+            let paths = Mutex<[String: Entry]>([:]), folders = Mutex<[String: Set<String>]>([:])
+            let names = Mutex<[String: Set<String>]>([:]), allFolders = Mutex<Set<String>>([])
+            DispatchQueue.concurrentPerform(iterations: 3) { part in
+                switch part {
+                case 0:
+                    var byPath = [String: Entry](minimumCapacity: entries.count)
+                    for entry in entries { byPath[entry.path] = entry }
+                    paths.withLock { $0 = byPath }
+                case 1:
+                    var byFolder: [String: Set<String>] = [:]
+                    for entry in entries { byFolder[entry.folder, default: []].insert(entry.path) }
+                    folders.withLock { $0 = byFolder }
+                default:
+                    var byName = [String: Set<String>](minimumCapacity: entries.count)
+                    var folderPaths: Set<String> = []
+                    for entry in entries {
+                        for key in SearchIndex.nameKeys(of: entry) { byName[key, default: []].insert(entry.path) }
+                        if entry.kind == .folder { folderPaths.insert(entry.path) }
+                    }
+                    names.withLock { $0 = byName }
+                    allFolders.withLock { $0 = folderPaths }
+                }
+            }
+            byPath = paths.withLock { $0 }
+            byFolder = folders.withLock { $0 }
+            byName = names.withLock { $0 }
+            folderPaths = allFolders.withLock { $0 }
+        }
+
+        mutating func add(_ entry: Entry) {
+            byPath[entry.path] = entry
+            byFolder[entry.folder, default: []].insert(entry.path)
+            for key in SearchIndex.nameKeys(of: entry) { byName[key, default: []].insert(entry.path) }
+            if entry.kind == .folder { folderPaths.insert(entry.path) }
+        }
+    }
+
+    /// Puts new lookups in place of the old, which go away on another thread: freeing the text of thousands of notes
+    /// takes a while too.
+    private func put(_ lookups: Lookups) {
+        let old = (byPath, byFolder, byName, folderPaths)
+        DispatchQueue.global(qos: .background).async { withExtendedLifetime(old) {} }
+        byPath = lookups.byPath
+        byFolder = lookups.byFolder
+        byName = lookups.byName
+        folderPaths = lookups.folderPaths
+    }
+
+    /// Reads every folder of the locations in the background, and puts what it found in place of what the index had.
+    /// A file as it was when the index last read it (by its date and size) isn't read again: at launch, the index kept
+    /// from the last run is shown at once and only what changed since is read.
     func rebuild(_ locations: [Location]) {
         generation += 1
         let generation = generation
@@ -102,35 +215,65 @@ public final class SearchIndex {
         changedWhileBuilding = []
         pdfQueue = []
         let roots = locations.flatMap { location in location.folders.map { ($0.url, $0.place, location.id) } }
+        let hidden = hiddenPaths, recognized = self.recognized, version = self.version
+        let current = byPath
+        let kept = hasBuilt ? nil : self.kept
+        #if DEBUG
+        let started = CACurrentMediaTime()
+        let notesRead = Self.notesRead.load(ordering: .relaxed)
+        #endif
         Task.detached(priority: .utility) {
-            var byPath: [String: Entry] = [:]
-            var byFolder: [String: Set<String>] = [:]
-            var byName: [String: Set<String>] = [:]
-            var folderPaths: Set<String> = []
+            var known = current
+            if let kept, let lookups = await kept.value {
+                known = lookups.byPath
+                // Anything read since launch is newer.
+                for (path, entry) in current { known[path] = entry }
+                await MainActor.run { self.install(lookups, generation: generation) }
+            }
+            var found = Lookups()
+            var changes = 0
+            var shown = CACurrentMediaTime()
             for (root, name, id) in roots {
-                for entry in Self.scan(root, locationName: name, locationID: id) {
-                    byPath[entry.path] = entry
-                    byFolder[entry.folder, default: []].insert(entry.path)
-                    for key in Self.nameKeys(of: entry) { byName[key, default: []].insert(entry.path) }
-                    if entry.kind == .folder { folderPaths.insert(entry.path) }
+                Self.walk(root.path, root: root.path, locationName: name, locationID: id, known: known) { entry, isNew in
+                    found.add(entry)
+                    if isNew { changes += 1 }
+                    // A whole iCloud Drive takes a while: search finds what has been read so far in the meantime, unless
+                    // it has all there was the last time.
+                    if known.isEmpty, CACurrentMediaTime() - shown > 1.5 {
+                        let partial = SearchCorpus(version: version, entries: found.byPath.values, hidden: hidden, recognized: recognized)
+                        Task { @MainActor in
+                            // Only before the index has anything: the last full one beats part of a new one.
+                            guard generation == self.generation, self.isBuilding, self.byPath.isEmpty else { return }
+                            self.show(partial)
+                        }
+                        shown = CACurrentMediaTime()
+                    }
                 }
             }
-            let pdfs = byPath.values.filter { $0.kind == .pdf && !$0.isInCloud }.map { PDFJob(url: $0.url, path: $0.path, modified: $0.modified) }
-            let found = byPath, folders = byFolder, names = byName, allFolders = folderPaths
+            let pdfs = found.byPath.values.filter { $0.kind == .pdf && !$0.isInCloud && $0.text == nil }.map { PDFJob(url: $0.url, path: $0.path, modified: $0.modified) }
+            // Every file as the index had it, as after most launches: what it has stays, with what changed meanwhile.
+            let isUnchanged = !known.isEmpty && changes == 0 && found.byPath.count == known.count
+            let built = found
             await MainActor.run {
                 guard generation == self.generation else { return }
-                // The old index goes away on another thread: freeing the text of thousands of notes takes a while too.
-                let old = (self.byPath, self.byFolder, self.byName, self.folderPaths)
-                DispatchQueue.global(qos: .background).async { withExtendedLifetime(old) {} }
-                self.byPath = found
-                self.byFolder = folders
-                self.byName = names
-                self.folderPaths = allFolders
-                self.version += 1
-                self.folderVersion += 1
+                self.kept = nil
+                self.hasBuilt = true
+                if !isUnchanged {
+                    self.put(built)
+                    self.changed()
+                    self.folderVersion += 1
+                }
                 self.isBuilding = false
+                #if DEBUG
+                self.lastBuild = (Self.notesRead.load(ordering: .relaxed) - notesRead, pdfs.count)
+                self.log(String(format: "built %d files in %.0f ms, reading %d notes and %d PDFs", built.byPath.count, (CACurrentMediaTime() - started) * 1000,
+                                self.lastBuild.notesRead, pdfs.count))
+                #endif
                 self.onBuilt?()
-                self.onFoldersChanged?()
+                self.onIndexed?(built.byPath)
+                if !isUnchanged { self.onFoldersChanged?() }
+                // Changes merged in meanwhile waited for this.
+                if !isUnchanged || self.unsavedSince != nil { self.save() }
                 self.readPDFs(pdfs)
                 let changed = self.changedWhileBuilding
                 self.changedWhileBuilding = []
@@ -139,59 +282,199 @@ public final class SearchIndex {
         }
     }
 
-    nonisolated static func scan(_ root: URL, locationName: String, locationID: UUID) -> [Entry] {
-        var result: [Entry] = []
-        let keys: [URLResourceKey] = [.isDirectoryKey, .isPackageKey, .isHiddenKey, .contentModificationDateKey, .ubiquitousItemDownloadingStatusKey, .fileSizeKey]
-        guard let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: keys, options: [.skipsPackageDescendants]) else { return [] }
-        while let found = enumerator.nextObject() as? URL {
-            let url = found.standardizedFileURL
-            var name = url.lastPathComponent
-            var fileURL = url
-            var inCloud = false
-            if name.hasPrefix("."), name.hasSuffix(".icloud") {
-                name = String(name.dropFirst().dropLast(7))
-                fileURL = url.deletingLastPathComponent().appendingPathComponent(name)
-                inCloud = true
-            } else if name.hasPrefix(".") {
-                if (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true { enumerator.skipDescendants() }
-                continue
-            }
-            if ["node_modules", "DerivedData", ".build", "Pods"].contains(name) { enumerator.skipDescendants(); continue }
-            let values = try? url.resourceValues(forKeys: Set(keys))
-            // Hidden as in the sidebar, like iCloud Drive's links to Desktop and Documents (indexed as folders of their own).
-            if values?.isHidden == true, !inCloud {
-                if values?.isDirectory == true { enumerator.skipDescendants() }
-                continue
-            }
-            let isDirectory = (values?.isDirectory ?? false) && !(values?.isPackage ?? false)
-            if values?.ubiquitousItemDownloadingStatus == .notDownloaded { inCloud = true }
-            if let entry = makeEntry(fileURL, root: root, locationName: locationName, locationID: locationID, isDirectory: isDirectory,
-                                     modified: values?.contentModificationDate, inCloud: inCloud, size: values?.fileSize) {
-                result.append(entry)
-            }
-        }
-        return result
+    /// Puts the index kept from the last run in place while the files are read: search, links and Move To have
+    /// everything at once. Only before the files have been read.
+    private func install(_ lookups: Lookups, generation: Int) {
+        guard generation == self.generation, !hasBuilt, isBuilding, !lookups.byPath.isEmpty else { return }
+        kept = nil
+        put(lookups)
+        changed()
+        folderVersion += 1
+        #if DEBUG
+        log("kept index of \(lookups.byPath.count) files in place")
+        #endif
+        onBuilt?()
+        onFoldersChanged?()
+        // Folders read since launch are newer than what was kept: read again.
+        if !changedWhileBuilding.isEmpty { refresh(folders: Array(changedWhileBuilding), locations: locations) }
     }
 
-    nonisolated static func makeEntry(_ url: URL, root: URL, locationName: String, locationID: UUID, isDirectory: Bool, modified: Date?, inCloud: Bool, size: Int?) -> Entry? {
-        let kind = FileKind(url: url, isDirectory: isDirectory)
-        let name = kind == .note ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent
-        let rootPath = root.standardizedFileURL.path
-        let folderPath = url.deletingLastPathComponent().standardizedFileURL.path
-        let relative = folderPath.hasPrefix(rootPath) ? folderPath.dropFirst(rootPath.count).split(separator: "/").map(String.init) : []
-        let place = ([locationName] + relative).joined(separator: " › ")
-        var text: String?
-        if kind == .note {
-            if inCloud {
-                // Notes are kept on every device, so search and links work offline.
-                try? FileManager.default.startDownloadingUbiquitousItem(at: url)
-            } else if (size ?? 0) < 4_000_000, let data = try? Data(contentsOf: url) {
-                text = String(data: data, encoding: .utf8)
+    /// Folders left out with everything in them, as the sidebar leaves them out.
+    nonisolated private static let skippedFolders: Set<String> = ["node_modules", "DerivedData", ".build", "Pods"]
+
+    /// Goes through the files in `folder` (an address in the location folder `root`) and, if `deep`, in every folder in
+    /// it, as the sidebar shows them: without hidden files and packages' insides. Calls `listed` with each folder whose
+    /// files it goes through, before them, and `each` with every file, and whether it is new or changed since `known`. A
+    /// file as it was in `known` (by its date and size) isn't read again.
+    ///
+    /// With `fts`, which hands over each file's date, size and flags with its name, in the system's own code: a hundred
+    /// thousand files take well under a second, ten times less than with `FileManager`'s resource values.
+    nonisolated static func walk(_ folder: String, root: String, locationName: String, locationID: UUID, deep: Bool = true, known: [String: Entry] = [:],
+                                 listed: (String) -> Void = { _ in }, each: (_ entry: Entry, _ isNew: Bool) -> Void) {
+        let relative = folder.hasPrefix(root) ? folder.dropFirst(root.count).split(separator: "/").map(String.init) : []
+        // Every folder gone through, with its place: what the files in it share.
+        var folders: [(path: String, place: String)] = [(folder, ([locationName] + relative).joined(separator: " › "))]
+        let options = FTS_PHYSICAL | FTS_NOCHDIR | FTS_COMFOLLOW
+        guard let fts = folder.withCString({ fts_open([UnsafeMutablePointer(mutating: $0), nil], options, nil) }) else { return }
+        defer { fts_close(fts) }
+        while let found = fts_read(fts) {
+            let file = found.pointee
+            let info = Int32(file.fts_info)
+            // A folder that can't be read is shown, empty.
+            let isDirectory = info == FTS_D || info == FTS_DNR
+            guard isDirectory || info == FTS_F || info == FTS_SL || info == FTS_SLNONE || info == FTS_DEFAULT, let stat = file.fts_statp?.pointee else { continue }
+            func skip() { if isDirectory { fts_set(fts, found, FTS_SKIP) } }
+            if file.fts_level == 0 {
+                guard isDirectory else { return }
+                found.pointee.fts_number = 0
+                listed(folder)
+                continue
             }
+            let parent = folders[file.fts_parent.pointee.fts_number]
+            let bytes = UnsafeRawPointer(file.fts_path).assumingMemoryBound(to: UInt8.self)
+            var name = String(decoding: UnsafeBufferPointer(start: bytes + Int(file.fts_pathlen - file.fts_namelen), count: Int(file.fts_namelen)), as: UTF8.self)
+            var inCloud = false
+            if name.hasPrefix(".") {
+                // Only in iCloud: a stand-in with the file's name between "." and ".icloud".
+                guard !isDirectory, name.hasSuffix(".icloud"), name.count > 8 else {
+                    skip()
+                    continue
+                }
+                name = String(name.dropFirst().dropLast(7))
+                inCloud = true
+            }
+            // Hidden as in the sidebar, like iCloud Drive's links to Desktop and Documents (indexed as folders of their own).
+            if skippedFolders.contains(name) || (!inCloud && stat.st_flags & UInt32(UF_HIDDEN) != 0) {
+                skip()
+                continue
+            }
+            let path = inCloud ? parent.path + "/" + name : String(decoding: UnsafeBufferPointer(start: bytes, count: Int(file.fts_pathlen)), as: UTF8.self)
+            var isFolder = isDirectory
+            if isDirectory, name.contains("."), (try? URL(fileURLWithPath: path).resourceValues(forKeys: [.isPackageKey]).isPackage) == true {
+                isFolder = false
+                skip()
+            }
+            // A file whose content is only in iCloud.
+            if !isDirectory, stat.st_flags & UInt32(SF_DATALESS) != 0 { inCloud = true }
+            if isFolder {
+                if deep {
+                    found.pointee.fts_number = folders.count
+                    folders.append((path, parent.place + " › " + name))
+                    listed(path)
+                } else {
+                    skip()
+                }
+            }
+            let time = stat.st_mtimespec
+            // As Foundation makes it, so dates read here and there compare equal.
+            let modified = Date(timeIntervalSinceReferenceDate: Double(time.tv_sec) - Date.timeIntervalBetween1970AndReferenceDate + 1.0e-9 * Double(time.tv_nsec))
+            let kind = FileKind(name: name, isDirectory: isFolder), size = isDirectory ? nil : Int(stat.st_size)
+            let old = known.isEmpty ? nil : known[path]
+            let entry = makeEntry(path: path, name: name, folder: parent.path, place: parent.place, locationID: locationID, kind: kind,
+                                  modified: modified, size: size, inCloud: inCloud, known: old)
+            each(entry, !(old?.isSame(as: entry) ?? false))
         }
-        return Entry(url: url, name: name, kind: kind, place: place, locationID: locationID, modified: modified, isInCloud: inCloud,
-                     text: text, folded: text.map(fold), foldedName: fold(name), foldedFileName: fold(url.lastPathComponent),
-                     path: url.standardizedFileURL.path, folder: folderPath)
+    }
+
+    /// The entry for a file: `known`, what the index had for it, if the file is as it was then; else read anew.
+    nonisolated static func makeEntry(path: String, name fileName: String, folder: String, place: String, locationID: UUID, kind: FileKind,
+                                      modified: Date?, size: Int?, inCloud: Bool, known: Entry? = nil) -> Entry {
+        let url = known.flatMap { $0.kind == kind ? $0.url : nil } ?? URL(fileURLWithPath: path, isDirectory: kind == .folder)
+        // Notes are kept on every device, so search and links work offline.
+        if kind == .note, inCloud { try? FileManager.default.startDownloadingUbiquitousItem(at: url) }
+        if var entry = known, entry.isCurrent(kind: kind, modified: modified, size: size, inCloud: inCloud) {
+            entry.place = place
+            entry.locationID = locationID
+            entry.isInCloud = inCloud
+            return entry
+        }
+        let name = kind == .note ? FileKind.withoutExtension(fileName) : fileName
+        var text: String?
+        if kind == .note, !inCloud, (size ?? 0) < largestNote, let data = try? Data(contentsOf: url) {
+            text = String(data: data, encoding: .utf8)
+            #if DEBUG
+            notesRead.add(1, ordering: .relaxed)
+            #endif
+        }
+        var entry = Entry(url: url, name: name, kind: kind, place: place, locationID: locationID, modified: modified, size: size,
+                          isInCloud: inCloud, text: text, folded: text.map(fold), foldedName: fold(name),
+                          foldedFileName: fold(fileName), path: path, folder: folder)
+        if let text {
+            entry.headings = headings(in: text)
+            entry.assets = FileOperations.assetNames(in: text).sorted()
+        }
+        return entry
+    }
+
+    /// A note's headings, as the outline shows them: without their Markdown, leaving out lines in code blocks and in
+    /// front matter. Goes through the bytes, as it runs on every note in the locations.
+    nonisolated static func headings(in text: String) -> [Heading] {
+        var headings: [Heading] = []
+        var fence: UInt8?
+        var inFrontMatter = false
+        var isFirst = true
+        for line in text.utf8.split(separator: 10, omittingEmptySubsequences: false) {
+            defer { isFirst = false }
+            let indent = line.prefix { $0 == 32 }.count
+            let rest = line.dropFirst(indent)
+            let first = rest.first
+            if isFirst, rest.starts(with: "---".utf8) {
+                inFrontMatter = true
+                continue
+            }
+            if inFrontMatter {
+                if line.starts(with: "---".utf8) || line.starts(with: "...".utf8) { inFrontMatter = false }
+                continue
+            }
+            // ``` or ~~~ open a code block, and the same close it.
+            if let open = fence {
+                if first == open, rest.prefix(3).allSatisfy({ $0 == open }), rest.count >= 3 { fence = nil }
+                continue
+            }
+            if first == 96 || first == 126, rest.count >= 3, rest.prefix(3).allSatisfy({ $0 == first }) {
+                fence = first
+                continue
+            }
+            guard first == 35, indent < 4 else { continue }
+            let level = rest.prefix { $0 == 35 }.count
+            let after = rest.dropFirst(level)
+            guard level <= 6, after.first == 32 || after.first == 9 else { continue }
+            var title = String(decoding: after, as: UTF8.self).trimmingCharacters(in: .whitespaces)
+            // Closing #s, as in "## Plan ##".
+            while title.hasSuffix("#") { title.removeLast() }
+            title = plainMarkdown(title.trimmingCharacters(in: .whitespaces))
+            if !title.isEmpty { headings.append(Heading(level: level, title: title)) }
+        }
+        return headings
+    }
+
+    /// Words without the Markdown in them, as they read in the note: `**Plan** for [[Kyoto]]` reads "Plan for Kyoto",
+    /// a picture its description or file name, a link its text.
+    nonisolated static func plainMarkdown(_ text: String) -> String {
+        var text = text
+        // ![description](address) reads as the description, or else the file's name; [text](address) as the text.
+        while let open = text.range(of: "]("), let close = text[open.upperBound...].firstIndex(of: ")"),
+              let start = text[..<open.lowerBound].lastIndex(of: "[") {
+            var shown = String(text[text.index(after: start)..<open.lowerBound])
+            var from = start
+            if start > text.startIndex, text[text.index(before: start)] == "!" {
+                from = text.index(before: start)
+                if shown.isEmpty {
+                    let address = String(text[open.upperBound..<close])
+                    shown = (address.removingPercentEncoding ?? address).split(separator: "/").last.map(String.init) ?? address
+                }
+            }
+            text.replaceSubrange(from...close, with: shown)
+        }
+        // [[note|shown]] reads as what it shows, ![[file]] as the file.
+        while let open = text.range(of: "[["), let close = text.range(of: "]]", range: open.upperBound..<text.endIndex) {
+            let inside = text[open.upperBound..<close.lowerBound]
+            let shown = inside.split(separator: "|", maxSplits: 1).last ?? inside
+            let from = open.lowerBound > text.startIndex && text[text.index(before: open.lowerBound)] == "!" ? text.index(before: open.lowerBound) : open.lowerBound
+            text.replaceSubrange(from..<close.upperBound, with: shown)
+        }
+        for mark in ["**", "__", "==", "~~", "`"] { text = text.replacingOccurrences(of: mark, with: "") }
+        return text.trimmingCharacters(in: .whitespaces)
     }
 
     /// The names a link finds a file by: a note's with and without ".md", any other file's in full. None for folders.
@@ -222,41 +505,39 @@ public final class SearchIndex {
         for job in jobs { newestRefresh[job.folder.path] = id }
         let generation = generation
         let deep = Set(deep.map { $0.standardizedFileURL.path })
+        // Files as they were aren't read again.
+        let known = byPath
         Task.detached(priority: .utility) {
             var updates: [(folder: String, entries: [Entry])] = []
-            var jobs = jobs
-            for job in jobs where deep.contains(job.folder.path) {
-                jobs += Self.subfolders(of: job.folder).map { ($0, job.root, job.place, job.locationID) }
-            }
             for (folder, root, place, locationID) in jobs {
-                // A folder that is gone is taken out by reading the one it was in.
-                var isDirectory: ObjCBool = false
-                guard FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory), isDirectory.boolValue else { continue }
-                var found: [Entry] = []
-                let keys: [URLResourceKey] = [.isDirectoryKey, .isPackageKey, .isHiddenKey, .contentModificationDateKey, .ubiquitousItemDownloadingStatusKey, .fileSizeKey]
-                let contents = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: keys)) ?? []
-                for url in contents where !url.lastPathComponent.hasPrefix(".") {
-                    let values = try? url.resourceValues(forKeys: Set(keys))
-                    if values?.isHidden == true { continue }
-                    let isDirectory = (values?.isDirectory ?? false) && !(values?.isPackage ?? false)
-                    if let entry = Self.makeEntry(url, root: root, locationName: place, locationID: locationID, isDirectory: isDirectory,
-                                                  modified: values?.contentModificationDate, inCloud: values?.ubiquitousItemDownloadingStatus == .notDownloaded, size: values?.fileSize) {
-                        found.append(entry)
-                    }
-                }
-                updates.append((folder.standardizedFileURL.path, found))
+                // A folder that is gone lists nothing: it is taken out by reading the one it was in.
+                var listed: [String] = []
+                var found: [String: [Entry]] = [:]
+                Self.walk(folder.path, root: root.path, locationName: place, locationID: locationID, deep: deep.contains(folder.path), known: known,
+                          listed: { listed.append($0) }) { entry, _ in found[entry.folder, default: []].append(entry) }
+                updates += listed.map { ($0, found[$0] ?? []) }
             }
             let scanned = updates
             await MainActor.run {
                 guard generation == self.generation else { return }
                 var pdfs: [PDFJob] = []
+                var changed: [String: Entry] = [:]
+                var removed = false
                 let folders = self.folderPaths.count
                 // Folders found in a deep one were asked for by nobody else, unless since.
                 for (folder, found) in scanned where self.newestRefresh[folder] ?? id == id {
                     self.newestRefresh[folder] = nil
-                    pdfs += self.merge(found, into: folder)
+                    let merged = self.merge(found, into: folder)
+                    pdfs += merged.pdfs
+                    removed = removed || merged.removed
+                    for entry in merged.changed { changed[entry.path] = entry }
                 }
-                self.version += 1
+                if !changed.isEmpty { self.onIndexed?(changed) }
+                // Folders read again as they were, as when the app comes back to the front, change nothing.
+                if !changed.isEmpty || removed {
+                    self.changed()
+                    self.entriesChanged()
+                }
                 if self.foldersChanged || self.folderPaths.count != folders {
                     self.foldersChanged = false
                     self.folderVersion += 1
@@ -268,40 +549,22 @@ public final class SearchIndex {
         }
     }
 
-    /// Every folder in a folder, as `scan` goes through them.
-    nonisolated private static func subfolders(of folder: URL) -> [URL] {
-        let keys: [URLResourceKey] = [.isDirectoryKey, .isPackageKey, .isHiddenKey]
-        guard let enumerator = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: keys, options: [.skipsPackageDescendants]) else { return [] }
-        var folders: [URL] = []
-        while let url = enumerator.nextObject() as? URL {
-            let values = try? url.resourceValues(forKeys: Set(keys))
-            guard values?.isDirectory == true, values?.isPackage != true else { continue }
-            if url.lastPathComponent.hasPrefix(".") || values?.isHidden == true || ["node_modules", "DerivedData", ".build", "Pods"].contains(url.lastPathComponent) {
-                enumerator.skipDescendants()
-                continue
-            }
-            folders.append(url.standardizedFileURL)
-        }
-        return folders
-    }
-
-    /// Puts what is in a folder now in place of what was, and says which PDFs need their text read.
-    private func merge(_ found: [Entry], into folder: String) -> [PDFJob] {
+    /// Puts what is in a folder now in place of what was, and says which PDFs need their text read, which files are new
+    /// or changed, and whether any went.
+    private func merge(_ found: [Entry], into folder: String) -> (pdfs: [PDFJob], changed: [Entry], removed: Bool) {
         let paths = Set(found.map(\.path))
         // What was in the folder and is gone, with everything inside a folder that is gone.
-        for path in (byFolder[folder] ?? []).subtracting(paths) { remove(path) }
+        let gone = (byFolder[folder] ?? []).subtracting(paths)
+        for path in gone { remove(path) }
         var pdfs: [PDFJob] = []
+        var changed: [Entry] = []
         for entry in found {
-            var updated = entry
-            if entry.kind == .pdf {
-                if let old = byPath[entry.path], old.modified == entry.modified, old.text != nil {
-                    updated.text = old.text
-                    updated.folded = old.folded
-                } else if !entry.isInCloud {
-                    pdfs.append(PDFJob(url: entry.url, path: entry.path, modified: entry.modified))
-                }
+            // A PDF as it was has its text already (`walk`).
+            if entry.kind == .pdf, entry.text == nil, !entry.isInCloud {
+                pdfs.append(PDFJob(url: entry.url, path: entry.path, modified: entry.modified))
             }
-            let old = byPath.updateValue(updated, forKey: entry.path)
+            let old = byPath.updateValue(entry, forKey: entry.path)
+            if old.map({ !$0.isSame(as: entry) }) ?? true { changed.append(entry) }
             if old?.kind != entry.kind {
                 if let old { forget(old) }
                 for key in Self.nameKeys(of: entry) { byName[key, default: []].insert(entry.path) }
@@ -309,7 +572,7 @@ public final class SearchIndex {
             }
         }
         byFolder[folder] = paths.isEmpty ? nil : paths
-        return pdfs
+        return (pdfs, changed, !gone.isEmpty)
     }
 
     private func remove(_ path: String) {
@@ -347,99 +610,229 @@ public final class SearchIndex {
                 let read = await Task.detached(priority: .background) { Self.text(of: job) }.value
                 guard let self else { return }
                 guard let read, var entry = byPath[job.path], entry.modified == job.modified else { continue }
-                let hadText = entry.folded != nil
                 entry.text = read.text
                 entry.folded = read.folded
+                entry.pagesWithoutText = read.pagesWithoutText
                 byPath[job.path] = entry
-                version += 1
-                // What search goes through stays as it was but for this PDF, rather than being made again for each one.
-                if madeLists?.version == version - 1 {
-                    madeLists?.version = version
-                    if !hadText { madeLists?.addText(job.path, modified: entry.modified ?? .distantPast) }
-                }
+                changed()
+                entriesChanged()
+                if !read.pagesWithoutText.isEmpty { onIndexed?([job.path: entry]) }
             }
             self?.pdfTask = nil
+            // All read: kept soon, so a launch shortly after needn't read them again.
+            if self?.unsavedSince != nil { self?.entriesChanged(quiet: .seconds(2)) }
         }
     }
+
+    /// Whether the text of PDFs is being read.
+    var isReadingPDFs: Bool { pdfTask != nil }
 
     private func nextPDF() -> PDFJob? {
         pdfQueue.isEmpty ? nil : pdfQueue.removeFirst()
     }
 
-    nonisolated private static func text(of job: PDFJob) -> (text: String, folded: String)? {
+    nonisolated private static func text(of job: PDFJob) -> PDFText? {
         if let cached = pdfCache.text(for: job.path, modified: job.modified) { return cached }
         guard let document = PDFDocument(url: job.url) else { return nil }
         var pages: [String] = []
+        var empty: [Int] = []
         for index in 0..<min(document.pageCount, 300) {
-            pages.append(document.page(at: index)?.string ?? "")
+            let text = document.page(at: index)?.string ?? ""
+            if text.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 { empty.append(index) }
+            pages.append(text)
         }
         // Pages are separated by form feeds so a hit can say which page it is on.
         let text = pages.joined(separator: "\u{0C}")
-        let read = (text, fold(text))
+        let read = PDFText(text: text, folded: fold(text), pagesWithoutText: empty)
         pdfCache.keep(read, for: job.path, modified: job.modified)
         return read
     }
 
-    // MARK: - Looking things up
+    /// Called with files found or read again, so the text in pictures, scans and drawings among them can be read.
+    @ObservationIgnored var onIndexed: (([String: Entry]) -> Void)?
 
-    /// What search goes through for every letter typed, made again only when files changed: every file's name, and
-    /// the notes and PDFs with text, newest first. Going through the index itself would copy every entry, text and
-    /// all, and sorting it by date every time took most of a second for a whole iCloud Drive.
-    private struct Lists {
-        struct File {
-            var foldedName: String
-            var isNote: Bool
-            var modified: Date
-            var path: String
-        }
+    // MARK: - Kept between launches
 
-        var version: Int
-        var files: [File] = []
-        var newestWithText: [(modified: Date, path: String)] = []
+    /// Where the index is kept between launches (`KeptIndex`); nil to keep nothing.
+    @ObservationIgnored var storeURL: URL?
+    /// The index kept from the last run, read in the background, until the first build has taken it.
+    @ObservationIgnored private var kept: Task<Lookups?, Never>?
+    /// When the files first changed since the index was last kept.
+    @ObservationIgnored private var unsavedSince: ContinuousClock.Instant?
+    @ObservationIgnored private var saveTimer: Task<Void, Never>?
+    /// The last writing of the index, which the next one waits for, so an older one never ends up on disk.
+    @ObservationIgnored private(set) var lastSave: Task<Void, Never>?
 
-        mutating func addText(_ path: String, modified: Date) {
-            let index = newestWithText.firstIndex { $0.modified < modified } ?? newestWithText.count
-            newestWithText.insert((modified, path), at: index)
+    /// Where the index is kept: in the app's caches, as it can always be made again. A folder given on the command line
+    /// (`library`) gets a file of its own, so a run on the sample notes leaves the one for your locations alone. None
+    /// in tests, which keep theirs where they say.
+    nonisolated static func storeURL(library: String? = nil) -> URL? {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil,
+              let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
+        let folder = caches.appendingPathComponent(Bundle.main.bundleIdentifier ?? "Notebook", isDirectory: true)
+        guard let library else { return folder.appendingPathComponent("Search index") }
+        // FNV-1a: the same for the same folder at every launch, as Swift's own hashes aren't.
+        let hash = library.utf8.reduce(UInt64(0xcbf2_9ce4_8422_2325)) { ($0 ^ UInt64($1)) &* 0x100_0000_01b3 }
+        return folder.appendingPathComponent("Search index " + String(hash, radix: 36))
+    }
+
+    /// Starts reading the index kept from the last run, for the first build to show at once and to check the files
+    /// against. In the background, while the locations are looked up.
+    func loadKept(for locations: [Location]) {
+        guard let storeURL, kept == nil, !hasBuilt else { return }
+        let roots = locations.map { (id: $0.id, path: $0.url.path) }
+        #if DEBUG
+        let started = CACurrentMediaTime()
+        #endif
+        kept = Task.detached(priority: .userInitiated) { [weak self] in
+            guard let entries = KeptIndex.read(storeURL, locations: roots) else {
+                #if DEBUG
+                await self?.log("no kept index")
+                #endif
+                return nil
+            }
+            #if DEBUG
+            let read = CACurrentMediaTime()
+            #endif
+            let lookups = Lookups(all: entries)
+            #if DEBUG
+            await self?.log(String(format: "read the kept index of %d files in %.0f ms, and made its lookups in %.0f ms", entries.count,
+                                   (read - started) * 1000, (CACurrentMediaTime() - read) * 1000))
+            #endif
+            return lookups
         }
     }
 
-    @ObservationIgnored private var madeLists: Lists?
-
-    private var lists: Lists {
-        if let madeLists, madeLists.version == version { return madeLists }
-        var lists = Lists(version: version)
-        lists.files.reserveCapacity(byPath.count)
-        for entry in byPath.values {
-            let modified = entry.modified ?? .distantPast
-            if entry.kind != .folder { lists.files.append(Lists.File(foldedName: entry.foldedName, isNote: entry.kind == .note, modified: modified, path: entry.path)) }
-            if entry.folded != nil { lists.newestWithText.append((modified, entry.path)) }
+    /// Keeps the files on disk once they have stopped changing for a while (`quiet`), or a couple of minutes after they
+    /// first changed while they keep changing: writing them all takes a moment, and what wasn't kept is only read again
+    /// at the next launch.
+    private func entriesChanged(quiet: Duration = .seconds(10)) {
+        guard storeURL != nil else { return }
+        let now = ContinuousClock.now
+        let since = unsavedSince ?? now
+        unsavedSince = since
+        let due = min(now + quiet, since + .seconds(120))
+        saveTimer?.cancel()
+        saveTimer = Task { [weak self] in
+            try? await Task.sleep(until: due, clock: .continuous)
+            guard !Task.isCancelled else { return }
+            self?.save()
         }
-        lists.newestWithText.sort { $0.modified > $1.modified }
-        madeLists = lists
-        return lists
     }
 
-    /// The first few of many, in order, without sorting them all.
-    private struct Best<Item> {
-        let limit: Int
-        let isBefore: (Item, Item) -> Bool
-        private(set) var items: [Item] = []
+    /// Keeps what changed since the index was last kept, now: when the app goes to the background, where it may be
+    /// stopped before long.
+    func keepChanges() {
+        if unsavedSince != nil { save() }
+    }
 
-        init(_ limit: Int, by isBefore: @escaping (Item, Item) -> Bool) {
-            self.limit = limit
-            self.isBefore = isBefore
+    /// Writes the files in the background, one writing after another. Not before they have been read since launch, nor
+    /// while they are read again: that keeps them when it is done.
+    func save() {
+        guard let storeURL, hasBuilt, !isBuilding else { return }
+        saveTimer?.cancel()
+        saveTimer = nil
+        unsavedSince = nil
+        let entries = byPath, roots = locations.map { (id: $0.id, path: $0.url.path) }, previous = lastSave
+        #if os(iOS)
+        // Written even when the app goes to the background right now.
+        let task = UIApplication.shared.beginBackgroundTask(withName: "Keeping the search index")
+        #endif
+        lastSave = Task.detached(priority: .utility) {
+            await previous?.value
+            #if DEBUG
+            let started = CACurrentMediaTime()
+            #endif
+            try? KeptIndex.write(entries.values, locations: roots, to: storeURL)
+            #if DEBUG
+            let size = (try? storeURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            await self.log(String(format: "kept %d files (%.1f MB) in %.0f ms", entries.count, Double(size) / 1_000_000, (CACurrentMediaTime() - started) * 1000))
+            #endif
+            #if os(iOS)
+            await MainActor.run { UIApplication.shared.endBackgroundTask(task) }
+            #endif
         }
+    }
 
-        /// Whether `item` would be among them.
-        func takes(_ item: Item) -> Bool {
-            items.count < limit || items.last.map { isBefore(item, $0) } == true
-        }
+    #if DEBUG
+    /// Notes read from disk since launch, for the debug remote and the benchmark.
+    nonisolated static let notesRead = Atomic<Int>(0)
+    /// What the last build read: notes, and PDFs whose text it left to read.
+    @ObservationIgnored private(set) var lastBuild = (notesRead: 0, pdfs: 0)
+    /// What building and keeping the index did, with when since the app started, for the debug remote.
+    @ObservationIgnored private(set) var history: [String] = []
+    @ObservationIgnored private var loggedCorpora = 0
 
-        mutating func add(_ item: Item) {
-            let index = items.firstIndex { isBefore(item, $0) } ?? items.count
-            items.insert(item, at: index)
-            if items.count > limit { items.removeLast() }
+    /// When the app started, from the system: what a person waits for counts from there.
+    private static let launch: Date = {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.size
+        var name: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
+        guard sysctl(&name, 4, &info, &size, nil, 0) == 0 else { return Date() }
+        let start = info.kp_proc.p_un.__p_starttime
+        return Date(timeIntervalSince1970: Double(start.tv_sec) + Double(start.tv_usec) / 1_000_000)
+    }()
+
+    private func log(_ message: String) {
+        history.append(String(format: "%.2f s: ", Date().timeIntervalSince(Self.launch)) + message)
+        if history.count > 40 { history.removeFirst() }
+    }
+    #endif
+
+    // MARK: - Search
+
+    /// Puts a new corpus in place and runs the searches on screen again on it.
+    private func show(_ new: SearchCorpus) {
+        // The old one goes away on another thread: freeing the text of thousands of notes takes a while too.
+        let old = corpus
+        corpus = new
+        #if DEBUG
+        if loggedCorpora < 3, !new.items.isEmpty {
+            loggedCorpora += hasBuilt ? 3 : 1
+            log("search has \(new.items.count) files and \(new.documents.count) texts")
         }
+        #endif
+        DispatchQueue.global(qos: .background).async { withExtendedLifetime(old) {} }
+        corpusObservers.removeAll { $0.search == nil }
+        for observer in corpusObservers { observer.search?.corpusChanged() }
+    }
+
+    /// Makes a new corpus in the background once the one being made is done: after a burst of changes, one for all.
+    private func scheduleCorpus() {
+        corpusWanted = true
+        guard corpusTask == nil else { return }
+        corpusWanted = false
+        let version = version, entries = byPath, hidden = hiddenPaths, recognized = recognized
+        corpusTask = Task.detached(priority: .userInitiated) { [weak self] in
+            let corpus = SearchCorpus(version: version, entries: entries.values, hidden: hidden, recognized: recognized)
+            await self?.made(corpus, fromNothing: entries.isEmpty)
+        }
+    }
+
+    private func made(_ corpus: SearchCorpus, fromNothing: Bool) {
+        corpusTask = nil
+        // Nothing while the files are read the first time: what has been read so far shows meanwhile.
+        if !fromNothing || !isBuilding { show(corpus) }
+        if corpusWanted { scheduleCorpus() }
+    }
+
+    /// The corpus for what the index knows now, made here if the one made in the background isn't there yet. For
+    /// tests and the few answers that can't wait; search itself takes `corpus` as it is.
+    func currentCorpus() -> SearchCorpus {
+        if corpus.version != version {
+            show(SearchCorpus(version: version, entries: byPath.values, hidden: hiddenPaths, recognized: recognized))
+        }
+        return corpus
+    }
+
+    /// Runs `search` again whenever there is a new corpus, for as long as it is around.
+    func observeCorpus(_ search: SearchSession) {
+        corpusObservers.removeAll { $0.search == nil || $0.search === search }
+        corpusObservers.append(WeakSearch(search: search))
+    }
+
+    private struct WeakSearch {
+        weak var search: SearchSession?
     }
 
     public func entry(for url: URL) -> Entry? {
@@ -476,22 +869,12 @@ public final class SearchIndex {
         }?.url
     }
 
-    /// Files whose names match, best first: names starting with the query, then words starting with it, then
-    /// containing it, then having its letters in order.
+    /// Notes and files whose names match, best first: names starting with the query, then words starting with it,
+    /// then containing it, then having its letters in order.
     public func files(matching query: String, limit: Int = 8) -> [Entry] {
-        let q = Self.fold(query.trimmingCharacters(in: .whitespaces))
-        guard !q.isEmpty else { return [] }
-        var best = Best<(score: Int, file: Lists.File)>(limit) { a, b in
-            if a.score != b.score { return a.score > b.score }
-            if a.file.modified != b.file.modified { return a.file.modified > b.file.modified }
-            return a.file.path < b.file.path
-        }
-        for file in lists.files {
-            guard let score = Self.score(file.foldedName, q) else { continue }
-            let candidate = (score: score + (file.isNote ? 5 : 0), file: file)
-            if best.takes(candidate), !Self.isHidden(file.path, in: hiddenPaths) { best.add(candidate) }
-        }
-        return best.items.compactMap { byPath[$0.file.path] }
+        guard let query = SearchCorpus.Query(query) else { return [] }
+        let corpus = currentCorpus()
+        return corpus.matchNames(query, files: limit, folders: 0).files.compactMap { byPath[corpus.items[$0].url.path] }
     }
 
     /// Every folder, in no particular order, hidden ones too: for Move To.
@@ -501,12 +884,17 @@ public final class SearchIndex {
     }
 
     public func folders(matching query: String, limit: Int = 12) -> [Entry] {
-        let q = Self.fold(query.trimmingCharacters(in: .whitespaces))
-        _ = version
-        return byPath.values.filter { $0.kind == .folder && (q.isEmpty || Self.score($0.foldedName, q) != nil) && !isHidden($0.url) }
-            .map { (score: Self.score($0.foldedName, q) ?? 0, entry: $0) }
-            .sorted { $0.score != $1.score ? $0.score > $1.score : $0.entry.path < $1.entry.path }
-            .prefix(limit).map(\.entry)
+        guard let query = SearchCorpus.Query(query) else { return [] }
+        let corpus = currentCorpus()
+        return corpus.matchNames(query, files: 0, folders: limit).folders.compactMap { byPath[corpus.items[$0].url.path] }
+    }
+
+    /// Notes and PDFs that have the words in them, with the line they are in.
+    func textHits(_ query: String, limit: Int = 8) -> [SearchCorpus.TextHit] {
+        guard let query = SearchCorpus.Query(query) else { return [] }
+        var limits = SearchCorpus.Limits(files: 0, folders: 0, headings: 0, texts: limit, pictures: 0)
+        limits.texts = limit
+        return currentCorpus().search(query, limits: limits).texts
     }
 
     /// In a hidden folder, or one itself.
@@ -554,83 +942,25 @@ public final class SearchIndex {
         }
     }
 
-    /// Notes and PDFs that contain the query, with the line it is in.
-    public func textHits(_ query: String, limit: Int = 8) -> [TextHit] {
-        let q = Self.fold(query.trimmingCharacters(in: .whitespacesAndNewlines))
-        guard q.count >= 2 else { return [] }
-        var hits: [TextHit] = []
-        for (_, path) in lists.newestWithText {
-            guard let entry = byPath[path], let folded = entry.folded, Self.offset(of: q, in: folded) != nil, let text = entry.text, !isHidden(entry.url) else { continue }
-            hits.append(Self.hit(entry, text: text, query: query))
-            if hits.count >= limit { break }
-        }
-        return hits
-    }
-
-    private static func hit(_ entry: Entry, text: String, query: String) -> TextHit {
-        guard let range = text.range(of: query.trimmingCharacters(in: .whitespacesAndNewlines), options: [.caseInsensitive, .diacriticInsensitive]) else {
-            return TextHit(entry: entry, snippet: String(text.prefix(120)), match: nil, page: nil)
-        }
-        var page: Int?
-        if entry.kind == .pdf { page = text[..<range.lowerBound].filter { $0 == "\u{0C}" }.count + 1 }
-        // The line around the match, at most a few words on each side.
-        let lineStart = text[..<range.lowerBound].lastIndex(where: { $0 == "\n" || $0 == "\u{0C}" }).map { text.index(after: $0) } ?? text.startIndex
-        let lineEnd = text[range.upperBound...].firstIndex(where: { $0 == "\n" || $0 == "\u{0C}" }) ?? text.endIndex
-        let start = text.index(range.lowerBound, offsetBy: -48, limitedBy: lineStart) ?? lineStart
-        let end = text.index(range.upperBound, offsetBy: 90, limitedBy: lineEnd) ?? lineEnd
-        var snippet = String(text[start..<end]).trimmingCharacters(in: .whitespaces)
-        if start == lineStart { snippet = plainLine(snippet) }
-        snippet = snippet.replacingOccurrences(of: "**", with: "").replacingOccurrences(of: "[[", with: "").replacingOccurrences(of: "]]", with: "")
-        if start > lineStart { snippet = "…" + snippet }
-        if end < lineEnd { snippet += "…" }
-        let match = snippet.range(of: query.trimmingCharacters(in: .whitespacesAndNewlines), options: [.caseInsensitive, .diacriticInsensitive])
-        return TextHit(entry: entry, snippet: snippet, match: match, page: page)
-    }
-
-    /// A line without the Markdown at its start: "> ", "- [ ] ", "## ", "1. ", a callout's "[!tip]".
-    private static func plainLine(_ line: String) -> String {
-        var result = Substring(line)
-        var changed = true
-        while changed {
-            changed = false
-            for prefix in ["> ", ">", "- [ ] ", "- [x] ", "- [X] ", "- ", "* ", "+ "] where result.hasPrefix(prefix) {
-                result = result.dropFirst(prefix.count)
-                changed = true
-            }
-            if result.hasPrefix("#") {
-                result = result.drop(while: { $0 == "#" }).drop(while: { $0 == " " })
-                changed = true
-            }
-            if result.hasPrefix("[!"), let close = result.firstIndex(of: "]") {
-                result = result[result.index(after: close)...].drop(while: { $0 == " " || $0 == "-" || $0 == "+" })
-                changed = true
-            }
-            if let dot = result.firstIndex(of: "."), result[..<dot].allSatisfy(\.isNumber), !result[..<dot].isEmpty, result[result.index(after: dot)...].hasPrefix(" ") {
-                result = result[result.index(dot, offsetBy: 2)...]
-                changed = true
-            }
-        }
-        return String(result)
-    }
-
-    /// What `[[query` could link to.
+    /// What `[[query` could link to. Goes through the corpus as it is, even if a moment behind, so typing never waits.
     func linkSuggestions(_ query: String, from note: URL?) -> [LinkSuggestion] {
         var items: [LinkSuggestion] = []
-        let candidates: [Entry]
-        if query.trimmingCharacters(in: .whitespaces).isEmpty {
-            let current = note?.standardizedFileURL.path
-            var newest = Best<Lists.File>(6) { $0.modified > $1.modified }
-            for file in lists.files where file.isNote && file.path != current && newest.takes(file) && !Self.isHidden(file.path, in: hiddenPaths) {
-                newest.add(file)
-            }
-            candidates = newest.items.compactMap { byPath[$0.path] }
+        let current = note?.standardizedFileURL.path
+        let candidates: [SearchCorpus.Item]
+        if let parsed = SearchCorpus.Query(query) {
+            candidates = corpus.matchNames(parsed, files: 8, folders: 0).files.map { corpus.items[$0] }.filter { $0.url.path != current }.prefix(7).map { $0 }
         } else {
-            candidates = files(matching: query, limit: 7).filter { $0.url != note }
+            var newest = SearchCorpus.Best(6)
+            for (index, item) in corpus.items.enumerated() where item.kind == .note && item.url.path != current {
+                newest.add(SearchCorpus.Candidate(score: 0, modified: item.modified, path: item.url.path, index: index))
+            }
+            candidates = newest.items.map { corpus.items[$0.index] }
         }
-        for entry in candidates {
-            let insert = entry.kind == .note ? entry.name : entry.url.lastPathComponent
-            items.append(LinkSuggestion(kind: entry.kind == .note ? .note : .file, title: entry.kind == .note ? entry.name : entry.url.lastPathComponent,
-                                        detail: entry.place.split(separator: "›").suffix(2).joined(separator: "›").trimmingCharacters(in: .whitespaces), insert: insert))
+        for item in candidates {
+            let isNote = item.kind == .note
+            let title = isNote ? item.name : item.url.lastPathComponent
+            items.append(LinkSuggestion(kind: isNote ? .note : .file, title: title,
+                                        detail: item.place.split(separator: "›").suffix(2).joined(separator: "›").trimmingCharacters(in: .whitespaces), insert: title))
         }
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         if !trimmed.isEmpty, !items.contains(where: { Self.fold($0.title) == Self.fold(trimmed) }) {
@@ -641,18 +971,24 @@ public final class SearchIndex {
     }
 }
 
+struct PDFText: Sendable {
+    var text: String
+    var folded: String
+    var pagesWithoutText: [Int]
+}
+
 /// The text of PDFs read before, kept for as long as the app runs, for any thread.
 private final class PDFTextCache: Sendable {
-    private let texts = Mutex<[String: (modified: Date?, text: String, folded: String)]>([:])
+    private let texts = Mutex<[String: (modified: Date?, read: PDFText)]>([:])
 
-    func text(for path: String, modified: Date?) -> (text: String, folded: String)? {
+    func text(for path: String, modified: Date?) -> PDFText? {
         texts.withLock { texts in
             guard let cached = texts[path], cached.modified == modified else { return nil }
-            return (cached.text, cached.folded)
+            return cached.read
         }
     }
 
-    func keep(_ read: (text: String, folded: String), for path: String, modified: Date?) {
-        texts.withLock { $0[path] = (modified, read.text, read.folded) }
+    func keep(_ read: PDFText, for path: String, modified: Date?) {
+        texts.withLock { $0[path] = (modified, read) }
     }
 }

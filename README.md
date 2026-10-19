@@ -122,16 +122,36 @@ GitHub's and Obsidian's `> [!note]` style get their colour and symbol.
   <img alt="The note Week 3 with inline maths, the typeset formula A x = lambda x, and an Exam callout" src="Design/screenshots/math-light.webp">
 </picture>
 
-### Find anything with ⌘F
+### Find anything
 
-The search field in the toolbar finds notes and files by name, and words inside notes and PDFs, with the page they're
-on. Return opens the first match, and the last suggestion is always a new note with what you typed as its name.
-With an empty field, it lists what you opened last.
+The search field in the toolbar (⌘F) finds notes, files and folders by name, the headings in notes, and words in notes
+and PDFs, with the page they're on. It also reads the words in pictures, in scanned PDFs and in the handwriting of
+drawings, so a photographed receipt or a scanned letter turns up too. Type several words in any order; notes that have
+them together come first. A result opens where it was found: the note scrolled to the words with them selected (they
+bounce as Find does in Safari), a PDF at its page, a heading, or the picture in a note. Return opens the first match,
+and the last suggestion is always a new note with what you typed as its name. With an empty field, it lists what you
+opened last.
+
+Search runs in the background on every core, a few milliseconds a letter even in a whole iCloud Drive, so typing never
+waits for it; the results stay until the new ones are there. Notebook keeps what it has read between launches, so search
+finds everything the moment it opens, and then reads only the notes and PDFs that changed since; the very first time,
+while it is still reading your files, it finds what it has read so far. Pictures, scans and drawings are read on your
+Mac, iPhone or iPad with Apple's own text recognition, in the background and once each; Settings › General › Search
+turns it off.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/search-dark.webp">
   <img alt="The search field with kyoto typed in: the note Kyoto trip under Files, and under In Notes and PDFs a match on page 1 of Flight tickets.pdf and one in the note Budget, then New Note kyoto" src="Design/screenshots/search-light.webp">
 </picture>
+
+### Everything with ⌘K
+
+⌘K opens a field over the window, as Spotlight does. It finds everything search finds, and runs what the menus do:
+for the note that is open (rename it, move it, duplicate it, set a reminder, draw, export, print, move it to the
+Trash), the text styles, a new note or folder, back and forward, the sidebar and outline, the text size, the typeface,
+and Settings, each with the keys that do it without ⌘K. Type a few letters of a command, or `>` first to see only
+commands. Move To… lists the folders as you type their names. The arrow keys and Return pick, Escape closes. On an iPad
+with a keyboard, ⌘K works the same.
 
 ### Remind me of a note
 
@@ -179,7 +199,7 @@ open. Links, the caret and folders are in ink blue to go with it, or in the acce
 The same notes in the same editor, laid out the way each device works. On the iPhone you go into one folder per screen,
 as in the Files app, and a note opens on a screen of its own; swipe from the edge to go back. The first screen has your
 favourites, what you opened last and the folders of each location. New Folder, search and a new note sit at the bottom,
-as in Notes, and search finds names, notes and PDFs as on the Mac. While you write, a bar floats above the keyboard with
+as in Notes, and search finds everything it finds on the Mac. While you write, a bar floats above the keyboard with
 Aa, a checklist, attachments, a link, undo and the formatting, a page of tools at a time. Which tools and in what order
 is yours to choose: touch and hold the bar, or tap the sliders after its last tool, or go to Settings › Writing Bar. Aa
 brings up the Format panel in the keyboard's place, as in Notes: the text styles, bold, italic and the rest, lists,
@@ -232,7 +252,8 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   that other apps show, with its strokes kept next to it so it stays a drawing in Notebook.
 - **PDFs, pictures, videos and other files** open in the window: PDFs and pictures as in Preview, videos as in
   QuickTime Player, the rest in Quick Look.
-- **Search** across file names, note text and PDF text.
+- **Search** for the names of notes, files and folders, headings, words in notes and PDFs, and the text in pictures,
+  scans and handwriting, in the background as you type. ⌘K finds the same and runs commands.
 - **Saves as you type,** and never overwrites a change made somewhere else (see below).
 - **Export** a note as a PDF or a PNG image, or print it (on iPhone and iPad: as a PDF to share, or print).
 - **Single files.** Open any Markdown file from the Finder or with ⌘O, and it gets a plain window of its own.
@@ -242,7 +263,8 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
 Everything is plain Markdown, so other apps keep reading your notes. Notebook adds no files of its own besides the
 `.assets` folders for pictures and files you add to notes, and in them, next to each drawing's picture, a `.drawing`
 file with its strokes. What isn't part of a note, such as the folders you hide and the reminders you set, is kept in
-the app's settings and iCloud's key-value store, not in your folders.
+the app's settings and iCloud's key-value store, not in your folders. What search knows, the text of your notes and
+PDFs and the words read in pictures, is kept in the app's caches on each device, from where it can always be read again.
 
 | What | In the file | In Notebook |
 | --- | --- | --- |
@@ -325,6 +347,7 @@ app's own folder there.
 | ⌘N | New note in the current folder |
 | ⇧⌘N | New folder in the current folder, named in place |
 | ⌘F | Search |
+| ⌘K | Search and run commands; `>` for commands only |
 | ⌘[ and ⌘], or swipe between pages | Back and forward; the swipe follows System Settings, as in Safari |
 | ⌘O | Open a Markdown file in a window of its own, or a folder in the sidebar |
 | ⌃⌘S | Show or hide the sidebar |
@@ -363,7 +386,7 @@ folder for everything else, including New Folder, Copy Link, which copies a `[[l
 Folder. As you point at a location's name, a folder with a plus comes up next to it for a new folder at its top, and,
 when the location has hidden folders, an eye that shows them.
 
-On an iPad with a keyboard, ⌘N, ⌘F, ⌘[ and ⌘], ⌃⌘I, ⇧⌘. and the shortcuts for writing work as on the Mac. On iPhone
+On an iPad with a keyboard, ⌘N, ⌘F, ⌘K, ⌘[ and ⌘], ⌃⌘I, ⇧⌘. and the shortcuts for writing work as on the Mac. On iPhone
 and iPad:
 
 | Gesture | Action |
@@ -388,8 +411,7 @@ Planned, and not built yet:
 
 - **Quick capture:** a widget, a control in Control Center and on the Lock Screen, the Action button and a share
   extension, all adding a note to an Inbox folder.
-- **Spotlight,** text recognition in pictures and scans, and a search index that's kept between launches; today it is
-  rebuilt at every launch.
+- **Spotlight:** notes don't turn up in Spotlight yet, only in Notebook's own search.
 - **Reminders at a place** (arriving or leaving) **and when a calendar event starts,** and on the iPhone a Live
   Activity that keeps the note on the Lock Screen. A reminder set on another device reaches an iPhone or iPad the next
   time Notebook runs there or gets time in the background. Reminders don't repeat.
@@ -397,7 +419,7 @@ Planned, and not built yet:
   Footnotes are styled but don't jump to their text.
 - On iPhone and iPad there is no Settings › App Icon (iOS only switches between icons built into the app), no PNG
   export and no window of its own for a single file.
-- **Sketches** as files of their own, next to your notes rather than in one, and search in handwriting.
+- **Sketches** as files of their own, next to your notes rather than in one.
 - Translations: the app is in English only.
 
 The full plan, with what is deliberately left out (tags, backlinks, a database, sync of its own), is in
@@ -417,7 +439,9 @@ Packages/NotebookKit/
     Drawing/                 Drawings: the strokes file and its picture, and drawing them in notes
     Files/                   Locations, the file tree read in the background, file operations, saving, watching, the
                              three-way merge, and the hidden folders and reminders kept in iCloud's key-value store
-    Index/                   Search over names, note text and PDF text, and how [[links]] resolve
+    Index/                   Search: the index of every file and how it is kept between launches, the corpus a
+                             search goes through on every core, the text read in pictures, scans and drawings, and
+                             how [[links]] resolve
     Platform/                The few names and calls that differ between AppKit and UIKit
     UI/                      The Mac's window, sidebar, inspector, search field, Settings and file windows; PDFs,
                              pictures, videos and Quick Look; what both share, such as the outline and search results
@@ -483,7 +507,9 @@ pictures. `-NotebookSlowFolders 2` makes every folder take two seconds to read, 
 nothing waits for it, `-NotebookSlowFiles 2` does the same for every note, PDF, picture and video you open, and
 `-NotebookSlowWrites 2` for every change to files: a new note or folder, a rename, a move, a copy, the Trash. On the
 Mac, `mainthread` logs how many folders were read and files changed on the main thread, which should be none.
-`timeopen <note>` logs how long opening a note keeps the window busy, and `search <text>` how long search takes. macOS
+`timeopen <note>` logs how long opening a note keeps the window busy, `search <text>` how long search takes, and
+`index` when after launch the kept index was read, search had every file and the files were checked, and how many
+notes that read. macOS
 shows notifications only from an app in a lasting place, not from one in `/tmp`.
 
 Builds for TestFlight are made and uploaded with [fastlane](https://fastlane.tools), signed in with an App Store

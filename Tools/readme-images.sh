@@ -120,8 +120,13 @@ for theme in dark light; do
   wait $recorder
   say "showcaret 0"
 
-  # Last, since the suggestions menu shows on screen even though the app is in the background.
-  say "palette" "wait 0.4" "type kyoto"; sleep 2
+  # ⌘K with nothing typed yet: what was opened last, then what can be done with the note that is open.
+  say "open Travel/Kyoto trip.md" "wait 1" "palette"; sleep 1.5; shot "palette-$theme"
+  say "key escape"; sleep 0.5
+
+  # Last, since the suggestions menu shows on screen even though the app is in the background. The reading of the
+  # pictures has had time by now, so the receipt in Budget is found too.
+  say "searchfocus" "wait 0.4" "type kyoto"; sleep 2
   "$work/capture" all "$pid" "$raw/search-$theme.png" > "$raw/search-$theme.txt"
   say "key escape"
 

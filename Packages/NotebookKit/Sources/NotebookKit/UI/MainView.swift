@@ -29,6 +29,7 @@ public struct RootView: View {
 /// A Mac window like the system's own: a sidebar of files, the note, and an inspector with the note's outline.
 struct MainView: View {
     @Bindable var workspace: Workspace
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         NavigationSplitView(columnVisibility: $workspace.columnVisibility) {
@@ -54,6 +55,7 @@ struct MainView: View {
                 .toolbar(removing: .title)
         }
         .navigationTitle(workspace.currentTitle)
+        .overlay { PaletteHost(workspace: workspace, actions: paletteActions) }
         .alert(conflictTitle, isPresented: Binding(get: { workspace.note?.conflict != nil }, set: { _ in }), presenting: workspace.note?.conflict) { _ in
             Button("Keep Both") { workspace.resolveConflict(.keepBoth) }
             Button("Keep This Version") { workspace.resolveConflict(.keepThis) }
@@ -61,6 +63,17 @@ struct MainView: View {
         } message: { conflict in
             Text("It changed on \(conflict.source) while you were editing it here. Keep both to have the other version as a copy next to it.")
         }
+    }
+
+    private var paletteActions: PaletteActions {
+        PaletteActions(
+            openSettings: { tab in
+                if let tab { UserDefaults.standard.set(tab, forKey: "settingsTab") }
+                openSettings()
+            },
+            newFolder: { workspace.newFolder() },
+            addLocation: { workspace.chooseLocation(iCloud: false) }
+        )
     }
 
     private var conflictTitle: String {
@@ -122,7 +135,7 @@ struct DocumentToolbar: ToolbarContent {
             SearchFieldItem(controller: workspace.search)
                 .frame(width: 190, height: 36)
                 .padding(.horizontal, 6)
-                .help("Search names, notes and PDFs (⌘F)")
+                .help("Search notes, files and pictures (⌘F)")
         }
         ToolbarSpacer(.fixed)
         ToolbarItem {
@@ -239,7 +252,7 @@ struct DetailColumn: View {
                 } else {
                     // What Preview and QuickTime Player open, Notebook draws itself; everything else is Quick Look's.
                     switch FileKind(url: url, isDirectory: false) {
-                    case .pdf: PDFFileView(url: url).id(url)
+                    case .pdf: PDFFileView(url: url, find: workspace.find(in: url)).id(url)
                     case .image: PictureFileView(url: url).id(url)
                     case .video: VideoFileView(url: url).id(url)
                     default: QuickLookView(url: url).id(url)
@@ -301,7 +314,7 @@ struct WelcomeView: View {
                 .padding(.bottom, 40)
             HStack(alignment: .top, spacing: 28) {
                 point("folder", "Plain files", "Every note is a .md file. Move it in Finder, open it anywhere.")
-                point("magnifyingglass", "Find anything", "⌘F searches names, notes and PDFs.")
+                point("magnifyingglass", "Find anything", "⌘F finds names, words in notes and PDFs, and text in pictures.")
                 point("icloud", "On every device", "iCloud Drive keeps your Mac, iPhone and iPad in step.")
             }
             .frame(maxWidth: 820)

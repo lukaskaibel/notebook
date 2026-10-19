@@ -240,6 +240,10 @@ enum DebugRemote {
             if editor.textView(editor.textView, shouldChangeTextIn: range, replacementText: words[1]) { editor.textView.replace(textRange, withText: words[1]) }
         case "qlclose":
             workspace.quickLookURL = nil
+        case "index":
+            // index: how the index was built and kept since launch, and what search has now.
+            let index = workspace.index
+            log("index files=\(index.count) building=\(index.isBuilding) search=\(index.corpus.items.count) | " + index.history.joined(separator: " | "))
         case "resolve":
             log("resolve \(argument): \(workspace.index.resolve(argument, from: workspace.currentURL)?.path ?? "nothing") building \(workspace.index.isBuilding) entries \(workspace.index.count)")
         case "suggestions":
@@ -263,6 +267,13 @@ enum DebugRemote {
                 }
             }
             log("refreshed \(argument)")
+        case "palette":
+            // palette: opens or closes ⌘K; palette rows: what its search found.
+            if argument == "rows" {
+                log("palette \(String(describing: workspace.palette)): " + workspace.paletteSearch.sections.map { "[\($0.title ?? "")] " + $0.items.map(\.title).joined(separator: " | ") }.joined(separator: " "))
+            } else {
+                workspace.togglePalette()
+            }
         case "tapdrawing":
             // A tap on the note's nth drawing, as a finger's.
             let drawings = editor.drawingObjects()
