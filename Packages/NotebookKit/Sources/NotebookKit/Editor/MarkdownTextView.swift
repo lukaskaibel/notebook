@@ -77,6 +77,12 @@ final class MarkdownTextView: NSTextView {
     // MARK: - Layout
 
     override func setFrameSize(_ newSize: NSSize) {
+        var newSize = newSize
+        // AppKit sizes the view to the text without the spacing after a last paragraph that no line break ends
+        // (`NotebookLayoutManager.usedRect`), where a diagram or formula being edited shows what it makes.
+        if isVerticallyResizable, let layoutManager = layoutManager as? NotebookLayoutManager, let container = textContainer {
+            newSize.height = max(newSize.height, ceil(layoutManager.usedRect(for: container).maxY + textContainerOrigin.y + textContainerInset.height))
+        }
         let changed = newSize != frame.size
         super.setFrameSize(newSize)
         updateInsets()

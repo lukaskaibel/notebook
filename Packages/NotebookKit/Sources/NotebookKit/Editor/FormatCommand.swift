@@ -107,3 +107,75 @@ extension EditorController {
         return line.spans.contains { format.matches($0.kind) && $0.range.location <= selection.location && $0.range.upperBound >= selection.upperBound }
     }
 }
+
+#if os(iOS)
+import SwiftUI
+import UIKit
+
+/// A shortcut of the iPad's Format menu, after the system's Bold and Italic, which the text view turns into Markdown.
+/// The note's text view takes these keys itself (`MarkdownTextView.keyCommands`), listed while ⌘ is held: buttons in
+/// the system's Format menu don't get their shortcuts on iPad.
+struct FormatShortcut {
+    /// What it does; nil for Mark as Checked.
+    let command: FormatCommand?
+    let key: Character
+    let modifiers: EventModifiers
+
+    init(_ command: FormatCommand?, _ key: Character, _ modifiers: EventModifiers = .command) {
+        self.command = command
+        self.key = key
+        self.modifiers = modifiers
+    }
+
+    var name: String { command?.name ?? "Mark as Checked" }
+    var symbol: String { command?.symbol ?? "checkmark.circle" }
+
+    /// As the menu shows them, between dividers.
+    static let groups: [[FormatShortcut]] = [
+        [
+            FormatShortcut(.strikethrough, "x", [.command, .shift]),
+            FormatShortcut(.highlight, "h", [.command, .control]),
+            FormatShortcut(.code, "e"),
+            FormatShortcut(.link, "l"),
+        ],
+        [
+            FormatShortcut(.title, "t", [.command, .shift]),
+            FormatShortcut(.heading, "h", [.command, .shift]),
+            FormatShortcut(.subheading, "j", [.command, .shift]),
+            FormatShortcut(.body, "b", [.command, .shift]),
+        ],
+        [
+            FormatShortcut(.checklist, "l", [.command, .shift]),
+            FormatShortcut(nil, "u", [.command, .shift]),
+            FormatShortcut(.bulletedList, "7", [.command, .shift]),
+            FormatShortcut(.numberedList, "9", [.command, .shift]),
+            FormatShortcut(.quote, "'"),
+        ],
+        [
+            FormatShortcut(.indent, "]", [.command, .option]),
+            FormatShortcut(.outdent, "[", [.command, .option]),
+        ],
+    ]
+
+    static let all = Array(groups.joined())
+
+    /// The shortcut as a key command for the text view, named for the list shown while ⌘ is held. Its property list is
+    /// its place in `all`.
+    func keyCommand(action: Selector, index: Int) -> UIKeyCommand {
+        var flags: UIKeyModifierFlags = []
+        if modifiers.contains(.command) { flags.insert(.command) }
+        if modifiers.contains(.shift) { flags.insert(.shift) }
+        if modifiers.contains(.option) { flags.insert(.alternate) }
+        if modifiers.contains(.control) { flags.insert(.control) }
+        let command = UIKeyCommand(title: name, image: UIImage(systemName: symbol), action: action, input: String(key), modifierFlags: flags, propertyList: index)
+        command.wantsPriorityOverSystemBehavior = true
+        return command
+    }
+}
+
+extension EditorController {
+    func perform(_ shortcut: FormatShortcut) {
+        if let command = shortcut.command { perform(command) } else { toggleChecked() }
+    }
+}
+#endif

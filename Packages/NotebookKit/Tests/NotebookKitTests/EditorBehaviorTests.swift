@@ -286,6 +286,39 @@ final class EditorBehaviorTests: XCTestCase {
         XCTAssertEqual(h.selection.location, two.upperBound)
     }
 
+    func testATableTypedShowsItsSourceAfterTheCaretComesBack() {
+        let h = EditorHarness("Steps")
+        h.caret(h.text.utf16.count)
+        h.type("\n\n| Key | Does |\n|---|---|\n| Up | Moves |")
+        XCTAssertNotNil(h.editor.activeBlock, "the table being typed is open")
+        XCTAssertEqual(h.visibleText(in: h.range(of: "| Up | Moves |")), "| Up | Moves |")
+        h.type("\nmore")
+        XCTAssertNil(h.editor.activeBlock)
+        XCTAssertFalse(h.isVisible(h.range(of: "| Up").location + 2), "left, it is drawn")
+        for _ in 0..<5 { h.command(#selector(NSResponder.deleteBackward(_:))) }
+        XCTAssertNotNil(h.editor.activeBlock, "back in it, it is open again")
+        XCTAssertEqual(h.visibleText(in: h.range(of: "| Up | Moves |")), "| Up | Moves |", "and its source shows")
+        XCTAssertEqual(h.visibleText(in: h.range(of: "| Key | Does |")), "| Key | Does |")
+    }
+
+    func testABlockAtTheEndKeepsItsBoxAndRoom() {
+        let box = { (h: EditorHarness, at: String) in h.editor.layoutManager.blockBox(at: h.range(of: at).location, origin: .zero)?.height }
+        let table = "Steps\n\n| Key | Does |\n|---|---|\n| Up | Moves |"
+        let endingTable = EditorHarness(table, height: 200)
+        let followedTable = EditorHarness(table + "\n", height: 200)
+        for h in [endingTable, followedTable] { h.caret(h.range(of: "Moves").location) }
+        XCTAssertEqual(box(endingTable, "| Up"), box(followedTable, "| Up"), "the box goes round the last row, at the end of the note too")
+
+        // A formula being edited shows what it makes under its source, in room below the last line.
+        let formula = "Area\n\n$$\nE = mc^2\n$$"
+        let endingFormula = EditorHarness(formula, height: 200)
+        let followedFormula = EditorHarness(formula + "\n", height: 200)
+        for h in [endingFormula, followedFormula] { h.caret(h.range(of: "mc").location) }
+        XCTAssertNotNil(box(endingFormula, "E ="))
+        XCTAssertEqual(box(endingFormula, "E ="), box(followedFormula, "E ="))
+        XCTAssertGreaterThanOrEqual(endingFormula.textView.frame.height + 1, followedFormula.textView.frame.height - EditorStyle.lineHeight, "and room for its preview")
+    }
+
     // MARK: - Formatting
 
     func testCommandBTogglesBold() {
@@ -302,6 +335,42 @@ final class EditorBehaviorTests: XCTestCase {
         h.select(h.range(of: "this"))
         h.type("*")
         XCTAssertEqual(h.text, "make *this* italic")
+    }
+
+    func testBoldOverWholeLinesLeavesTheirPunctuationOutside() {
+        let h = EditorHarness("- [ ] Milk\n- [x] Eggs\n\n## Later")
+        h.select(NSRange(location: 0, length: h.text.utf16.count))
+        h.textView.toggleBoldface(nil)
+        XCTAssertEqual(h.text, "- [ ] **Milk**\n- [x] **Eggs**\n\n## **Later**")
+        XCTAssertEqual(h.editor.nsText.substring(with: h.selection), "**Milk**\n- [x] **Eggs**\n\n## **Later**", "a selection takes bold whole")
+        h.textView.toggleBoldface(nil)
+        XCTAssertEqual(h.text, "- [ ] Milk\n- [x] Eggs\n\n## Later", "and pressed again, it comes off every line")
+        XCTAssertEqual(h.editor.nsText.substring(with: h.selection), "Milk\n- [x] Eggs\n\n## Later")
+    }
+
+    func testFormattingSkipsCodeAndRules() {
+        let h = EditorHarness("Run\n\n```\nmake\n```\n\n---\n\nDone")
+        h.select(NSRange(location: 0, length: h.text.utf16.count))
+        h.textView.toggleItalics(nil)
+        XCTAssertEqual(h.text, "*Run*\n\n```\nmake\n```\n\n---\n\n*Done*")
+    }
+
+    func testBoldKeepsAnEmojiAtTheSelectionsEdgeWhole() {
+        let h = EditorHarness("Party 🎉")
+        h.select(NSRange(location: 0, length: h.text.utf16.count))
+        h.textView.toggleBoldface(nil)
+        XCTAssertEqual(h.text, "**Party 🎉**")
+    }
+
+    func testTypingAMarkerOverAWholeLineWrapsItsWords() {
+        let h = EditorHarness("> Quoted words ")
+        h.select(NSRange(location: 0, length: h.text.utf16.count))
+        h.type("_")
+        XCTAssertEqual(h.text, "> _Quoted words_ ")
+        let cell = EditorHarness("| A | B |\n| --- | --- |\n| one | two |")
+        cell.select(cell.range(of: "| one | two |"))
+        cell.type("*")
+        XCTAssertEqual(cell.text, "| A | B |\n| --- | --- |\n*", "across cells the marker is typed, as anywhere else")
     }
 
     func testUndoAfterListContinuation() {

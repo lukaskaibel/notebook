@@ -131,6 +131,17 @@ versions follow [semantic versioning](https://semver.org).
   renamed folder now also stays selected, as in the Finder.
 - Checkboxes and bullets sat two points above the middle of their text, and so did the heading level in the margin, the
   icons of links and callouts, and maths within a line. They now line up with the text.
+- Going back into a table, formula or diagram while typing, such as with Backspace from the line below, could leave
+  its Markdown hidden although the caret was in it. It now shows as soon as the caret is back.
+- A table, code block, formula or diagram at the very end of a note, with no line after it, had its box cut short while
+  you edited it, and a formula's or diagram's picture lay over its last line, or below the end of the page.
+- Bold, italic and the other formatting over whole lines, from the menu, a shortcut or by typing a `*` or `_`, also
+  wrapped the lines' `- [ ] `, `## ` and `> `, so other apps no longer saw a list, a heading or a quote. Now the words
+  of each line get it, code and empty lines are left as they are, and doing it again over the same lines takes it off
+  every one.
+- Bold or italic over text that ended in an emoji left the emoji outside the formatting.
+- On an iPad with a keyboard, the Format menu's shortcuts other than ⌘B and ⌘I, such as ⇧⌘T for a title or ⇧⌘L for a
+  checklist, did nothing. They now work in the note you are writing in.
 
 ## [0.1.0] – not released yet
 

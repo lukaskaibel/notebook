@@ -87,6 +87,19 @@ final class MarkdownTextView: UITextView {
 
     private var laidOutWidth: CGFloat = 0
 
+    // UIKit may size the content to the text without the spacing after a last paragraph that no line break ends
+    // (`NotebookLayoutManager.usedRect`), where a diagram or formula being edited shows what it makes.
+    override var contentSize: CGSize {
+        get { super.contentSize }
+        set {
+            var size = newValue
+            if let layoutManager = layoutManager as? NotebookLayoutManager {
+                size.height = max(size.height, ceil(layoutManager.usedRect(for: textContainer).maxY + textContainerInset.top + textContainerInset.bottom))
+            }
+            super.contentSize = size
+        }
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         updateInsets()
@@ -266,7 +279,16 @@ final class MarkdownTextView: UITextView {
             command("\t", .shift, #selector(outdentLines))
             if controller?.isCaretOnFirstLine == true { command(UIKeyCommand.inputUpArrow, [], #selector(moveUpIntoTitle)) }
         }
+        // The Format menu's shortcuts, which its buttons don't get on iPad.
+        if isEditable, isFirstResponder {
+            commands += FormatShortcut.all.enumerated().map { index, shortcut in shortcut.keyCommand(action: #selector(formatShortcut(_:)), index: index) }
+        }
         return commands
+    }
+
+    @objc private func formatShortcut(_ sender: UIKeyCommand) {
+        guard let index = sender.propertyList as? Int, let shortcut = FormatShortcut.all[safe: index] else { return }
+        controller?.perform(shortcut)
     }
 
     @objc private func suggestionUp() { controller?.suggestions.move(by: -1) }
