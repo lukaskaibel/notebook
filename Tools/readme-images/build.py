@@ -106,6 +106,8 @@ for theme in [] if only == "devices" else ["dark", "light"]:
     # The whole window: the bell in the sidebar, under the title and in the inspector, and Remind Me… open.
     webp(place(window(f"reminder-{theme}"), theme, (130, 110), 1800), f"reminder-{theme}")
     webp(place(window(f"quicklook-{theme}"), theme, (130, 110), 1800), f"quicklook-{theme}")
+    # ⌘K over the dimmed window.
+    webp(place(window(f"palette-{theme}"), theme, (130, 110), 1800), f"palette-{theme}")
     webp(search(theme), f"search-{theme}")
 
 def devices(theme):

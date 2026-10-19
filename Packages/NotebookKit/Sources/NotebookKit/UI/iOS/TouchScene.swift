@@ -97,6 +97,9 @@ struct TouchCommands: Commands {
         CommandMenu("Go") {
             Button { workspace.searchRequest += 1 } label: { Label("Search", systemImage: "magnifyingglass") }
                 .keyboardShortcut("f", modifiers: .command)
+            Button { workspace.togglePalette() } label: { Label("Command Palette", systemImage: "command") }
+                .keyboardShortcut("k", modifiers: .command)
+                .disabled(workspace.locations.isEmpty)
             Button { workspace.goBack() } label: { Label("Back", systemImage: "chevron.backward") }
                 .keyboardShortcut("[", modifiers: .command)
                 .disabled(!workspace.canGoBack)
@@ -162,7 +165,7 @@ struct TouchWelcomeView: View {
                     .padding(.bottom, 36)
                 VStack(alignment: .leading, spacing: 22) {
                     point("folder", "Plain files", "Every note is a .md file. Move it in Files, open it anywhere.")
-                    point("magnifyingglass", "Find anything", "Search finds names, notes and PDFs.")
+                    point("magnifyingglass", "Find anything", "Search finds names, notes, PDFs and text in pictures.")
                     point("icloud", "On every device", "iCloud Drive keeps your iPhone, iPad and Mac in step.")
                 }
                 .padding(.bottom, 40)
@@ -260,8 +263,11 @@ struct TouchSettings: View {
                     LabeledContent("Indexed") {
                         Text(workspace.index.isBuilding ? "Reading your files…" : "\(workspace.index.count) files")
                     }
+                    Toggle("Find Text in Pictures", isOn: Bindable(NotebookSettings.shared).readsTextInPictures)
                 } header: {
                     Text("Search")
+                } footer: {
+                    Text("Notebook reads the words in pictures, scanned PDFs and handwriting on this device, in the background, so search finds them.")
                 }
                 Section {
                     LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")

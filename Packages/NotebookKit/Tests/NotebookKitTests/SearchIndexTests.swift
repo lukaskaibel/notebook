@@ -84,7 +84,7 @@ final class SearchIndexTests: XCTestCase {
             }
             XCTAssertEqual(index.files(matching: query, limit: 6).map(\.path), sorted.prefix(6).map(\.1.path), query)
         }
-        XCTAssertEqual(index.textHits("about p", limit: 3).map(\.entry.name), ["Plum and nuts", "pan", "p l a n"], "newest first")
+        XCTAssertEqual(index.textHits("about p", limit: 3).map(\.item.name), ["Plum and nuts", "pan", "p l a n"], "newest first")
         XCTAssertEqual(index.linkSuggestions("", from: nil).map(\.title), ["explain", "Plum and nuts", "pan", "p l a n", "airplane", "the-plan"])
     }
 

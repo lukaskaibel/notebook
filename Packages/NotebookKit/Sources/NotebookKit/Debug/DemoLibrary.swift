@@ -100,6 +100,10 @@ enum DemoLibrary {
 
         Roughly **€2,450** in total at today's rate.
 
+        The rail pass, from the counter at the station:
+
+        ![](.assets/rail%20pass%20receipt.jpg)
+
         """)
         write("Personal/Weekend.md", """
         Market on Saturday morning, cooking with Mia in the evening. Sunday stays empty on purpose.
@@ -180,6 +184,11 @@ enum DemoLibrary {
         drawTorii(to: root.appendingPathComponent("Travel/.assets/torii.png"))
         drawRoute(to: root.appendingPathComponent("Travel/.assets/Getting to the ryokan drawing.png"))
         drawTorii(to: root.appendingPathComponent("Travel/ryokan.jpg"), jpeg: true)
+        drawReceipt(to: root.appendingPathComponent("Travel/.assets/rail pass receipt.jpg"))
+        makeScan(at: root.appendingPathComponent("Travel/Ryokan confirmation.pdf"), lines: [
+            "RYOKAN HANAYA", "Reservation confirmed", "4 nights, 13 to 17 October, two guests",
+            "Room Kiku, garden side", "Check-in from 15:00, dinner at 19:00",
+        ])
         makePDF(at: root.appendingPathComponent("Travel/Flight tickets.pdf"), title: "Itinerary receipt", lines: [
             "Booking reference K7Q2LM", "Outbound Mon 12 Oct: FRA 13:40 to KIX 08:45, flight XY 2041",
             "Return Sat 17 Oct: KIX 10:55 to FRA 16:15, flight XY 2042", "Haruka express from Kansai Airport to Kyoto Station",
@@ -280,7 +289,98 @@ enum DemoLibrary {
             return (556 + CGFloat(cos(angle)) * 72, 236 + CGFloat(sin(angle)) * 54)
         }
         stroke(hand(ring, seed: 13), .pen, 0xE5483E, width: 3)
+        // The ryokan's name, written under the way to it, and the station's: words to find in a drawing.
+        write("Hanaya", size: 3.2, at: CGPoint(x: 312, y: 268), seed: 20)
+        write("Station", size: 2.4, at: CGPoint(x: 60, y: 22), seed: 30)
         DrawingFile(drawing: PKDrawing(strokes: strokes), size: CGSize(width: 640, height: 300)).write(picture: picture)
+
+        /// A word in print as a hand writes it, a stroke for each line of a letter, `at` the start of its baseline.
+        func write(_ word: String, size: CGFloat, at origin: CGPoint, seed: Double) {
+            var x = origin.x
+            for (number, letter) in word.enumerated() {
+                guard let shape = letters[letter] else { continue }
+                for (index, line) in shape.strokes.enumerated() {
+                    let points = line.map { (x + $0.0 * size, origin.y + ($0.1 - 10) * size) }
+                    stroke(hand(points, seed: seed + Double(number * 7 + index)), width: 2.6)
+                }
+                x += (shape.width + 2) * size
+            }
+        }
+    }
+
+    /// Print letters as single strokes, in a box 10 high from the top of a capital to the baseline, the middle of a
+    /// small letter at 4.5 and descenders below 10: (width, strokes).
+    private static let letters: [Character: (width: CGFloat, strokes: [[(CGFloat, CGFloat)]])] = [
+        "H": (6, [[(0, 0), (0, 10)], [(6, 0), (6, 10)], [(0, 5), (6, 5)]]),
+        "S": (5.4, [[(5, 1.2), (3.6, 0), (1.6, 0), (0.3, 1.2), (0.6, 3.2), (2.6, 4.6), (4.6, 6), (5.4, 8), (4.4, 9.6), (2.4, 10), (0.4, 9)]]),
+        "a": (5, [[(4.6, 5.6), (3.4, 4.6), (1.8, 4.7), (0.4, 6.2), (0.3, 8.4), (1.4, 9.9), (3, 10), (4.6, 8.6)], [(4.8, 4.6), (4.8, 10)]]),
+        "n": (4.6, [[(0, 4.5), (0, 10)], [(0, 6.4), (1.3, 4.8), (2.8, 4.5), (4.2, 5.4), (4.6, 7), (4.6, 10)]]),
+        "y": (5, [[(0, 4.5), (2.6, 10)], [(5, 4.5), (2.6, 10), (1.6, 12.6), (0.4, 13.4)]]),
+        "t": (4, [[(1.8, 1.4), (1.8, 9), (2.6, 10), (3.8, 9.7)], [(0, 4.7), (3.6, 4.7)]]),
+        "i": (1, [[(0.5, 4.6), (0.5, 10)], [(0.5, 2.4), (0.6, 2.9)]]),
+        "o": (5, [[(2.5, 4.5), (0.8, 5.3), (0, 7.3), (0.8, 9.3), (2.5, 10), (4.2, 9.3), (5, 7.3), (4.2, 5.3), (2.5, 4.5)]]),
+    ]
+
+    /// A photo of a receipt from the station's counter, slightly turned, on a wooden table: text to find in a picture.
+    private static func drawReceipt(to url: URL) {
+        let width = 1100, height = 760
+        guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+        context.setFillColor(red: 0.62, green: 0.47, blue: 0.34, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        context.translateBy(x: CGFloat(width) / 2, y: CGFloat(height) / 2)
+        context.rotate(by: -0.035)
+        let paper = CGRect(x: -330, y: -340, width: 660, height: 680)
+        context.setShadow(offset: CGSize(width: 0, height: -6), blur: 18, color: CGColor(gray: 0, alpha: 0.35))
+        context.setFillColor(red: 0.98, green: 0.97, blue: 0.94, alpha: 1)
+        context.fill(paper)
+        context.setShadow(offset: .zero, blur: 0, color: nil)
+        let lines: [(String, CGFloat, Bool)] = [
+            ("JR WEST", 30, true), ("KYOTO STATION", 22, false), ("", 14, false),
+            ("JAPAN RAIL PASS", 34, true), ("ORDINARY 7 DAYS  1 ADULT", 22, false), ("VALID 12 OCT - 18 OCT", 22, false),
+            ("", 14, false), ("TOTAL      JPY 50,000", 28, true), ("PAID BY CARD", 20, false), ("THANK YOU", 20, false),
+        ]
+        var y = paper.maxY - 70
+        for (text, size, bold) in lines {
+            let font = CTFontCreateWithName((bold ? "Menlo-Bold" : "Menlo-Regular") as CFString, size, nil)
+            let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [
+                .init(kCTFontAttributeName as String): font,
+                .init(kCTForegroundColorAttributeName as String): CGColor(gray: 0.12, alpha: 1),
+            ]))
+            let lineWidth = CTLineGetTypographicBounds(line, nil, nil, nil)
+            context.textPosition = CGPoint(x: -lineWidth / 2, y: y)
+            CTLineDraw(line, context)
+            y -= size * 1.75
+        }
+        guard let image = context.makeImage(),
+              let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.jpeg.identifier as CFString, 1, nil) else { return }
+        CGImageDestinationAddImage(destination, image, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
+        CGImageDestinationFinalize(destination)
+    }
+
+    /// A scanned page: a picture of the text with no text of its own, as a scanner or the camera makes it.
+    private static func makeScan(at url: URL, lines: [String]) {
+        let width = 1240, height = 1754
+        guard let page = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                   space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return }
+        page.setFillColor(red: 0.97, green: 0.97, blue: 0.95, alpha: 1)
+        page.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        for (index, text) in lines.enumerated() {
+            let font = CTFontCreateWithName((index == 0 ? "Georgia-Bold" : "Georgia") as CFString, index == 0 ? 54 : 32, nil)
+            let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [
+                .init(kCTFontAttributeName as String): font,
+                .init(kCTForegroundColorAttributeName as String): CGColor(gray: 0.15, alpha: 1),
+            ]))
+            page.textPosition = CGPoint(x: 120, y: CGFloat(height - 220) - CGFloat(index) * 70 - (index > 0 ? 40 : 0))
+            CTLineDraw(line, page)
+        }
+        guard let image = page.makeImage() else { return }
+        var box = CGRect(x: 0, y: 0, width: 595, height: 842)
+        guard let context = CGContext(url as CFURL, mediaBox: &box, nil) else { return }
+        context.beginPDFPage(nil)
+        context.draw(image, in: box)
+        context.endPDFPage()
+        context.closePDF()
     }
 
     private static func makePDF(at url: URL, title: String, lines: [String]) {

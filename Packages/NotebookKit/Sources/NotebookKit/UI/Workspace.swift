@@ -44,7 +44,20 @@ public final class Workspace: NSObject {
     #if os(macOS)
     /// The search field in the toolbar.
     @ObservationIgnored lazy var search = SearchController(workspace: self)
+    #else
+    /// Search on iPhone and iPad: one field is out at a time.
+    @ObservationIgnored lazy var searchSession = SearchSession(workspace: self)
     #endif
+    /// Reads the text in pictures, scans and drawings for search.
+    @ObservationIgnored lazy var recognizer = TextRecognizer(index: index)
+    /// ⌘K, over the window.
+    var palette: PaletteMode?
+    /// What ⌘K finds.
+    @ObservationIgnored lazy var paletteSearch = SearchSession(workspace: self)
+    /// A PDF opened from search, with the words to show in it.
+    private(set) var pdfFind: (url: URL, find: PDFFind)?
+    /// Where to take a note opened from search once its text is there.
+    @ObservationIgnored private var pendingPlace: (url: URL, place: NotePlace)?
     var columnVisibility: NavigationSplitViewVisibility = .all
     var isSidebarVisible: Bool {
         get { columnVisibility != .detailOnly }
@@ -98,6 +111,11 @@ public final class Workspace: NSObject {
     var problem: Problem?
     /// Counts ⌘F, which puts the caret in the search field.
     var searchRequest = 0
+    #if os(iOS)
+    /// Counts the times ⌘K asked for Settings and for Add Location, which the screens show.
+    var settingsRequest = 0
+    var locationRequest = 0
+    #endif
     /// A file to delete for good, once you said so, where there is no Recently Deleted to put it in.
     var deleting: URL?
     /// A note to set a reminder for, in a sheet.
@@ -147,6 +165,7 @@ public final class Workspace: NSObject {
         }
         index.onFoldersChanged = { [weak self] in self?.prepareMoveFolders() }
         index.onRefreshed = { [weak self] in self?.editor.refreshLinks() }
+        index.onIndexed = { [weak self] entries in self?.recognizer.consider(entries) }
         #if os(macOS)
         pages.workspace = self
         #endif
@@ -193,8 +212,12 @@ public final class Workspace: NSObject {
             }
         }
         #endif
+        // The index kept from the last run is read while the locations are looked up, for search to have it all at once.
+        index.storeURL = SearchIndex.storeURL(library: temporaryLocations ? locations.first?.url.path : nil)
+        index.loadKept(for: locations)
         hidden.onChange = { [weak self] in self?.hiddenFoldersChanged() }
         reminders.onChange = { [weak self] in self?.remindersChanged() }
+        readTextInPictures(NotebookSettings.shared.readsTextInPictures)
         watchForDueReminders()
         let last = temporaryLocations ? nil : UserDefaults.standard.string(forKey: "lastOpened")
         locationsChanged(resolving: true, reading: last.map { [$0] } ?? [])
@@ -537,8 +560,55 @@ public final class Workspace: NSObject {
 
     // MARK: - Opening
 
+    /// Opens what search found: a file, or a note or PDF at the words, heading or picture found in it.
+    func open(_ result: SearchResult) {
+        switch result {
+        case .file(let url): open(url)
+        case .text(let url, let words, let page): open(url, at: .words(words), page: page)
+        case .heading(let url, let title): open(url, at: .heading(title))
+        case .picture(let url, let asset):
+            if let asset { open(url, at: .asset(asset)) } else { open(url) }
+        case .newNote(let title): newNote(title: title)
+        }
+    }
+
+    /// Opens a note scrolled to a place in it, with that selected; a PDF at the words on their page.
+    func open(_ url: URL, at place: NotePlace, page: Int? = nil) {
+        let target = url.standardizedFileURL
+        if FileKind(url: target, isDirectory: false) == .pdf {
+            if case .words(let words) = place { pdfFind = (target, PDFFind(words: words, page: page)) }
+            open(target)
+            return
+        }
+        if target == currentURL, let note, note.isLoaded {
+            editor.reveal(place)
+            return
+        }
+        pendingPlace = (target, place)
+        open(target)
+    }
+
+    /// The words to show in the PDF that is open, if it was opened from search.
+    func find(in url: URL) -> PDFFind? {
+        guard let pdfFind, pdfFind.url == url.standardizedFileURL else { return nil }
+        return pdfFind.find
+    }
+
+    /// Reading the text in pictures, scans and drawings, or not, from Settings.
+    func readTextInPictures(_ reads: Bool) {
+        // Never in tests: they make pictures of their own and look at search before it could have read them.
+        guard reads, ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else {
+            recognizer.stop()
+            return
+        }
+        recognizer.start()
+        if !index.isBuilding { recognizer.consider(index.byPathSnapshot) }
+    }
+
     public func open(_ url: URL, recordHistory: Bool = true, focusTitle: Bool = false) {
         let target = url.standardizedFileURL
+        // Words found by search show in the PDF opened for them, not when you come back to it later.
+        if let pdfFind, !FileNode.samePath(pdfFind.url, target) { self.pdfFind = nil }
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: target.path, isDirectory: &isDirectory) || target.lastPathComponent.hasSuffix(".icloud") else { return }
         if isDirectory.boolValue, !isPackage(target) {
@@ -614,6 +684,10 @@ public final class Workspace: NSObject {
                     title: focusTitle ? "" : document.url.deletingPathExtension().lastPathComponent, meta: meta(for: document), focusTitle: focusTitle)
         updateReminderLine()
         if document.isLoaded, let place { restore(place) }
+        if document.isLoaded, let pending = pendingPlace {
+            pendingPlace = nil
+            if FileNode.samePath(pending.url, document.url) { editor.reveal(pending.place) }
+        }
         // The editor only reports changes, and a Quick Look file in between cleared the outline here.
         editorOutlineDidChange(editor)
         editorPositionDidChange(editor)
@@ -1314,6 +1388,8 @@ public final class Workspace: NSObject {
     /// before it goes on.
     public func saveAll(quitting: Bool = false) {
         editor.saveDrawingsNow(waiting: quitting)
+        // Not as the app quits, which wouldn't wait for it: the next launch reads what changed.
+        if !quitting { index.keepChanges() }
         guard let note else { return }
         note.update(text: editor.text)
         note.saveNow()

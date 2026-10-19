@@ -329,7 +329,7 @@ final class LocationTests: XCTestCase {
         index.refresh(folders: [papers, old], locations: workspace.locations)
         for _ in 0..<100 where index.entry(for: old.appendingPathComponent("Deep.md")) == nil { try await Task.sleep(for: .milliseconds(20)) }
         XCTAssertEqual(index.count, before + 3)
-        XCTAssertEqual(index.textHits("quantum").map(\.entry.name), ["Paper"])
+        XCTAssertEqual(index.textHits("quantum").map(\.item.name), ["Paper"])
         XCTAssertEqual(index.resolve("Deep", from: plan)?.lastPathComponent, "Deep.md")
 
         try FileManager.default.removeItem(at: old)

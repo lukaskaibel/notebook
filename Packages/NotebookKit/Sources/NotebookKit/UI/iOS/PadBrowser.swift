@@ -26,6 +26,13 @@ struct PadBrowser: View {
         // Room for the sidebar, a column of text and the outline: an iPad in landscape. In portrait, even the 13-inch
         // one's, the text would get too narrow with all three.
         .onGeometryChange(for: Bool.self) { $0.size.width >= 1100 } action: { isWide = $0 }
+        .overlay {
+            PaletteHost(workspace: workspace, actions: PaletteActions(
+                openSettings: { _ in showsSettings = true },
+                newFolder: { newFolderIn = workspace.selectedFolder ?? workspace.folderForNewNote ?? workspace.locations.first?.url },
+                addLocation: { addsLocation = true }
+            ), top: 80)
+        }
         .modifier(FileAlerts(workspace: workspace, newFolderIn: $newFolderIn))
         .sheet(isPresented: $showsSettings) { TouchSettings(workspace: workspace) }
         .folderImporter(isPresented: $addsLocation, workspace: workspace)
@@ -61,9 +68,10 @@ struct PadBrowser: View {
             PadSidebar(workspace: workspace, query: query, newFolderIn: $newFolderIn)
                 .navigationTitle("Notebook")
                 .searchable(text: $query, placement: .sidebar, prompt: "Search")
+                .onChange(of: query, initial: true) { _, query in workspace.searchSession.update(query) }
                 .searchFocused($isSearchFocused)
                 .onSubmit(of: .search) {
-                    if let first = SearchSection.sections(for: query, in: workspace).first?.items.first { open(first.result) }
+                    if let first = workspace.searchSession.sections.first?.items.first { workspace.open(first.result) }
                 }
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -107,12 +115,6 @@ struct PadBrowser: View {
         }
     }
 
-    private func open(_ result: SearchResult) {
-        switch result {
-        case .file(let url): workspace.open(url)
-        case .newNote(let title): workspace.newNote(title: title)
-        }
-    }
 }
 
 /// The sidebar: search results while you search; otherwise favourites and a section for every location, with its
@@ -129,12 +131,7 @@ struct PadSidebar: View {
         ScrollViewReader { proxy in
             List(selection: selection) {
                 if isSearching {
-                    SearchResultsList(workspace: workspace, query: query) { result in
-                        switch result {
-                        case .file(let url): workspace.open(url)
-                        case .newNote(let title): workspace.newNote(title: title)
-                        }
-                    }
+                    SearchResultsList(workspace: workspace, query: query) { workspace.open($0) }
                 } else {
                     let favorites = workspace.favoriteURLs
                     if !favorites.isEmpty {
