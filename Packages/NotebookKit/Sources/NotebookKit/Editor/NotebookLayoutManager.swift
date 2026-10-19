@@ -705,6 +705,23 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
         return blockRect(extent(of: decoration, around: run), container: container, origin: origin)
     }
 
+    /// Whether a run of text is the end of the note without a line break after it: TextKit leaves out the spacing after
+    /// that last paragraph.
+    private func endsWithoutSpacing(_ range: NSRange) -> Bool {
+        guard let storage = textStorage, range.length > 0, range.upperBound >= storage.length else { return false }
+        return (storage.string as NSString).character(at: storage.length - 1) != 10
+    }
+
+    /// The room the text takes, with the spacing after its last paragraph that TextKit leaves out when no line break
+    /// ends the note: a diagram or formula being edited there shows what it makes in it.
+    override func usedRect(for container: NSTextContainer) -> NSRect {
+        var rect = super.usedRect(for: container)
+        guard let storage = textStorage, endsWithoutSpacing(NSRange(location: 0, length: storage.length)) else { return rect }
+        let style = storage.attribute(.paragraphStyle, at: storage.length - 1, effectiveRange: nil) as? NSParagraphStyle
+        rect.size.height += style?.paragraphSpacing ?? 0
+        return rect
+    }
+
     /// From the top of a block's first line to the bottom of its last, without the spacing around it, across the
     /// whole width of the text.
     private func blockRect(_ range: NSRange, container: NSTextContainer, origin: NSPoint) -> NSRect? {
@@ -717,7 +734,7 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
         let firstStyle = storage.attribute(.paragraphStyle, at: range.location, effectiveRange: nil) as? NSParagraphStyle
         let lastStyle = storage.attribute(.paragraphStyle, at: max(range.location, range.upperBound - 1), effectiveRange: nil) as? NSParagraphStyle
         let top = first.minY + (firstStyle?.paragraphSpacingBefore ?? 0)
-        let bottom = last.maxY - (lastStyle?.paragraphSpacing ?? 0)
+        let bottom = last.maxY - (endsWithoutSpacing(range) ? 0 : lastStyle?.paragraphSpacing ?? 0)
         let x = container.lineFragmentPadding
         return NSRect(x: origin.x + x, y: origin.y + top, width: container.size.width - x * 2, height: bottom - top)
     }

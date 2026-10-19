@@ -10,8 +10,19 @@
 		F10000000000000000000001 /* NotebookKit in Frameworks */ = {isa = PBXBuildFile; productRef = F10000000000000000000010 /* NotebookKit */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		F10000000000000000000031 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F1000000000000000000000B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F10000000000000000000008;
+			remoteInfo = Notebook;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		F10000000000000000000002 /* Notebook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Notebook.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F10000000000000000000030 /* NotebookUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NotebookUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F10000000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		F10000000000000000000021 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Shared.xcconfig; sourceTree = "<group>"; };
 		F10000000000000000000024 /* Notebook-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Notebook-macOS.entitlements"; sourceTree = "<group>"; };
@@ -22,6 +33,11 @@
 		F10000000000000000000004 /* Notebook */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Notebook;
+			sourceTree = "<group>";
+		};
+		F10000000000000000000032 /* NotebookUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = NotebookUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -35,6 +51,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F10000000000000000000033 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -42,6 +65,7 @@
 			isa = PBXGroup;
 			children = (
 				F10000000000000000000004 /* Notebook */,
+				F10000000000000000000032 /* NotebookUITests */,
 				F10000000000000000000020 /* Config */,
 				F10000000000000000000007 /* Products */,
 			);
@@ -51,6 +75,7 @@
 			isa = PBXGroup;
 			children = (
 				F10000000000000000000002 /* Notebook.app */,
+				F10000000000000000000030 /* NotebookUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -92,6 +117,27 @@
 			productReference = F10000000000000000000002 /* Notebook.app */;
 			productType = "com.apple.product-type.application";
 		};
+		F10000000000000000000034 /* NotebookUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F10000000000000000000037 /* Build configuration list for PBXNativeTarget "NotebookUITests" */;
+			buildPhases = (
+				F10000000000000000000035 /* Sources */,
+				F10000000000000000000033 /* Frameworks */,
+				F10000000000000000000036 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				F1000000000000000000003A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				F10000000000000000000032 /* NotebookUITests */,
+			);
+			name = NotebookUITests;
+			productName = NotebookUITests;
+			productReference = F10000000000000000000030 /* NotebookUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -104,6 +150,10 @@
 				TargetAttributes = {
 					F10000000000000000000008 = {
 						CreatedOnToolsVersion = 27.0;
+					};
+					F10000000000000000000034 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = F10000000000000000000008;
 					};
 				};
 			};
@@ -125,12 +175,20 @@
 			projectRoot = "";
 			targets = (
 				F10000000000000000000008 /* Notebook */,
+				F10000000000000000000034 /* NotebookUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		F1000000000000000000000A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F10000000000000000000036 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -147,7 +205,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F10000000000000000000035 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		F1000000000000000000003A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F10000000000000000000008 /* Notebook */;
+			targetProxy = F10000000000000000000031 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		F10000000000000000000012 /* Debug */ = {
@@ -342,6 +415,63 @@
 			};
 			name = AppStore;
 		};
+		F10000000000000000000038 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lukaskbl.NotebookUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Notebook;
+			};
+			name = Debug;
+		};
+		F10000000000000000000039 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lukaskbl.NotebookUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Notebook;
+			};
+			name = Release;
+		};
+		F10000000000000000000052 /* AppStore */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lukaskbl.NotebookUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Notebook;
+			};
+			name = AppStore;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -361,6 +491,16 @@
 				F10000000000000000000015 /* Debug */,
 				F10000000000000000000016 /* Release */,
 				F10000000000000000000051 /* AppStore */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F10000000000000000000037 /* Build configuration list for PBXNativeTarget "NotebookUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F10000000000000000000038 /* Debug */,
+				F10000000000000000000039 /* Release */,
+				F10000000000000000000052 /* AppStore */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

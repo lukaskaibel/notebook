@@ -361,9 +361,7 @@ extension EditorController {
             return false
         }
         // Typing a marker with text selected wraps it.
-        if range.length > 0, ["*", "_", "`", "~", "="].contains(replacement), !text.substring(with: range).contains("\n") {
-            let selected = text.substring(with: range)
-            replace(range, with: replacement + selected + replacement, select: NSRange(location: range.location + 1, length: range.length))
+        if range.length > 0, ["*", "_", "`", "~", "="].contains(replacement), !text.substring(with: range).contains("\n"), wrap(range, in: replacement) {
             return false
         }
         // "[] " at the start of a line makes a task.
@@ -416,6 +414,25 @@ extension EditorController {
     func toggle(_ format: InlineFormat) {
         let selection = self.selection
         guard !document.lines.isEmpty else { return }
+        // Words on several lines that all have the format lose it, each line's.
+        let pieces = wordRanges(in: selection)
+        if pieces.count > 1 {
+            let spans = pieces.compactMap { piece in
+                document.lines[document.lineIndex(containing: piece.location)].spans.first {
+                    format.matches($0.kind) && $0.range.location <= piece.location && $0.range.upperBound >= piece.upperBound
+                }
+            }
+            if spans.count == pieces.count, let start = spans.first?.range.location, let end = spans.last?.range.upperBound {
+                var result = ""
+                var location = start
+                for span in spans {
+                    result += nsText.substring(with: NSRange(location: location, length: span.range.location - location)) + nsText.substring(with: span.content)
+                    location = span.range.upperBound
+                }
+                replace(NSRange(location: start, length: end - start), with: result, select: NSRange(location: start, length: (result as NSString).length), actionName: "Format")
+                return
+            }
+        }
         let line = document.lines[document.lineIndex(containing: selection.location)]
         if let span = line.spans.first(where: { format.matches($0.kind) && $0.range.location <= selection.location && $0.range.upperBound >= selection.upperBound }) {
             let content = nsText.substring(with: span.content)
@@ -429,14 +446,52 @@ extension EditorController {
             replace(selection, with: marker + marker, select: NSRange(location: selection.location + markerLength, length: 0), actionName: "Format")
             return
         }
-        // Wrap the words, not the spaces around them.
-        var range = selection
+        wrap(selection, in: marker)
+    }
+
+    /// Puts a marker around the selected words of each line the selection touches. A line's own punctuation
+    /// (`- [ ] `, `## `, `> `) and the spaces around the words stay outside, or no other app would see a list, a
+    /// heading or the emphasis any more. Returns false when no words are selected.
+    @discardableResult
+    func wrap(_ selection: NSRange, in marker: String) -> Bool {
+        guard !document.lines.isEmpty, selection.length > 0 else { return false }
         let text = nsText
-        while range.length > 0, CharacterSet.whitespacesAndNewlines.contains(UnicodeScalar(text.character(at: range.location)) ?? " ") { range.location += 1; range.length -= 1 }
-        while range.length > 0, CharacterSet.whitespacesAndNewlines.contains(UnicodeScalar(text.character(at: range.upperBound - 1)) ?? " ") { range.length -= 1 }
-        guard range.length > 0 else { return }
-        let selected = text.substring(with: range)
-        replace(range, with: marker + selected + marker, select: NSRange(location: range.location + markerLength, length: range.length), actionName: "Format")
+        let markerLength = (marker as NSString).length
+        let pieces = wordRanges(in: selection)
+        guard let start = pieces.first?.location, let end = pieces.last?.upperBound else { return false }
+        var result = ""
+        var location = start
+        for piece in pieces {
+            result += text.substring(with: NSRange(location: location, length: piece.location - location)) + marker + text.substring(with: piece) + marker
+            location = piece.upperBound
+        }
+        return replace(NSRange(location: start, length: end - start), with: result, select: NSRange(location: start + markerLength, length: end - start + 2 * markerLength * (pieces.count - 1)), actionName: "Format")
+    }
+
+    /// The selected words of each line, without the line's own punctuation and the spaces around them; in a table
+    /// only words within one cell.
+    private func wordRanges(in selection: NSRange) -> [NSRange] {
+        guard !document.lines.isEmpty, selection.length > 0 else { return [] }
+        let text = nsText
+        let first = document.lineIndex(containing: selection.location)
+        let last = document.lineIndex(containing: selection.upperBound - 1)
+        var pieces: [NSRange] = []
+        for index in first...last {
+            let line = document.lines[index]
+            switch line.kind {
+            case .blank, .thematicBreak, .fence, .code, .mathDelimiter, .math, .tableDelimiter, .frontmatterDelimiter, .frontmatter: continue
+            default: break
+            }
+            var range = NSIntersectionRange(selection, NSRange(location: line.content.location, length: line.range.upperBound - line.content.location))
+            // Half of an emoji is no space.
+            func isSpace(_ index: Int) -> Bool { UnicodeScalar(text.character(at: index)).map(CharacterSet.whitespacesAndNewlines.contains) ?? false }
+            while range.length > 0, isSpace(range.location) { range.location += 1; range.length -= 1 }
+            while range.length > 0, isSpace(range.upperBound - 1) { range.length -= 1 }
+            // In a table, only the words of one cell.
+            if line.kind == .tableHeader || line.kind == .tableRow, text.substring(with: range).contains("|") { continue }
+            if range.length > 0 { pieces.append(range) }
+        }
+        return pieces
     }
 
     enum LineFormat {

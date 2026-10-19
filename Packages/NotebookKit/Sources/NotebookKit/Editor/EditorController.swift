@@ -140,6 +140,9 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
             restyle(lines: Array(Set(lines)))
         }
     }
+    /// Characters whose glyphs are to be made again once the edit going on is over (`flushGlyphs`).
+    private var pendingGlyphs = IndexSet()
+    private var isGlyphFlushScheduled = false
 
     public override init() {
         _ = NotebookSettings.shared
@@ -190,6 +193,8 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         revealed = []
         activeBlock = nil
         lineSignatures = []
+        // The whole text is new, and so is every glyph.
+        pendingGlyphs = IndexSet()
         titleText = title
         metaText = meta
         updateLayoutMode(for: (text as NSString).length)
@@ -357,6 +362,44 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         isApplyingStyle = true
         MarkdownStyler.style(storage, document: document, lines: lines, environment: environment)
         isApplyingStyle = false
+        if !isLoading { invalidateGlyphs(of: lines) }
+    }
+
+    /// Lines styled again get their glyphs made again: which characters are hidden is decided when glyphs are made,
+    /// and a change of attributes alone, above all one made while the text view is in the middle of its own edit,
+    /// leaves the old ones (a table's source stayed hidden after it opened again).
+    private func invalidateGlyphs(of lines: [Int]) {
+        // Line by line, so that two blocks far apart don't lay out the whole note between them again.
+        for index in lines where index < document.lines.count {
+            let line = document.lines[index].fullRange
+            let end = min(storage.length, line.upperBound)
+            if end > line.location { pendingGlyphs.insert(integersIn: line.location..<end) }
+        }
+        flushGlyphs()
+    }
+
+    /// Makes the glyphs waiting for it again, once no edit of the text is open: the layout manager may not be asked to
+    /// lay out while the text storage is still processing one (UIKit throws).
+    func flushGlyphs() {
+        guard !pendingGlyphs.isEmpty else { return }
+        guard storage.editedMask.isEmpty else {
+            if !isGlyphFlushScheduled {
+                isGlyphFlushScheduled = true
+                DispatchQueue.main.async { [weak self] in
+                    self?.isGlyphFlushScheduled = false
+                    self?.flushGlyphs()
+                }
+            }
+            return
+        }
+        let pending = pendingGlyphs
+        pendingGlyphs = IndexSet()
+        for run in pending.rangeView where run.lowerBound < storage.length {
+            let range = NSRange(location: run.lowerBound, length: min(run.upperBound, storage.length) - run.lowerBound)
+            layoutManager.invalidateGlyphs(forCharacterRange: range, changeInLength: 0, actualCharacterRange: nil)
+            layoutManager.invalidateLayout(forCharacterRange: range, actualCharacterRange: nil)
+            layoutManager.invalidateDisplay(forCharacterRange: range)
+        }
     }
 
 
@@ -423,6 +466,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         storage.endEditing()
         isApplyingStyle = false
         lineSignatures = computeSignatures()
+        invalidateGlyphs(of: lines)
     }
 
     /// The typeface, size, spacing or width changed in the settings: the whole note is set again, keeping the line
@@ -612,6 +656,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
 
     /// The selection moved: show the Markdown next to the caret, follow a link being typed.
     func selectionChanged() {
+        flushGlyphs()
         if !isLoading { caretWasPlaced = true }
         layoutManager.selectedRanges = selectedRanges
         if !isTracking { updateReveal() }
@@ -621,6 +666,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
 
     func textChanged() {
         guard !isLoading else { return }
+        flushGlyphs()
         delegate?.editorTextDidChange(self)
         updateSuggestions()
         // A change from another device, or an undo, may have moved the drawings or taken one away.

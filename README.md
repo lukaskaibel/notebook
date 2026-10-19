@@ -407,6 +407,7 @@ The full plan, with what is deliberately left out (tags, backlinks, a database, 
 
 ```
 Notebook/                    The app target (Mac, iPhone and iPad): the entry point and the icon
+NotebookUITests/             UI tests on an iPad simulator, for what only a real keyboard or touch reaches
 Packages/NotebookKit/
   Sources/NotebookKit/
     Editor/                  The live-preview editor on TextKit 1: styling, hidden marks, objects, typing, export;
@@ -443,6 +444,13 @@ Run the tests (they use off-screen windows and temporary folders, and touch none
 
 ```bash
 cd Packages/NotebookKit && swift test
+```
+
+The UI tests start the app on fresh sample notes in the simulator's own folders. Run them on an iPad simulator of
+your own, here one called Notebook iPad:
+
+```bash
+xcodebuild test -project Notebook.xcodeproj -scheme NotebookUITests -destination "platform=iOS Simulator,name=Notebook iPad"
 ```
 
 The pictures in this README are made by a script. It builds the app, runs it in the background on the sample notes,

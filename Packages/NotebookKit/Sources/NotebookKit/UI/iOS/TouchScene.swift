@@ -104,34 +104,19 @@ struct TouchCommands: Commands {
                 .keyboardShortcut("]", modifiers: .command)
                 .disabled(!workspace.canGoForward)
         }
-        // In the system's Format menu, after its Bold and Italic, which the text view turns into Markdown.
+        // In the system's Format menu, after its Bold and Italic, which the text view turns into Markdown. The keys
+        // themselves reach the note through its text view (`FormatShortcut`).
         CommandGroup(after: .textFormatting) {
-            format(.strikethrough, "x", [.command, .shift])
-            format(.highlight, "h", [.command, .control])
-            format(.code, "e", .command)
-            format(.link, "l", .command)
-            Divider()
-            format(.title, "t", [.command, .shift])
-            format(.heading, "h", [.command, .shift])
-            format(.subheading, "j", [.command, .shift])
-            format(.body, "b", [.command, .shift])
-            Divider()
-            format(.checklist, "l", [.command, .shift])
-            Button { workspace.editor.toggleChecked() } label: { Label("Mark as Checked", systemImage: "checkmark.circle") }
-                .keyboardShortcut("u", modifiers: [.command, .shift])
-                .disabled(workspace.note == nil)
-            format(.bulletedList, "7", [.command, .shift])
-            format(.numberedList, "9", [.command, .shift])
-            format(.quote, "'", .command)
-            Divider()
-            format(.indent, "]", [.command, .option])
-            format(.outdent, "[", [.command, .option])
+            ForEach(Array(FormatShortcut.groups.enumerated()), id: \.offset) { index, group in
+                if index > 0 { Divider() }
+                ForEach(group, id: \.name) { shortcut in format(shortcut) }
+            }
         }
     }
 
-    private func format(_ command: FormatCommand, _ key: Character, _ modifiers: EventModifiers) -> some View {
-        Button { workspace.editor.perform(command) } label: { Label(command.name, systemImage: command.symbol) }
-            .keyboardShortcut(KeyEquivalent(key), modifiers: modifiers)
+    private func format(_ shortcut: FormatShortcut) -> some View {
+        Button { workspace.editor.perform(shortcut) } label: { Label(shortcut.name, systemImage: shortcut.symbol) }
+            .keyboardShortcut(KeyEquivalent(shortcut.key), modifiers: shortcut.modifiers)
             .disabled(workspace.note == nil)
     }
 }
