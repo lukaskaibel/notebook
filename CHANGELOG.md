@@ -62,6 +62,22 @@ versions follow [semantic versioning](https://semver.org).
 - A note found by search opens where the words are, scrolled there with them selected, and on the Mac they bounce as
   Find does in Safari; a PDF opens at the page with them, a heading where it is, and a picture in a note with it
   selected.
+- Typing Markdown as in Notion or Bear, on the Mac, iPhone and iPad, the same as in Issues. Bold (⌘B, or the bar)
+  inside bold text takes the bold off, and a second press puts it back; at the end of bold text it leaves the bold, so
+  you type on plainly, and just behind it it goes back in. The same goes for italics, strikethrough, highlights and
+  code.
+- Return at the end of bold text goes to the next line and leaves the `**` behind; in the middle of it, the bold goes on
+  in the next line. A list goes on with its next bullet, number or checkbox, as before.
+- A style's marks go as a pair. Deleting a star takes one from the other end too, so `**bold**` becomes italics and
+  then plain text; typing a star there again brings them back the same way, and a star typed at either end of italics
+  makes them bold. Other styles lose both marks at once, and a selection that holds one mark takes the other with it.
+- `-` at the start of a line makes a bullet with its space, and `-[]` a checkbox; `---` still makes a rule. A closing
+  mark typed where the same one already is steps over it.
+- Text eases into its new look while you type: bold thickens and thins, a heading grows, italics slant, and new marks
+  fade in. Reduce Motion turns it off.
+- On iPhone and iPad, buttons for where the caret is come in on the left of the bar above the keyboard, each a circle
+  of glass: the style you are in, tinted (a tap takes it off), the checkbox of the line, moving a list item out or in,
+  and opening the link the caret is on.
 
 ### Changed
 
@@ -86,6 +102,9 @@ versions follow [semantic versioning](https://semver.org).
 - New Note is a button of glass in the accent colour, so it stands out from the buttons around it.
 - More menus have symbols next to their items, as the ⋯ menu has: Move To's folders, Export As, the menu of a picture
   in a note, Copy Code, and the commands of the menu bar on the Mac and the iPad.
+- Bold and the other styles at a caret inside a word style the whole word, instead of putting in an empty pair of
+  marks. Part of bold text selected loses its bold and the rest keeps it. Italics are written `_like this_`, or with
+  `*` inside a word, where `_` doesn't work.
 
 ### Fixed
 
@@ -142,6 +161,9 @@ versions follow [semantic versioning](https://semver.org).
 - Bold or italic over text that ended in an emoji left the emoji outside the formatting.
 - On an iPad with a keyboard, the Format menu's shortcuts other than ⌘B and ⌘I, such as ⇧⌘T for a title or ⇧⌘L for a
   checklist, did nothing. They now work in the note you are writing in.
+- A space typed at the end of bold text took the bold off until the next letter, so the bold flickered while you typed.
+  It stays bold now while you write; leaving the bold with Bold or Return moves such a space out of it, so other apps
+  show it bold too.
 
 ## [0.1.0] – not released yet
 

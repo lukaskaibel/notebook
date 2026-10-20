@@ -226,6 +226,26 @@ enum DebugRemote {
             log("current \(workspace.currentURL?.path ?? "none") editing \(workspace.isEditing) selection \(editor.selection) scroll \(editor.scrollTop) top \(editor.topInset) titleAway \(workspace.isTitleScrolledAway) heading \(String(describing: workspace.currentHeading))")
         case "text":
             log(editor.text)
+        case "easing":
+            // easing <text>: the weight and size of the text's first letter on each of the next 20 frames, to see a
+            // change of style ease in (`format bold` right before it).
+            let range = (editor.text as NSString).range(of: argument)
+            guard range.location != NSNotFound else { return log("not found: \(argument)") }
+            var samples: [String] = []
+            let start = CACurrentMediaTime()
+            let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { timer in
+                MainActor.assumeIsolated {
+                    let font = editor.storage.attribute(.font, at: range.location, effectiveRange: nil) as? UIFont
+                    let variation = font.flatMap { CTFontCopyVariation($0) as? [NSNumber: NSNumber] }
+                    let weight = variation?[NSNumber(value: 0x7767_6874)]?.doubleValue ?? 400
+                    samples.append(String(format: "%.0fms %.0f %.1f", (CACurrentMediaTime() - start) * 1000, weight, font?.pointSize ?? 0))
+                    if samples.count == 20 {
+                        timer.invalidate()
+                        log("easing " + samples.joined(separator: ", "))
+                    }
+                }
+            }
+            RunLoop.main.add(timer, forMode: .common)
         case "caretinfo":
             // caretinfo: the caret UIKit proposes and the one drawn, next to the baseline and font of the text there.
             caretInfo(editor)

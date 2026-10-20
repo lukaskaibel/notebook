@@ -81,6 +81,19 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     private var isApplyingStyle = false
     /// True while the editor changes the text itself, so its own changes aren't taken for typing.
     var isPerformingEdit = false
+    /// True while the editor selects something exactly, which isn't grown to take Markdown whole (what a typing rule
+    /// selected).
+    var selectsExactly = false
+    /// Whether the note is read as it is typed in: see `InlineParser.spans`.
+    private(set) var isTypingIn = false
+    /// What the last press of Bold (or another style) took off, for the next press to put back.
+    var unwrapped: MarkdownUnwrapped?
+    /// The text whose marks Delete just took off, for a mark typed next to it to put back.
+    var unmarked: MarkdownUnmarked?
+    /// Eases the text into its new look after an edit: bold thickens, a heading grows, typed marks fade in.
+    let styleAnimator = MarkdownStyleAnimator()
+    /// What the caret is in, for the buttons on the left of the bar above the keyboard.
+    let caretContext = CaretContext()
     /// The folder of the note, which pictures and relative links start from.
     public private(set) var folder: URL?
     /// Drawing mode, while it is on (`EditorController+Drawing`).
@@ -169,6 +182,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         storage.delegate = self
         layoutManager.source = self
         textView.controller = self
+        styleAnimator.view = textView
         NotificationCenter.default.addObserver(self, selector: #selector(typographyChanged), name: .notebookTypographyChanged, object: nil)
         suggestions.onPick = { [weak self] suggestion in self?.acceptSuggestion(suggestion) }
     }
@@ -327,7 +341,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         if !isLoading { scheduleOutlineUpdate() }
         let oldDocument = document
         let oldSignatures = lineSignatures
-        document = MarkdownParser.parse(storage.mutableString)
+        document = MarkdownParser.parse(storage.mutableString, typing: isTypingIn)
         // Keep the revealed punctuation where it was until the caret settles, moved along with the edit.
         let oldEnd = editedRange.location + editedRange.length - delta
         revealed = revealed.compactMap { range in
@@ -360,7 +374,17 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         }
         lineSignatures = signatures
         isApplyingStyle = true
-        MarkdownStyler.style(storage, document: document, lines: lines, environment: environment)
+        if isLoading {
+            MarkdownStyler.style(storage, document: document, lines: lines, environment: environment)
+        } else if let first = lines.min(), let last = lines.max() {
+            let start = document.lines[first].fullRange.location
+            let scope = NSRange(location: start, length: document.lines[last].fullRange.upperBound - start)
+            styleAnimator.restyle(storage, edited: editedRange, scope: scope) {
+                MarkdownStyler.style(storage, document: document, lines: lines, environment: environment)
+                // The edit's own fixing ran before the styling, which undid it: an emoji got the text's font.
+                storage.fixAttributes(in: scope)
+            }
+        }
         isApplyingStyle = false
         if !isLoading { invalidateGlyphs(of: lines) }
     }
@@ -460,6 +484,8 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     /// Styles lines again outside of an edit (the caret entered a block, a link's target appeared).
     func restyle(lines: [Int]) {
         guard !lines.isEmpty else { return }
+        // An ease still under way would overwrite the new look with the old one's last.
+        styleAnimator.complete()
         isApplyingStyle = true
         storage.beginEditing()
         MarkdownStyler.style(storage, document: document, lines: lines, environment: environment)
@@ -662,6 +688,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         if !isTracking { updateReveal() }
         updateSuggestions()
         textNeedsDisplay()
+        updateCaretContext()
     }
 
     func textChanged() {
@@ -669,6 +696,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         flushGlyphs()
         delegate?.editorTextDidChange(self)
         updateSuggestions()
+        updateCaretContext()
         // A change from another device, or an undo, may have moved the drawings or taken one away.
         if isDrawing { DispatchQueue.main.async { [weak self] in self?.updateDrawingCanvases() } }
     }
@@ -680,9 +708,24 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
 
     func focusChanged() {
         DispatchQueue.main.async { [weak self] in
-            self?.updateReveal()
-            if self?.isFocused == false { self?.closeSuggestions() }
+            guard let self else { return }
+            let focused = self.isFocused
+            if !focused { self.unwrapped = nil }
+            if self.isTypingIn != focused { self.readForTyping(focused) }
+            self.updateReveal()
+            if !focused { self.closeSuggestions() }
+            self.updateCaretContext()
         }
+    }
+
+    /// Reads the note again for typing in it or for reading it, and styles the lines that read differently now.
+    private func readForTyping(_ typing: Bool) {
+        isTypingIn = typing
+        guard !isLoading else { return }
+        let old = document
+        document = MarkdownParser.parse(storage.mutableString, typing: typing)
+        let changed = document.lines.indices.filter { $0 >= old.lines.count || old.lines[$0].spans != document.lines[$0].spans }
+        if !changed.isEmpty { restyle(lines: changed) }
     }
 
     /// The title field was left: its text becomes the note's name.
