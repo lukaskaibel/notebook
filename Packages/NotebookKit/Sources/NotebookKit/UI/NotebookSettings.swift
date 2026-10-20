@@ -111,7 +111,8 @@ public final class NotebookSettings {
         didSet { changedSidebar("foldersFirst", foldersFirst) }
     }
 
-    /// How a heading shows that it is one while you edit it: a level tag in the margin, or its `#`s in the text.
+    /// How a heading shows that it is one while you edit it: a level tag in the margin, its `#`s showing with a keyboard
+    /// and while they are typed, or only its `#`s, in the text, on every keyboard.
     public enum HeadingMarks: String { case margin, inline }
     public var headingMarks: HeadingMarks {
         didSet {

@@ -9,12 +9,11 @@ final class EditorFeatureTests: XCTestCase {
 
     // MARK: - Headings
 
-    func testHeadingMarksNeverShowAndTheLevelShowsInTheMargin() throws {
+    func testHeadingMarksShowWithAKeyboardAndTheLevelShowsInTheMargin() throws {
         let h = EditorHarness(note)
         let marker = h.range(of: "## ")
         h.caret(h.range(of: "Packing").location + 3)
-        XCTAssertTrue(h.editor.layoutManager.isHidden(marker.location), "the #s stay hidden with the caret on the heading")
-        XCTAssertTrue(h.editor.isRevealed(marker.location), "the heading counts as being edited")
+        XCTAssertFalse(h.editor.layoutManager.isHidden(marker.location), "the #s show next to the caret, as the stars of bold do")
         XCTAssertEqual(h.editor.storage.attribute(.notebookHeading, at: marker.location, effectiveRange: nil) as? Int, 2)
         let rect = try XCTUnwrap(h.editor.layoutManager.headingMarkRect(at: marker.location, origin: h.textView.textContainerOrigin))
         XCTAssertLessThan(rect.maxX, h.textView.textContainerOrigin.x, "the tag is in the margin, left of the text")
@@ -22,8 +21,25 @@ final class EditorFeatureTests: XCTestCase {
         XCTAssertGreaterThan(tag.alphaComponent, 0.5, "the tag is drawn")
 
         h.caret(h.range(of: "Intro").location)
+        XCTAssertTrue(h.editor.layoutManager.isHidden(marker.location), "the #s go when the caret leaves the heading")
         let away = try XCTUnwrap(h.pixel(at: CGPoint(x: rect.minX + 3, y: rect.midY)))
-        XCTAssertLessThan(away.alphaComponent, 0.1, "the tag goes when the caret leaves the heading")
+        XCTAssertLessThan(away.alphaComponent, 0.1, "and so does the tag")
+    }
+
+    func testOnATouchKeyboardHeadingMarksShowOnlyWhileTheyAreTyped() {
+        let h = EditorHarness(note)
+        h.editor.marksShowOverride = false
+        let marker = h.range(of: "## ")
+        h.caret(h.range(of: "Packing").location + 3)
+        XCTAssertTrue(h.editor.layoutManager.isHidden(marker.location), "a heading picked or tapped into keeps its #s hidden")
+        XCTAssertNotNil(h.editor.headingMarkLevel, "its level still shows in the margin")
+
+        h.caret(h.range(of: "Intro line").upperBound)
+        h.type("\n### Next")
+        let typed = h.range(of: "### ")
+        XCTAssertFalse(h.editor.layoutManager.isHidden(typed.location), "#s typed show, so you see which heading you typed")
+        h.type("\n")
+        XCTAssertTrue(h.editor.layoutManager.isHidden(typed.location), "until the caret leaves the line")
     }
 
     func testCaretStaysOutOfHiddenHeadingMarks() {
@@ -43,9 +59,46 @@ final class EditorFeatureTests: XCTestCase {
     func testTypingHashAndSpaceMakesAHeading() {
         let h = EditorHarness("Intro\n")
         h.caret(6)
-        h.type("# Title")
+        h.type("#")
+        XCTAssertNil(h.editor.headingMarkLevel, "one # alone may start a tag: no level in the margin yet")
+        h.type(" Title")
         XCTAssertEqual(h.text, "Intro\n# Title")
-        XCTAssertTrue(h.editor.layoutManager.isHidden(6), "the # disappears once the space follows it")
+        XCTAssertEqual(h.editor.headingMarkLevel?.level, 1)
+        XCTAssertFalse(h.editor.layoutManager.isHidden(6), "the # shows while the caret is on the heading")
+        h.caret(0)
+        XCTAssertTrue(h.editor.layoutManager.isHidden(6), "and goes when it leaves")
+    }
+
+    func testTextTypedAfterTwoHashesGetsItsSpace() {
+        let h = EditorHarness("")
+        h.type("##Title\n###Sub\n#tag")
+        XCTAssertEqual(h.text, "## Title\n### Sub\n#tag", "two or more #s only ever start a heading; one may be a tag")
+        h.caret(h.range(of: "### Sub").upperBound)
+        XCTAssertEqual(h.editor.headingMarkLevel?.level, 3)
+    }
+
+    func testTwoHashesShowTheirLevelBeforeTheSpace() {
+        let h = EditorHarness("Intro\n")
+        h.caret(6)
+        h.type("##")
+        XCTAssertEqual(h.editor.headingMarkLevel?.level, 2)
+    }
+
+    func testReturnOnAHeadingWithoutTextTakesTheHeadingOff() {
+        let h = EditorHarness("Intro\n## ")
+        h.caret((h.text as NSString).length)
+        h.type("\n")
+        XCTAssertEqual(h.text, "Intro\n")
+        XCTAssertEqual(h.selection, NSRange(location: 6, length: 0))
+    }
+
+    func testReturnAtTheStartOfAHeadingPutsALineAboveIt() {
+        let h = EditorHarness(note)
+        let heading = h.range(of: "Packing")
+        h.caret(heading.location)
+        h.type("\n")
+        XCTAssertEqual(h.text, "Intro line\n\n## Packing\nSome text with [the site](https://example.com) and ==marked words== here.")
+        XCTAssertEqual(h.selection, NSRange(location: heading.location + 1, length: 0), "the caret stays at the heading's text")
     }
 
     func testCopyingAWholeHeadingKeepsItAHeading() {

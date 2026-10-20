@@ -510,19 +510,27 @@ enum MarkdownEditing {
         return State(result as String, caret: caret)
     }
 
-    /// The small things typing does: "-" at the start of a line becomes a bullet with its space, a space typed
-    /// after a list marker's own is left out, "- [" and "]" make a checkbox, and a closing mark typed where the same
-    /// mark is already steps over it. A `*` or `_` typed at either end of italics goes on the other end too, which
-    /// makes them bold, and one typed at either end of `unmarked`, the text whose marks Delete just took off, styles
-    /// it again: marks come back as they went, a pair at a time.
+    /// The small things typing does: "-" at the start of a line becomes a bullet with its space, text typed right
+    /// after `##` gets the space a heading needs, a space typed after a list marker's own is left out, "- [" and "]"
+    /// make a checkbox, and a closing mark typed where the same mark is already steps over it. A `*` or `_` typed at
+    /// either end of italics goes on the other end too, which makes them bold, and one typed at either end of
+    /// `unmarked`, the text whose marks Delete just took off, styles it again: marks come back as they went, a pair at
+    /// a time.
     static func insert(_ typed: String, in state: State, unmarked: NSRange? = nil) -> State? {
-        guard state.selection.length == 0, typed.utf16.count == 1 else { return nil }
+        guard state.selection.length == 0, !typed.isEmpty else { return nil }
         let document = Document(state.text)
         let caret = state.selection.location
         guard !document.isInFence(caret) else { return nil }
         let line = document.line(at: caret)
         let before = document.string(NSRange(location: line.range.location, length: caret - line.range.location))
         let after = document.string(NSRange(location: caret, length: NSMaxRange(line.range) - caret))
+        // Two or more #s at the start of a line only ever start a heading (a tag has one): text typed right after them
+        // gets the space in front of it that makes them one.
+        if let first = typed.unicodeScalars.first, first != "#", !CharacterSet.whitespacesAndNewlines.contains(first),
+           before.range(of: #"^ {0,3}#{2,6}$"#, options: .regularExpression) != nil {
+            return document.replacing(NSRange(location: caret, length: 0), with: " " + typed, caret: caret + 1 + typed.utf16.count)
+        }
+        guard typed.utf16.count == 1 else { return nil }
         switch typed {
         case "-":
             if before.allSatisfy({ $0 == " " || $0 == "\t" }), !after.hasPrefix(" "), !after.hasPrefix("-") {

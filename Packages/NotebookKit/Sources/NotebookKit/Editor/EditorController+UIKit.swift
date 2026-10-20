@@ -46,6 +46,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
 
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillChange(_:)), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillChange(_:)), name: UIResponder.keyboardWillHideNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardAttachmentChanged), name: HardwareKeyboard.didChange, object: nil)
     }
 
     /// The note's view: the text view, which scrolls itself.
@@ -144,6 +145,11 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         requestedFocus = (.title, Date())
         pendingFocus = nil
         if textView.window == nil { pendingFocus = .title } else { _ = textView.titleField.becomeFirstResponder() }
+    }
+
+    func putTitleCaretAtEnd() {
+        let field = textView.titleField
+        field.selectedTextRange = field.textRange(from: field.endOfDocument, to: field.endOfDocument)
     }
 
     /// The editor is about to move to another screen: leaving the window takes the keyboard away, and with it
@@ -338,6 +344,11 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         focusText()
     }
 
+    /// A keyboard was attached or taken away: marks show next to the caret with one, and not without.
+    @objc func keyboardAttachmentChanged() {
+        updateReveal()
+    }
+
     // MARK: - Taps
 
     /// Taps on checkboxes, links and pictures are the editor's; everywhere else the text view places the caret.
@@ -409,6 +420,9 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         let keyboard = window.convert(end, from: window.screen.coordinateSpace)
         let frame = textView.convert(textView.bounds, to: window)
         let hiding = notification.name == UIResponder.keyboardWillHideNotification
+        // Taller than the bar above it: the touch keyboard, not just the bar a keyboard with keys leaves.
+        let bar = textView.inputAccessoryView?.bounds.height ?? 0
+        HardwareKeyboard.shared.isTouchKeyboardShown = !hiding && keyboard.intersects(window.bounds) && keyboard.height - bar > 120
         let overlap = hiding ? 0 : max(0, frame.maxY - keyboard.minY - textView.safeAreaInsets.bottom)
         guard textView.contentInset.bottom != overlap else { return }
         textView.contentInset.bottom = overlap

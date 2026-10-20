@@ -81,6 +81,33 @@ enum DebugRemote {
             editor.focusText(atEnd: argument == "end")
         case "focustitle":
             editor.focusTitle()
+        case "seen":
+            log(editor.debugSeenLine)
+        case "fold":
+            // fold <index>: where the character at index is drawn over the next frames (see debugSampleFold).
+            if let index = numbers.first { editor.debugSampleFold(at: Int(index), log: log) }
+        case "keyboard":
+            // keyboard on|off|auto: as if a keyboard were attached to the iPhone or iPad, or not.
+            HardwareKeyboard.shared.override = argument == "on" ? true : argument == "off" ? false : nil
+            let keyboard = HardwareKeyboard.shared
+            log("keyboard \(keyboard.isInUse ? "in use" : "not in use"): attached \(keyboard.isAttached), touch keyboard shown \(keyboard.isTouchKeyboardShown)")
+        case "tapcaret":
+            // tapcaret <index>: the caret put there by a tap, which the editor may move (unlike `select`).
+            if let index = numbers.first.map(Int.init) { editor.textView.selectedRange = NSRange(location: index, length: 0) }
+        case "presskey":
+            // presskey <input>: a key of a hardware keyboard (tab, down, right, left, up) in the title or the text,
+            // through their key commands.
+            let inputs = ["tab": "\t", "down": UIKeyCommand.inputDownArrow, "up": UIKeyCommand.inputUpArrow, "left": UIKeyCommand.inputLeftArrow, "right": UIKeyCommand.inputRightArrow]
+            let responder: UIResponder = editor.isEditingTitle ? editor.textView.titleField : editor.textView
+            if let input = inputs[argument], let command = responder.keyCommands?.first(where: { $0.input == input && $0.modifierFlags.isEmpty }), let action = command.action {
+                responder.perform(action, with: command)
+                log("presskey \(argument): \(action)")
+            } else {
+                log("presskey \(argument): no command, the text field or view takes it")
+            }
+        case "deletekey":
+            // The keyboard's Delete, as it reaches the text view.
+            if editor.isEditingTitle { editor.textView.titleField.deleteBackward() } else if editor.selection == NSRange(location: 0, length: 0) { editor.textView.deleteBackward() } else { editor.debugBackspace() }
         case "blur":
             editor.endEditing()
         case "type":
@@ -268,6 +295,15 @@ enum DebugRemote {
             log("resolve \(argument): \(workspace.index.resolve(argument, from: workspace.currentURL)?.path ?? "nothing") building \(workspace.index.isBuilding) entries \(workspace.index.count)")
         case "suggestions":
             log("suggestions \(editor.suggestions.isVisible) \(editor.suggestions.model.items.map(\.title))")
+        case "cursorview":
+            // Where UIKit draws the caret, next to where the editor says it is.
+            func cursors(in view: UIView) -> [UIView] {
+                (String(describing: type(of: view)).contains("Cursor") ? [view] : []) + view.subviews.flatMap(cursors)
+            }
+            let view = editor.textView
+            let drawn = cursors(in: view.window ?? view).map { "\(type(of: $0)) \($0.convert($0.bounds, to: view).integral) hidden \($0.isHidden) alpha \($0.alpha)" }
+            let position = view.position(from: view.beginningOfDocument, offset: editor.selection.location)
+            log("cursorview caret \(position.map { view.caretRect(for: $0).integral } ?? .null): \(drawn.joined(separator: "; "))")
         case "views":
             if let window = editor.textView.window { log(describe(window, depth: 0, limit: Int(numbers.first ?? 6))) }
         case "drawing", "drawstroke", "drawinfo", "drawundo", "drawredo":

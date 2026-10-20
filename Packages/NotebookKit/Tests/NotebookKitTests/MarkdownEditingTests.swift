@@ -237,6 +237,18 @@ struct MarkdownEditingTests {
         #expect(typed("-", "```\n|") == nil)
     }
 
+    @Test func textAfterTwoHashesGetsTheSpaceOfAHeading() {
+        #expect(typed("T", "##|") == "## T|")
+        #expect(typed("W", "intro\n######|") == "intro\n###### W|")
+        #expect(typed("Wo", "  ###|") == "  ### Wo|", "a word the keyboard puts in")
+        #expect(typed("t", "#|") == nil, "one # may start a tag")
+        #expect(typed("#", "##|") == nil, "a third #")
+        #expect(typed(" ", "##|") == nil)
+        #expect(typed("x", "#######|") == nil, "seven are no heading")
+        #expect(typed("x", "a ##|") == nil)
+        #expect(typed("x", "```\n##|") == nil)
+    }
+
     @Test func threeDashesStillMakeARule() {
         #expect(typed("-", "- |") == "--|")
         #expect(typed("-", "--|") == nil)

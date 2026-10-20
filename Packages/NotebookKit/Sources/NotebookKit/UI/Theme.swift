@@ -65,6 +65,8 @@ public enum Theme {
     static let quick = Animation.easeOut(duration: 0.14)
     /// Text easing into a new look while you type: bold thickening, a heading growing, marks fading.
     static let textStyleDuration: TimeInterval = 0.18
+    /// Markdown marks unfolding next to the caret and folding away behind it.
+    static let markRevealDuration: TimeInterval = 0.16
     /// The buttons for where the caret is, coming and going in the bar above the keyboard.
     static let keyboardBarSpring: (duration: TimeInterval, bounce: CGFloat) = (0.32, 0.16)
 }

@@ -20,12 +20,9 @@ extension EditorController {
         guard storage.length > 0 else { return nil }
         let origin = textOrigin
         // The level tag in the margin next to the heading the caret is on.
-        if point.x < origin.x, !document.lines.isEmpty {
-            let line = document.lineIndex(containing: selection.location)
-            if case .heading(_, let marker) = document.lines[line].kind, isRevealed(marker.location),
-               let rect = layoutManager.headingMarkRect(at: marker.location, origin: origin), rect.insetBy(dx: -4, dy: -4).contains(point) {
-                return .headingLevel(line: line)
-            }
+        if point.x < origin.x, let (_, marker) = headingMarkLevel,
+           let rect = layoutManager.headingMarkRect(at: marker.location, origin: origin), rect.insetBy(dx: -4, dy: -4).contains(point) {
+            return .headingLevel(line: document.lineIndex(containing: marker.location))
         }
         let local = NSPoint(x: point.x - origin.x, y: point.y - origin.y)
         let glyph = layoutManager.glyphIndex(for: local, in: container)
