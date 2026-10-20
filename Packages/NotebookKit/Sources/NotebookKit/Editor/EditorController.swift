@@ -88,6 +88,8 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     private(set) var isTypingIn = false
     /// What the last press of Bold (or another style) took off, for the next press to put back.
     var unwrapped: MarkdownUnwrapped?
+    /// The text whose marks Delete just took off, for a mark typed next to it to put back.
+    var unmarked: MarkdownUnmarked?
     /// Eases the text into its new look after an edit: bold thickens, a heading grows, typed marks fade in.
     let styleAnimator = MarkdownStyleAnimator()
     /// What the caret is in, for the buttons on the left of the bar above the keyboard.

@@ -76,14 +76,27 @@ final class TypingRulesTests: XCTestCase {
         XCTAssertEqual(weight(h, at: 8), 590)
     }
 
-    func testDeletingBehindBoldKeepsTheMarks() {
-        let h = EditorHarness("**bold**")
-        h.caret(8)
+    func testDeletingStarsTakesThemInPairsAndTypingBringsThemBack() {
+        let h = EditorHarness("a **bold** b")
+        h.caret(10)
         h.command(#selector(NSResponder.deleteBackward(_:)))
-        XCTAssertEqual(h.text, "**bol**")
-        h.caret(2)
+        XCTAssertEqual(h.text, "a *bold* b", "bold becomes italics")
         h.command(#selector(NSResponder.deleteBackward(_:)))
-        XCTAssertEqual(h.text, "bol")
+        XCTAssertEqual(h.text, "a bold b", "and then plain")
+        h.type("*")
+        XCTAssertEqual(h.text, "a *bold* b", "a star brings italics back")
+        h.type("*")
+        XCTAssertEqual(h.text, "a **bold** b", "and another bold")
+        h.textView.undoManager?.undo()
+        XCTAssertEqual(h.text, "a *bold* b", "each step is one undo")
+    }
+
+    func testDeletingAfterTypingSomethingElseForgetsTheMarks() {
+        let h = EditorHarness("*bold*")
+        h.caret(6)
+        h.command(#selector(NSResponder.deleteBackward(_:)))
+        h.type("x*")
+        XCTAssertEqual(h.text, "boldx*")
     }
 
     func testDeletingASelectionWithOneMarkTakesTheOther() {

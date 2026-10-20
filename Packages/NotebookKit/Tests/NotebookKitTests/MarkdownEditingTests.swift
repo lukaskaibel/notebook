@@ -116,20 +116,31 @@ struct MarkdownEditingTests {
         marked(Editing.deleteBackward(in: state(text)))
     }
 
-    @Test func deletingBehindBoldDeletesItsTextNotItsMarks() {
-        #expect(deletedBackward("**bold**|") == "**bol**|")
-        #expect(deletedBackward("a **b**| c") == "a | c")
-        #expect(deletedBackward("**_ab_**|") == "**_a_**|")
-        #expect(deletedBackward("**_a_**|") == "|")
-        #expect(deletedBackward("**ok 🎉**|") == "**ok** |")
-        #expect(marked(Editing.deleteForward(in: state("|**🎉 ok**"))) == "| **ok**")
+    @Test func deletingBehindBoldTakesAStarFromBothEnds() {
+        #expect(deletedBackward("**bold**|") == "*bold*|")
+        #expect(deletedBackward("*bold*|") == "bold|")
+        #expect(deletedBackward("a **b**| c") == "a *b*| c")
+        #expect(deletedBackward("**_ab_**|") == "*_ab_*|")
+        #expect(deletedBackward("~~old~~|") == "old|")
+        #expect(deletedBackward("==mark==|") == "mark|")
+        #expect(deletedBackward("`code`|") == "code|")
+        #expect(marked(Editing.deleteForward(in: state("|**bold**"))) == "|*bold*")
+        #expect(marked(Editing.deleteForward(in: state("|*bold*"))) == "|bold")
     }
 
-    @Test func deletingAMarkTakesItsPartnerToo() {
-        #expect(deletedBackward("a **|bold** b") == "a |bold b")
-        #expect(deletedBackward("a *|*bold** b") == "a |bold b")
-        #expect(deletedBackward("a **bold*|* b") == "a bold| b")
+    @Test func deletingAMarkTakesOneOfItsPartnerToo() {
+        #expect(deletedBackward("a **|bold** b") == "a *|bold* b")
+        #expect(deletedBackward("a *|*bold** b") == "a |*bold* b")
+        #expect(deletedBackward("a **bold*|* b") == "a *bold|* b")
         #expect(deletedBackward("_|x_") == "|x")
+    }
+
+    @Test func deletingTheLastMarksRemembersTheirText() {
+        let deletion = Editing.deleting(state("a *bold*| b"), forward: false)
+        #expect(marked(deletion?.state) == "a bold| b")
+        #expect(deletion?.unmarked == NSRange(location: 2, length: 4))
+        #expect(Editing.deleting(state("**bold**|"), forward: false)?.unmarked == nil, "still italics")
+        #expect(Editing.deleting(state("bold|"), forward: false) == nil)
     }
 
     @Test func deletingAnEmptyPairTakesBothMarks() {
@@ -137,7 +148,7 @@ struct MarkdownEditingTests {
     }
 
     @Test func spansThatMeetAreNotAnEmptyPair() {
-        #expect(deletedBackward("**a**|**b**") == "|**b**")
+        #expect(deletedBackward("**a**|**b**") == "*a*|**b**")
     }
 
     @Test func deletingIntoAListMarkerTakesTheMarker() {
@@ -161,9 +172,9 @@ struct MarkdownEditingTests {
     }
 
     @Test func forwardDeleteIsTheMirrorImage() {
-        #expect(marked(Editing.deleteForward(in: state("|**bold**"))) == "|**old**")
-        #expect(marked(Editing.deleteForward(in: state("**bold|**"))) == "bold|")
-        #expect(marked(Editing.deleteForward(in: state("|**b** x"))) == "| x")
+        #expect(marked(Editing.deleteForward(in: state("|**bold**"))) == "|*bold*")
+        #expect(marked(Editing.deleteForward(in: state("**bold|**"))) == "*bold|*")
+        #expect(marked(Editing.deleteForward(in: state("|**b** x"))) == "|*b* x")
         #expect(marked(Editing.deleteForward(in: state("|- item"))) == "|item")
     }
 
@@ -246,6 +257,29 @@ struct MarkdownEditingTests {
         #expect(typed("]", "[|") == nil)
     }
 
+    @Test func aStarAtEitherEndOfItalicsGoesOnTheOtherEndToo() {
+        #expect(typed("*", "*bold*|") == "**bold**|")
+        #expect(typed("_", "a _bold_| b") == "a __bold__| b")
+        #expect(typed("*", "|*bold*") == "*|*bold**")
+        #expect(typed("*", "*|bold*") == "**|bold**")
+        // Bold stays as it is.
+        #expect(typed("*", "**bold**|") == nil)
+        #expect(typed("_", "*bold*|") == nil)
+    }
+
+    @Test func aStarWhereMarksWereDeletedBringsThemBack() {
+        let deleted = Editing.deleting(state("**bold**|"), forward: false)!
+        let plain = Editing.deleting(deleted.state, forward: false)!
+        #expect(marked(plain.state) == "bold|")
+        let italic = Editing.insert("*", in: plain.state, unmarked: plain.unmarked)
+        #expect(marked(italic) == "*bold*|")
+        #expect(marked(italic.flatMap { Editing.insert("*", in: $0) }) == "**bold**|")
+        let front = Editing.deleting(state("|*bold*"), forward: true)!
+        #expect(marked(Editing.insert("*", in: front.state, unmarked: front.unmarked)) == "*|bold*")
+        // Without the memory, a star is just typed.
+        #expect(typed("*", "bold|") == nil)
+    }
+
     @Test func typingAClosingMarkStepsOverIt() {
         #expect(typed("*", "**bold|**") == "**bold*|*")
         #expect(typed("*", "**bold*|*") == "**bold**|")
@@ -312,7 +346,7 @@ struct MarkdownEditingTests {
         #expect(toggled(.highlight, "a wo|rd b") == "a ==wo|rd== b")
         #expect(toggled(.highlight, "==marked|==") == "==marked==|")
         #expect(toggled(.highlight, "==ma|rked==") == "ma|rked")
-        #expect(deletedBackward("==ab==|") == "==a==|")
+        #expect(deletedBackward("==ab==|") == "ab|")
         #expect(newline("==mark|==") == "==mark==\n|")
         #expect(typed("=", "==mark|==") == "==mark=|=")
         #expect(Editing.context(in: state("==ma|rk==")).styles == [.highlight])

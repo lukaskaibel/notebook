@@ -68,8 +68,9 @@ versions follow [semantic versioning](https://semver.org).
   code.
 - Return at the end of bold text goes to the next line and leaves the `**` behind; in the middle of it, the bold goes on
   in the next line. A list goes on with its next bullet, number or checkbox, as before.
-- A style's marks go as a pair: Delete behind `**bold**` deletes its letters and keeps the `**` until the last letter
-  goes, and deleting one mark, or a selection that holds one, takes the other with it.
+- A style's marks go as a pair. Deleting a star takes one from the other end too, so `**bold**` becomes italics and
+  then plain text; typing a star there again brings them back the same way, and a star typed at either end of italics
+  makes them bold. Other styles lose both marks at once, and a selection that holds one mark takes the other with it.
 - `-` at the start of a line makes a bullet with its space, and `-[]` a checkbox; `---` still makes a rule. A closing
   mark typed where the same one already is steps over it.
 - Text eases into its new look while you type: bold thickens and thins, a heading grows, italics slant, and new marks

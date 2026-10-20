@@ -58,10 +58,10 @@ looks in the note, as in the toolbar's Aa menu. Lists continue on Return,
 Tab nests them, and checkboxes tick with a click.
 
 Typing goes as in Notion or Bear. ⌘B inside bold text takes the bold off, and a second press puts it back; at the end
-of bold text it steps out, so you type on plainly. Return there goes to the next line without the `**`. Delete behind
-bold text takes its letters, not its marks, and a mark deleted takes its partner with it. `-` at the start of a line
-makes a bullet, `-[]` a checkbox. The text eases into its new look as you type: bold thickens, a heading grows, the
-marks fade in.
+of bold text it steps out, so you type on plainly. Return there goes to the next line without the `**`. Marks go in
+pairs: deleting a star takes one from the other end too, so bold becomes italics and then plain text, and typing a star
+there brings them back the same way. `-` at the start of a line makes a bullet, `-[]` a checkbox. The text eases into
+its new look as you type: bold thickens, a heading grows, the marks fade in.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/typing-dark.webp">
@@ -385,7 +385,8 @@ While writing:
 | ⌥⌘] and ⌥⌘[ | Increase and decrease indent |
 | `*`, `_`, `` ` ``, `~` or `=` with text selected | Wrap the selection in that mark |
 | Return at the end of bold text | The next line, without the bold; in the middle of it, the bold goes on |
-| Delete behind `**bold**` | Its last letter; the marks go with the last one. Deleting one mark takes both |
+| Delete behind `**bold**` | A star from each end: italics, then plain text; `*` there brings them back |
+| `*` at either end of `*italics*` | One at the other end too: bold |
 | `-` at the start of a line | A bullet; `-[]` a checkbox, `---` a rule |
 | `[[` | Suggestions for a link; ↑↓ and Return or Tab to pick |
 | Space on a selected picture | Quick Look |

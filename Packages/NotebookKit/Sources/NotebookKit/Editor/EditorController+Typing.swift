@@ -18,6 +18,12 @@ struct MarkdownUnwrapped {
     var text: String
 }
 
+/// The text whose marks Delete just took off, for a mark typed next to it to style again, while nothing else changed.
+struct MarkdownUnmarked {
+    var range: NSRange
+    var text: String
+}
+
 /// The typing rules of `MarkdownEditing` applied to the note: each takes the text and the selection and gives back new
 /// ones, which go in as one undoable edit, with the characters that stay easing from their old look.
 extension EditorController {
@@ -48,6 +54,21 @@ extension EditorController {
         guard let result = rule(state) else { return false }
         if result != state { apply(result, actionName: actionName) }
         return true
+    }
+
+    /// Delete (or forward delete) by the rules of `MarkdownEditing`: a style's marks go a pair at a time, and the text
+    /// whose last marks went is remembered, so typing a mark next to it brings them back.
+    func deleteByRules(forward: Bool) -> Bool {
+        guard !isWaitingForText, isInProse, let deletion = MarkdownEditing.deleting(markdownState, forward: forward) else { return false }
+        apply(deletion.state, actionName: "Delete")
+        unmarked = deletion.unmarked.map { MarkdownUnmarked(range: $0, text: text) }
+        return true
+    }
+
+    /// A character typed, by the rules of `MarkdownEditing`; false when it goes in as it is.
+    func insertByRules(_ typed: String) -> Bool {
+        let memory = unmarked.flatMap { $0.text == text ? $0.range : nil }
+        return perform { MarkdownEditing.insert(typed, in: $0, unmarked: memory) }
     }
 
     /// Bold, italics, strikethrough, highlight or code on or off, by the rules of `MarkdownEditing`: at the end of a

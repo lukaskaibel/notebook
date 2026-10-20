@@ -23,6 +23,10 @@ enum MarkdownEditing {
         init(_ text: String, caret: Int) {
             self.init(text, selection: NSRange(location: caret, length: 0))
         }
+
+        func moving(to caret: Int) -> State {
+            State(text, caret: caret)
+        }
     }
 
     /// The kinds of list the bar above the keyboard starts.
@@ -402,64 +406,42 @@ enum MarkdownEditing {
         return next
     }
 
-    /// Delete. A pair of empty marks goes as a whole. Behind a style's closing marks it deletes the last character
-    /// of its text, leaving the marks in place, and the marks too once the text is gone. Deleting into either mark
-    /// takes the style off, both marks at once; deleting into a list marker, a checkbox, a quote or a heading's marks
-    /// takes the marker off.
+    /// What Delete did: the new text, and the text of a style whose last marks it took off, which a mark typed right
+    /// next to it styles again (see `insert`).
+    struct Deletion: Equatable {
+        var state: State
+        var unmarked: NSRange?
+    }
+
+    /// Delete. A pair of empty marks goes as a whole. Deleting one of a style's marks takes one of the other side with
+    /// it: `**bold**` becomes `*bold*`, italics, and then `bold`; the other styles lose both their marks at once.
+    /// Deleting into a list marker, a checkbox, a quote or a heading's marks takes the marker off.
     static func deleteBackward(in state: State) -> State? {
-        let document = Document(state.text)
-        if state.selection.length > 0 { return deleteSelection(in: state, document: document) }
-        let caret = state.selection.location
-        guard caret > 0, !document.isInFence(caret) else { return nil }
-        let line = document.line(at: caret)
-        guard caret > line.range.location else { return nil }
-        let spans = document.spans(on: line.range)
-        if let pair = document.emptyPair(around: caret, spans: spans) {
-            return document.replacing(pair.range, with: "", caret: pair.range.location)
-        }
-        // Behind closing marks: into the text, innermost first.
-        var position = caret
-        var behind: [Span] = []
-        while let span = spans.last(where: { NSMaxRange($0.range) == position && $0.content.length > 0 }) {
-            behind.append(span)
-            position = NSMaxRange(span.content)
-        }
-        if !behind.isEmpty {
-            let character = document.text.rangeOfComposedCharacterSequence(at: position - 1)
-            return deleting(character, inside: behind, caret: caret, in: document)
-        }
-        if let span = spans.last(where: { touches(caret - 1, $0) }) {
-            return unwrap(span, in: document, caret: caret)
-        }
-        return deletingMarker(of: line, at: caret - 1, in: document)
+        deleting(state, forward: false)?.state
     }
 
     /// Forward delete, the mirror image of `deleteBackward`.
     static func deleteForward(in state: State) -> State? {
+        deleting(state, forward: true)?.state
+    }
+
+    static func deleting(_ state: State, forward: Bool) -> Deletion? {
         let document = Document(state.text)
-        if state.selection.length > 0 { return deleteSelection(in: state, document: document) }
+        if state.selection.length > 0 { return deleteSelection(in: state, document: document).map { Deletion(state: $0) } }
         let caret = state.selection.location
-        guard caret < document.text.length, !document.isInFence(caret) else { return nil }
+        guard forward ? caret < document.text.length : caret > 0, !document.isInFence(caret) else { return nil }
         let line = document.line(at: caret)
-        guard caret < NSMaxRange(line.range) else { return nil }
+        guard forward ? caret < NSMaxRange(line.range) : caret > line.range.location else { return nil }
         let spans = document.spans(on: line.range)
         if let pair = document.emptyPair(around: caret, spans: spans) {
-            return document.replacing(pair.range, with: "", caret: pair.range.location)
+            return Deletion(state: document.replacing(pair.range, with: "", caret: pair.range.location))
         }
-        var position = caret
-        var before: [Span] = []
-        while let span = spans.first(where: { $0.range.location == position && $0.content.length > 0 }) {
-            before.append(span)
-            position = span.content.location
+        let index = forward ? caret : caret - 1
+        // The innermost style whose marks hold the character.
+        if let span = spans.last(where: { touches(index, $0) }) {
+            return unmarking(span, at: index, caret: caret, in: document)
         }
-        if !before.isEmpty {
-            let character = document.text.rangeOfComposedCharacterSequence(at: position)
-            return deleting(character, inside: before, caret: caret, in: document)
-        }
-        if let span = spans.last(where: { touches(caret, $0) }) {
-            return unwrap(span, in: document, caret: caret)
-        }
-        return deletingMarker(of: line, at: caret, in: document)
+        return deletingMarker(of: line, at: index, in: document).map { Deletion(state: $0) }
     }
 
     /// Whether the character at `index` is one of a span's marks.
@@ -467,36 +449,21 @@ enum MarkdownEditing {
         NSLocationInRange(index, span.opening) || NSLocationInRange(index, span.closing)
     }
 
-    /// Deletes one character inside nested spans (outermost first), and the marks of every span left empty.
-    private static func deleting(_ character: NSRange, inside spans: [Span], caret: Int, in document: Document) -> State {
+    /// One mark of a span deleted, and one of the other side with it: bold's `**` become italics' `*`. A style with a
+    /// single mark, or marks that can't be halved (`~~`, `==`), loses them both at once, and its text is what a mark
+    /// typed next to it styles again.
+    private static func unmarking(_ span: Span, at index: Int, caret: Int, in document: Document) -> Deletion {
+        let halves = span.style == .bold
+        // The mark deleted, and the outer one of the other side.
+        let opening = !halves ? span.opening : NSRange(location: NSLocationInRange(index, span.opening) ? index : span.opening.location, length: 1)
+        let closing = !halves ? span.closing : NSRange(location: NSLocationInRange(index, span.closing) ? index : NSMaxRange(span.closing) - 1, length: 1)
         let result = NSMutableString(string: document.text)
-        result.deleteCharacters(in: character)
-        var deleted = character.length
-        for span in spans.reversed() {
-            guard span.content.length - deleted == 0 else { break }
-            // The span is now just its marks, side by side where it starts.
-            let marks = span.opening.length + span.closing.length
-            result.deleteCharacters(in: NSRange(location: span.range.location, length: marks))
-            deleted += marks
-        }
-        // A space left next to a mark goes outside it, where Markdown needs it: `**ok **` becomes `**ok** `.
-        if deleted == character.length, let span = spans.last {
-            let content = NSRange(location: span.content.location, length: span.content.length - deleted)
-            let backward = character.location == NSMaxRange(content)
-            let edge = backward ? NSMaxRange(content) - 1 : content.location
-            if content.length > 1, edge >= 0, [32, 9].contains(result.character(at: edge)) {
-                let space = result.substring(with: NSRange(location: edge, length: 1))
-                if backward {
-                    result.insert(space, at: NSMaxRange(content) + span.closing.length)
-                    result.deleteCharacters(in: NSRange(location: edge, length: 1))
-                } else {
-                    result.deleteCharacters(in: NSRange(location: edge, length: 1))
-                    result.insert(space, at: span.range.location)
-                }
-            }
-        }
-        // Everything deleted was in front of the caret (Delete) or behind it (forward delete).
-        return State(result as String, caret: caret >= NSMaxRange(character) ? caret - deleted : caret)
+        result.deleteCharacters(in: closing)
+        result.deleteCharacters(in: opening)
+        // The caret moves back by what went in front of it.
+        let moved = caret - [opening, closing].reduce(0) { $0 + max(0, min(NSMaxRange($1), caret) - $1.location) }
+        let unmarked = halves ? nil : NSRange(location: span.range.location, length: span.content.length)
+        return Deletion(state: State(result as String, caret: moved), unmarked: unmarked)
     }
 
     /// Deleting the character at `index`, inside a line's marker: the marker goes as a whole. One `#` of several
@@ -545,8 +512,10 @@ enum MarkdownEditing {
 
     /// The small things typing does: "-" at the start of a line becomes a bullet with its space, a space typed
     /// after a list marker's own is left out, "- [" and "]" make a checkbox, and a closing mark typed where the same
-    /// mark is already steps over it.
-    static func insert(_ typed: String, in state: State) -> State? {
+    /// mark is already steps over it. A `*` or `_` typed at either end of italics goes on the other end too, which
+    /// makes them bold, and one typed at either end of `unmarked`, the text whose marks Delete just took off, styles
+    /// it again: marks come back as they went, a pair at a time.
+    static func insert(_ typed: String, in state: State, unmarked: NSRange? = nil) -> State? {
         guard state.selection.length == 0, typed.utf16.count == 1 else { return nil }
         let document = Document(state.text)
         let caret = state.selection.location
@@ -581,6 +550,20 @@ enum MarkdownEditing {
             let closes = spans.contains { $0.content.length > 0 && caret >= NSMaxRange($0.content) && caret < NSMaxRange($0.range) }
             if closes, after.hasPrefix(typed) {
                 return State(state.text, caret: caret + 1)
+            }
+            guard typed == "*" || typed == "_" else { break }
+            let italics = spans.filter { $0.style == .italic && document.string($0.opening) == typed }
+            if let span = italics.last(where: { NSMaxRange($0.range) == caret }) {
+                return document.applying([(NSRange(location: caret, length: 0), typed), (NSRange(location: span.range.location, length: 0), typed)], to: NSRange(location: caret, length: 0))
+                    .moving(to: caret + 2)
+            }
+            if let span = italics.first(where: { $0.range.location == caret || NSMaxRange($0.opening) == caret }) {
+                return document.applying([(NSRange(location: NSMaxRange(span.range), length: 0), typed), (NSRange(location: caret, length: 0), typed)], to: NSRange(location: caret, length: 0))
+                    .moving(to: caret + 1)
+            }
+            if let unmarked, NSMaxRange(unmarked) <= document.text.length, caret == NSMaxRange(unmarked) || caret == unmarked.location {
+                let wrapped = typed + document.string(unmarked) + typed
+                return document.replacing(unmarked, with: wrapped, caret: caret == unmarked.location ? caret + 1 : caret + 2)
             }
         default:
             break

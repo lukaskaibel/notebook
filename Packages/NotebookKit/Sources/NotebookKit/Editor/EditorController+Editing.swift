@@ -178,7 +178,7 @@ extension EditorController {
         let selection = self.selection
         guard !document.lines.isEmpty, !hasMarkedText else { return false }
         // A selection that holds one of a style's marks takes the other one too.
-        guard selection.length == 0 else { return perform(MarkdownEditing.deleteBackward, actionName: "Delete") }
+        guard selection.length == 0 else { return deleteByRules(forward: false) }
         guard selection.location > 0 else { return false }
         let location = selection.location
         let index = document.lineIndex(containing: location)
@@ -243,14 +243,14 @@ extension EditorController {
                 return true
             }
         }
-        // Behind a style's closing marks its last letter goes and the marks stay; into a mark, both go.
-        return perform(MarkdownEditing.deleteBackward, actionName: "Delete")
+        // A style's mark goes with one of the other side: bold becomes italics, italics plain text.
+        return deleteByRules(forward: false)
     }
 
     func deleteForward() -> Bool {
         let selection = self.selection
         guard !document.lines.isEmpty, !hasMarkedText else { return false }
-        guard selection.length == 0 else { return perform(MarkdownEditing.deleteForward, actionName: "Delete") }
+        guard selection.length == 0 else { return deleteByRules(forward: true) }
         guard selection.location < storage.length else { return false }
         let line = document.lines[document.lineIndex(containing: selection.location)]
         if let span = line.spans.first(where: { isAtomic($0) && $0.range.location == selection.location }) {
@@ -267,7 +267,7 @@ extension EditorController {
             replace(NSRange(location: link.range.upperBound, length: 1), with: "", select: NSRange(location: link.content.upperBound, length: 0), actionName: "Delete")
             return true
         }
-        return perform(MarkdownEditing.deleteForward, actionName: "Delete")
+        return deleteByRules(forward: true)
     }
 
     // MARK: - Tab
@@ -402,12 +402,13 @@ extension EditorController {
         }
         // A selection deleted (as iOS sends it, and cutting): a style's mark goes with its pair.
         if replacement.isEmpty, range.length > 0, range == selection {
-            return !perform(MarkdownEditing.deleteBackward, actionName: "Delete")
+            return !deleteByRules(forward: false)
         }
-        // "-" at the start of a line makes a bullet with its space, "- []" a checkbox, and a closing mark typed where
-        // the same one is steps over it.
+        // "-" at the start of a line makes a bullet with its space, "- []" a checkbox, a closing mark typed where the
+        // same one is steps over it, and a star typed at either end of italics or of text that just lost its marks
+        // goes on both ends.
         if range.length == 0, selection == range, ["-", " ", "]", "*", "_", "~", "`", "="].contains(replacement) {
-            return !perform { MarkdownEditing.insert(replacement, in: $0) }
+            return !insertByRules(replacement)
         }
         return true
     }
