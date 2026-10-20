@@ -154,7 +154,7 @@ extension EditorController: NSTextViewDelegate, NSTextFieldDelegate {
     }
 
     public func textView(_ textView: NSTextView, willChangeSelectionFromCharacterRanges oldSelectedCharRanges: [NSValue], toCharacterRanges newSelectedCharRanges: [NSValue]) -> [NSValue] {
-        guard !isLoading, newSelectedCharRanges.count == 1, let old = oldSelectedCharRanges.first?.rangeValue else { return newSelectedCharRanges }
+        guard !isLoading, !selectsExactly, newSelectedCharRanges.count == 1, let old = oldSelectedCharRanges.first?.rangeValue else { return newSelectedCharRanges }
         let range = newSelectedCharRanges[0].rangeValue
         if range.length == 0 {
             return [NSValue(range: NSRange(location: snapCaret(range.location, from: old), length: 0))]

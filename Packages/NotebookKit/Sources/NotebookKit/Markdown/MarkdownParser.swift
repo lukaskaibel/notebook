@@ -4,20 +4,21 @@ import Foundation
 /// Obsidian's `[[links]]`, `![[embeds]]`, callouts and `$math$`. It reads line by line, so every character keeps
 /// its place, which is what the live preview needs; it does not try to be a complete CommonMark parser.
 public enum MarkdownParser {
-    public static func parse(_ string: String) -> MarkdownDocument {
-        parse(units: Array(string.utf16))
+    public static func parse(_ string: String, typing: Bool = false) -> MarkdownDocument {
+        parse(units: Array(string.utf16), typing: typing)
     }
 
     /// The same, reading the text out of an `NSString` in one copy rather than one character at a time.
-    public static func parse(_ string: NSString) -> MarkdownDocument {
+    public static func parse(_ string: NSString, typing: Bool = false) -> MarkdownDocument {
         var units = [UInt16](repeating: 0, count: string.length)
         units.withUnsafeMutableBufferPointer { buffer in
             if let base = buffer.baseAddress { string.getCharacters(base, range: NSRange(location: 0, length: string.length)) }
         }
-        return parse(units: units)
+        return parse(units: units, typing: typing)
     }
 
-    static func parse(units u: [UInt16]) -> MarkdownDocument {
+    /// `typing`: the note is being typed in (see `InlineParser.spans`).
+    static func parse(units u: [UInt16], typing: Bool = false) -> MarkdownDocument {
         var lines = splitLines(u)
         var blocks: [MarkdownBlock] = []
         var index = 0
@@ -156,7 +157,7 @@ public enum MarkdownParser {
         for line in lines.indices {
             switch lines[line].kind {
             case .paragraph, .heading, .listItem, .quote, .footnoteDefinition, .tableHeader, .tableRow:
-                lines[line].spans = InlineParser.spans(in: u, range: lines[line].content)
+                lines[line].spans = InlineParser.spans(in: u, range: lines[line].content, typing: typing)
             default:
                 break
             }

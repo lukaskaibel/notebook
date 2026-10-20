@@ -57,6 +57,12 @@ one, its level sits in the margin, and a click there turns it into a title, head
 looks in the note, as in the toolbar's Aa menu. Lists continue on Return,
 Tab nests them, and checkboxes tick with a click.
 
+Typing goes as in Notion or Bear. ⌘B inside bold text takes the bold off, and a second press puts it back; at the end
+of bold text it steps out, so you type on plainly. Return there goes to the next line without the `**`. Delete behind
+bold text takes its letters, not its marks, and a mark deleted takes its partner with it. `-` at the start of a line
+makes a bullet, `-[]` a checkbox. The text eases into its new look as you type: bold thickens, a heading grows, the
+marks fade in.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/typing-dark.webp">
   <img alt="Typing at the end of a note: two hash marks become the heading Sunday, a checklist item appears, and the stars around lake and the equals signs around coffee show while the caret is next to them, then fold away into bold and a highlight" src="Design/screenshots/typing-light.webp">
@@ -200,11 +206,13 @@ The same notes in the same editor, laid out the way each device works. On the iP
 as in the Files app, and a note opens on a screen of its own; swipe from the edge to go back. The first screen has your
 favourites, what you opened last and the folders of each location. New Folder, search and a new note sit at the bottom,
 as in Notes, and search finds everything it finds on the Mac. While you write, a bar floats above the keyboard with
-Aa, a checklist, attachments, a link, undo and the formatting, a page of tools at a time. Which tools and in what order
-is yours to choose: touch and hold the bar, or tap the sliders after its last tool, or go to Settings › Writing Bar. Aa
-brings up the Format panel in the keyboard's place, as in Notes: the text styles, bold, italic and the rest, lists,
-indenting and quotes. Pictures come from the camera, the document scanner, your photos or the Files app. The pencil, at
-the bottom of the screen or in the bar, draws in the note with Apple's tool picker. Tap a checkbox to tick it, a link to
+Aa, a checklist, attachments, a link, undo and the formatting, a page of tools at a time. On its left, buttons for
+where the caret is come and go: the style you are in, tinted, to take it off with a tap, the line's checkbox, moving a
+list item in or out, and opening the link you are on. Which tools and in what order is yours to choose: touch and hold
+the bar, or tap the sliders after its last tool, or go to Settings › Writing Bar. Aa brings up the Format panel in the
+keyboard's place, as in Notes: the text styles, bold, italic and the rest, lists, indenting and quotes. Pictures come
+from the camera, the document scanner, your photos or the Files app. The pencil, at the bottom of the screen or in the
+bar, draws in the note with Apple's tool picker. Tap a checkbox to tick it, a link to
 follow it, a picture to look at it, a drawing to draw in it; touch and hold a picture and drag it to move it in the
 note, or let go to copy, share or delete it. Swipe a file to move or delete it, or to make it a favourite; touch and
 hold it for everything else.
@@ -234,7 +242,7 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
 - **iPhone and iPad.** The same editor, search and file handling, with screens made for each: one folder per screen
   on the iPhone, the sidebar on the iPad. Pick iCloud Drive or any folder in the Files app's picker, or keep notes on
   the device, in On My iPhone › Notebook. A bar above the keyboard, whose tools you choose, formats, links and adds
-  photos, scans and files; Aa opens the Format panel as in Notes.
+  photos, scans and files, with buttons for where the caret is on its left; Aa opens the Format panel as in Notes.
   Deleting moves to Recently Deleted; where a place has none, Notebook asks before it deletes.
 - **Hidden folders.** Right-click a folder you don't want to see, such as one another app keeps in iCloud Drive, and
   choose Hide Folder, or on iPhone and iPad touch and hold it. It leaves the sidebar, search and Move To, and stays
@@ -245,7 +253,8 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   and reaches your other Macs, iPhones and iPads through iCloud; each device shows the notification itself.
 - **Live preview editor.** Headings, bold, italic, strikethrough, `==highlight==`, inline code, links, checklists,
   bulleted and numbered lists, quotes, callouts, tables, code blocks, maths, Mermaid, footnotes and front matter, which
-  folds into a small "properties" pill.
+  folds into a small "properties" pill. Styles turn on and off where the caret is, their marks come and go as a pair,
+  and the text eases into each new look.
 - **Pictures and files in notes.** Paste or drop them in; `![[embeds]]` of other notes show an excerpt, of files a
   card with a preview.
 - **Drawings in notes,** with PencilKit: Apple Pencil, a finger, the mouse, the trackpad or a tablet. Each is a PNG
@@ -362,7 +371,7 @@ While writing:
 
 | Shortcut | Action |
 | --- | --- |
-| ⌘B, ⌘I | Bold, italic |
+| ⌘B, ⌘I | Bold, italic; inside bold text it comes off (again: back on), at its end you step out of it |
 | ⇧⌘X | Strikethrough |
 | ⌃⌘H | Highlight |
 | ⌘E | Inline code |
@@ -375,6 +384,9 @@ While writing:
 | Tab, ⇧Tab | Nest or un-nest a list item (in code: indent) |
 | ⌥⌘] and ⌥⌘[ | Increase and decrease indent |
 | `*`, `_`, `` ` ``, `~` or `=` with text selected | Wrap the selection in that mark |
+| Return at the end of bold text | The next line, without the bold; in the middle of it, the bold goes on |
+| Delete behind `**bold**` | Its last letter; the marks go with the last one. Deleting one mark takes both |
+| `-` at the start of a line | A bullet; `-[]` a checkbox, `---` a rule |
 | `[[` | Suggestions for a link; ↑↓ and Return or Tab to pick |
 | Space on a selected picture | Quick Look |
 | Double-click a drawing | Draw in it |
