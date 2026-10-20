@@ -10,8 +10,8 @@
 #   bundle exec fastlane beta         # both
 #   bundle exec fastlane build        # build both for the App Store, signed, without uploading (or ios build, mac build)
 #
-# .github/workflows/testflight.yml runs `ios beta` on GitHub for every change to the app on main. TestFlight builds are
-# numbered as beta_version and build_number below say: 0.2.0 (2026.1017.1047).
+# .github/workflows/testflight.yml runs `ios beta` and `mac beta` on GitHub for every change to the app on main.
+# TestFlight builds are numbered as beta_version and build_number below say: 0.2.0 (2026.1017.1047).
 #
 # The App Store listing (texts, screenshots, submitting for review) isn't here yet: that comes with the first release.
 
@@ -66,34 +66,61 @@ end
 
 # Lets Xcode make the development profiles for the archive, signed in with the same API key. The team and the signing
 # identity are given here rather than in Config/Local.xcconfig, which would sign the Debug builds for the team too.
-def build_arguments(marketing_version)
+# An archive signed for the App Store from the start (signs_for_store_from_start?) takes the Apple Distribution
+# certificate instead, and no development profile.
+def build_arguments(marketing_version, development: true)
+  signing = if development
+              ["-allowProvisioningUpdates",
+               "-authenticationKeyPath", File.expand_path(secret("APP_STORE_CONNECT_API_KEY_P8_PATH")),
+               "-authenticationKeyID", secret("APP_STORE_CONNECT_API_KEY_KEY_ID"),
+               "-authenticationKeyIssuerID", secret("APP_STORE_CONNECT_API_KEY_ISSUER_ID"),
+               "CODE_SIGN_IDENTITY=Apple Development"]
+            else
+              ["CODE_SIGN_STYLE=Manual", "CODE_SIGN_IDENTITY=Apple Distribution"]
+            end
   [
-    "-allowProvisioningUpdates",
-    "-authenticationKeyPath", File.expand_path(secret("APP_STORE_CONNECT_API_KEY_P8_PATH")),
-    "-authenticationKeyID", secret("APP_STORE_CONNECT_API_KEY_KEY_ID"),
-    "-authenticationKeyIssuerID", secret("APP_STORE_CONNECT_API_KEY_ISSUER_ID"),
+    *signing,
     "DEVELOPMENT_TEAM=#{secret('DEVELOPMENT_TEAM')}",
-    "CODE_SIGN_IDENTITY=Apple Development",
     "MARKETING_VERSION=#{marketing_version}",
     "CURRENT_PROJECT_VERSION=#{build_number}"
   ].shelljoin
+end
+
+# GitHub gives every run a new Mac, which the team's development profiles don't list and which shouldn't become a
+# device of the team on every run. There the Mac app is signed for the App Store from the start, with the profile and
+# the certificate the export signs it with anyway.
+def signs_for_store_from_start?(platform)
+  platform == :mac && !ENV["CI"].to_s.empty?
+end
+
+# The App Store profile for the app's target alone, in Config/Local.xcconfig (gitignored), which only the app's
+# target reads: given to xcodebuild, the profile would go to the Swift packages too, which take none.
+def give_target_profile(profile)
+  path = File.join(ROOT, "Config", "Local.xcconfig")
+  lines = ["", "// From fastlane on GitHub: the Mac app is signed for the App Store from the start.",
+           "PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*] = #{profile}"]
+  File.write(path, (File.exist?(path) ? File.read(path) : "") + lines.join("\n") + "\n")
 end
 
 # The archive is signed for development; the export signs it for the App Store: with the team's Apple Distribution
 # certificate in this Mac's keychain and an App Store profile that fastlane makes or fetches with the API key. (The key
 # may not use Apple's cloud-managed certificates, so Xcode can't do this part by itself.) The Mac's .pkg is signed with
 # a Mac Installer Distribution certificate, which fastlane creates the first time; macOS then asks once whether
-# xcodebuild may use its key. Returns the export options.
+# xcodebuild may use its key. On GitHub that certificate comes from the secrets, since one made there would be a new
+# one on every run. Returns the export options.
 def store_signing(platform)
   folder = File.join(OUTPUT, "signing")
-  register_this_mac if platform == :mac
+  register_this_mac if platform == :mac && !signs_for_store_from_start?(platform)
   turn_on_capabilities
   # get_provisioning_profile would sign the profile with whatever certificate get_certificates handled last.
   lane_context.delete(SharedValues::CERT_CERTIFICATE_ID)
   get_provisioning_profile(api_key: api_key, app_identifier: APP_ID, platform: platform == :mac ? "macos" : "ios",
                            output_path: folder)
   profile = lane_context[SharedValues::SIGH_NAME]
-  if platform == :mac
+  if signs_for_store_from_start?(platform)
+    installers = sh("security find-identity -v 2>/dev/null", log: false)
+    UI.user_error!("No Mac Installer Distribution certificate in the keychain (MAC_INSTALLER_CERTIFICATE_P12).") unless installers.include?("Mac Installer Distribution")
+  elsif platform == :mac
     get_certificates(api_key: api_key, platform: "macos", type: "mac_installer_distribution", output_path: folder)
     lane_context.delete(SharedValues::CERT_CERTIFICATE_ID)
   end
@@ -186,6 +213,7 @@ def archive_for_store(platform, marketing_version: version)
   folder = File.join(OUTPUT, platform.to_s)
   UI.header("#{config[:name]}: Notebook #{marketing_version} (#{build_number})")
   export_options = store_signing(platform)
+  give_target_profile(export_options[:provisioningProfiles][APP_ID]) if signs_for_store_from_start?(platform)
   package = build_app(
     project: PROJECT,
     scheme: SCHEME,
@@ -201,7 +229,7 @@ def archive_for_store(platform, marketing_version: version)
     export_options: export_options,
     skip_profile_detection: true,
     # gym hands these to the export as well, so they mustn't go into export_xcargs a second time.
-    xcargs: build_arguments(marketing_version)
+    xcargs: build_arguments(marketing_version, development: !signs_for_store_from_start?(platform))
   )
   check_sandbox(File.join(folder, "Notebook.xcarchive")) if platform == :mac
   package

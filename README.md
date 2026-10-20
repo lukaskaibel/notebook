@@ -534,11 +534,13 @@ app or both:
 bundle exec fastlane ios beta
 ```
 
-Every change to the app on `main` also goes to TestFlight by itself, for the iPhone and iPad:
-[`.github/workflows/testflight.yml`](.github/workflows/testflight.yml) runs the same lane on GitHub, signed with
-certificates made for it (the workflow lists the secrets it needs). A TestFlight build carries the version it's on its
-way to and the date and time in Germany: `0.1.0 (2026.1017.1047)` is the build of 17 October 2026 at 10:47, and once
-`v0.1.0` is tagged, the builds after it are `0.2.0`. Its "What to Test" names the commit.
+Every change to the app on `main` also goes to TestFlight by itself, for the iPhone and iPad and for the Mac:
+[`.github/workflows/testflight.yml`](.github/workflows/testflight.yml) runs `ios beta` and `mac beta` on GitHub side by
+side, signed with certificates made for it (the workflow lists the secrets it needs). There the Mac app is signed for
+the App Store from the start, so the Macs GitHub runs it on don't have to be registered with the team. A TestFlight
+build carries the version it's on its way to and the date and time in Germany: `0.1.0 (2026.1017.1047)` is the build of
+17 October 2026 at 10:47, and once `v0.1.0` is tagged, the builds after it are `0.2.0`. Its "What to Test" names the
+commit.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes.
 
