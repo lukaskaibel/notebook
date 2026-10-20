@@ -117,13 +117,11 @@ def store_signing(platform)
   get_provisioning_profile(api_key: api_key, app_identifier: APP_ID, platform: platform == :mac ? "macos" : "ios",
                            output_path: folder)
   profile = lane_context[SharedValues::SIGH_NAME]
-  if signs_for_store_from_start?(platform)
-    installers = sh("security find-identity -v 2>/dev/null", log: false)
-    UI.user_error!("No Mac Installer Distribution certificate in the keychain (MAC_INSTALLER_CERTIFICATE_P12).") unless installers.include?("Mac Installer Distribution")
-  elsif platform == :mac
+  if platform == :mac && !signs_for_store_from_start?(platform)
     get_certificates(api_key: api_key, platform: "macos", type: "mac_installer_distribution", output_path: folder)
     lane_context.delete(SharedValues::CERT_CERTIFICATE_ID)
   end
+  installer = installer_certificate if platform == :mac
   options = {
     signingStyle: "manual",
     teamID: secret("DEVELOPMENT_TEAM"),
@@ -131,8 +129,16 @@ def store_signing(platform)
     provisioningProfiles: { APP_ID => profile },
     manageAppVersionAndBuildNumber: false
   }
-  options[:installerSigningCertificate] = "Mac Installer Distribution" if platform == :mac
+  options[:installerSigningCertificate] = installer if platform == :mac
   options
+end
+
+# The name Xcode finds the Mac Installer Distribution certificate in the keychain by: the ones App Store Connect makes
+# are still called "3rd Party Mac Developer Installer" there, and Xcode doesn't take the new name for them.
+def installer_certificate
+  name = sh("security find-identity -v 2>/dev/null", log: false)[/"(Mac Installer Distribution|3rd Party Mac Developer Installer)/, 1]
+  UI.user_error!("No Mac Installer Distribution certificate in the keychain (on GitHub: MAC_INSTALLER_CERTIFICATE_P12).") if name.nil?
+  name
 end
 
 # The entitlements ask for iCloud's key-value store (hidden folders and reminders go to your other devices through it)
