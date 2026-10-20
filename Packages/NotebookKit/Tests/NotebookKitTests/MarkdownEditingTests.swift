@@ -249,6 +249,46 @@ struct MarkdownEditingTests {
         #expect(typed("x", "```\n##|") == nil)
     }
 
+    @Test func hashesTypedInFrontOfTextMakeAHeading() {
+        #expect(typed("#", "#|Groceries") == "##| Groceries")
+        #expect(typed("#", "|#Groceries") == "#|# Groceries")
+        #expect(typed("#", "intro\n  #|Plan") == "intro\n  ##| Plan")
+        #expect(typed("#", "|Groceries") == nil, "one # may start a tag")
+        #expect(typed("#", "###|###Plan") == nil, "seven are no heading")
+        #expect(typed("#", "#|") == nil, "nothing to make a heading of yet")
+        #expect(typed("#", "a #|b") == nil)
+    }
+
+    @Test func aSpaceInFrontOfAHeadingsOwnStepsOverIt() {
+        #expect(typed(" ", "##| Groceries") == "## |Groceries")
+        #expect(typed(" ", "a| b") == nil)
+    }
+
+    @Test func twoMarksOfAStyleBringTheirClosingPair() {
+        #expect(typed("*", "*|") == "**|**")
+        #expect(typed("*", "Buy *|") == "Buy **|**")
+        #expect(typed("*", "- (*|") == "- (**|**")
+        #expect(typed("~", "a ~|") == "a ~~|~~")
+        #expect(typed("~", "~|") == nil, "`~~~~` alone would open a block of code")
+        #expect(typed("=", "x =|") == "x ==|==")
+        #expect(typed("*", "a*|") == nil, "inside a word")
+        #expect(typed("*", "*|word") == nil, "in front of a word, the closing marks go after it")
+        #expect(typed("*", "**bold *|") == nil, "these close the bold that is open")
+        #expect(typed("*", "**|") == nil, "a third star")
+        #expect(typed("_", "_|") == nil)
+        #expect(typed("*", "`a *|`") == nil, "code")
+    }
+
+    @Test func aSpaceInPairedMarksMakesThemPlainStars() {
+        #expect(typed(" ", "a **|**") == "a ** |")
+        #expect(typed(" ", "x ==|==") == "x == |")
+        #expect(typed(" ", "a *|*") == nil)
+    }
+
+    @Test func aStarInAnEmptyPairOfBoldMakesBoldItalics() {
+        #expect(typed("*", "**|**") == "***|***")
+    }
+
     @Test func threeDashesStillMakeARule() {
         #expect(typed("-", "- |") == "--|")
         #expect(typed("-", "--|") == nil)

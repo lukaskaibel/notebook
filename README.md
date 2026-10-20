@@ -63,8 +63,10 @@ Typing goes as in Notion or Bear. ⌘B inside bold text takes the bold off, and 
 of bold text it steps out, so you type on plainly. Return there goes to the next line without the `**`. Marks go in
 pairs: deleting a star takes one from the other end too, so bold becomes italics and then plain text, and typing a star
 there brings them back the same way; on the touch keyboard, where the stars don't show, Delete takes the letter you see
-and the bold stays. `-` at the start of a line makes a bullet, `-[]` a checkbox, and `##` followed by text gets its
-space, since two `#`s only ever start a heading (one may be a tag). Return on a heading without text takes the heading
+and the bold stays. Typing `**` brings the closing `**` along, with the caret between them; type the closing stars
+yourself and they are stepped over. `-` at the start of a line makes a bullet, `-[]` a checkbox, and `##` gets its space
+whether you type text after it or in front of a line's text, since two `#`s only ever start a heading (one may be a
+tag). Return on a heading without text takes the heading
 off, and at the start of one puts a line above it. The text eases into its new look as you type: bold thickens, a
 heading grows, the marks fade in.
 
@@ -397,7 +399,8 @@ While writing:
 | Delete behind `**bold**` | A star from each end: italics, then plain text; `*` there brings them back (on the touch keyboard, where the stars don't show: the last letter) |
 | `*` at either end of `*italics*` | One at the other end too: bold |
 | `-` at the start of a line | A bullet; `-[]` a checkbox, `---` a rule |
-| `##` and then text | The space a heading needs goes in for you |
+| `##` and then text, or `##` in front of a line | The space a heading needs goes in for you |
+| `**` (also `~~`, `==`) | The closing pair comes along, the caret between; a space next makes them plain stars |
 | Return on a heading | At its start: a line above it; on one without text: back to body text |
 | `[[` | Suggestions for a link; ↑↓ and Return or Tab to pick |
 | Space on a selected picture | Quick Look |

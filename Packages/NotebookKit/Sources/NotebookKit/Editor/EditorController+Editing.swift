@@ -462,9 +462,10 @@ extension EditorController {
         }
         // "-" at the start of a line makes a bullet with its space, "- []" a checkbox, a closing mark typed where the
         // same one is steps over it, and a star typed at either end of italics or of text that just lost its marks
-        // goes on both ends. Text typed right after two or more #s gets the space a heading needs.
+        // goes on both ends. Text typed right after two or more #s gets the space a heading needs, and so does text they
+        // are typed in front of; `**` brings its closing pair.
         let afterHashes = range.location > 0 && text.character(at: range.location - 1) == 35
-        if range.length == 0, selection == range, afterHashes || ["-", " ", "]", "*", "_", "~", "`", "="].contains(replacement) {
+        if range.length == 0, selection == range, afterHashes || ["-", " ", "]", "#", "*", "_", "~", "`", "="].contains(replacement) {
             return !insertByRules(replacement)
         }
         return true

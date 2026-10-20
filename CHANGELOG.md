@@ -80,8 +80,11 @@ versions follow [semantic versioning](https://semver.org).
   and opening the link the caret is on.
 - Marks unfold next to the caret and fold away behind it instead of popping in and out, and the text beside them slides
   along: the stars of bold as you arrow into it, the `##` of a heading, the stars you just closed as you type on.
-- Text typed right after `##` gets the space a heading needs, so `##Plan` becomes the heading Plan. One `#` is left
-  alone, as it may start a tag.
+- Text typed right after `##` gets the space a heading needs, so `##Plan` becomes the heading Plan, and so does a line
+  you type `##` in front of. One `#` is left alone, as it may start a tag.
+- Typing `**` puts in the closing `**` too, with the caret between them, so you type straight into bold; typing the
+  closing stars yourself steps over them, and a space right after `**` leaves them plain stars (`2 ** 3`). The same
+  goes for `~~` and `==`.
 - Return at the start of a heading puts an empty line above it, and Return on a heading without text makes it body
   text again.
 - From the title, Tab, ↓ and → at its end go on into the text, and ←, ↑ or Delete at the very start of the text go back
