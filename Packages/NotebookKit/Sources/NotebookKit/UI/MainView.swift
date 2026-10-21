@@ -39,12 +39,6 @@ struct MainView: View {
                 AddLocationButton(workspace: workspace)
             }
             .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 400)
-                .toolbar {
-                    ToolbarItem {
-                        NewNoteButton { workspace.newNote() }
-                            .help("New note (⌘N)")
-                    }
-                }
         } detail: {
             DetailColumn(workspace: workspace)
                 .inspector(isPresented: $workspace.isOutlineVisible) {
@@ -83,7 +77,7 @@ struct MainView: View {
 
 // MARK: - Toolbar
 
-/// Back and forward on the left; formatting, sharing, more, search and the outline on the right.
+/// Back, forward and a new note on the left; formatting, sharing, more, search and the outline on the right.
 struct DocumentToolbar: ToolbarContent {
     let workspace: Workspace
 
@@ -96,6 +90,23 @@ struct DocumentToolbar: ToolbarContent {
                 .disabled(!workspace.canGoForward)
                 .help("Forward")
         }
+        // Plain, like the buttons around it, and there with the sidebar hidden too. In a circle of its own: the toolbar
+        // draws neighbouring buttons in one capsule, and on this side a ToolbarSpacer doesn't part them, so the button
+        // brings its own glass.
+        ToolbarItem(placement: .navigation) {
+            Button { workspace.newNote() } label: {
+                // The symbol as large and as high as the toolbar draws its own, in its 36 pt circle: the glass adds
+                // 10 pt around the label.
+                Label("New Note", systemImage: "square.and.pencil")
+                    .imageScale(.large)
+                    .offset(y: -1.5)
+                    .frame(width: 16, height: 16)
+            }
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+            .help("New note (⌘N)")
+        }
+        .sharedBackgroundVisibility(.hidden)
         // The note's name, once its title has scrolled up under the toolbar. At most so wide that a long name never
         // pushes the search field into the toolbar's overflow menu.
         ToolbarItem(placement: .navigation) {
