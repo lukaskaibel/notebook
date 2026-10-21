@@ -13,7 +13,8 @@ extension EditorController {
         switch line.kind {
         case .listItem(let item): item.prefix.upperBound
         case .quote(_, let prefix): prefix.upperBound
-        case .heading(_, let marker): isHidden(marker) ? marker.upperBound : nil
+        // A heading's #s while they don't show.
+        case .heading(_, let marker): marker.length > 0 && !isRevealed(marker.location) ? marker.upperBound : nil
         default: nil
         }
     }
@@ -41,7 +42,13 @@ extension EditorController {
             return location - span.range.location <= span.range.upperBound - location ? span.range.location : span.range.upperBound
         }
 
-        if let contentStart = atomicPrefixEnd(line), location < contentStart, location >= line.range.location {
+        // With a keyboard a heading's #s show once the caret is on its line: a step from the line above lands in
+        // front of them.
+        let stepsOntoHeading: Bool = {
+            guard showsMarks, stepped, location == line.range.location, case .heading = line.kind else { return false }
+            return true
+        }()
+        if let contentStart = atomicPrefixEnd(line), location < contentStart, location >= line.range.location, !stepsOntoHeading {
             // Left from the start of an item's text goes to the end of the line above.
             if stepped, location < previous, previous == contentStart, lineIndex > 0 {
                 return document.lines[lineIndex - 1].range.upperBound
@@ -60,14 +67,34 @@ extension EditorController {
         if let object = blockObjectSpan(in: line), location < object.location, location > line.range.location {
             return stepped && location < previous ? line.range.location : object.location
         }
+
+        // On a touch keyboard a style's marks don't show, and the caret never rests among them. A tap next to them
+        // puts it in front of them, where typing carries on in the style of the letter before it, as in Notes: in bold
+        // text at its end, outside it at its start. A step (or a letter typed) into them goes past them all. A caret
+        // that stays where it is (the editor put it there) stays.
+        if location != previous, let marks = hiddenStyleMarks(around: location, in: line) {
+            if stepped {
+                guard location > marks.location, location < marks.upperBound else { return location }
+                return location > previous ? marks.upperBound : marks.location
+            }
+            return marks.location == line.range.location ? marks.upperBound : marks.location
+        }
         return location
     }
 
-    /// Whether a range is hidden for good (a heading's #s once they are followed by a space).
-    func isHidden(_ range: NSRange) -> Bool {
-        guard range.length > 0, range.location < storage.length,
-              let mode = storage.attribute(.notebookHidden, at: range.location, effectiveRange: nil) as? Int else { return false }
-        return mode == HiddenMode.always.rawValue
+    /// The run of a style's marks that don't show (on a touch keyboard) that a caret at `location` is in or next to.
+    func hiddenStyleMarks(around location: Int, in line: MarkdownLine) -> NSRange? {
+        guard !showsMarks else { return nil }
+        let marks = line.spans.filter(\.isStyle).flatMap(\.markers)
+        guard !marks.isEmpty else { return nil }
+        func isHiddenMark(_ index: Int) -> Bool {
+            marks.contains { NSLocationInRange(index, $0) } && layoutManager.isHidden(index)
+        }
+        var start = location
+        var end = location
+        while start > line.range.location, isHiddenMark(start - 1) { start -= 1 }
+        while end < line.range.upperBound, isHiddenMark(end) { end += 1 }
+        return end > start ? NSRange(location: start, length: end - start) : nil
     }
 
     /// The picture or embed that is a whole line on its own.

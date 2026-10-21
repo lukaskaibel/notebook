@@ -51,21 +51,31 @@ iA Writer read just the same, and with iCloud Drive the same notes are on your M
 
 ### Markdown that gets out of the way
 
-You write Markdown, and Notebook shows the result as you type. The marks show faintly next to the caret, only for the
-bit you're on, and fold away when you move on. Headings hide their `#` once you type the space after them; while the caret is on
-one, its level sits in the margin, and a click there turns it into a title, heading, subheading or body text, each shown as it
-looks in the note, as in the toolbar's Aa menu. Lists continue on Return,
-Tab nests them, and checkboxes tick with a click.
+You write Markdown, and Notebook shows the result as you type. On the Mac, and on an iPad or iPhone with a keyboard,
+the marks show faintly next to the caret, only for the bit you're on, so the arrow keys reach them and Delete takes
+them; they unfold as the caret comes and fold away as you move on, and the text beside them slides along instead of
+jumping. On the touch keyboard they stay hidden, and the bar above it shows the styles the caret is in. A heading's `#`s
+show the same way, and while the caret is on one its level sits in the margin; a click there turns it into a title,
+heading, subheading or body text, each shown as it looks in the note, as in the toolbar's Aa menu. Lists continue on
+Return, Tab nests them, and checkboxes tick with a click.
 
 Typing goes as in Notion or Bear. ⌘B inside bold text takes the bold off, and a second press puts it back; at the end
 of bold text it steps out, so you type on plainly. Return there goes to the next line without the `**`. Marks go in
 pairs: deleting a star takes one from the other end too, so bold becomes italics and then plain text, and typing a star
-there brings them back the same way. `-` at the start of a line makes a bullet, `-[]` a checkbox. The text eases into
-its new look as you type: bold thickens, a heading grows, the marks fade in.
+there brings them back the same way; on the touch keyboard, where the stars don't show, Delete takes the letter you see
+and the bold stays. Typing `**` brings the closing `**` along, with the caret between them; type the closing stars
+yourself and they are stepped over. `-` at the start of a line makes a bullet, `-[]` a checkbox, and `##` gets its space
+whether you type text after it or in front of a line's text, since two `#`s only ever start a heading (one may be a
+tag). Return on a heading without text takes the heading
+off, and at the start of one puts a line above it. The text eases into its new look as you type: bold thickens, a
+heading grows, the marks fade in.
+
+The title of a new note has the caret first. Return, Tab, ↓, or → at its end go on into the text, and ↑, ←, or Delete at
+the very start of the text go back up into the title, on the Mac and on an iPad or iPhone with a keyboard alike.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/typing-dark.webp">
-  <img alt="Typing at the end of a note: two hash marks become the heading Sunday, a checklist item appears, and the stars around lake and the equals signs around coffee show while the caret is next to them, then fold away into bold and a highlight" src="Design/screenshots/typing-light.webp">
+  <img alt="Typing at the end of a note: two hash marks show with the level H2 in the margin while Sunday is typed after them, then fold away into the heading Sunday, a checklist item appears, and the stars around lake and the equals signs around coffee show while the caret is next to them, then fold away into bold and a highlight" src="Design/screenshots/typing-light.webp">
 </picture>
 
 Nothing moves while you select text or hold the mouse button, so a selection never jumps. Long notes type and scroll
@@ -219,7 +229,7 @@ hold it for everything else.
 
 The iPad has the Mac's layout: the sidebar with its folders opening in place, the note next to it, and the outline in
 an inspector. In portrait the sidebar steps aside once you have picked a note. With a keyboard, the Mac's shortcuts
-work and the menu bar has New Note, Go and Format. Drag pictures from Photos into a note, or files onto a folder in
+work, the menu bar has New Note, Go and Format, and the marks show next to the caret as on the Mac. Drag pictures from Photos into a note, or files onto a folder in
 the sidebar. A window as narrow as a phone gets the iPhone's screens.
 
 <picture>
@@ -254,7 +264,8 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
 - **Live preview editor.** Headings, bold, italic, strikethrough, `==highlight==`, inline code, links, checklists,
   bulleted and numbered lists, quotes, callouts, tables, code blocks, maths, Mermaid, footnotes and front matter, which
   folds into a small "properties" pill. Styles turn on and off where the caret is, their marks come and go as a pair,
-  and the text eases into each new look.
+  and the text eases into each new look. With a keyboard the marks next to the caret unfold and fold away; on the touch
+  keyboard they stay hidden.
 - **Pictures and files in notes.** Paste or drop them in; `![[embeds]]` of other notes show an excerpt, of files a
   card with a preview.
 - **Drawings in notes,** with PencilKit: Apple Pencil, a finger, the mouse, the trackpad or a tablet. Each is a PNG
@@ -385,14 +396,18 @@ While writing:
 | ⌥⌘] and ⌥⌘[ | Increase and decrease indent |
 | `*`, `_`, `` ` ``, `~` or `=` with text selected | Wrap the selection in that mark |
 | Return at the end of bold text | The next line, without the bold; in the middle of it, the bold goes on |
-| Delete behind `**bold**` | A star from each end: italics, then plain text; `*` there brings them back |
+| Delete behind `**bold**` | A star from each end: italics, then plain text; `*` there brings them back (on the touch keyboard, where the stars don't show: the last letter) |
 | `*` at either end of `*italics*` | One at the other end too: bold |
 | `-` at the start of a line | A bullet; `-[]` a checkbox, `---` a rule |
+| `##` and then text, or `##` in front of a line | The space a heading needs goes in for you |
+| `**` (also `~~`, `==`) | The closing pair comes along, the caret between; a space next makes them plain stars |
+| Return on a heading | At its start: a line above it; on one without text: back to body text |
 | `[[` | Suggestions for a link; ↑↓ and Return or Tab to pick |
 | Space on a selected picture | Quick Look |
 | Double-click a drawing | Draw in it |
 | Esc, or start typing | Stop drawing; typing goes on below the drawing |
-| ↑ on the first line | Into the title; Return, Tab or ↓ back into the text |
+| ↑ on the first line, ← or Delete at the very start | Into the title, at its end |
+| Return, Tab, ↓, or → at the end of the title | Into the text |
 
 In the sidebar: Return renames, ⌘⌫ moves to the Trash, and Space opens a file in Quick Look. Right-click a file or
 folder for everything else, including New Folder, Copy Link, which copies a `[[link]]` to it, Remind Me… and Hide

@@ -327,6 +327,17 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
         super.fillBackgroundRectArray(rectArray, count: rectCount, forCharacterRange: charRange, color: color)
     }
 
+    /// Marks folding in or out (`MarkdownRevealAnimator`) are drawn as see-through as they are far from showing.
+    override func showCGGlyphs(_ glyphs: UnsafePointer<CGGlyph>, positions: UnsafePointer<CGPoint>, count: Int, font: NSFont, textMatrix: CGAffineTransform, attributes: [NSAttributedString.Key: Any] = [:], in context: CGContext) {
+        guard let fade = attributes[.notebookFade] as? CGFloat else {
+            return super.showCGGlyphs(glyphs, positions: positions, count: count, font: font, textMatrix: textMatrix, attributes: attributes, in: context)
+        }
+        context.saveGState()
+        context.setAlpha(fade)
+        super.showCGGlyphs(glyphs, positions: positions, count: count, font: font, textMatrix: textMatrix, attributes: attributes, in: context)
+        context.restoreGState()
+    }
+
     override func drawGlyphs(forGlyphRange glyphsToShow: NSRange, at origin: NSPoint) {
         super.drawGlyphs(forGlyphRange: glyphsToShow, at: origin)
         guard let storage = textStorage, let container = textContainers.first else { return }

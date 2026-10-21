@@ -510,19 +510,27 @@ enum MarkdownEditing {
         return State(result as String, caret: caret)
     }
 
-    /// The small things typing does: "-" at the start of a line becomes a bullet with its space, a space typed
-    /// after a list marker's own is left out, "- [" and "]" make a checkbox, and a closing mark typed where the same
-    /// mark is already steps over it. A `*` or `_` typed at either end of italics goes on the other end too, which
-    /// makes them bold, and one typed at either end of `unmarked`, the text whose marks Delete just took off, styles
-    /// it again: marks come back as they went, a pair at a time.
+    /// The small things typing does: "-" at the start of a line becomes a bullet with its space, text typed right
+    /// after `##` gets the space a heading needs, a space typed after a list marker's own is left out, "- [" and "]"
+    /// make a checkbox, and a closing mark typed where the same mark is already steps over it. A `*` or `_` typed at
+    /// either end of italics goes on the other end too, which makes them bold, and one typed at either end of
+    /// `unmarked`, the text whose marks Delete just took off, styles it again: marks come back as they went, a pair at
+    /// a time.
     static func insert(_ typed: String, in state: State, unmarked: NSRange? = nil) -> State? {
-        guard state.selection.length == 0, typed.utf16.count == 1 else { return nil }
+        guard state.selection.length == 0, !typed.isEmpty else { return nil }
         let document = Document(state.text)
         let caret = state.selection.location
         guard !document.isInFence(caret) else { return nil }
         let line = document.line(at: caret)
         let before = document.string(NSRange(location: line.range.location, length: caret - line.range.location))
         let after = document.string(NSRange(location: caret, length: NSMaxRange(line.range) - caret))
+        // Two or more #s at the start of a line only ever start a heading (a tag has one): text typed right after them
+        // gets the space in front of it that makes them one.
+        if let first = typed.unicodeScalars.first, first != "#", !CharacterSet.whitespacesAndNewlines.contains(first),
+           before.range(of: #"^ {0,3}#{2,6}$"#, options: .regularExpression) != nil {
+            return document.replacing(NSRange(location: caret, length: 0), with: " " + typed, caret: caret + 1 + typed.utf16.count)
+        }
+        guard typed.utf16.count == 1 else { return nil }
         switch typed {
         case "-":
             if before.allSatisfy({ $0 == " " || $0 == "\t" }), !after.hasPrefix(" "), !after.hasPrefix("-") {
@@ -532,10 +540,28 @@ enum MarkdownEditing {
             if line.kind == .bullet, after.isEmpty, before.hasSuffix("- "), before.dropLast(2).allSatisfy({ $0 == " " || $0 == "\t" }) {
                 return document.replacing(NSRange(location: caret - 1, length: 1), with: "-", caret: caret)
             }
+        case "#":
+            // #s typed in front of text: two or more make a heading, so the space after the last one goes in. The
+            // caret stays after the # typed, for another.
+            let leading = after.prefix { $0 == "#" }
+            let rest = after.dropFirst(leading.count)
+            let count = before.filter { $0 == "#" }.count + 1 + leading.count
+            if before.range(of: #"^ {0,3}#*$"#, options: .regularExpression) != nil, (2...6).contains(count),
+               let next = rest.unicodeScalars.first, !CharacterSet.whitespacesAndNewlines.contains(next) {
+                return document.replacing(NSRange(location: caret, length: leading.utf16.count), with: "#" + leading + " ", caret: caret + 1)
+            }
         case " ":
             let isMarked = line.isList || { if case .heading = line.kind { true } else { false } }()
             if isMarked, caret == line.contentStart, before.hasSuffix(" ") {
                 return state
+            }
+            // Right in front of a heading's own space, a space steps over it.
+            if after.hasPrefix(" "), before.range(of: #"^ {0,3}#{1,6}$"#, options: .regularExpression) != nil {
+                return State(state.text, caret: caret + 1)
+            }
+            // A space right after marks that were just paired makes them plain stars (`a ** b`): the closing pair goes.
+            if let pair = document.emptyPair(around: caret, spans: document.spans(on: line.range)), pair.range.length == 4 {
+                return document.replacing(NSRange(location: caret, length: 2), with: " ", caret: caret + 1)
             }
         case "]":
             let pattern = #"^([ \t]*(?:[-*+]|\d{1,9}[.)]))[ \t]+\[([ xX]?)$"#
@@ -550,6 +576,13 @@ enum MarkdownEditing {
             let closes = spans.contains { $0.content.length > 0 && caret >= NSMaxRange($0.content) && caret < NSMaxRange($0.range) }
             if closes, after.hasPrefix(typed) {
                 return State(state.text, caret: caret + 1)
+            }
+            // A star in an empty pair of bold makes it bold italics: `***|***`.
+            if typed == "*", let pair = document.emptyPair(around: caret, spans: spans), document.string(pair.range) == "****" {
+                return document.replacing(NSRange(location: caret, length: 0), with: "**", caret: caret + 1)
+            }
+            if let paired = pairing(typed, before: before, after: after, caret: caret, spans: spans, in: document) {
+                return paired
             }
             guard typed == "*" || typed == "_" else { break }
             let italics = spans.filter { $0.style == .italic && document.string($0.opening) == typed }
@@ -569,6 +602,23 @@ enum MarkdownEditing {
             break
         }
         return nil
+    }
+
+    /// The second mark of a style that takes two (`**`, `~~`, `==`), typed where a style can start (at the start of
+    /// a line, after a space or an opening bracket) with nothing after it yet, brings the closing pair along and puts
+    /// the caret between them, `**|**`; typing on fills them, and the closing marks are stepped over. Not where the
+    /// marks would close a style that is open, nor inside a word or code.
+    private static func pairing(_ typed: String, before: String, after: String, caret: Int, spans: [Span], in document: Document) -> State? {
+        guard ["*", "~", "="].contains(typed), before.hasSuffix(typed), !before.hasSuffix(typed + typed),
+              after.first.map(\.isWhitespace) ?? true,
+              !spans.contains(where: { $0.style == .code && NSLocationInRange(caret - 1, $0.range) }) else { return nil }
+        let opening = before.dropLast()
+        if let previous = opening.last, !previous.isWhitespace, !"([{\"'“‘".contains(previous) { return nil }
+        // `~~~~` alone on a line would open a block of code.
+        if typed == "~", opening.allSatisfy(\.isWhitespace) { return nil }
+        // An odd number of the same pair before it on the line: these close it.
+        guard (opening.components(separatedBy: typed + typed).count - 1) % 2 == 0 else { return nil }
+        return document.replacing(NSRange(location: caret, length: 0), with: typed + typed + typed, caret: caret + 1)
     }
 
     // MARK: - Context

@@ -278,6 +278,7 @@ final class MarkdownTextView: UITextView {
             // Tab arrives as text and nests list items there; Shift-Tab needs a command of its own.
             command("\t", .shift, #selector(outdentLines))
             if controller?.isCaretOnFirstLine == true { command(UIKeyCommand.inputUpArrow, [], #selector(moveUpIntoTitle)) }
+            if selectedRange == NSRange(location: 0, length: 0) { command(UIKeyCommand.inputLeftArrow, [], #selector(moveBackIntoTitle)) }
         }
         // The Format menu's shortcuts, which its buttons don't get on iPad.
         if isEditable, isFirstResponder {
@@ -298,8 +299,19 @@ final class MarkdownTextView: UITextView {
     @objc private func outdentLines() { controller?.indent(by: -1) }
     /// ↑ on the first line goes into the title.
     @objc private func moveUpIntoTitle() { _ = controller?.moveUpIntoTitle() }
+    /// ← at the start of the note goes into the title.
+    @objc private func moveBackIntoTitle() { _ = controller?.moveBackIntoTitle() }
+
+    /// Delete at the very start of the note goes back into the title, as into the line above.
+    override func deleteBackward() {
+        if selectedRange == NSRange(location: 0, length: 0), controller?.deleteBackIntoTitle() == true { return }
+        super.deleteBackward()
+        controller?.lastDeleteBackward = CACurrentMediaTime()
+    }
 
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        // Keys pressed: a keyboard is attached, whatever the game controller framework says.
+        if presses.contains(where: { $0.key != nil }) { HardwareKeyboard.shared.keyWasPressed() }
         // Return picks a suggestion on a hardware keyboard too; the software keyboard's Return arrives as text.
         if controller?.suggestions.isVisible == true, presses.contains(where: { $0.key?.keyCode == .keyboardReturnOrEnter && $0.key?.modifierFlags.isEmpty == true }) {
             controller?.acceptSelectedSuggestion()
@@ -314,6 +326,25 @@ final class TitleField: UITextField {
     /// The title's own, so that undo while you rename a note undoes the renaming, not a change in the text below.
     private let titleUndo = UndoManager()
     override var undoManager: UndoManager? { titleUndo }
+
+    /// Tab, ↓ and → at the end go on into the text, as Return does, on a keyboard as on the Mac.
+    override var keyCommands: [UIKeyCommand]? {
+        var commands = super.keyCommands ?? []
+        var inputs = ["\t", UIKeyCommand.inputDownArrow]
+        if selectedTextRange.map({ $0.isEmpty && compare($0.end, to: endOfDocument) == .orderedSame }) ?? false {
+            inputs.append(UIKeyCommand.inputRightArrow)
+        }
+        for input in inputs {
+            let command = UIKeyCommand(input: input, modifierFlags: [], action: #selector(goOnToText))
+            command.wantsPriorityOverSystemBehavior = true
+            commands.append(command)
+        }
+        return commands
+    }
+
+    @objc private func goOnToText() {
+        (superview as? MarkdownTextView)?.controller?.leaveTitle()
+    }
 
     /// UIKit gives the focus a text field lets go of to the text view it is in, which would bring the keyboard
     /// back for the text when you leave the title or the note.

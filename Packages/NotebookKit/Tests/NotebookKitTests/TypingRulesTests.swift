@@ -30,6 +30,44 @@ final class TypingRulesTests: XCTestCase {
         XCTAssertEqual(h.text, "- [ ] todo")
     }
 
+    func testTypingBoldWithItsStarsLeavesTheCaretAfterIt() {
+        let h = EditorHarness("")
+        h.type("Buy **")
+        XCTAssertEqual(h.text, "Buy ****", "the closing pair comes along")
+        XCTAssertEqual(h.selection.location, 6, "with the caret between")
+        h.type("milk** today")
+        XCTAssertEqual(h.text, "Buy **milk** today", "the closing stars typed are stepped over")
+    }
+
+    func testBoldStartedAtTheStartOfALineIsNoRuleAndNothingMoves() {
+        let h = EditorHarness("Intro\n")
+        h.caret(6)
+        h.type("**")
+        XCTAssertEqual(h.text, "Intro\n****")
+        XCTAssertEqual(h.editor.document.lines[1].kind, .paragraph, "the empty pair is not a rule while typing")
+        let y = h.editor.yPosition(of: 6)
+        h.type("b")
+        XCTAssertEqual(h.editor.yPosition(of: 6), y, "the line stays where it is when its text comes")
+        XCTAssertEqual(MarkdownParser.parse("Intro\n****").lines[1].kind, .thematicBreak, "read, four stars are still a rule")
+    }
+
+    func testStarsWithSpacesStayStars() {
+        let h = EditorHarness("")
+        h.type("2 ** 3")
+        XCTAssertEqual(h.text, "2 ** 3")
+    }
+
+    func testHashesTypedInFrontOfALineMakeItAHeading() {
+        let h = EditorHarness("Groceries")
+        h.caret(0)
+        h.type("##")
+        XCTAssertEqual(h.text, "## Groceries")
+        XCTAssertEqual(h.editor.headingMarkLevel?.level, 2)
+        h.type(" ")
+        XCTAssertEqual(h.text, "## Groceries", "a space there steps over the heading's own")
+        XCTAssertEqual(h.selection.location, 3)
+    }
+
     func testThreeDashesStillMakeARule() {
         let h = EditorHarness("")
         h.type("---")

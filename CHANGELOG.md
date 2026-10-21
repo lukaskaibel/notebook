@@ -78,6 +78,18 @@ versions follow [semantic versioning](https://semver.org).
 - On iPhone and iPad, buttons for where the caret is come in on the left of the bar above the keyboard, each a circle
   of glass: the style you are in, tinted (a tap takes it off), the checkbox of the line, moving a list item out or in,
   and opening the link the caret is on.
+- Marks unfold next to the caret and fold away behind it instead of popping in and out, and the text beside them slides
+  along: the stars of bold as you arrow into it, the `##` of a heading, the stars you just closed as you type on.
+- Text typed right after `##` gets the space a heading needs, so `##Plan` becomes the heading Plan, and so does a line
+  you type `##` in front of. One `#` is left alone, as it may start a tag.
+- Typing `**` puts in the closing `**` too, with the caret between them, so you type straight into bold; typing the
+  closing stars yourself steps over them, and a space right after `**` leaves them plain stars (`2 ** 3`). The same
+  goes for `~~` and `==`.
+- Return at the start of a heading puts an empty line above it, and Return on a heading without text makes it body
+  text again.
+- From the title, Tab, ↓ and → at its end go on into the text, and ←, ↑ or Delete at the very start of the text go back
+  to the end of the title, on the Mac and on an iPad or iPhone with a keyboard. Holding Delete stops at the start of
+  the text rather than going on into the title.
 
 ### Changed
 
@@ -105,6 +117,14 @@ versions follow [semantic versioning](https://semver.org).
 - Bold and the other styles at a caret inside a word style the whole word, instead of putting in an empty pair of
   marks. Part of bold text selected loses its bold and the rest keeps it. Italics are written `_like this_`, or with
   `*` inside a word, where `_` doesn't work.
+- Markdown marks show next to the caret where you type with keys: on the Mac, and on an iPad or iPhone with a keyboard
+  attached. On the touch keyboard they stay hidden and the bar above it shows the styles you are in; there Delete
+  takes the letter you see rather than a hidden star, so bold text stays bold, and a tap at the end of bold text types
+  on in bold, as in Notes.
+- A heading's `#`s show while the caret is on it with a keyboard, as the stars of bold do, next to its level in the
+  margin, so the arrow keys reach them and Delete takes them. On the touch keyboard they show while you type them,
+  until you leave the line, and a heading picked from the Format panel shows only its level. Two or more `#`s show
+  their level at once.
 
 ### Fixed
 
@@ -164,6 +184,10 @@ versions follow [semantic versioning](https://semver.org).
 - A space typed at the end of bold text took the bold off until the next letter, so the bold flickered while you typed.
   It stays bold now while you write; leaving the bold with Bold or Return moves such a space out of it, so other apps
   show it bold too.
+- On iPhone and iPad, Tab and ↓ in the title did nothing on a keyboard; they now go on into the text, as on the Mac.
+- On the Mac, ↑ from the first line into the title selected the whole title, so the next key replaced it; the caret now
+  goes to its end.
+- Return at the end of a heading could scroll the note by a line.
 
 ## [0.1.0] – not released yet
 

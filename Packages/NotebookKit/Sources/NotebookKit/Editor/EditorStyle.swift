@@ -16,6 +16,8 @@ extension NSAttributedString.Key {
     static let notebookLink = NSAttributedString.Key("notebook.link")
     /// On the first `#` of a heading: its level, shown in the margin next to the caret.
     static let notebookHeading = NSAttributedString.Key("notebook.heading")
+    /// How much of a Markdown mark shows while it folds in or out (`MarkdownRevealAnimator`): its opacity, 0 to 1.
+    static let notebookFade = NSAttributedString.Key("notebook.fade")
 }
 
 enum HiddenMode: Int {

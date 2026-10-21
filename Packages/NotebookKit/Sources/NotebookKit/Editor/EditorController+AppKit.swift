@@ -123,6 +123,11 @@ extension EditorController: NSTextViewDelegate, NSTextFieldDelegate {
     func makeTextFirstResponder() { textView.window?.makeFirstResponder(textView) }
     func makeTitleFirstResponder() { textView.window?.makeFirstResponder(textView.titleField) }
 
+    func putTitleCaretAtEnd() {
+        guard let editor = textView.titleField.currentEditor() else { return }
+        editor.selectedRange = NSRange(location: (editor.string as NSString).length, length: 0)
+    }
+
     var isDarkAppearance: Bool {
         textView.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
     }
@@ -216,6 +221,7 @@ extension EditorController: NSTextViewDelegate, NSTextFieldDelegate {
             insert("\n")
             return true
         case #selector(NSResponder.deleteBackward(_:)):
+            defer { lastDeleteBackward = CACurrentMediaTime() }
             return deleteBackward()
         case #selector(NSResponder.deleteForward(_:)):
             return deleteForward()
@@ -225,6 +231,8 @@ extension EditorController: NSTextViewDelegate, NSTextFieldDelegate {
             return indent(by: -1)
         case #selector(NSResponder.moveUp(_:)):
             return moveUpIntoTitle()
+        case #selector(NSResponder.moveLeft(_:)):
+            return moveBackIntoTitle()
         default:
             return false
         }
@@ -232,12 +240,16 @@ extension EditorController: NSTextViewDelegate, NSTextFieldDelegate {
 
     // MARK: - Title
 
-    public func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
-        guard control === self.textView.titleField else { return false }
+    public func control(_ control: NSControl, textView fieldEditor: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        guard control === textView.titleField else { return false }
         switch commandSelector {
         case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertTab(_:)), #selector(NSResponder.moveDown(_:)):
-            commitTitle()
-            focusText()
+            leaveTitle()
+            return true
+        case #selector(NSResponder.moveRight(_:)):
+            // → at the end of the title goes on into the text, as at the end of a line.
+            guard fieldEditor.selectedRange() == NSRange(location: (fieldEditor.string as NSString).length, length: 0) else { return false }
+            leaveTitle()
             return true
         case #selector(NSResponder.cancelOperation(_:)):
             return false

@@ -128,6 +128,9 @@ public enum MarkdownParser {
             }
 
             lines[index].kind = classifySingle(u, range, indent: indent, listIndents: &listIndents)
+            // Four stars alone make a rule, but while the note is typed in they are the empty pair of bold marks that
+            // typing `**` puts in, waiting for their text.
+            if typing, lines[index].kind == .thematicBreak, lineText(u, range) == "****" { lines[index].kind = .paragraph }
             switch lines[index].kind {
             case .heading(_, let marker):
                 lines[index].content = NSRange(location: marker.upperBound, length: range.upperBound - marker.upperBound)
