@@ -155,7 +155,18 @@ extension EditorController: NSTextViewDelegate, NSTextFieldDelegate {
     }
 
     public func textDidChange(_ notification: Notification) {
+        textUndoManager = textView.undoManager
         textChanged()
+    }
+
+    /// Another note: Undo forgets the changes to the text. They are in the window's undo with the changes to files,
+    /// in the order they were made (`Workspace+Undo`), which stay. The text's are also taken from the window it was
+    /// last changed in, should the text view be out of that window now.
+    func forgetTextUndo() {
+        for manager in [textView.undoManager, textUndoManager].compactMap({ $0 }) {
+            manager.removeAllActions(withTarget: storage)
+            manager.removeAllActions(withTarget: textView)
+        }
     }
 
     public func textView(_ textView: NSTextView, willChangeSelectionFromCharacterRanges oldSelectedCharRanges: [NSValue], toCharacterRanges newSelectedCharRanges: [NSValue]) -> [NSValue] {

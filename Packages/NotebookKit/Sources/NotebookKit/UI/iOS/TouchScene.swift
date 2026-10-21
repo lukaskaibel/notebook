@@ -85,6 +85,13 @@ struct TouchCommands: Commands {
                 .keyboardShortcut("n", modifiers: .command)
                 .disabled(workspace.locations.isEmpty)
         }
+        // The system's own reach only what has the focus; these reach the changes to files too (`Workspace+Undo`).
+        CommandGroup(replacing: .undoRedo) {
+            Button { workspace.undo() } label: { Label("Undo", systemImage: "arrow.uturn.backward") }
+                .keyboardShortcut("z", modifiers: .command)
+            Button { workspace.redo() } label: { Label("Redo", systemImage: "arrow.uturn.forward") }
+                .keyboardShortcut("z", modifiers: [.command, .shift])
+        }
         // The Finder's shortcut for its hidden files, as on the Mac.
         CommandGroup(after: .sidebar) {
             Button { withAnimation { workspace.toggleAllHiddenFolders() } } label: {

@@ -168,6 +168,12 @@ final class MarkdownTextView: UITextView {
     /// The editor's record of changes, which undo and redo go through (see `EditorUndo+UIKit`).
     override var undoManager: UndoManager? { controller?.undoStack ?? super.undoManager }
 
+    /// ⌘Z and ⇧⌘Z in the text take back its changes, and the changes to files with them, newest first. Without these
+    /// SwiftUI's hosting controller, further up, would take them for the window's undo manager whenever that has a
+    /// change to files, however much was typed since. In the title or a drawing they are theirs.
+    @objc func undo(_ sender: Any?) { undoManager?.undo() }
+    @objc func redo(_ sender: Any?) { undoManager?.redo() }
+
     // MARK: - Caret
 
     /// A caret as tall as the text it is in, not as the line, which is taller than the font.
@@ -250,6 +256,8 @@ final class MarkdownTextView: UITextView {
         // Bold and italic are Markdown: a text view without rich text would leave them out (and ⌘B, ⌘I with them).
         if action == #selector(toggleBoldface(_:)) || action == #selector(toggleItalics(_:)) { return isEditable }
         if action == #selector(toggleUnderline(_:)) { return false }
+        if action == #selector(undo(_:)) { return isFirstResponder && undoManager?.canUndo == true }
+        if action == #selector(redo(_:)) { return isFirstResponder && undoManager?.canRedo == true }
         return super.canPerformAction(action, withSender: sender)
     }
 
@@ -326,6 +334,16 @@ final class TitleField: UITextField {
     /// The title's own, so that undo while you rename a note undoes the renaming, not a change in the text below.
     private let titleUndo = UndoManager()
     override var undoManager: UndoManager? { titleUndo }
+
+    /// ⌘Z and ⇧⌘Z take back the typing in the title before what SwiftUI would take back for the window.
+    @objc func undo(_ sender: Any?) { titleUndo.undo() }
+    @objc func redo(_ sender: Any?) { titleUndo.redo() }
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        if action == #selector(undo(_:)) { return titleUndo.canUndo }
+        if action == #selector(redo(_:)) { return titleUndo.canRedo }
+        return super.canPerformAction(action, withSender: sender)
+    }
 
     /// Tab, ↓ and → at the end go on into the text, as Return does, on a keyboard as on the Mac.
     override var keyCommands: [UIKeyCommand]? {

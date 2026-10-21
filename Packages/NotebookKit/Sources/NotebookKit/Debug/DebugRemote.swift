@@ -42,8 +42,15 @@ enum DebugRemote {
             processed += 1
             guard !line.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
             run(line)
+            endEvent()
             if waitUntil != nil { return }
         }
+    }
+
+    /// Each command is an event, as typing or a click is: AppKit closes the undo groups the event opened once it has
+    /// been handled, which it does for events it handles itself only.
+    static func endEvent() {
+        (UndoManager.self as AnyObject).perform(NSSelectorFromString("_endTopLevelGroupings"))
     }
 
     /// Search results on one line: each section's title, then its items with where they are or the line found.
@@ -634,10 +641,22 @@ enum DebugRemote {
                 if bits.count > 1, bits[1] == "play" { pages.debugPlay(direction) } else { pages.debugShow(direction, numbers.first ?? 0.5) }
             }
             log("swipe \(argument)")
-        case "undo":
-            window?.firstResponder?.undoManager?.undo()
-        case "redo":
-            window?.firstResponder?.undoManager?.redo()
+        case "undo", "redo":
+            // undo, redo: Edit › Undo and Redo, as the menu sends them, to the first responder and up from there to
+            // what takes them (in the end the window, with its undo manager). Says what the item said.
+            guard let window else { break }
+            let action = Selector((command + ":"))
+            var target: NSResponder? = window.firstResponder
+            while let responder = target, !responder.responds(to: action) { target = responder.nextResponder }
+            let item = NSMenuItem(title: command == "undo" ? "Undo" : "Redo", action: action, keyEquivalent: "")
+            let enabled = (target as? NSMenuItemValidation)?.validateMenuItem(item) ?? (target != nil)
+            log("\(command): \(item.title) enabled=\(enabled) in \(target.map { String(describing: type(of: $0)) } ?? "nothing") from \(window.firstResponder.map { String(describing: type(of: $0)) } ?? "nothing")")
+            if enabled { NSApp.sendAction(action, to: target, from: item) }
+        case "undostate":
+            // undostate: how the window's undo manager groups what is done.
+            if let manager = window?.undoManager {
+                log("undostate level=\(manager.groupingLevel) byEvent=\(manager.groupsByEvent) modes=\(manager.runLoopModes.map(\.rawValue)) undo “\(manager.undoActionName)” redo “\(manager.redoActionName)” files=\(manager === workspace?.fileUndoManager) \(type(of: manager))")
+            }
         case "loaddelay", "pdfdelay":
             // loaddelay <seconds>: reading a note, PDF, picture or video takes this long (0 for as long as it really
             // takes).

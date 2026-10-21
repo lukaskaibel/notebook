@@ -218,6 +218,33 @@ enum DebugRemote {
             workspace.deleting = nil
         case "trash":
             if let url = url(argument) { workspace.moveToTrash(url) }
+        case "keyundo", "keyredo":
+            // keyundo, keyredo: ⌘Z and ⇧⌘Z on a keyboard, as UIKit sends them: from the first responder, or the window
+            // without one, up to what takes them. Says where they went and what Undo would have said.
+            let action = Selector((command == "keyundo" ? "undo:" : "redo:"))
+            UIResponder.debugFirstResponder = nil
+            UIApplication.shared.sendAction(#selector(UIResponder.debugBecomeFound(_:)), to: nil, from: nil, for: nil)
+            let window = editor.textView.window ?? UIApplication.shared.connectedScenes.lazy.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first
+            guard let start = UIResponder.debugFirstResponder ?? window, let target = start.target(forAction: action, withSender: nil) as? UIResponder else {
+                log("\(command): nothing takes it"); break
+            }
+            let manager = target is UIWindow ? (UIResponder.debugFirstResponder?.undoManager ?? target.undoManager) : target.undoManager
+            let title = command == "keyundo" ? manager?.undoMenuItemTitle : manager?.redoMenuItemTitle
+            log("\(command): from \(type(of: start)) to \(type(of: target)), “\(title ?? "")”")
+            target.perform(action, with: nil)
+        case "menuundo":
+            // menuundo, menuredo: Edit › Undo and Redo, ⌘Z and ⇧⌘Z.
+            workspace.undo()
+        case "menuredo":
+            workspace.redo()
+        case "undoinfo":
+            // undoinfo: what Undo and Redo would take back in the files and in the note.
+            let files = workspace.fileUndoManager
+            let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
+            let window = windows.first { $0.undoManager === files }
+            log("undoinfo files “\(files.undoMenuItemTitle)” “\(files.redoMenuItemTitle)” note “\(editor.undoStack.undoMenuItemTitle)” “\(editor.undoStack.redoMenuItemTitle)” text first responder \(editor.textView.isFirstResponder)")
+            log("undoinfo \(editor.undoStack.debugOrders)")
+            log("undoinfo files kept in \(window.map { "\(type(of: $0)) key=\($0.isKeyWindow) takes undo=\($0.canPerformAction(Selector(("undo:")), withSender: nil))" } ?? "no window") of \(windows.map { "\(type(of: $0)) key=\($0.isKeyWindow)" })")
         case "move":
             // move <file> > <folder>
             let paths = argument.components(separatedBy: " > ")
@@ -383,6 +410,15 @@ enum DebugRemote {
 extension Notification.Name {
     /// A debug remote command for the screens.
     static let notebookDebug = Notification.Name("NotebookDebug")
+}
+
+extension UIResponder {
+    /// The first responder, which UIKit doesn't name: an action sent to it says who it is.
+    static weak var debugFirstResponder: UIResponder?
+
+    @objc func debugBecomeFound(_ sender: Any?) {
+        UIResponder.debugFirstResponder = self
+    }
 }
 
 extension EditorController {
