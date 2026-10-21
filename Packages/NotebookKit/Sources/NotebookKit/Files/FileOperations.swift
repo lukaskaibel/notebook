@@ -111,6 +111,15 @@ enum FileOperations {
         // A package (a Pages document) is a folder that keeps its extension like a file.
         let isDirectory = values?.isDirectory == true && values?.isPackage != true
         guard let destination = destination(renaming: url, to: name, isDirectory: isDirectory) else { return nil }
+        return rename(url, to: destination, presenter: presenter)
+    }
+
+    /// Renames to a file name as it is, extension and all: Undo giving a file back the name it had.
+    static func rename(_ url: URL, toFileName fileName: String, presenter: NoteDocument? = nil) -> URL? {
+        rename(url, to: url.deletingLastPathComponent().appendingPathComponent(fileName), presenter: presenter)
+    }
+
+    private static func rename(_ url: URL, to destination: URL, presenter: NoteDocument?) -> URL? {
         guard destination.path != url.path else { return url }
         // Only the case changed: the file system calls that the same name.
         if destination.path.lowercased() != url.path.lowercased(), FileManager.default.fileExists(atPath: destination.path) { return nil }
@@ -118,23 +127,46 @@ enum FileOperations {
     }
 
     static func trash(_ url: URL) -> Bool {
+        moveToTrash(url).done
+    }
+
+    /// Moves to the Trash, and says where it went there, for Undo to put it back from.
+    static func moveToTrash(_ url: URL) -> (done: Bool, place: URL?) {
         debugWait("trashed", url)
-        var trashed = false
+        var result: (done: Bool, place: URL?) = (false, nil)
         NSFileCoordinator().coordinate(writingItemAt: url, options: .forDeleting, error: nil) { url in
-            trashed = (try? FileManager.default.trashItem(at: url, resultingItemURL: nil)) != nil
+            var place: NSURL?
+            if (try? FileManager.default.trashItem(at: url, resultingItemURL: &place)) != nil { result = (true, place as URL?) }
         }
-        return trashed
+        return result
     }
 
     #if os(iOS)
-    /// Deletes for good: for places without a Recently Deleted, after asking.
-    static func delete(_ url: URL) -> Bool {
+    /// Where files deleted for good wait out of sight, for Undo to bring them back while Notebook is open. Emptied at
+    /// the next launch (`emptyDeleted`).
+    static let deletedFolder = FileManager.default.temporaryDirectory.appendingPathComponent("Deleted", isDirectory: true)
+
+    /// Deletes for good: for places without a Recently Deleted, after asking. On this device's own storage the file
+    /// only moves out of its folder into `deletedFolder`, which says where, for Undo; anywhere else it goes at once.
+    static func delete(_ url: URL) -> (done: Bool, place: URL?) {
         debugWait("deleted", url)
+        let volume = (try? url.resourceValues(forKeys: [.volumeIdentifierKey]))?.volumeIdentifier as? NSObject
+        let ours = (try? FileManager.default.temporaryDirectory.resourceValues(forKeys: [.volumeIdentifierKey]))?.volumeIdentifier as? NSObject
+        if let volume, let ours, volume.isEqual(ours) {
+            let place = deletedFolder.appendingPathComponent(UUID().uuidString, isDirectory: true).appendingPathComponent(url.lastPathComponent)
+            try? FileManager.default.createDirectory(at: place.deletingLastPathComponent(), withIntermediateDirectories: true)
+            if let moved = move(url, to: place) { return (true, moved) }
+        }
         var deleted = false
         NSFileCoordinator().coordinate(writingItemAt: url, options: .forDeleting, error: nil) { url in
             deleted = (try? FileManager.default.removeItem(at: url)) != nil
         }
-        return deleted
+        return (deleted, nil)
+    }
+
+    /// What was deleted for good last time Notebook was open goes now.
+    static func emptyDeleted() {
+        try? FileManager.default.removeItem(at: deletedFolder)
     }
     #endif
 

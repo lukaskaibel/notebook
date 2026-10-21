@@ -247,13 +247,14 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   Folders are read and changes to files written in the background, so even a large iCloud Drive shows at once and
   nothing waits for it. Create, rename, duplicate and move notes and folders, by drag and drop or with Move To;
   Option-drag copies. The New Folder button next to a location's name makes a folder at its top, New Folder in a
-  folder's menu one inside it, named in place as in the Finder. Deleting moves to the Trash, never further.
-  Favourites sit at the top of the sidebar.
+  folder's menu one inside it, named in place as in the Finder. Deleting moves to the Trash, never further, and Undo
+  (⌘Z) puts it back, as it takes back a rename, a move or a new file. Favourites sit at the top of the sidebar.
 - **iPhone and iPad.** The same editor, search and file handling, with screens made for each: one folder per screen
   on the iPhone, the sidebar on the iPad. Pick iCloud Drive or any folder in the Files app's picker, or keep notes on
   the device, in On My iPhone › Notebook. A bar above the keyboard, whose tools you choose, formats, links and adds
   photos, scans and files, with buttons for where the caret is on its left; Aa opens the Format panel as in Notes.
-  Deleting moves to Recently Deleted; where a place has none, Notebook asks before it deletes.
+  Deleting moves to Recently Deleted; where a place has none, Notebook asks before it deletes, and Undo (⌘Z) still
+  brings it back while Notebook is open.
 - **Hidden folders.** Right-click a folder you don't want to see, such as one another app keeps in iCloud Drive, and
   choose Hide Folder, or on iPhone and iPad touch and hold it. It leaves the sidebar, search and Move To, and stays
   hidden on your other Macs, iPhones and iPads through iCloud. The eye next to the location's name, or ⇧⌘., shows
@@ -366,6 +367,7 @@ app's own folder there.
 | --- | --- |
 | ⌘N | New note in the current folder |
 | ⇧⌘N | New folder in the current folder, named in place |
+| ⌘Z, ⇧⌘Z | Undo and redo: typing, and changes to files (the Trash, a rename, a move, a new note or folder), newest first |
 | ⌘F | Search |
 | ⌘K | Search and run commands; `>` for commands only |
 | ⌘[ and ⌘], or swipe between pages | Back and forward; the swipe follows System Settings, as in Safari |
@@ -414,8 +416,8 @@ folder for everything else, including New Folder, Copy Link, which copies a `[[l
 Folder. As you point at a location's name, a folder with a plus comes up next to it for a new folder at its top, and,
 when the location has hidden folders, an eye that shows them.
 
-On an iPad with a keyboard, ⌘N, ⌘F, ⌘K, ⌘[ and ⌘], ⌃⌘I, ⇧⌘. and the shortcuts for writing work as on the Mac. On iPhone
-and iPad:
+On an iPad with a keyboard, ⌘N, ⌘Z and ⇧⌘Z, ⌘F, ⌘K, ⌘[ and ⌘], ⌃⌘I, ⇧⌘. and the shortcuts for writing work as on the
+Mac. On iPhone and iPad:
 
 | Gesture | Action |
 | --- | --- |
@@ -490,7 +492,9 @@ character, so undo, dictation and spell checking behave as everywhere else on th
 `Editor/EditorController.swift` and `Editor/NotebookLayoutManager.swift`. On iPhone and iPad the same storage, layout
 manager and styling sit under UIKit's text view; only what talks to the text view differs (`Editor/*+AppKit.swift`
 and `Editor/*+UIKit.swift`), plus an undo history of the editor's own, since UIKit's goes wrong when the editor
-changes the text itself.
+changes the text itself. Changes to files are kept for Undo in the window's undo manager (`UI/Workspace+Undo.swift`):
+on the Mac next to the text's own, in the order they were made; on iPhone and iPad the editor's history weighs them
+against its own by when each was made.
 
 Run the tests (they use off-screen windows and temporary folders, and touch none of your files):
 

@@ -66,6 +66,8 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     let textView: MarkdownTextView
     #if os(macOS)
     public let scrollView = NSScrollView()
+    /// The undo manager the text was last changed in: the window's, which keeps the changes to files too.
+    weak var textUndoManager: UndoManager?
     #endif
 
     private(set) var document = MarkdownParser.parse("")
@@ -246,7 +248,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         requestedFocus = nil
         if textView.isFirstResponder || textView.titleField.isFirstResponder { textView.endEditing(true) }
         #else
-        textView.undoManager?.removeAllActions()
+        forgetTextUndo()
         #endif
         isLoading = false
         caretWasPlaced = false

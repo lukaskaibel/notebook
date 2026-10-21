@@ -52,6 +52,23 @@ final class DrawingCanvas: PKCanvasView {
 
     override var undoManager: UndoManager? { strokeUndo }
 
+    /// ⌘Z and ⇧⌘Z take back strokes while drawing, before what SwiftUI would take back for the window.
+    @objc func undo(_ sender: Any?) {
+        strokeUndo.undo()
+        if let editor { editor.delegate?.editorDrawingDidChange(editor) }
+    }
+
+    @objc func redo(_ sender: Any?) {
+        strokeUndo.redo()
+        if let editor { editor.delegate?.editorDrawingDidChange(editor) }
+    }
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        if action == #selector(undo(_:)) { return strokeUndo.canUndo }
+        if action == #selector(redo(_:)) { return strokeUndo.canRedo }
+        return super.canPerformAction(action, withSender: sender)
+    }
+
     /// None of the writing bar: without a bar of its own, the canvas would show the text view's, which it is inside of.
     private let noAccessory = UIView(frame: .zero)
     override var inputAccessoryView: UIView? { noAccessory }

@@ -428,7 +428,7 @@ struct FileAlerts: ViewModifier {
                     workspace.deleting = nil
                 }
             } message: {
-                Text("This place has no Recently Deleted folder, so it is deleted right away. You can’t undo this.")
+                Text("This place has no Recently Deleted folder, so it is deleted right away.")
             }
             .alert(workspace.problem?.title ?? "", isPresented: Binding(get: { workspace.problem != nil }, set: { if !$0 { workspace.problem = nil } }), presenting: workspace.problem) { _ in
                 Button("OK") { workspace.problem = nil }

@@ -90,6 +90,11 @@ versions follow [semantic versioning](https://semver.org).
 - From the title, Tab, ↓ and → at its end go on into the text, and ←, ↑ or Delete at the very start of the text go back
   to the end of the title, on the Mac and on an iPad or iPhone with a keyboard. Holding Delete stops at the start of
   the text rather than going on into the title.
+- Undo and Redo for changes to files, as in the Finder. Edit › Undo (⌘Z) puts a note or folder you moved to the Trash
+  back where it was, with its reminders, and opens it again if it was open; it takes back a rename (links to the note
+  follow it back), a move, a drop, a copy, a new note or a new folder, and Redo (⇧⌘Z) makes it again. Typing in the
+  note and changes to files come back in the order you made them. On iPhone and iPad the same works with a keyboard,
+  and a note deleted where there is no Recently Deleted comes back too, while Notebook is open.
 
 ### Changed
 

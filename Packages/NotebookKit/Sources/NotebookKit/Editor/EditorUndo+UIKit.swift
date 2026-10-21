@@ -15,6 +15,15 @@ final class EditorUndoManager: UndoManager {
         manager.disableUndoRegistration()
         return manager
     }()
+    /// The changes to files, which are kept in the window's undo manager (`Workspace+Undo`). While the note has the
+    /// focus ⌘Z comes here, and takes those back too when they are newer than the last change to the text, as on the
+    /// Mac, where the text keeps its changes in the window's undo manager itself.
+    weak var files: FileUndoLog?
+    /// When each group of steps to undo was made, and each to redo was undone, oldest first, as `UndoOrder` counts.
+    /// One for every group, also an empty one, which takes an Undo of its own too.
+    private var undoOrders: [Int] = []
+    private var redoOrders: [Int] = []
+    private var isReplaying = false
 
     override func registerUndo(withTarget target: Any, selector: Selector, object anObject: Any?) {
         guard acceptsRegistrations else { return }
@@ -25,14 +34,26 @@ final class EditorUndoManager: UndoManager {
         acceptsRegistrations ? super.prepare(withInvocationTarget: target) : sink.prepare(withInvocationTarget: target)
     }
 
+    override func beginUndoGrouping() {
+        if groupingLevel == 0, !isReplaying, !isUndoing, !isRedoing {
+            undoOrders.append(MainActor.assumeIsolated { UndoOrder.next() })
+        }
+        super.beginUndoGrouping()
+    }
+
     override func removeAllActions() {
         guard allowsClearing else { return }
         super.removeAllActions()
+        undoOrders.removeAll()
+        redoOrders.removeAll()
     }
 
     override func removeAllActions(withTarget target: Any) {
         guard allowsClearing || target is EditorController else { return }
         super.removeAllActions(withTarget: target)
+        // The steps are all the editor's.
+        undoOrders.removeAll()
+        redoOrders.removeAll()
     }
 
     /// Forgets everything: a new note is loaded.
@@ -40,6 +61,68 @@ final class EditorUndoManager: UndoManager {
         allowsClearing = true
         removeAllActions()
         allowsClearing = false
+    }
+
+    /// A step was kept, which leaves nothing to redo.
+    fileprivate func stepKept() {
+        redoOrders.removeAll()
+    }
+
+    /// Whether the text has a step to take back, leaving the changes to files aside.
+    var canUndoText: Bool { super.canUndo }
+
+    #if DEBUG
+    var debugOrders: String {
+        "text undo \(undoOrders) \(super.canUndo) redo \(redoOrders) \(super.canRedo), files undo \(files?.nextUndo?.order ?? 0) redo \(files?.nextRedo?.order ?? 0)"
+    }
+    #endif
+
+    /// The window's undo manager, when the change to files it would take back next is newer than the text's last step.
+    private var filesFirst: UndoManager? {
+        MainActor.assumeIsolated {
+            guard let change = files?.nextUndo, let manager = change.manager, manager.canUndo else { return nil }
+            guard super.canUndo, let text = undoOrders.last else { return manager }
+            return change.order > text ? manager : nil
+        }
+    }
+
+    /// The same for Redo: the one undone last comes back first.
+    private var filesFirstForRedo: UndoManager? {
+        MainActor.assumeIsolated {
+            guard let change = files?.nextRedo, let manager = change.manager, manager.canRedo else { return nil }
+            guard super.canRedo, let text = redoOrders.last else { return manager }
+            return change.order > text ? manager : nil
+        }
+    }
+
+    override var canUndo: Bool { super.canUndo || filesFirst != nil }
+    override var canRedo: Bool { super.canRedo || filesFirstForRedo != nil }
+    override var undoActionName: String { filesFirst?.undoActionName ?? super.undoActionName }
+    override var redoActionName: String { filesFirstForRedo?.redoActionName ?? super.redoActionName }
+    override var undoMenuItemTitle: String { filesFirst?.undoMenuItemTitle ?? super.undoMenuItemTitle }
+    override var redoMenuItemTitle: String { filesFirstForRedo?.redoMenuItemTitle ?? super.redoMenuItemTitle }
+
+    override func undo() {
+        if let files = filesFirst { return files.undo() }
+        guard super.canUndo else { return }
+        if !undoOrders.isEmpty { undoOrders.removeLast() }
+        replay { super.undo() }
+        redoOrders.append(MainActor.assumeIsolated { UndoOrder.next() })
+    }
+
+    override func redo() {
+        if let files = filesFirstForRedo { return files.redo() }
+        guard super.canRedo else { return }
+        if !redoOrders.isEmpty { redoOrders.removeLast() }
+        replay { super.redo() }
+        undoOrders.append(MainActor.assumeIsolated { UndoOrder.next() })
+    }
+
+    /// Undo or Redo, whose group of the steps that take them back again is dated here, not when it opens.
+    private func replay(_ body: () -> Void) {
+        isReplaying = true
+        body()
+        isReplaying = false
     }
 }
 
@@ -69,7 +152,7 @@ extension EditorController {
         guard !isLoading else { return }
         let manager = undoStack
         let typing = !isPerformingEdit && !isReplayingUndo
-        if typing, let step = openStep, step.isTyping, manager.canUndo {
+        if typing, let step = openStep, step.isTyping, manager.canUndoText {
             // Typing on, or Backspace, right where the step ends.
             if removed.isEmpty, range.location == step.end {
                 step.inserted += range.length
@@ -97,6 +180,7 @@ extension EditorController {
         manager.acceptsRegistrations = true
         manager.registerUndo(withTarget: self) { editor in editor.revert(step) }
         manager.acceptsRegistrations = false
+        if !manager.isUndoing, !manager.isRedoing { manager.stepKept() }
     }
 
     /// Puts back what a step changed, which records the opposite step for redo.
