@@ -99,7 +99,8 @@ versions follow [semantic versioning](https://semver.org).
   menu, in the Format panel on iPhone and iPad and behind the heading level in the margin, in the note's typeface. On
   the iPad the heading level opens them next to it. In Settings › Text each typeface is shown in itself, on iPhone and
   iPad in a list of its own.
-- New Note is a button of glass in the accent colour, so it stands out from the buttons around it.
+- On iPhone and iPad, New Note is a button of glass in the accent colour, so it stands out from the buttons around it.
+  On the Mac it is a plain button of its own right of Back and Forward, and stays there when the sidebar is hidden.
 - More menus have symbols next to their items, as the ⋯ menu has: Move To's folders, Export As, the menu of a picture
   in a note, Copy Code, and the commands of the menu bar on the Mac and the iPad.
 - Bold and the other styles at a caret inside a word style the whole word, instead of putting in an empty pair of

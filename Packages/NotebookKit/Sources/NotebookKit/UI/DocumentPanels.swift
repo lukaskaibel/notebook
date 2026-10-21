@@ -37,7 +37,8 @@ struct MoveToMenu: View {
     }
 }
 
-/// New Note in a toolbar, in glass of the accent colour as Done is, so that it stands out from the other buttons.
+/// New Note in a toolbar on iPhone and iPad, in glass of the accent colour as Done is, so that it stands out from the
+/// other buttons. The Mac's is plain, next to Back and Forward.
 struct NewNoteButton: View {
     let action: () -> Void
 
