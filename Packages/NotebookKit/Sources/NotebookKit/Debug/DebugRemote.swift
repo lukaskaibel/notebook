@@ -112,6 +112,13 @@ enum DebugRemote {
             window?.orderFront(nil)
         case "focus":
             if let editor { window?.makeFirstResponder(editor.textView) }
+        case "focustitle":
+            editor?.focusTitle()
+        case "seen":
+            if let editor { log(editor.debugSeenLine) }
+        case "fold":
+            // fold <index>: where the character at index is drawn over the next frames (see debugSampleFold).
+            if let editor, let index = numbers.first { editor.debugSampleFold(at: Int(index), log: log) }
         case "caret":
             if let editor, let location = numbers.first {
                 window?.makeFirstResponder(editor.textView)
@@ -717,7 +724,7 @@ enum DebugRemote {
         log("""
         --- dump
         file: \(workspace?.currentURL?.path ?? "none")
-        title: \(editor.titleText) waiting: \(editor.isWaitingForText) pending: \(workspace?.note?.pending.map { "\($0)" } ?? "none")
+        title: \(editor.titleText) waiting: \(editor.isWaitingForText) pending: \(workspace?.note?.pending.map { "\($0)" } ?? "none") editingTitle: \(editor.isEditingTitle) titleSelection: \((editor.textView.titleField.currentEditor() as? NSTextView).map { "\($0.selectedRange().location) \($0.selectedRange().length)" } ?? "none")
         selection: \(selection.location) \(selection.length)
         revealed: \(editor.revealed.map { "\($0.location)+\($0.length)" }.joined(separator: " "))
         activeBlock: \(editor.activeBlock.map(String.init) ?? "none")

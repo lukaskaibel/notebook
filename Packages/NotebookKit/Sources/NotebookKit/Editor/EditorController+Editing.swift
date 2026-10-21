@@ -32,11 +32,27 @@ extension EditorController {
 
     // MARK: - Up into the title
 
-    /// ↑ on the first line goes into the title.
+    /// ↑ on the first line goes into the title, to its end.
     func moveUpIntoTitle() -> Bool {
         guard isCaretOnFirstLine else { return false }
-        focusTitle()
+        focusTitle(caretAtEnd: true)
         return true
+    }
+
+    /// ← or Delete at the very start of the note goes back into the title, to its end, as if it were the line above.
+    func moveBackIntoTitle() -> Bool {
+        guard selection == NSRange(location: 0, length: 0), !isWaitingForText else { return false }
+        focusTitle(caretAtEnd: true)
+        return true
+    }
+
+    /// Delete at the very start of the note goes into the title, but not while Delete is held down (or pressed again
+    /// right away), which would go on to delete the title.
+    func deleteBackIntoTitle() -> Bool {
+        let now = CACurrentMediaTime()
+        let held = now - lastDeleteBackward < 0.5
+        lastDeleteBackward = now
+        return !held && moveBackIntoTitle()
     }
 
     /// The caret rests on the note's first line, where ↑ goes into the title.
@@ -71,6 +87,20 @@ extension EditorController {
             let fence = String(fenceText.prefix { $0 == "`" || $0 == "~" })
             replace(selection, with: "\n\n" + fence, select: NSRange(location: selection.location + 1, length: 0))
             return true
+        }
+
+        if case .heading(_, let marker) = line.kind, selection.length == 0 {
+            let content = text.substring(with: NSRange(location: marker.upperBound, length: line.range.upperBound - marker.upperBound))
+            if content.trimmingCharacters(in: .whitespaces).isEmpty {
+                // Return on a heading without text takes the heading off, as on an empty list item.
+                replace(line.range, with: "", select: NSRange(location: line.range.location, length: 0), actionName: "Format")
+                return true
+            }
+            if selection.location <= marker.upperBound {
+                // At the start of a heading's text: a line above it, and the heading stays one.
+                replace(NSRange(location: line.range.location, length: 0), with: "\n", select: NSRange(location: selection.location + 1, length: 0))
+                return true
+            }
         }
 
         switch line.kind {
@@ -179,7 +209,7 @@ extension EditorController {
         guard !document.lines.isEmpty, !hasMarkedText else { return false }
         // A selection that holds one of a style's marks takes the other one too.
         guard selection.length == 0 else { return deleteByRules(forward: false) }
-        guard selection.location > 0 else { return false }
+        guard selection.location > 0 else { return deleteBackIntoTitle() }
         let location = selection.location
         let index = document.lineIndex(containing: location)
         let line = document.lines[index]
@@ -243,8 +273,27 @@ extension EditorController {
                 return true
             }
         }
+        if deleteBehindHiddenMarks(at: location, in: line, forward: false) { return true }
         // A style's mark goes with one of the other side: bold becomes italics, italics plain text.
         return deleteByRules(forward: false)
+    }
+
+    /// On a touch keyboard, where a style's marks don't show, Delete takes the letter you see next to the caret rather
+    /// than a mark you don't, and leaves the caret in the style, so what you type next has it; a style that loses its
+    /// last letter goes as a whole.
+    private func deleteBehindHiddenMarks(at location: Int, in line: MarkdownLine, forward: Bool) -> Bool {
+        guard let marks = hiddenStyleMarks(around: location, in: line),
+              forward ? marks.location == location : marks.upperBound == location else { return false }
+        // The letter on the other side of the marks.
+        guard forward ? marks.upperBound < line.range.upperBound : marks.location > line.range.location else { return false }
+        var removed = nsText.rangeOfComposedCharacterSequence(at: forward ? marks.upperBound : marks.location - 1)
+        // Styles with nothing else in them go with their marks, from the inside out.
+        let styles = line.spans.filter(\.isStyle).sorted { $0.range.length < $1.range.length }
+        for span in styles where span.content == removed || (span.content.location >= removed.location && span.content.upperBound <= removed.upperBound) {
+            removed = NSUnionRange(removed, span.range)
+        }
+        replace(removed, with: "", select: NSRange(location: removed.location, length: 0), actionName: "Delete")
+        return true
     }
 
     func deleteForward() -> Bool {
@@ -253,6 +302,7 @@ extension EditorController {
         guard selection.length == 0 else { return deleteByRules(forward: true) }
         guard selection.location < storage.length else { return false }
         let line = document.lines[document.lineIndex(containing: selection.location)]
+        if deleteBehindHiddenMarks(at: selection.location, in: line, forward: true) { return true }
         if let span = line.spans.first(where: { isAtomic($0) && $0.range.location == selection.location }) {
             replace(span.range, with: "", select: NSRange(location: span.range.location, length: 0), actionName: "Delete")
             return true
@@ -404,10 +454,18 @@ extension EditorController {
         if replacement.isEmpty, range.length > 0, range == selection {
             return !deleteByRules(forward: false)
         }
+        // #s typed at the start of a line show until the caret leaves it, also where marks otherwise don't.
+        if replacement == "#", range.length == 0 {
+            let lineStart = text.lineRange(for: NSRange(location: range.location, length: 0)).location
+            let before = text.substring(with: NSRange(location: lineStart, length: range.location - lineStart))
+            if before.trimmingCharacters(in: CharacterSet(charactersIn: "#")).allSatisfy({ $0 == " " }) { typedHeading = lineStart }
+        }
         // "-" at the start of a line makes a bullet with its space, "- []" a checkbox, a closing mark typed where the
         // same one is steps over it, and a star typed at either end of italics or of text that just lost its marks
-        // goes on both ends.
-        if range.length == 0, selection == range, ["-", " ", "]", "*", "_", "~", "`", "="].contains(replacement) {
+        // goes on both ends. Text typed right after two or more #s gets the space a heading needs, and so does text they
+        // are typed in front of; `**` brings its closing pair.
+        let afterHashes = range.location > 0 && text.character(at: range.location - 1) == 35
+        if range.length == 0, selection == range, afterHashes || ["-", " ", "]", "#", "*", "_", "~", "`", "="].contains(replacement) {
             return !insertByRules(replacement)
         }
         return true
@@ -519,6 +577,8 @@ extension EditorController {
     func setLineFormat(_ format: LineFormat) {
         let selection = self.selection
         guard !document.lines.isEmpty else { return }
+        // Picked rather than typed: the #s of a heading don't show on a touch keyboard.
+        typedHeading = nil
         let text = nsText
         let first = document.lineIndex(containing: selection.location)
         let last = document.lineIndex(containing: max(selection.location, selection.upperBound - (selection.length > 0 ? 1 : 0)))

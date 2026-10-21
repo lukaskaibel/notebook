@@ -79,9 +79,9 @@ extension EditorController {
 
     /// The level of the heading the caret is on, while the caret rests on a heading whose level shows in the margin.
     var headingMarkLevel: (level: Int, marker: NSRange)? {
-        guard isFocused, !document.lines.isEmpty, selection.length == 0 else { return nil }
+        guard isFocused, !isTracking, !document.lines.isEmpty, selection.length == 0 else { return nil }
         let line = document.lines[document.lineIndex(containing: selection.location)]
-        guard case .heading(let level, let marker) = line.kind, isRevealed(marker.location),
+        guard case .heading(let level, let marker) = line.kind, marker.location < storage.length,
               storage.attribute(.notebookHeading, at: marker.location, effectiveRange: nil) != nil else { return nil }
         return (level, marker)
     }

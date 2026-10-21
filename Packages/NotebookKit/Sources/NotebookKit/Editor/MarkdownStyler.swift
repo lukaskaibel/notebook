@@ -117,13 +117,14 @@ enum MarkdownStyler {
                 .paragraphStyle: EditorStyle.paragraph(lineHeight: height, before: before, after: 4),
                 .baselineOffset: EditorStyle.baselineOffset(for: font, lineHeight: height),
             ], range: full)
-            let hasSpace = marker.length > 0 && text.character(at: marker.upperBound - 1) == 32
-            if NotebookSettings.shared.headingMarks == .margin, hasSpace {
-                // The #s never show; next to the caret the level shows in the margin instead, so the text never moves.
-                hide(s, marker, .always)
+            // The #s show next to the caret with a keyboard, and while they are typed (`EditorController.revealTarget`).
+            s.addAttribute(.foregroundColor, value: Theme.faint, range: marker)
+            hide(s, marker, .untilRevealed)
+            // Next to the caret the level shows in the margin, once the #s can only make a heading: with their space, or
+            // two or more of them, which no tag starts with.
+            let hasSpace = marker.length > 0 && [32, 9].contains(text.character(at: marker.upperBound - 1))
+            if NotebookSettings.shared.headingMarks == .margin, hasSpace || level > 1 {
                 s.addAttribute(.notebookHeading, value: level, range: NSRange(location: marker.location, length: 1))
-            } else {
-                hide(s, marker, .untilRevealed)
             }
         case .listItem(let item):
             styleListItem(s, text: text, line: line, item: item, env: env)

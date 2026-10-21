@@ -135,6 +135,13 @@ public struct InlineSpan: Equatable {
         case autolink(url: String)
         case footnoteReference(label: String)
         case escape
+
+        var isStyle: Bool {
+            switch self {
+            case .strong, .emphasis, .strikethrough, .highlight, .code: true
+            default: false
+            }
+        }
     }
 
     public var kind: Kind
@@ -144,6 +151,10 @@ public struct InlineSpan: Equatable {
     public var markers: [NSRange]
     /// What you read.
     public var content: NSRange
+
+    /// Bold, italics, strikethrough, highlights and code: styles that typing and the bar above the keyboard turn on
+    /// and off.
+    var isStyle: Bool { kind.isStyle }
 
     /// Spans that are one thing on screen: the caret goes around them and a selection takes all or nothing.
     public var isAtomic: Bool {
