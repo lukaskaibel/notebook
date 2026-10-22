@@ -131,7 +131,7 @@ struct DocumentToolbar: ToolbarContent {
                 ToolbarSpacer(.fixed)
             } else {
                 ToolbarItem {
-                    Button("Open in \(defaultAppName(url))") { NSWorkspace.shared.open(url) }
+                    Button("Open in \(workspace.appName(opening: url) ?? "App")") { workspace.openOnItsOwn(url) }
                 }
                 ToolbarSpacer(.fixed)
             }
@@ -157,11 +157,6 @@ struct DocumentToolbar: ToolbarContent {
             }
             .help(workspace.isOutlineVisible ? "Hide outline (⌃⌘I)" : "Show outline (⌃⌘I)")
         }
-    }
-
-    private func defaultAppName(_ url: URL) -> String {
-        guard let app = NSWorkspace.shared.urlForApplication(toOpen: url) else { return "App" }
-        return FileManager.default.displayName(atPath: app.path).replacingOccurrences(of: ".app", with: "")
     }
 }
 

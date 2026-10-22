@@ -167,9 +167,21 @@ enum DebugRemote {
                 log("selected row \(row) \(argument)")
                 break
             }
-        case "clickrow", "doubleclickrow":
+        case "clickrow":
             // clickrow <name>: the sidebar row showing that name.
-            if let point = sidebarRowPoint(named: argument) { click(at: point, count: command == "doubleclickrow" ? 2 : 1) } else { log("no row \(argument)") }
+            if let point = sidebarRowPoint(named: argument) { click(at: point) } else { log("no row \(argument)") }
+        case "doubleclickrow":
+            // doubleclickrow <name>: what a double-click on that row does. The list takes no clicks of its own in a
+            // window that isn't key, so the row is selected and its double action run, as the clicks would.
+            guard let sidebar = workspace?.sidebar else { break }
+            let outline = sidebar.outline
+            guard let row = (0..<outline.numberOfRows).first(where: { (outline.view(atColumn: 0, row: $0, makeIfNecessary: true) as? NSTableCellView)?.textField?.stringValue == argument }) else {
+                log("no row \(argument)")
+                break
+            }
+            outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+            sidebar.openOnItsOwn(row: row)
+            log("doubleclickrow \(row) \(argument)")
         case "clickobject":
             // clickobject <character index> [x y]: inside the object drawn there, at x, y from its top-left.
             if let editor, let index = numbers.first, let window, let content = window.contentView,
@@ -310,6 +322,12 @@ enum DebugRemote {
             NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
         case "usewindow":
             usesFileWindow = argument == "file"
+        case "windows":
+            // windows: the windows open, a note's own windows with their file and how many tabs they are in.
+            for window in NSApp.windows where window.isVisible && !(window is NSPanel) {
+                let file = (window.windowController as? FileWindowController).map { " file=\($0.url.path) tabs=\(window.tabbedWindows?.count ?? 1)" } ?? ""
+                log("window \"\(window.title)\"\(file)")
+            }
         case "openfile":
             FileWindows.shared.open(URL(fileURLWithPath: argument))
         case "openurls":

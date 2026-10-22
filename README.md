@@ -193,7 +193,7 @@ Notebook is a browser for your folders, not only for notes. A PDF opens right in
 pages one under the other: there at once, and back where you left it when you return. A picture fits the window on the
 same grey, never larger than it is; pinch or double-click to zoom in on a spot. A video plays with the system's
 controls, as in QuickTime Player. A spreadsheet or any other file opens in Quick Look. The inspector shows a file's
-details, and "Open in" hands it to its own app.
+details, and "Open in" hands it to its own app, as a double-click on it in the sidebar does.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/quicklook-dark.webp">
@@ -272,12 +272,14 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
 - **Drawings in notes,** with PencilKit: Apple Pencil, a finger, the mouse, the trackpad or a tablet. Each is a PNG
   that other apps show, with its strokes kept next to it so it stays a drawing in Notebook.
 - **PDFs, pictures, videos and other files** open in the window: PDFs and pictures as in Preview, videos as in
-  QuickTime Player, the rest in Quick Look.
+  QuickTime Player, the rest in Quick Look. Double-click one in the sidebar to open it in its own app, such as Preview.
 - **Search** for the names of notes, files and folders, headings, words in notes and PDFs, and the text in pictures,
   scans and handwriting, in the background as you type. ⌘K finds the same and runs commands.
 - **Saves as you type,** and never overwrites a change made somewhere else (see below).
 - **Export** a note as a PDF or a PNG image, or print it (on iPhone and iPad: as a PDF to share, or print).
-- **Single files.** Open any Markdown file from the Finder or with ⌘O, and it gets a plain window of its own.
+- **Notes in windows of their own.** Double-click a note in the sidebar, or open any Markdown file from the Finder or
+  with ⌘O, and it gets a plain window of its own; more of them join it as tabs. A note from your locations links to
+  every note there, as in the main window.
 
 ## How notes are stored
 
@@ -411,10 +413,11 @@ While writing:
 | ↑ on the first line, ← or Delete at the very start | Into the title, at its end |
 | Return, Tab, ↓, or → at the end of the title | Into the text |
 
-In the sidebar: Return renames, ⌘⌫ moves to the Trash, and Space opens a file in Quick Look. Right-click a file or
-folder for everything else, including New Folder, Copy Link, which copies a `[[link]]` to it, Remind Me… and Hide
-Folder. As you point at a location's name, a folder with a plus comes up next to it for a new folder at its top, and,
-when the location has hidden folders, an eye that shows them.
+In the sidebar: a double-click opens a note in a window of its own and any other file in its own app, as in the
+Finder; Return renames, ⌘⌫ moves to the Trash, and Space opens a file in Quick Look. Right-click a file or folder for
+everything else, including Open in New Window, New Folder, Copy Link, which copies a `[[link]]` to it, Remind Me… and
+Hide Folder. As you point at a location's name, a folder with a plus comes up next to it for a new folder at its top,
+and, when the location has hidden folders, an eye that shows them.
 
 On an iPad with a keyboard, ⌘N, ⌘Z and ⇧⌘Z, ⌘F, ⌘K, ⌘[ and ⌘], ⌃⌘I, ⇧⌘. and the shortcuts for writing work as on the
 Mac. On iPhone and iPad:
@@ -445,7 +448,8 @@ Planned, and not built yet:
 - **Reminders at a place** (arriving or leaving) **and when a calendar event starts,** and on the iPhone a Live
   Activity that keeps the note on the Lock Screen. A reminder set on another device reaches an iPhone or iPad the next
   time Notebook runs there or gets time in the background. Reminders don't repeat.
-- Links follow a renamed note, but not yet a moved one, a renamed folder or a rename in a single-file window.
+- Links follow a renamed note, but not yet a moved one, a renamed folder, or a note from outside your locations
+  renamed in its own window.
   Footnotes are styled but don't jump to their text.
 - On iPhone and iPad there is no Settings › App Icon (iOS only switches between icons built into the app), no PNG
   export and no window of its own for a single file.
