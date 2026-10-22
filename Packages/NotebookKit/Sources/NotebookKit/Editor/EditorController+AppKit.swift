@@ -270,7 +270,8 @@ extension EditorController: NSTextViewDelegate, NSTextFieldDelegate {
     }
 
     public func controlTextDidEndEditing(_ notification: Notification) {
-        guard (notification.object as? NSTextField) === textView.titleField else { return }
+        // Loading another note isn't leaving the title: the name was taken as the note was left.
+        guard (notification.object as? NSTextField) === textView.titleField, !isLoading else { return }
         commitTitle()
     }
 }

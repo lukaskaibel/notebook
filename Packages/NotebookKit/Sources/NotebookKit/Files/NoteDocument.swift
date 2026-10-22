@@ -18,7 +18,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     @ObservationIgnored private let presentedURL: Mutex<URL>
     public private(set) var text: String
     private(set) var savedText: String
-    /// Made with ⌘N and not given a title or text yet; thrown away if left like that.
+    /// Made with ⌘N and not given a title yet; thrown away if left without text too, even text typed and taken out again.
     var isNew = false
     public private(set) var modified: Date?
     /// Why the text isn't there yet; nil once it is.
@@ -171,7 +171,6 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     func update(text newText: String) {
         guard isLoaded, newText != text else { return }
         text = newText
-        if !newText.isEmpty { isNew = false }
         saveTimer?.invalidate()
         saveTimer = Timer.scheduledTimer(withTimeInterval: Self.saveDelay, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.saveNow() }

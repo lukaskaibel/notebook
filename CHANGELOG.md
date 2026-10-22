@@ -95,6 +95,9 @@ versions follow [semantic versioning](https://semver.org).
   follow it back), a move, a drop, a copy, a new note or a new folder, and Redo (⇧⌘Z) makes it again. Typing in the
   note and changes to files come back in the order you made them. On iPhone and iPad the same works with a keyboard,
   and a note deleted where there is no Recently Deleted comes back too, while Notebook is open.
+- Delete new notes left empty, a switch in Settings › General on the Mac and Settings › Notes on iPhone and iPad. It
+  is on at first, so a new note you leave without a title or text is deleted, as if you had never made it; turn it off
+  to keep such notes.
 
 ### Changed
 
@@ -131,6 +134,8 @@ versions follow [semantic versioning](https://semver.org).
   margin, so the arrow keys reach them and Delete takes them. On the touch keyboard they show while you type them,
   until you leave the line, and a heading picked from the Format panel shows only its level. Two or more `#`s show
   their level at once.
+- A new note you type in and then empty again is deleted when you leave it, as one you never typed in is. On the Mac,
+  so is a new note left empty when you quit, which before stayed behind for good.
 
 ### Fixed
 
@@ -196,6 +201,9 @@ versions follow [semantic versioning](https://semver.org).
 - Return at the end of a heading could scroll the note by a line.
 - On the Mac, the arrows next to folders in the sidebar sat lower than the folder icons, an open folder's most of all.
   They are now level with the icons, open or closed and in subfolders too.
+- On the Mac, a name typed in a note's title was lost when you pressed ⌘N or went back or forward before pressing
+  Return, and a new note went to the Trash with it. The name is now kept, and the next note's title no longer stays
+  selected, ready to be typed over.
 
 ## [0.1.0] – not released yet
 

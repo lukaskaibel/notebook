@@ -243,13 +243,18 @@ struct TouchSettings: View {
                 } footer: {
                     Text("Notebook shows the folders you add here and works on their files in place. Removing one leaves its files where they are.")
                 }
-                Section("Notes") {
+                Section {
                     NavigationLink { TextSettings().navigationTitle("Text") } label: { Label("Text", systemImage: "textformat") }
                     NavigationLink { SidebarSettings().navigationTitle("Files") } label: { Label("Files", systemImage: "folder") }
                     NavigationLink { WritingBarSettings() } label: { Label("Writing Bar", systemImage: "keyboard") }
                     LabeledContent("New Notes Without a Folder") {
                         Text(workspace.locations.first.map { "\($0.name) › Inbox" } ?? "–")
                     }
+                    Toggle("Delete New Notes Left Empty", isOn: Bindable(NotebookSettings.shared).deletesEmptyNewNotes)
+                } header: {
+                    Text("Notes")
+                } footer: {
+                    Text("A new note you leave without giving it a title or text is deleted.")
                 }
                 Section {
                     LabeledContent("Indexed") {

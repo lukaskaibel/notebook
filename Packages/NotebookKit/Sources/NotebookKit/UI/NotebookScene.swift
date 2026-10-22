@@ -206,6 +206,10 @@ struct GeneralSettings: View {
                 Text("Notes made with ⌘N go next to the note you have open, or into the folder you selected in the sidebar. Without either, they go to the Inbox.")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
+                Toggle("Delete new notes left empty", isOn: Bindable(NotebookSettings.shared).deletesEmptyNewNotes)
+                Text("A new note you leave or quit without giving it a title or text goes to the Trash.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
             }
             Section("Search") {
                 LabeledContent("Indexed") {

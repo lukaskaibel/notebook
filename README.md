@@ -70,8 +70,10 @@ tag). Return on a heading without text takes the heading
 off, and at the start of one puts a line above it. The text eases into its new look as you type: bold thickens, a
 heading grows, the marks fade in.
 
-The title of a new note has the caret first. Return, Tab, ↓, or → at its end go on into the text, and ↑, ←, or Delete at
-the very start of the text go back up into the title, on the Mac and on an iPad or iPhone with a keyboard alike.
+The title of a new note has the caret first, so you type its name straight away. Return, Tab, ↓, or → at its end go on
+into the text, and ↑, ←, or Delete at the very start of the text go back up into the title, on the Mac and on an iPad
+or iPhone with a keyboard alike. A new note you leave without a title or text is deleted again, as if you had never
+made it; turn off Delete new notes left empty in Settings to keep such notes.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/typing-dark.webp">
@@ -240,7 +242,7 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
 ## What it does
 
 - **Notes are files.** The title is the file name: rename a note by editing its title, and links to it in other notes
-  follow. New notes go into the folder you're in.
+  follow. New notes go into the folder you're in, and one you leave empty goes away again.
 - **Folders as they are.** Add iCloud Drive or any folder as a location with Add Location at the bottom of the
   sidebar, or drop the folder from the Finder below the sidebar's sections. iCloud Drive shows what the Finder shows
   in it: Desktop and Documents when they are kept in iCloud, and the folders of apps such as Pages or Obsidian.

@@ -653,6 +653,8 @@ public final class Workspace: NSObject {
             // A note still in iCloud shows its title at once and its text when it has come down; the window doesn't
             // wait for it.
             let document = NoteDocument(url: target)
+            // Opened with its title to type: a new note, which goes away again if it is left empty.
+            document.isNew = focusTitle
             let place = recordHistory ? nil : places[target]
             document.onExternalChange = { [weak self] text in self?.editor.reload(text: text) }
             // Only while it is open: put in the Trash, a closed note can still hear that it went there.
@@ -800,17 +802,15 @@ public final class Workspace: NSObject {
     private func leaveCurrentNote() {
         guard let note else { return }
         editor.endDrawing()
-        #if os(iOS)
-        // Back while typing a new name: the name counts, as it would once the title is left.
+        // Back or ⌘N while typing a new name: the name counts, as it would once the title is left.
         if editor.isEditingTitle { editor.commitTitle() }
-        #endif
         note.update(text: editor.text)
         note.close()
         let folder = note.url.deletingLastPathComponent()
         let dropped = assetsInUse.subtracting(FileOperations.assetNames(in: note.text))
         // It reads every note in the folder, which takes a while in a large one.
         if !dropped.isEmpty { Task.detached(priority: .utility) { FileOperations.cleanUpAssets(in: folder, candidates: dropped) } }
-        if note.isNew, note.isEmpty, note.url.deletingPathExtension().lastPathComponent.hasPrefix("Untitled") {
+        if isLeftEmpty(note) {
             let url = note.url
             // Nothing was made that Undo could take back.
             if let change = newNoteChange, change.after.map({ FileNode.samePath($0, url) }) == true { dropFromUndo(change) }
@@ -824,11 +824,37 @@ public final class Workspace: NSObject {
                     return FileOperations.trash(url)
                     #endif
                 }.value
-                if thrownAway { showChanges(in: [url.deletingLastPathComponent()], removing: [url]) }
+                if thrownAway {
+                    forgetRecent(url)
+                    showChanges(in: [url.deletingLastPathComponent()], removing: [url])
+                }
             }
         }
         self.note = nil
     }
+
+    /// A note made with New Note and left as it came, without a name or text, unless Settings keeps those.
+    private func isLeftEmpty(_ note: NoteDocument) -> Bool {
+        NotebookSettings.shared.deletesEmptyNewNotes && note.isNew && note.isEmpty
+            && note.url.deletingPathExtension().lastPathComponent.hasPrefix("Untitled")
+    }
+
+    #if os(macOS)
+    /// Quitting leaves the note too, and the next launch wouldn't know it was new: one left empty goes to the Trash
+    /// before the app does, which waits a moment for it at most. A name being typed counts, though it can't be given.
+    private func trashAsQuitting(_ note: NoteDocument) {
+        let named = editor.isEditingTitle && !editor.titleText.trimmingCharacters(in: .whitespaces).isEmpty
+        guard isLeftEmpty(note), !named else { return }
+        note.close()
+        let url = note.url
+        let done = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .userInitiated).async {
+            _ = FileOperations.trash(url)
+            done.signal()
+        }
+        _ = done.wait(timeout: .now() + 1)
+    }
+    #endif
 
     func meta(for document: NoteDocument) -> String {
         guard let date = document.modified else { return "" }
@@ -909,6 +935,12 @@ public final class Workspace: NSObject {
 
     func clearRecents() {
         recents = []
+        if !temporaryLocations { UserDefaults.standard.set(recents, forKey: "recents") }
+    }
+
+    /// A new note thrown away again leaves the files opened last, which the iPhone shows without looking again.
+    private func forgetRecent(_ url: URL) {
+        recents.removeAll { FileNode.samePath(URL(fileURLWithPath: $0), url) }
         if !temporaryLocations { UserDefaults.standard.set(recents, forKey: "recents") }
     }
 
@@ -1049,7 +1081,6 @@ public final class Workspace: NSObject {
             showChanges(in: made.madeFolder ? [parent, folder] : [folder],
                         adding: (made.listing.map { [$0] } ?? []) + (made.madeFolder ? [FileNode.Listing(url: folder, kind: .folder)] : []))
             open(made.url, focusTitle: title == nil)
-            note?.isNew = title == nil
             // After opening it: a new note left empty for this one goes, with its own New Note.
             if title == nil { newNoteChange = change }
             return made.url
@@ -1489,6 +1520,9 @@ public final class Workspace: NSObject {
         guard let note else { return }
         note.update(text: editor.text)
         note.saveNow()
+        #if os(macOS)
+        if quitting { trashAsQuitting(note) }
+        #endif
     }
 
     func resolveConflict(_ resolution: NoteDocument.Resolution) {
