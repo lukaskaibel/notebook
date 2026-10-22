@@ -249,6 +249,8 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         if textView.isFirstResponder || textView.titleField.isFirstResponder { textView.endEditing(true) }
         #else
         forgetTextUndo()
+        // A name being typed was taken as the other note was left: this note's title isn't being typed.
+        if isEditingTitle { makeTextFirstResponder() }
         #endif
         isLoading = false
         caretWasPlaced = false

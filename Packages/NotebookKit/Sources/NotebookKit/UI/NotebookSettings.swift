@@ -129,6 +129,11 @@ public final class NotebookSettings {
         }
     }
 
+    /// A new note left without a title or text goes away again, as if it had never been made.
+    public var deletesEmptyNewNotes: Bool {
+        didSet { UserDefaults.standard.set(deletesEmptyNewNotes, forKey: "deletesEmptyNewNotes") }
+    }
+
     #if os(iOS)
     /// The tools in the bar above the keyboard, in their order.
     var writingBarTools: [WritingTool] {
@@ -144,6 +149,7 @@ public final class NotebookSettings {
         foldersFirst = defaults.object(forKey: "foldersFirst") as? Bool ?? true
         headingMarks = HeadingMarks(rawValue: defaults.string(forKey: "headingMarks") ?? "") ?? .margin
         readsTextInPictures = defaults.object(forKey: "readsTextInPictures") as? Bool ?? true
+        deletesEmptyNewNotes = defaults.object(forKey: "deletesEmptyNewNotes") as? Bool ?? true
         #if os(iOS)
         writingBarTools = defaults.stringArray(forKey: "writingBarTools")?.compactMap(WritingTool.init(rawValue:)) ?? WritingTool.standard
         #endif
