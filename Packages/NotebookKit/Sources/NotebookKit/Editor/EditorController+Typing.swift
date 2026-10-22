@@ -9,6 +9,8 @@ final class CaretContext {
     var context = MarkdownEditing.Context()
     /// Where the link the caret is on goes: an address, a note or a file.
     var link: LinkTarget.Kind?
+    /// The to-do the caret is in has a date or a place.
+    var hasReminder = false
 }
 
 /// What the last press of Bold (or another style) took off, for the next press to put back.
@@ -114,6 +116,9 @@ extension EditorController {
         if caretContext.context != context { caretContext.context = context }
         let link = editing ? linkTarget(at: selection) : nil
         if caretContext.link != link { caretContext.link = link }
+        let todo = editing && context.isChecklist && !document.lines.isEmpty ? self.todo(onLine: document.lineIndex(containing: selection.location)) : nil
+        let hasReminder = todo.map { $0.due != nil || $0.place != nil } ?? false
+        if caretContext.hasReminder != hasReminder { caretContext.hasReminder = hasReminder }
         #endif
     }
 

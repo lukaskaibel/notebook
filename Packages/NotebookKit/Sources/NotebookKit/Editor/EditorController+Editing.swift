@@ -114,6 +114,14 @@ extension EditorController {
             break
         }
 
+        // Between a to-do's words and its date or place, Return makes the next to-do, as at the end of the line: the
+        // pills stay with the to-do they belong to.
+        if selection.length == 0, case .listItem(let item) = line.kind, item.isTask, selection.location < line.range.upperBound,
+           line.spans.contains(where: { if case .todoMark = $0.kind { true } else { false } }), selection.location >= todoWordsEnd(line: index) {
+            setSelection(NSRange(location: line.range.upperBound, length: 0))
+            return insertNewline()
+        }
+
         // Return leaves a style at its end and splits one in its middle, continues a list or quote with the next
         // marker, and ends it on an empty item.
         if perform(MarkdownEditing.insertNewline) {

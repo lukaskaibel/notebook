@@ -154,6 +154,10 @@ extension Workspace {
         #endif
 
         let go = "Go"
+        if !showsTodos {
+            list.append(PaletteCommand(id: "todos", title: "To-dos", symbol: "checklist", section: go, keys: ["⇧", "⌘", "R"],
+                                       keywords: ["reminders", "tasks", "checklist", "today", "due"]) { [self] in showTodos() })
+        }
         if canGoBack {
             list.append(PaletteCommand(id: "back", title: "Back", symbol: "chevron.backward", section: go, keys: ["⌘", "["]) { [self] in goBack() })
         }

@@ -83,7 +83,7 @@ public final class SearchIndex {
     /// The text read in pictures, scans and drawings, by the file's address (for a picture in a note,
     /// `folder/.assets/name`).
     @ObservationIgnored var recognized: [String: PictureText] = [:] {
-        didSet { changed() }
+        didSet { changed(notes: false) }
     }
     /// Counts the times folders came or went, which is far less often than files change.
     private(set) var folderVersion = 0
@@ -138,10 +138,15 @@ public final class SearchIndex {
     }
 
     /// One change more: what shows the index updates, and search gets a new corpus.
-    private func changed() {
+    /// `notes`: what notes say may have changed too, not only the text read in pictures and PDFs.
+    private func changed(notes: Bool = true) {
         version += 1
         scheduleCorpus()
+        if notes { onChanged?() }
     }
+
+    /// Called whenever notes may have changed (or folders were hidden): the to-dos are read again.
+    @ObservationIgnored var onChanged: (() -> Void)?
 
     // MARK: - Building
 
@@ -614,7 +619,7 @@ public final class SearchIndex {
                 entry.folded = read.folded
                 entry.pagesWithoutText = read.pagesWithoutText
                 byPath[job.path] = entry
-                changed()
+                changed(notes: false)
                 entriesChanged()
                 if !read.pagesWithoutText.isEmpty { onIndexed?([job.path: entry]) }
             }

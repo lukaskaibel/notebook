@@ -46,7 +46,8 @@ Name: **Notebook** (bis zum 16.10.2026 hieß die App Folio). Stand: Planungssitz
 | Anhänge | `.assets/` in jedem Ordner, unsichtbar in Notebook, im Finder und in der Dateien-App. Wer ein Bild in der Notiz löscht, löscht auch die Datei. |
 | Andere Dateien | Quick Look für alles, was nicht Markdown ist, auch für PDF, Bild und Video |
 | Offline | Markdown-Dateien bleiben auf jedem Gerät geladen. PDFs und Bilder werden durchsucht, sobald sie lokal sind, bis dahin zeigt der Baum ein Wolken-Symbol. |
-| Erinnerungen | „Erinnern…“ an eine Notiz zu einer Uhrzeit (#57), später an einem Ort, zu einem Kalendertermin und als Live-Aktivität (Epic #55). Die Erinnerung steht nicht in der Notiz, sondern wie ausgeblendete Ordner im iCloud-Key-Value-Store, ein Schlüssel pro Erinnerung; jedes Gerät plant seine Mitteilungen selbst. Die Mitteilung zeigt die ersten Punkte der Notiz (offene Aufgaben zuerst), ist „Dringend“ (Time Sensitive) und bietet „In 1 Stunde erinnern“ und „Erledigt“. Erledigte Erinnerungen verschwinden aus dem Store. Keine Wiederholungen. |
+| Aufgaben | Jede offene Checkbox ist eine Aufgabe; „To-dos“ ganz oben in der Sidebar zeigt alle wie Erinnerungen, nach Fälligkeit gruppiert (Überfällig, Heute, Morgen, Nächste 7 Tage, Später, Ohne Datum), mit den eingerückten Zeilen darunter als Notizen der Aufgabe, dazu die Notizen mit Erinnerung. Abhaken, öffnen und per Ziehen verschieben ändert die Notiz. Datum, Uhrzeit und Ort einer Aufgabe stehen **in der Notiz** hinter ihrem Text, so wie Obsidians Tasks- und Reminder-Plugins sie schreiben (`⏰ 2026-10-24 14:00`, `📅 2026-11-01`, ein Ort als Link zu Apple Maps), damit sie mit der Datei überall hin wandern; Notebook zeigt sie als kleine Kapseln. |
+| Erinnerungen | „Erinnern…“ an eine Notiz zu einer Uhrzeit (#57) oder an einem Ort (#58), später zu einem Kalendertermin und als Live-Aktivität (Epic #55). Orte erinnern auf iPhone und iPad („Beim Verwenden“ genügt), der Mac kann sie nur setzen. Die Erinnerung einer Notiz steht nicht in der Notiz, sondern wie ausgeblendete Ordner im iCloud-Key-Value-Store, ein Schlüssel pro Erinnerung; jedes Gerät plant seine Mitteilungen selbst. Die Mitteilung zeigt die ersten Punkte der Notiz (offene Aufgaben zuerst), ist „Dringend“ (Time Sensitive) und bietet „In 1 Stunde erinnern“ und „Erledigt“. Erledigte Erinnerungen verschwinden aus dem Store. Keine Wiederholungen. |
 | Symbol und Farbe | Ein Notizbuch aus Ochsenblut-Leder als App-Symbol, in den Einstellungen selbst einzufärben. Akzentfarbe ist Tintenblau (`#34508F` hell, `#93ABE3` dunkel), wenn in den Systemeinstellungen „Mehrfarbig“ gewählt ist. |
 
 ## 3. Wie es sich anfühlt
@@ -118,6 +119,7 @@ Alles bleibt normales Markdown, damit andere Programme die Dateien weiter lesen 
 | Mermaid | ```` ```mermaid ```` | Gerendertes Diagramm, Quelltext nur mit Cursor darin |
 | Callout | `> [!note] Titel` (die fünf von GitHub, die gängigen Obsidian-Typen werden darauf abgebildet) | Farbige Box mit Symbol |
 | Checkliste | `- [ ]`, `- [x]` | Antippbare Checkbox, erledigt wird blass und durchgestrichen |
+| Aufgabe mit Termin | `- [ ] Anrufen ⏰ 2026-10-24 14:00`, `📅 2026-11-01`, `📍 [Apotheke](https://maps.apple.com/?ll=…)` | Kapsel mit Tag, Uhrzeit oder Ort, rot wenn überfällig; ein Klick ändert sie |
 | Frontmatter | `---` YAML `---` am Anfang | Dezente eingeklappte Zeile, Klick zeigt den YAML-Text |
 
 **Links auflösen:** `[[Name]]` sucht zuerst im selben Ordner, dann im selben Ort und nimmt bei mehreren Treffern den

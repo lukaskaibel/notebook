@@ -446,8 +446,22 @@ enum MarkdownStyler {
                 markers(s, span)
             case .escape:
                 markers(s, span)
+            case .todoMark(let mark):
+                guard case .listItem(let item) = line.kind else { continue }
+                todoPill(s, text: text, span: span, mark: mark, done: item.checked, line: line)
             }
         }
+    }
+
+    /// A to-do's date or place, drawn as a pill in place of its first character. The rest of it, and the spaces in
+    /// front of it, are hidden: the pill keeps its own room.
+    private static func todoPill(_ s: NSTextStorage, text: NSString, span: InlineSpan, mark: TodoMark.Kind, done: Bool, line: MarkdownLine) {
+        let range = span.range
+        s.addAttribute(.notebookObject, value: EditorObject(.todoPill(TodoPill(mark, done: done)), range: range), range: NSRange(location: range.location, length: 1))
+        hide(s, NSRange(location: range.location + 1, length: range.length - 1), .always)
+        var start = range.location
+        while start > line.content.location, [32, 9].contains(text.character(at: start - 1)) { start -= 1 }
+        hide(s, NSRange(location: start, length: range.location - start), .always)
     }
 
     /// A link to a note drawn as a chip: an icon in front, the name, a little room after, a tinted box behind.

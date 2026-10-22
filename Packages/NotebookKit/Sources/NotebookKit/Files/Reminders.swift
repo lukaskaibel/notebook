@@ -1,15 +1,31 @@
 import Foundation
 
-/// A reminder of a note at a time.
-struct Reminder: Codable, Equatable, Identifiable, Sendable {
+/// A reminder of a note: at a time, when you arrive at or leave a place, or both.
+struct Reminder: Codable, Hashable, Identifiable, Sendable {
     var id: UUID
     /// The note, by the name `HiddenFolders.key(for:links:)` gives it: its place in iCloud, the same on a Mac, an iPhone
     /// and an iPad, or its path when it isn't in iCloud.
     var note: String
-    var date: Date
+    var date: Date?
+    var place: TodoPlace?
+
+    init(id: UUID, note: String, date: Date?, place: TodoPlace? = nil) {
+        self.id = id
+        self.note = note
+        self.date = date
+        self.place = place
+    }
 
     /// The note's name, for when the note can't be found on this device.
     var name: String { ((note as NSString).lastPathComponent as NSString).deletingPathExtension }
+
+    /// Its time has passed.
+    var isOverdue: Bool { date.map { $0 <= .now } ?? false }
+
+    /// "Tomorrow 8:30", "Arriving at Pharmacy", or both.
+    var text: String {
+        [date.map { ReminderText.text($0, time: true) }, place?.phrase].compactMap { $0 }.joined(separator: ", ")
+    }
 }
 
 /// The reminders of notes. Not in the notes: setting one never changes the file, and the time doesn't go along with a
@@ -83,11 +99,12 @@ final class Reminders {
         save()
     }
 
-    /// A note has one reminder: setting a time changes the one it has.
+    /// A note has one reminder: setting a time or a place changes the one it has.
     @discardableResult
-    func set(note: String, date: Date) -> Reminder {
-        var reminder = reminder(for: note) ?? Reminder(id: UUID(), note: note, date: date)
+    func set(note: String, date: Date?, place: TodoPlace? = nil) -> Reminder {
+        var reminder = reminder(for: note) ?? Reminder(id: UUID(), note: note, date: date, place: place)
         reminder.date = date
+        reminder.place = place
         set(reminder)
         return reminder
     }
@@ -136,6 +153,10 @@ final class Reminders {
     }
 
     private static func sorted(_ reminders: [Reminder]) -> [Reminder] {
-        reminders.sorted { $0.date != $1.date ? $0.date < $1.date : $0.id.uuidString < $1.id.uuidString }
+        // Those at a place only after the rest.
+        reminders.sorted { a, b in
+            let aDate = a.date ?? .distantFuture, bDate = b.date ?? .distantFuture
+            return aDate != bDate ? aDate < bDate : a.id.uuidString < b.id.uuidString
+        }
     }
 }

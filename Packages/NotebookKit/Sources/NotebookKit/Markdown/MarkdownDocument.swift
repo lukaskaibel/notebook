@@ -135,6 +135,8 @@ public struct InlineSpan: Equatable {
         case autolink(url: String)
         case footnoteReference(label: String)
         case escape
+        /// A to-do's due date or place (`TodoMarks`).
+        case todoMark(TodoMark.Kind)
 
         var isStyle: Bool {
             switch self {
@@ -159,7 +161,7 @@ public struct InlineSpan: Equatable {
     /// Spans that are one thing on screen: the caret goes around them and a selection takes all or nothing.
     public var isAtomic: Bool {
         switch kind {
-        case .image, .wikiLink, .embed: true
+        case .image, .wikiLink, .embed, .todoMark: true
         default: false
         }
     }

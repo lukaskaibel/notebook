@@ -9,6 +9,8 @@ final class EditorHarness: NSObject, EditorControllerDelegate {
     let window: NSWindow
     let folder: URL
     var opened: [LinkTarget.Kind] = []
+    /// The lines of the to-dos whose Remind Me was asked for.
+    var todoReminders: [Int] = []
     var notes: [String: URL] = [:]
 
     init(_ text: String, width: CGFloat = 900, height: CGFloat = 900, dark: Bool = false) {
@@ -166,6 +168,7 @@ final class EditorHarness: NSObject, EditorControllerDelegate {
     }
     func editor(_ editor: EditorController, resolve target: String) -> URL? { notes[target.lowercased()] }
     func editorNoteName(_ editor: EditorController) -> String { "Kyoto trip" }
+    func editor(_ editor: EditorController, showTodoReminderOnLine line: Int) { todoReminders.append(line) }
 
     private func writeSampleImage(to url: URL) {
         let size = NSSize(width: 1200, height: 520)

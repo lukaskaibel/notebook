@@ -153,7 +153,7 @@ final class LocationTests: XCTestCase {
         window.contentView!.addSubview(sidebar.scrollView)
         window.layoutIfNeeded()
         let outline = sidebar.outline
-        XCTAssertEqual(outline.numberOfRows, 6, "two sections, iCloud Drive's open")
+        XCTAssertEqual(outline.numberOfRows, 7, "To-dos, then two sections, iCloud Drive’s open")
 
         let elsewhere = base.appendingPathComponent("Elsewhere")
         try make(elsewhere)

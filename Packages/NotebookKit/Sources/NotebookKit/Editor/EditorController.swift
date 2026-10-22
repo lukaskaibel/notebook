@@ -42,6 +42,8 @@ public protocol EditorControllerDelegate: AnyObject {
     func editorDrawingDidChange(_ editor: EditorController)
     /// The reminder under the title, or the writing bar's bell, was tapped: to set, change or remove the note's reminder.
     func editorShowReminder(_ editor: EditorController)
+    /// A to-do's pill or bell was clicked: to set, change or remove its date and place.
+    func editor(_ editor: EditorController, showTodoReminderOnLine line: Int)
 }
 
 public extension EditorControllerDelegate {
@@ -50,6 +52,7 @@ public extension EditorControllerDelegate {
     func editorEditingDidChange(_ editor: EditorController) {}
     func editorDrawingDidChange(_ editor: EditorController) {}
     func editorShowReminder(_ editor: EditorController) {}
+    func editor(_ editor: EditorController, showTodoReminderOnLine line: Int) {}
 }
 
 /// Notebook's editor: a TextKit 1 text view whose storage holds the note's Markdown exactly, styled so that it reads as

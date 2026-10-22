@@ -161,6 +161,14 @@ public enum MarkdownParser {
             switch lines[line].kind {
             case .paragraph, .heading, .listItem, .quote, .footnoteDefinition, .tableHeader, .tableRow:
                 lines[line].spans = InlineParser.spans(in: u, range: lines[line].content, typing: typing)
+                // A to-do's date and place are one thing each, whatever Markdown is inside them (a place is a link).
+                if case .listItem(let item) = lines[line].kind, item.isTask {
+                    let marks = TodoMarks.spans(in: u, range: lines[line].content)
+                    if !marks.isEmpty {
+                        lines[line].spans.removeAll { span in marks.contains { NSIntersectionRange($0.range, span.range).length > 0 } }
+                        lines[line].spans = (lines[line].spans + marks).sorted { $0.range.location < $1.range.location || ($0.range.location == $1.range.location && $0.range.length > $1.range.length) }
+                    }
+                }
             default:
                 break
             }

@@ -110,6 +110,12 @@ for theme in dark light; do
   say "open Personal/Questions for Dr. Weber.md"; sleep 1.2
   say "remindme Personal/Questions for Dr. Weber.md"; sleep 1.2; shot "reminder-$theme"
   say "remindme close"; sleep 0.5
+  # To-dos: every open to-do of the sample notes, by when it's due.
+  say "showtodos"; sleep 1.5; shot "todos-$theme"
+  # The pills after the errands' to-dos, and Remind Me for the one at a place, from its pill, once the map has loaded.
+  say "open Inbox/Errands.md"; sleep 1.2
+  say "remindtodo plasters"; sleep 3; shot "todo-reminder-$theme"
+  say "remindme close"; sleep 0.5
 
   say "open Personal/Weekend.md"; sleep 1.5
   rm -f "$raw/typing-$theme.mov"

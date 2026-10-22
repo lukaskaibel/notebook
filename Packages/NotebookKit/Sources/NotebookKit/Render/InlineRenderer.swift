@@ -34,7 +34,7 @@ enum InlineRenderer {
                 result.replaceCharacters(in: span.content, with: tex)
             case .footnoteReference:
                 result.addAttributes([.foregroundColor: Theme.accent, .baselineOffset: 4, .font: NSFont.systemFont(ofSize: font.pointSize * 0.75)], range: span.content)
-            case .escape:
+            case .escape, .todoMark:
                 break
             }
         }

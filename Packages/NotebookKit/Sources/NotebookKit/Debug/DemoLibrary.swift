@@ -24,6 +24,17 @@ enum DemoLibrary {
         return [("Personal/Questions for Dr. Weber.md", morning)]
     }
 
+    /// To-dos' dates and times, written as they would be on the day the samples are made: something overdue, things for
+    /// today and the coming days, and one at a place.
+    private static func due(_ days: Int, _ hour: Int? = nil, _ minute: Int = 0, now: Date = .now) -> String {
+        let calendar = Calendar.current
+        let day = calendar.date(byAdding: .day, value: days, to: calendar.startOfDay(for: now)) ?? now
+        let date = hour.flatMap { calendar.date(bySettingHour: $0, minute: minute, second: 0, of: day) } ?? day
+        return TodoDue(date, time: hour != nil).markdown
+    }
+
+    static let pharmacy = TodoPlace(name: "Pharmacy at Rosenthaler Platz", latitude: 52.529_6, longitude: 13.401_3)
+
     static func create(at root: URL) {
         let fm = FileManager.default
         if fm.fileExists(atPath: root.appendingPathComponent("Travel/Kyoto trip.md").path) { return }
@@ -46,6 +57,19 @@ enum DemoLibrary {
 
         write("Archive/2025/Old apartment.md", "# Handover\n\n- [x] Meter readings\n- [x] Keys returned\n- [ ] Deposit back\n")
         write("Inbox/Gift ideas.md", "- [ ] Book for Mia: *The Remains of the Day*\n- [ ] Good olive oil\n- [x] Concert tickets\n")
+        write("Inbox/Errands.md", """
+        Small things for this week, each with when (or where) it should come up.
+
+        - [ ] Return the library books \(due(-1))
+        - [ ] Pick up the dry cleaning \(due(0, 17, 30))
+            - The ticket is in the blue jacket
+            - Closes at 6
+        - [ ] Buy plasters \(pharmacy.markdown)
+        - [ ] Renew the passport \(due(24))
+            - Two photos, the old passport, €70
+        - [x] Pay the electricity bill
+
+        """)
         write("Inbox/Shared link.md", "https://example.com/an-article-worth-reading\n\nRead this on the train.\n")
 
         write("Travel/Kyoto trip.md", """
@@ -56,7 +80,7 @@ enum DemoLibrary {
         ## Packing
         - [x] Passport
         - [x] Rail pass voucher
-        - [ ] Power adapter, type A
+        - [ ] Power adapter, type A \(due(3))
         - [ ] Rain jacket
 
         ## Plan
@@ -84,7 +108,7 @@ enum DemoLibrary {
 
         ![Drawing](.assets/Getting%20to%20the%20ryokan%20drawing.png)
 
-        - [ ] Send the map to Mia
+        - [ ] Send the map to Mia \(due(0, 19))
         - [x] Ask about a late check-in
 
         """)
@@ -109,7 +133,8 @@ enum DemoLibrary {
         Market on Saturday morning, cooking with Mia in the evening. Sunday stays empty on purpose.
 
         ## Saturday
-        - [ ] Tomatoes, basil, burrata
+        - [ ] Tomatoes, basil, burrata \(due(1, 9))
+            - The good burrata is at the cheese stall at the back
         - [ ] Sourdough from the corner bakery
         - [ ] Flowers for the table
 

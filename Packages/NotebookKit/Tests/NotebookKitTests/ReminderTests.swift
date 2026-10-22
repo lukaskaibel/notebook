@@ -186,7 +186,7 @@ final class ReminderTests: XCTestCase {
         calendar.timeZone = TimeZone(identifier: "Europe/Berlin")!
         let afternoon = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 16, hour: 13, minute: 10)))
         let hours = { (date: Date) in calendar.dateComponents([.day, .hour, .minute], from: date) }
-        let choices = ReminderPicker.choices(after: afternoon, calendar: calendar)
+        let choices = ReminderForm.choices(after: afternoon, calendar: calendar)
         XCTAssertEqual(choices.map(\.title), ["Later Today", "This Evening", "Tomorrow"])
         XCTAssertEqual(hours(choices[0].date), DateComponents(day: 16, hour: 16, minute: 0))
         XCTAssertEqual(hours(choices[1].date), DateComponents(day: 16, hour: 18, minute: 0))
@@ -194,8 +194,8 @@ final class ReminderTests: XCTestCase {
 
         // Later Today would be the evening's time: once is enough.
         let later = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 16, hour: 15, minute: 30)))
-        XCTAssertEqual(ReminderPicker.choices(after: later, calendar: calendar).map(\.title), ["This Evening", "Tomorrow"])
+        XCTAssertEqual(ReminderForm.choices(after: later, calendar: calendar).map(\.title), ["This Evening", "Tomorrow"])
         let night = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 16, hour: 20, minute: 30)))
-        XCTAssertEqual(ReminderPicker.choices(after: night, calendar: calendar).map(\.title), ["Tomorrow"])
+        XCTAssertEqual(ReminderForm.choices(after: night, calendar: calendar).map(\.title), ["Tomorrow"])
     }
 }

@@ -14,6 +14,7 @@ extension EditorController {
         case block(index: Int, caret: Int)
         case editLink(range: NSRange)
         case headingLevel(line: Int)
+        case todo(line: Int)
     }
 
     func hitTest(_ point: NSPoint) -> Hit? {
@@ -59,6 +60,8 @@ extension EditorController {
                 return .block(index: blockIndex, caret: line.range.upperBound)
             case .linkEdit:
                 return .editLink(range: range)
+            case .todoPill:
+                return .todo(line: document.lineIndex(containing: index))
             case .chipLead, .chipTrail:
                 if let link = storage.attribute(.notebookLink, at: index, effectiveRange: nil) as? LinkTarget { return .link(link.kind) }
                 return nil
@@ -119,6 +122,9 @@ extension EditorController {
         case .headingLevel:
             showHeadingMenu(at: point)
             return true
+        case .todo(let line):
+            showTodoReminder(line: line)
+            return true
         case .block(_, let caret):
             openBlock(caret: caret, at: point)
             return true
@@ -129,8 +135,9 @@ extension EditorController {
         let point = textView.convert(event.locationInWindow, from: nil)
         if isDrawing, canvas(at: point) != nil { return NSCursor.crosshair.set() }
         if !textView.copyButton.isHidden, textView.copyButton.frame.contains(point) { return NSCursor.arrow.set() }
+        if !textView.todoBell.isHidden, textView.todoBell.frame.contains(point) { return NSCursor.arrow.set() }
         switch hitTest(point) {
-        case .checkbox, .link, .editLink, .headingLevel: NSCursor.pointingHand.set()
+        case .checkbox, .link, .editLink, .headingLevel, .todo: NSCursor.pointingHand.set()
         case .picture, .block: NSCursor.arrow.set()
         case nil: break
         }
@@ -180,7 +187,10 @@ extension EditorController {
             add("Delete", #selector(NSText.delete(_:)), "trash")
             return menu
         }
-        if let base { addCopyCode(to: base, at: point) }
+        if let base {
+            addCopyCode(to: base, at: point)
+            addTodoReminder(to: base, at: point)
+        }
         return base
     }
     #endif

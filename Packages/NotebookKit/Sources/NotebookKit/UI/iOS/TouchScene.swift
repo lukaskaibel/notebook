@@ -107,6 +107,9 @@ struct TouchCommands: Commands {
             Button { workspace.togglePalette() } label: { Label("Command Palette", systemImage: "command") }
                 .keyboardShortcut("k", modifiers: .command)
                 .disabled(workspace.locations.isEmpty)
+            Button { workspace.showTodos() } label: { Label("To-dos", systemImage: "checklist") }
+                .keyboardShortcut("r", modifiers: [.command, .shift])
+                .disabled(workspace.locations.isEmpty)
             Button { workspace.goBack() } label: { Label("Back", systemImage: "chevron.backward") }
                 .keyboardShortcut("[", modifiers: .command)
                 .disabled(!workspace.canGoBack)

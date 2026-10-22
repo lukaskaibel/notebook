@@ -82,9 +82,10 @@ enum WritingTool: String, CaseIterable, Identifiable {
 }
 
 /// A button on the left of the bar for where the caret is: a style it is in (on, its glass tinted; a tap takes it
-/// off), the checkbox of its line, moving its list item out or in, and opening the link it is on. As in Issues.
+/// off), the checkbox of its line and the to-do's reminder, moving its list item out or in, and opening the link it is
+/// on. As in Issues.
 enum CaretTool: CaseIterable, Identifiable {
-    case bold, italic, strikethrough, highlight, code, checkbox, outdent, indent, openLink
+    case bold, italic, strikethrough, highlight, code, checkbox, remind, outdent, indent, openLink
 
     var id: Self { self }
 
@@ -107,6 +108,7 @@ enum CaretTool: CaseIterable, Identifiable {
         case .highlight: "Highlight"
         case .code: "Code"
         case .checkbox: "Checkbox"
+        case .remind: "Remind Me"
         case .outdent: "Outdent"
         case .indent: "Indent"
         case .openLink: "Open Link"
@@ -121,6 +123,7 @@ enum CaretTool: CaseIterable, Identifiable {
         case .highlight: "highlighter"
         case .code: "chevron.left.forwardslash.chevron.right"
         case .checkbox: checked ? "checkmark" : "circle"
+        case .remind: "bell"
         case .outdent: "decrease.indent"
         case .indent: "increase.indent"
         case .openLink: "arrow.up.right.square"
@@ -132,7 +135,7 @@ enum CaretTool: CaseIterable, Identifiable {
     static func tools(for caret: CaretContext) -> [CaretTool] {
         let context = caret.context
         var tools = allCases.filter { $0.style.map(context.styles.contains) ?? false }
-        if context.isChecklist { tools.append(.checkbox) }
+        if context.isChecklist { tools.append(contentsOf: [.checkbox, .remind]) }
         if context.canOutdent { tools.append(.outdent) }
         if context.canIndent { tools.append(.indent) }
         if caret.link != nil { tools.append(.openLink) }
@@ -302,7 +305,7 @@ struct WritingBarView: View {
     private func caretButton(_ tool: CaretTool, checked: Bool) -> some View {
         let isOn = tool.style != nil || (tool == .checkbox && checked)
         return Button { perform(tool) } label: {
-            Image(systemName: tool.symbol(checked: checked))
+            Image(systemName: tool == .remind && editor.caretContext.hasReminder ? "bell.fill" : tool.symbol(checked: checked))
                 .font(.system(size: 17, weight: isOn ? .semibold : .medium))
                 .foregroundStyle(isOn ? Color.white : Color.primary)
                 .frame(width: WritingBar.barHeight, height: WritingBar.barHeight)
@@ -319,6 +322,7 @@ struct WritingBarView: View {
         if let style = tool.style { return editor.toggle(style) }
         switch tool {
         case .checkbox: editor.toggleChecked()
+        case .remind: editor.showTodoReminder(line: editor.document.lineIndex(containing: editor.selection.location))
         case .outdent: editor.indent(by: -1)
         case .indent: editor.indent(by: 1)
         case .openLink: if let link = editor.caretContext.link { editor.delegate?.editor(editor, open: link) }
