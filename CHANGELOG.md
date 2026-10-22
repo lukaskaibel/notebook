@@ -199,6 +199,8 @@ versions follow [semantic versioning](https://semver.org).
 - On the Mac, ↑ from the first line into the title selected the whole title, so the next key replaced it; the caret now
   goes to its end.
 - Return at the end of a heading could scroll the note by a line.
+- On the Mac, the arrows next to folders in the sidebar sat lower than the folder icons, an open folder's most of all.
+  They are now level with the icons, open or closed and in subfolders too.
 - On the Mac, a name typed in a note's title was lost when you pressed ⌘N or went back or forward before pressing
   Return, and a new note went to the Trash with it. The name is now kept, and the next note's title no longer stays
   selected, ready to be typed over.
