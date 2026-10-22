@@ -431,7 +431,7 @@ enum DebugRemote {
                 }
             }
         case "set":
-            // set <setting> <value>: face, size, spacing, width, headings, onlynotes, dim, foldersfirst.
+            // set <setting> <value>: face, size, spacing, width, headings, onlynotes, dim, foldersfirst, deleteempty.
             let bits = argument.split(separator: " ").map(String.init)
             guard bits.count == 2 else { break }
             let settings = NotebookSettings.shared
@@ -444,6 +444,7 @@ enum DebugRemote {
             case "onlynotes": settings.showsOnlyNotes = bits[1] == "1"
             case "dim": settings.dimsOtherFiles = bits[1] == "1"
             case "foldersfirst": settings.foldersFirst = bits[1] == "1"
+            case "deleteempty": settings.deletesEmptyNewNotes = bits[1] == "1"
             default: break
             }
             log("set \(argument)")
