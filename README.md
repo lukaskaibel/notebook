@@ -174,8 +174,11 @@ with a keyboard, ⌘K works the same.
 ### Remind me of a note
 
 Questions for the doctor, points for a meeting: Remind Me… brings a note back at the time you choose. Pick Later
-Today, This Evening or Tomorrow, or a date and a time, in a popover like a reminder's details in Reminders. The note
-then shows a bell and the time under its title ("Tomorrow 8:30") and a bell in its row; a click on it changes the time
+Today, This Evening or Tomorrow, set a date and a time, or type the time in a few words, in a popover like a reminder's
+details in Reminders. It reads "friday evening", "tomorrow at 9", "fri 3pm", "in 3 weeks", "in 2 hours", "next monday",
+"the 12th" or "12.11."; as you type it shows what that could mean, and the date and time below follow the one that is
+lit. Return or a click takes it, and the arrow keys go through the others. A day without a time is at nine in the
+morning. The note then shows a bell and the time under its title ("Tomorrow 8:30") and a bell in its row; a click on it changes the time
 or removes the reminder, and once the time has passed it turns red. At that time a notification comes with the note's
 name, the time and its first points: what is still to do first, then the rest, without pictures or front matter. It is
 Time Sensitive, so it gets through a Focus. Tap it to open the note, or choose Remind Me in 1 Hour or Done.
@@ -186,7 +189,7 @@ reminder isn't written into the note, so the file stays as it was and the time d
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/reminder-dark.webp">
-  <img alt="The note Questions for Dr. Weber with a bell and Tomorrow 8:30 under its title, a bell in its row in the sidebar and a Reminder section in the inspector; Remind Me is open below the title with Later Today, This Evening and Tomorrow, a date and a time" src="Design/screenshots/reminder-light.webp">
+  <img alt="The note Questions for Dr. Weber with a bell and Tomorrow 8:30 under its title, a bell in its row in the sidebar and a Reminder section in the inspector; Remind Me is open below the title with fri typed in its field, and Friday, Friday Afternoon and Friday Evening to choose from above a date and a time" src="Design/screenshots/reminder-light.webp">
 </picture>
 
 ### PDFs, pictures and every other file
@@ -261,8 +264,8 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   choose Hide Folder, or on iPhone and iPad touch and hold it. It leaves the sidebar, search and Move To, and stays
   hidden on your other Macs, iPhones and iPads through iCloud. The eye next to the location's name, or ⇧⌘., shows
   hidden folders again, dimmed, until you click it again; on iPhone and iPad, Show Hidden Folders is in the ⋯ menu.
-- **Reminders.** Remind Me… brings a note back at a time you choose, with a notification of its first points that
-  gets through a Focus. The reminder follows the note when you rename or move it in Notebook, goes when you delete it,
+- **Reminders.** Remind Me… brings a note back at a time you choose, picked or typed in a few words ("friday
+  evening", "in 3 weeks"), with a notification of its first points that gets through a Focus. The reminder follows the note when you rename or move it in Notebook, goes when you delete it,
   and reaches your other Macs, iPhones and iPads through iCloud; each device shows the notification itself.
 - **Live preview editor.** Headings, bold, italic, strikethrough, `==highlight==`, inline code, links, checklists,
   bulleted and numbered lists, quotes, callouts, tables, code blocks, maths, Mermaid, footnotes and front matter, which
