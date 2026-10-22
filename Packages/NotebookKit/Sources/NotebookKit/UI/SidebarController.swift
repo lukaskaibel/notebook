@@ -448,9 +448,15 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     }
 
     @objc private func doubleClicked(_ sender: Any?) {
-        let row = outline.clickedRow
-        guard row >= 0, let node = outline.item(atRow: row) as? FileNode, !node.isFolder, node.kind != .note else { return }
-        workspace.quickLook(node.url)
+        openOnItsOwn(row: outline.clickedRow)
+    }
+
+    /// A double-click opens a file on its own, as in the Finder: a note in a window of its own, anything else in the
+    /// app the Mac has for it. A folder already opens and closes with each click.
+    func openOnItsOwn(row: Int) {
+        guard let url = url(at: row) else { return }
+        guard !((outline.item(atRow: row) as? FileNode)?.isFolder ?? FileWindows.isFolder(url)) else { return }
+        workspace.openOnItsOwn(url)
     }
 
     func url(at row: Int) -> URL? {
@@ -556,7 +562,12 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         add(menu, "New Note in “\(workspace.folderName(folder))”", "square.and.pencil") { [weak self] in self?.workspace.newNote(in: folder) }
         add(menu, "New Folder", "folder.badge.plus") { [weak self] in self?.workspace.newFolder(in: folder) }
         menu.addItem(.separator())
-        if !isFolder, FileKind(url: url, isDirectory: false) != .note {
+        if !isFolder, FileKind(url: url, isDirectory: false) == .note {
+            add(menu, "Open in New Window", "macwindow.badge.plus") { [weak self] in self?.workspace.openOnItsOwn(url) }
+        } else if !isFolder {
+            if let app = workspace.appName(opening: url) {
+                add(menu, "Open in \(app)", "arrow.up.forward.app") { [weak self] in self?.workspace.openOnItsOwn(url) }
+            }
             add(menu, "Quick Look", "eye") { [weak self] in self?.workspace.quickLook(url) }
         }
         if FileKind(url: url, isDirectory: isFolder) == .note {

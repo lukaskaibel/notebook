@@ -108,8 +108,8 @@ extension Workspace {
                     printNote()
                 })
             } else {
-                list.append(PaletteCommand(id: "open-in", title: "Open in Its App", symbol: "arrow.up.forward.app", section: section) {
-                    NSWorkspace.shared.open(url)
+                list.append(PaletteCommand(id: "open-in", title: "Open in Its App", symbol: "arrow.up.forward.app", section: section) { [self] in
+                    openOnItsOwn(url)
                 })
             }
             #endif

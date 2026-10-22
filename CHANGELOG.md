@@ -98,9 +98,17 @@ versions follow [semantic versioning](https://semver.org).
 - Delete new notes left empty, a switch in Settings › General on the Mac and Settings › Notes on iPhone and iPad. It
   is on at first, so a new note you leave without a title or text is deleted, as if you had never made it; turn it off
   to keep such notes.
+- Double-click a note in the sidebar on the Mac to open it in a window of its own, as a note opened from the Finder;
+  more of them join it as tabs. Open in New Window in its menu does the same.
 
 ### Changed
 
+- Double-clicking a PDF, a picture or any other file in the sidebar opens it in its own app, such as Preview or
+  QuickTime Player, as in the Finder, rather than in Quick Look; Space still opens Quick Look, and the file's menu has
+  Open in Preview (or its app) next to it.
+- A note from your locations in a window of its own, opened from the sidebar or the Finder, links to notes in every
+  folder of the location as the main window does, and renaming it there updates the links to it in other notes, with
+  Undo in the main window.
 - Checkboxes are circles, as in Notes and Reminders, filled with the accent colour when done. On iPhone and iPad they
   are bigger, for a fingertip.
 - Folders are read in the background, on the Mac, iPhone and iPad. A location you add shows at once and its files a

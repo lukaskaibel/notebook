@@ -2,9 +2,9 @@
 import AppKit
 import SwiftUI
 
-/// A Markdown file opened on its own (from the Finder, File › Open, or dropped on the Dock icon): just the note in a
-/// plain window, no sidebar, no toolbar, the way Lettera opens a single file. Windows of this kind join the system's
-/// window tabs. Folders opened the same ways go to the main window's sidebar.
+/// A Markdown file opened on its own (from the Finder, File › Open, dropped on the Dock icon, or double-clicked in the
+/// sidebar): just the note in a plain window, no sidebar, no toolbar, the way Lettera opens a single file. Windows of
+/// this kind join the system's window tabs. Folders opened the same ways go to the main window's sidebar.
 @MainActor
 public final class FileWindows {
     public static let shared = FileWindows()
@@ -52,6 +52,16 @@ public final class FileWindows {
     }
 
     var windows: [NSWindow] { controllers.values.compactMap(\.window) }
+
+    /// Writes what was typed in every window now: Notebook goes to the background or quits, and a window left open
+    /// as it quits isn't closed first.
+    func saveAll(quitting: Bool) {
+        for controller in controllers.values { controller.save(quitting: quitting) }
+    }
+
+    func refreshLinks() {
+        for controller in controllers.values { controller.editor.refreshLinks() }
+    }
 }
 
 @MainActor
@@ -111,6 +121,19 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
         note.update(text: editor.text)
         note.close()
         onClose?()
+    }
+
+    func save(quitting: Bool) {
+        editor.saveDrawingsNow(waiting: quitting)
+        note.update(text: editor.text)
+        note.saveNow()
+    }
+
+    /// The main window's workspace, for a note in one of its locations: links reach every note there, and a new title
+    /// renames the note as the sidebar does, with links to it following. A note from elsewhere knows only the notes
+    /// next to it.
+    private var library: Workspace? {
+        Workspace.shared.location(containing: url) != nil ? Workspace.shared : nil
     }
 
     private func moved(to url: URL) {
@@ -178,13 +201,18 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
         guard !name.isEmpty, name != url.deletingPathExtension().lastPathComponent else { return }
         // Off the main thread, as in the main window: in iCloud Drive the write can wait for iCloud. The note saves
         // what is typed meanwhile once it is done, under the new name.
-        let (url, note) = (url, note)
+        let (url, note, library) = (url, note, library)
         note.beginMove()
         Task {
-            let renamed = await Task.detached(priority: .userInitiated) { FileOperations.rename(url, to: name, presenter: note) }.value
+            let renamed = if let library {
+                // As from the sidebar, which says so itself when the name is taken.
+                await library.rename(url, to: name).value
+            } else {
+                await Task.detached(priority: .userInitiated) { FileOperations.rename(url, to: name, presenter: note) }.value
+            }
             note.endMove(to: renamed)
             guard let renamed else {
-                NSSound.beep()
+                if library == nil { NSSound.beep() }
                 editor.setTitle(url.deletingPathExtension().lastPathComponent)
                 return
             }
@@ -192,8 +220,9 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
         }
     }
 
-    /// Notes next to this one, for `[[`.
+    /// Notes next to this one, for `[[`, or every note of its location.
     func editor(_ editor: EditorController, suggestionsFor query: String) -> [LinkSuggestion] {
+        if let library { return library.index.linkSuggestions(query, from: url) }
         let folder = url.deletingLastPathComponent()
         let names = ((try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? [])
             .filter { $0.lowercased().hasSuffix(".md") && $0 != url.lastPathComponent }
@@ -205,6 +234,7 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
     }
 
     func editor(_ editor: EditorController, resolve target: String) -> URL? {
+        if let library { return library.index.resolve(target, from: url) }
         let folder = url.deletingLastPathComponent()
         let name = target.split(separator: "#").first.map(String.init) ?? target
         for candidate in [name, name + ".md"] {

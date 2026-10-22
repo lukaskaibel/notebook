@@ -169,17 +169,25 @@ public final class Workspace: NSObject {
         super.init()
         editor.delegate = self
         index.onBuilt = { [weak self] in
-            self?.editor.refreshLinks()
+            self?.refreshLinks()
             // Notes moved in the Finder can be found by their names now.
             self?.scheduleReminders()
         }
         index.onFoldersChanged = { [weak self] in self?.prepareMoveFolders() }
-        index.onRefreshed = { [weak self] in self?.editor.refreshLinks() }
+        index.onRefreshed = { [weak self] in self?.refreshLinks() }
         index.onIndexed = { [weak self] entries in self?.recognizer.consider(entries) }
         #if os(macOS)
         pages.workspace = self
         #else
         editor.undoStack.files = fileUndoLog
+        #endif
+    }
+
+    /// Search knows other notes now: links to them show as links, in this window and in notes open on their own.
+    private func refreshLinks() {
+        editor.refreshLinks()
+        #if os(macOS)
+        FileWindows.shared.refreshLinks()
         #endif
     }
 
@@ -1484,6 +1492,21 @@ public final class Workspace: NSObject {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
+    /// Opens a file apart from this window, as a double-click in the Finder does: a note in a window of its own, any
+    /// other file in the app the Mac has for it (Preview, QuickTime Player).
+    func openOnItsOwn(_ url: URL) {
+        guard FileKind(url: url, isDirectory: false) != .note else { return FileWindows.shared.open(url) }
+        // Without waiting for the app; when there is none, the system says so and offers to choose one.
+        NSWorkspace.shared.open(url, configuration: NSWorkspace.OpenConfiguration())
+    }
+
+    /// The app a file opens in on its own, by name: "Preview".
+    func appName(opening url: URL) -> String? {
+        guard let app = NSWorkspace.shared.urlForApplication(toOpen: url) else { return nil }
+        let name = FileManager.default.displayName(atPath: app.path)
+        return name.hasSuffix(".app") ? String(name.dropLast(4)) : name
+    }
+
     /// The note in the window you are working in: a file window's, or this window's.
     func activeEditor() -> (editor: EditorController, title: String, window: NSWindow?)? {
         if let key = NSApp.keyWindow, let controller = key.windowController as? FileWindowController {
@@ -1515,6 +1538,9 @@ public final class Workspace: NSObject {
     /// before it goes on.
     public func saveAll(quitting: Bool = false) {
         editor.saveDrawingsNow(waiting: quitting)
+        #if os(macOS)
+        FileWindows.shared.saveAll(quitting: quitting)
+        #endif
         // Not as the app quits, which wouldn't wait for it: the next launch reads what changed.
         if !quitting { index.keepChanges() }
         guard let note else { return }
@@ -1543,13 +1569,16 @@ public final class Workspace: NSObject {
 
     // MARK: - What the window shows
 
-    /// Something that couldn't be done: an alert, on the Mac over the window.
+    /// Something that couldn't be done: an alert, on the Mac over the window, or over a note's own window when that is
+    /// the one in front, where it was asked for.
     func report(_ title: String, _ message: String) {
         #if os(macOS)
         let alert = NSAlert()
         alert.messageText = title
         alert.informativeText = message
-        if let window = editor.textView.window ?? NSApp.mainWindow { alert.beginSheetModal(for: window) } else { alert.runModal() }
+        let front = NSApp.orderedWindows.first { $0.isVisible && !($0 is NSPanel) }
+        let fileWindow = front?.windowController is FileWindowController ? front : nil
+        if let window = fileWindow ?? editor.textView.window ?? NSApp.mainWindow { alert.beginSheetModal(for: window) } else { alert.runModal() }
         #else
         problem = Problem(title: title, message: message)
         #endif
