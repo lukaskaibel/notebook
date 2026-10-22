@@ -387,6 +387,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     }
 
     func outlineViewItemDidExpand(_ notification: Notification) {
+        outline.placeChevron(of: notification.userInfo?["NSObject"])
         if let entry = notification.userInfo?["NSObject"] as? SidebarEntry, let key = entry.sectionKey {
             guard !isExpandingSections else { return }
             collapsedSections.remove(key)
@@ -397,6 +398,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     }
 
     func outlineViewItemDidCollapse(_ notification: Notification) {
+        outline.placeChevron(of: notification.userInfo?["NSObject"])
         if let entry = notification.userInfo?["NSObject"] as? SidebarEntry, let key = entry.sectionKey {
             collapsedSections.insert(key)
             UserDefaults.standard.set(Array(collapsedSections), forKey: "collapsedSections")
@@ -663,6 +665,37 @@ final class SidebarOutlineView: NSOutlineView {
             controller?.toggle(node)
         }
         super.mouseDown(with: event)
+    }
+
+    // A folder's chevron centred on its icon, which is in the middle of the row; AppKit puts it 1–1.5 pt lower. The
+    // chevron is a pixel right of the middle of its picture, so turned down for an open folder it's a pixel lower; a
+    // subfolder's smaller icon is a pixel higher. Section headers keep AppKit's Show/Hide.
+    override func frameOfOutlineCell(atRow row: Int) -> NSRect {
+        var frame = super.frameOfOutlineCell(atRow: row)
+        guard !frame.isEmpty, level(forRow: row) > 0 else { return frame }
+        let pixel = 1 / (window?.backingScaleFactor ?? 2)
+        let pixels = (isItemExpanded(item(atRow: row)) ? 1 : 0) + (level(forRow: row) > 1 ? 1 : 0)
+        frame.origin.y = rect(ofRow: row).midY - frame.height / 2 - CGFloat(pixels) * pixel
+        return frame
+    }
+
+    /// Moves the chevron of a folder that opened or closed, which AppKit only turns.
+    func placeChevron(of item: Any?) {
+        let row = row(forItem: item)
+        guard row >= 0, let rowView = rowView(atRow: row, makeIfNecessary: false) else { return }
+        placeChevron(in: rowView, row: row)
+    }
+
+    private func placeChevron(in rowView: NSTableRowView, row: Int) {
+        guard level(forRow: row) > 0,
+              let button = rowView.subviews.first(where: { $0.identifier == NSOutlineView.disclosureButtonIdentifier }) else { return }
+        button.frame = rowView.convert(frameOfOutlineCell(atRow: row), from: self)
+    }
+
+    // A pixel is another distance on another screen.
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        enumerateAvailableRowViews { rowView, row in placeChevron(in: rowView, row: row) }
     }
 
     override func keyDown(with event: NSEvent) {
