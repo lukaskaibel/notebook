@@ -1,13 +1,18 @@
 import SwiftUI
 
-/// Remind Me, as a reminder's details in Reminders: a time later today, this evening or tomorrow at a tap, or a date
-/// and a time of your own. A note with a reminder changes or removes it here. A popover on the Mac, a sheet on iPhone
-/// and iPad.
+/// Remind Me, as a reminder's details in Reminders: a time later today, this evening or tomorrow at a tap, a time typed
+/// in a few words ("friday evening", "in 3 weeks"), or a date and a time of your own. A note with a reminder changes or
+/// removes it here. A popover on the Mac, a sheet on iPhone and iPad.
 struct ReminderPicker: View {
     let workspace: Workspace
     let url: URL
     var close: () -> Void
     @State private var date: Date
+    /// The time as typed. While there is some, what it could mean takes the place of the quick choices.
+    @State private var query = ""
+    /// The suggestion Return takes, by its place in the list; the arrow keys move it. The date and time below show it.
+    @State private var lit = 0
+    @FocusState private var isTyping: Bool
 
     init(workspace: Workspace, url: URL, close: @escaping () -> Void) {
         self.workspace = workspace
@@ -18,6 +23,9 @@ struct ReminderPicker: View {
 
     private var reminder: Reminder? { workspace.reminder(for: url) }
     private var name: String { SearchSection.displayName(url) }
+    private var suggestions: [ReminderTimeParser.Suggestion] { ReminderTimeParser.suggestions(for: query, now: .now) }
+    /// Typed, but nothing that reads as a time: Return does nothing.
+    private var isUnreadable: Bool { !query.isEmpty && suggestions.isEmpty }
 
     var body: some View {
         #if os(macOS)
@@ -29,7 +37,8 @@ struct ReminderPicker: View {
             .padding(.horizontal, 20)
             .padding(.top, 16)
             Form {
-                choices
+                field
+                if query.isEmpty { choices } else { found }
                 pickers
             }
             .formStyle(.grouped)
@@ -42,9 +51,10 @@ struct ReminderPicker: View {
                 Spacer()
                 Button("Cancel", role: .cancel) { close() }
                     .keyboardShortcut(.cancelAction)
+                // Also Return in the field, which takes the suggestion the date and time show.
                 Button(reminder == nil ? "Remind Me" : "Change") { set(date) }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(date <= .now)
+                    .disabled(date <= .now || isUnreadable)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 16)
@@ -53,7 +63,8 @@ struct ReminderPicker: View {
         #else
         NavigationStack {
             Form {
-                choices
+                field
+                if query.isEmpty { choices } else { found }
                 pickers
                 if reminder != nil {
                     Section {
@@ -69,8 +80,46 @@ struct ReminderPicker: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(reminder == nil ? "Remind Me" : "Change", role: .confirm) { set(date) }
-                        .disabled(date <= .now)
+                        .disabled(date <= .now || isUnreadable)
                 }
+            }
+        }
+        #endif
+    }
+
+    /// Where a time is typed, focused as Remind Me opens on the Mac, and on iPhone and iPad with a keyboard attached.
+    private var field: some View {
+        Section {
+            TextField("Type a time", text: $query, prompt: Text("Type a time, such as Friday evening"))
+                .labelsHidden()
+                .autocorrectionDisabled()
+                .focused($isTyping)
+                #if os(macOS)
+                .focusOnAppear()
+                #else
+                .textInputAutocapitalization(.never)
+                .submitLabel(.done)
+                .onAppear { if HardwareKeyboard.shared.isAttached { isTyping = true } }
+                #endif
+                .onKeyPress(.downArrow) { light(lit + 1); return .handled }
+                .onKeyPress(.upArrow) { light(lit - 1); return .handled }
+                // On the Mac, Return is the Remind Me button's, which sets the date and time that show the suggestion.
+                .onSubmit { submit() }
+                .onChange(of: query) { light(0) }
+        }
+        #if DEBUG
+        // remindtype <text>, remindkey down|up|return: the keyboard, for the debug remote.
+        .onReceive(NotificationCenter.default.publisher(for: DebugReminders.keyboard)) { notification in
+            let argument = notification.userInfo?["argument"] as? String ?? ""
+            switch notification.userInfo?["command"] as? String {
+            case "remindtype": query = argument
+            case "remindkey":
+                switch argument {
+                case "down": light(lit + 1)
+                case "up": light(lit - 1)
+                default: submit()
+                }
+            default: break
             }
         }
         #endif
@@ -80,29 +129,81 @@ struct ReminderPicker: View {
     private var choices: some View {
         Section {
             ForEach(Self.choices(after: .now), id: \.title) { choice in
-                Button { set(choice.date) } label: {
-                    HStack {
-                        Label {
-                            Text(choice.title)
-                        } icon: {
-                            // The sunrise is wider than the clock and the moon: the titles line up all the same.
-                            Image(systemName: choice.symbol).frame(width: 22)
-                        }
-                        .foregroundStyle(Color.primary)
-                        Spacer()
-                        Text(choice.detail)
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
+                row(choice.title, symbol: choice.symbol, detail: choice.detail) { set(choice.date) }
             }
         } footer: {
             #if os(iOS)
             Text("A notification with the note’s first points comes at that time.")
             #endif
         }
+    }
+
+    /// What the typed time could mean, the one Return takes lit. A click or a tap sets the reminder at once.
+    private var found: some View {
+        Section {
+            let suggestions = suggestions
+            ForEach(Array(suggestions.enumerated()), id: \.element.date) { index, suggestion in
+                row(suggestion.title, symbol: suggestion.symbol, detail: suggestion.detail, isLit: index == lit) { set(suggestion.date) }
+            }
+            if suggestions.isEmpty {
+                Text("Try “tomorrow at 9”, “Friday evening” or “in 3 weeks”.")
+                    .foregroundStyle(.secondary)
+            }
+        } footer: {
+            #if os(iOS)
+            Text("A notification with the note’s first points comes at that time.")
+            #endif
+        }
+    }
+
+    private func row(_ title: String, symbol: String, detail: String, isLit: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Label {
+                    Text(title)
+                } icon: {
+                    // The sunrise is wider than the clock and the moon: the titles line up all the same.
+                    Image(systemName: symbol).frame(width: 22)
+                }
+                .foregroundStyle(Color.primary)
+                Spacer()
+                Text(detail)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            .contentShape(.rect)
+            #if os(macOS)
+            // A Mac form takes no row backgrounds: the lit row's is drawn behind it.
+            .background {
+                if isLit {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.22))
+                        .padding(.horizontal, -6)
+                        .padding(.vertical, -5)
+                }
+            }
+            #endif
+        }
+        .buttonStyle(.plain)
+        #if os(iOS)
+        .listRowBackground(isLit ? Color.accentColor.opacity(0.18) : nil)
+        #endif
+        .accessibilityAddTraits(isLit ? .isSelected : [])
+    }
+
+    /// Return in the field: the lit suggestion, whose date and time show below. Nothing while nothing is typed, so the
+    /// touch keyboard's Done only puts the keyboard away.
+    private func submit() {
+        guard !query.isEmpty, !isUnreadable, date > .now else { return }
+        set(date)
+    }
+
+    /// Lights a suggestion, and shows its date and time below.
+    private func light(_ index: Int) {
+        let suggestions = suggestions
+        lit = min(max(index, 0), max(suggestions.count - 1, 0))
+        guard !suggestions.isEmpty else { return }
+        date = suggestions[lit].date
     }
 
     private var pickers: some View {

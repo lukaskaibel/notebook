@@ -47,6 +47,10 @@ versions follow [semantic versioning](https://semver.org).
   sidebar's right-click menu and the inspector on the Mac, and in the ⋯ menu, on touch and hold and, if you add it in
   Settings › Writing Bar, as a bell above the keyboard on iPhone and iPad. Reminders aren't written into the note;
   they follow it when you rename or move it in Notebook, and reach your other devices through iCloud.
+- Type the time of a reminder in a few words: Remind Me… has a field at the top that reads "friday evening", "tomorrow
+  at 9", "fri 3pm", "in 3 weeks", "in 2 hours", "next monday", "the 12th" or "12.11.", and shows what it could mean as
+  you type, with the date and time below following the one that is lit. Return or a click takes it; the arrow keys go
+  through the others. A day without a time is at nine in the morning.
 - On iPhone and iPad, touch and hold the bar above the keyboard, or tap the sliders after its last tool, to choose its
   tools and their order right there, without going to Settings.
 - ⌘K is back: a field over the window, as Spotlight's, that finds everything search finds and runs commands. Commands
