@@ -168,7 +168,13 @@ public enum TodoMarks {
             let coordinates = TodoPlace.coordinates(in: text.substring(with: match.range(at: 3)))
             marks.append(TodoMark(kind: .place(TodoPlace(name: name, latitude: coordinates?.0, longitude: coordinates?.1, leaving: leaving)), range: match.range))
         }
-        return marks.sorted { $0.range.location < $1.range.location }
+        // A date written inside a place's name is part of the place.
+        var kept: [TodoMark] = []
+        for mark in marks.sorted(by: { $0.range.location != $1.range.location ? $0.range.location < $1.range.location : $0.range.length > $1.range.length })
+        where !kept.contains(where: { NSIntersectionRange($0.range, mark.range).length > 0 }) {
+            kept.append(mark)
+        }
+        return kept
     }
 
     /// The marks in a line being parsed, as spans: there are any only if one of the symbols is there.
@@ -199,11 +205,12 @@ public enum TodoMarks {
         schedule(of: line.spans.compactMap { if case .todoMark(let kind) = $0.kind { kind } else { nil } })
     }
 
+    /// With a day (📅, Tasks' due date) and a time (⏰, the Reminder plugin's) on one line, the time is when it reminds.
     private static func schedule(of kinds: [TodoMark.Kind]) -> (due: TodoDue?, place: TodoPlace?) {
         var due: TodoDue?, place: TodoPlace?
         for kind in kinds {
             switch kind {
-            case .due(let value): if due == nil { due = value }
+            case .due(let value): if due == nil || (due?.hasTime == false && value.hasTime) { due = value }
             case .place(let value): if place == nil { place = value }
             }
         }
@@ -211,11 +218,14 @@ public enum TodoMarks {
     }
 
     /// The change that gives a to-do these marks in place of the ones it has: the range of `text` to replace and what
-    /// goes there. The to-do's words stay as they are; the marks go at their end, the date first. Nil when nothing
-    /// changes.
+    /// goes there. The to-do's words stay as they are; the marks go at their end, the date first. A to-do that had both a
+    /// day (📅) and a time (⏰), for the two Obsidian plugins, keeps both, on the new day. Nil when nothing changes.
     public static func change(in text: NSString, content: NSRange, due: TodoDue?, place: TodoPlace?) -> (range: NSRange, replacement: String)? {
         let current = text.substring(with: content) as NSString
-        let marks = find(in: text, range: content).map { $0.range.shifted(by: -content.location) }
+        let found = find(in: text, range: content)
+        let marks = found.map { $0.range.shifted(by: -content.location) }
+        let dues = found.compactMap { if case .due(let due) = $0.kind { due } else { nil } }
+        let keepsDay = dues.contains { !$0.hasTime } && dues.contains { $0.hasTime }
         // The words, without the marks and the spaces in front of them.
         let words = NSMutableString(string: current)
         for range in marks.reversed() {
@@ -224,7 +234,8 @@ public enum TodoMarks {
             words.deleteCharacters(in: NSRange(location: start, length: range.upperBound - start))
         }
         var wanted = (words as String).replacingOccurrences(of: "\\s+$", with: "", options: .regularExpression)
-        for mark in [due?.markdown, place?.markdown].compactMap({ $0 }) {
+        let day = due.flatMap { keepsDay && $0.hasTime ? $0.at(hour: nil, minute: nil).markdown : nil }
+        for mark in [day, due?.markdown, place?.markdown].compactMap({ $0 }) {
             wanted += (wanted.isEmpty ? "" : " ") + mark
         }
         let new = wanted as NSString

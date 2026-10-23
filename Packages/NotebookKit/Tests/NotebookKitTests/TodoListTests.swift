@@ -66,9 +66,24 @@ final class TodoListTests: XCTestCase {
         await workspace.setTodo(pack.reference, due: due, place: nil)?.value
         XCTAssertEqual(try String(contentsOf: trip, encoding: .utf8), "- [ ] Pack the adapter 📅 2099-03-04\n- [ ] Print the tickets 📅 2099-01-02\n")
 
-        // Undo takes it back, in the file.
-        workspace.fileUndoManager.undo()
+        // Undo takes it back, in the file, and Redo brings it again.
+        let manager = workspace.fileUndoManager
+        XCTAssertEqual(manager.undoActionName, "Set Reminder")
+        manager.undo()
         try await until { (try? String(contentsOf: trip, encoding: .utf8)) == "- [ ] Pack the adapter\n- [ ] Print the tickets 📅 2099-01-02\n" }
+        XCTAssertTrue(manager.canRedo)
+        manager.redo()
+        try await until { (try? String(contentsOf: trip, encoding: .utf8)) == "- [ ] Pack the adapter 📅 2099-03-04\n- [ ] Print the tickets 📅 2099-01-02\n" }
+        manager.undo()
+        try await until { (try? String(contentsOf: trip, encoding: .utf8)) == "- [ ] Pack the adapter\n- [ ] Print the tickets 📅 2099-01-02\n" }
+        // Two changes at once, before the list has caught up: the second finds the line the first made.
+        let tickets = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Print the tickets" })
+        workspace.setTodo(tickets.reference, due: TodoDue(year: 2099, month: 1, day: 3), place: nil)
+        await workspace.setTodo(tickets.reference, due: TodoDue(year: 2099, month: 1, day: 4), place: nil)?.value
+        XCTAssertEqual(try String(contentsOf: trip, encoding: .utf8), "- [ ] Pack the adapter\n- [ ] Print the tickets 📅 2099-01-04\n")
+        try "- [ ] Pack the adapter\n- [ ] Print the tickets 📅 2099-01-02\n".write(to: trip, atomically: true, encoding: .utf8)
+        workspace.readAgain([library])
+        try await until { workspace.todos.items.contains { $0.todo.due?.day == 2 } }
 
         // The note changed in between: the to-do is found by what it says.
         try "Intro\n\n- [ ] Pack the adapter\n- [ ] Print the tickets 📅 2099-01-02\n".write(to: trip, atomically: true, encoding: .utf8)
@@ -89,11 +104,12 @@ final class TodoListTests: XCTestCase {
         let call = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Call Dr. Weber" })
         workspace.moveTodo(call.reference, to: Calendar.current.date(from: DateComponents(year: 2099, month: 5, day: 6)))
         XCTAssertEqual(workspace.editor.text, "# Doctor\n\n- [ ] Call Dr. Weber ⏰ 2099-05-06 14:00\n    - ask about the results\n- [x] Book the taxi\n", "the time stays")
+        // The list's row still has the line from before it moved: it finds the line as it is now.
         workspace.setTodoDone(call.reference, true)
-        XCTAssertTrue(workspace.editor.text.contains("- [ ] Call Dr. Weber ⏰ 2099-05-06"), "what the to-do said before isn't there any more")
-        let now = try XCTUnwrap(workspace.editor.todo(onLine: 2))
-        workspace.setTodoDone(TodoReference(url: doctor, line: 2, source: now.source), true)
         XCTAssertTrue(workspace.editor.text.contains("- [x] Call Dr. Weber ⏰ 2099-05-06 14:00"))
+        // A to-do that isn't there at all changes nothing.
+        workspace.setTodoDone(TodoReference(url: doctor, line: 2, source: "- [ ] Something else"), true)
+        XCTAssertTrue(workspace.editor.text.contains("- [x] Call Dr. Weber ⏰ 2099-05-06 14:00\n    - ask about the results\n- [x] Book the taxi"))
     }
 
     func testTodosAndNotesAreGroupedByWhenTheyAreDue() throws {
@@ -161,6 +177,18 @@ final class TodoListTests: XCTestCase {
         XCTAssertTrue(try String(contentsOf: doctor, encoding: .utf8).contains("- [ ] Call Dr. Weber ⏰ 2099-01-02 15:30"))
         try await until { workspace.todos.items.contains { $0.todo.text == "Call Dr. Weber" && $0.todo.due?.year == 2099 } }
         XCTAssertTrue(workspace.todoJobs().contains { $0.identifier == later.identifier })
+    }
+
+    /// A place reminds you once: what was waiting and isn't any more has come, and isn't scheduled again.
+    func testAPlaceRemindsOnce() {
+        let defaults = UserDefaults.standard
+        defer { ["armedPlaces", "firedPlaces"].forEach(defaults.removeObject(forKey:)) }
+        defaults.set(["todo.a.place", "todo.b.place", "reminder.X.place"], forKey: "armedPlaces")
+        defaults.set([String](), forKey: "firedPlaces")
+        // a came (it isn't waiting any more); b still waits; the note's place belongs to the other scheduling.
+        XCTAssertEqual(ReminderNotifications.firedPlaces(prefix: "todo.", pending: ["todo.b.place"]), ["todo.a.place"])
+        XCTAssertEqual(ReminderNotifications.firedPlaces(prefix: "reminder.", pending: ["reminder.X.place"]), [])
+        XCTAssertEqual(ReminderNotifications.firedPlaces(prefix: "todo.", pending: []), ["todo.a.place", "todo.b.place"], "b has come since")
     }
 
     func testANoteReminderAtAPlace() async throws {

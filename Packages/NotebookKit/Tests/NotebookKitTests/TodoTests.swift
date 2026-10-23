@@ -67,6 +67,21 @@ final class TodoTests: XCTestCase {
         XCTAssertNil(TodoMarks.change(in: text, content: NSRange(location: 0, length: text.length), due: due, place: nil), "nothing to change")
     }
 
+    func testADayAndATimeTogetherKeepBoth() {
+        let line = "Call 📅 2026-10-24 ⏰ 2026-10-24 14:00" as NSString
+        XCTAssertEqual(TodoMarks.schedule(of: marks(line as String)).due, TodoDue(year: 2026, month: 10, day: 24, hour: 14, minute: 0), "the time is when it reminds")
+        let change = TodoMarks.change(in: line, content: NSRange(location: 0, length: line.length), due: TodoDue(year: 2026, month: 10, day: 25, hour: 9, minute: 0), place: nil)
+        XCTAssertEqual(change.map { line.replacingCharacters(in: $0.range, with: $0.replacement) }, "Call 📅 2026-10-25 ⏰ 2026-10-25 09:00", "both plugins' marks move along")
+    }
+
+    func testADateInsideAPlacesNameIsPartOfThePlace() throws {
+        let line = "Go 📍 [a ⏰ 2026-10-24 14:00](https://maps.apple.com/?q=a)" as NSString
+        let found = TodoMarks.find(in: line, range: NSRange(location: 0, length: line.length))
+        XCTAssertEqual(found.count, 1)
+        let change = try XCTUnwrap(TodoMarks.change(in: line, content: NSRange(location: 0, length: line.length), due: nil, place: nil))
+        XCTAssertEqual(line.replacingCharacters(in: change.range, with: change.replacement), "Go")
+    }
+
     func testDueDates() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "Europe/Berlin")!

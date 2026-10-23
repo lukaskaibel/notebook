@@ -42,6 +42,9 @@ public final class Workspace: NSObject {
     @ObservationIgnored var dueTimer: Timer?
     /// The to-dos' notifications, scheduled a moment after the to-dos changed.
     @ObservationIgnored var todoScheduling: DispatchWorkItem?
+    /// The last change to a to-do's file, which the next waits for, and what to-dos' lines became (`current(_:)`).
+    @ObservationIgnored var lastTodoWrite: Task<Void, Never>?
+    @ObservationIgnored var todoRewrites: [String: TodoReference] = [:]
     #if DEBUG
     /// The sample notes' reminders, shown but never scheduled: a run on the sample notes leaves no notification behind.
     @ObservationIgnored var unscheduledReminders = Set<UUID>()

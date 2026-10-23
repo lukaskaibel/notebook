@@ -46,6 +46,9 @@ final class Reminders {
     private static let defaultsKey = "reminders"
     private static let uploadedKey = "remindersInICloud"
     private static let cloudPrefix = "reminder."
+    /// Reminders with a place, under keys of their own: a build from before places can't read them, and so never
+    /// writes one back without its place.
+    private static let placePrefix = "placeReminder."
 
     /// With no defaults and no cloud the reminders are kept for this run only (tests, the sample notes).
     init(defaults: UserDefaults? = .standard, cloud: NSUbiquitousKeyValueStore? = .default) {
@@ -114,6 +117,7 @@ final class Reminders {
         guard all.contains(where: { $0.id == id }) else { return }
         all.removeAll { $0.id == id }
         cloud?.removeObject(forKey: Self.cloudKey(id))
+        cloud?.removeObject(forKey: Self.placeKey(id))
         save()
     }
 
@@ -140,16 +144,27 @@ final class Reminders {
         cloudPrefix + id.uuidString
     }
 
+    static func placeKey(_ id: UUID) -> String {
+        placePrefix + id.uuidString
+    }
+
     private static func write(_ reminder: Reminder, to cloud: NSUbiquitousKeyValueStore) {
         guard let data = try? JSONEncoder().encode(reminder) else { return }
-        cloud.set(data, forKey: cloudKey(reminder.id))
+        // Under one key or the other, never both.
+        let (key, other) = reminder.place == nil ? (cloudKey(reminder.id), placeKey(reminder.id)) : (placeKey(reminder.id), cloudKey(reminder.id))
+        cloud.set(data, forKey: key)
+        cloud.removeObject(forKey: other)
     }
 
     private static func read(_ cloud: NSUbiquitousKeyValueStore) -> [Reminder] {
-        sorted(cloud.dictionaryRepresentation.compactMap { key, value in
-            guard key.hasPrefix(cloudPrefix), let data = value as? Data else { return nil }
-            return try? JSONDecoder().decode(Reminder.self, from: data)
-        })
+        var byID: [UUID: Reminder] = [:]
+        for (key, value) in cloud.dictionaryRepresentation {
+            guard key.hasPrefix(cloudPrefix) || key.hasPrefix(placePrefix), let data = value as? Data,
+                  let reminder = try? JSONDecoder().decode(Reminder.self, from: data) else { continue }
+            // Both, while another device moves one: the one with the place is the newer.
+            if byID[reminder.id]?.place == nil { byID[reminder.id] = reminder }
+        }
+        return sorted(Array(byID.values))
     }
 
     private static func sorted(_ reminders: [Reminder]) -> [Reminder] {

@@ -108,7 +108,7 @@ public final class SearchIndex {
     /// A folder went while folders were merged in (one replacing it keeps their number the same).
     @ObservationIgnored private var foldersChanged = false
     /// Whether the files have been read since launch: until then, the index kept from the last run stands in.
-    @ObservationIgnored private var hasBuilt = false
+    @ObservationIgnored private(set) var hasBuilt = false
     /// Notes larger than this aren't read: a log or a dump, not something written.
     nonisolated static let largestNote = 4_000_000
 

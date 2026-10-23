@@ -64,6 +64,7 @@ final class ReminderTests: XCTestCase {
 
     func testCloudKeysFitTheStore() {
         XCTAssertLessThanOrEqual(Reminders.cloudKey(UUID()).utf8.count, 64)
+        XCTAssertLessThanOrEqual(Reminders.placeKey(UUID()).utf8.count, 64)
     }
 
     // MARK: - In the app

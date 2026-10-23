@@ -99,10 +99,11 @@ final class ReminderNotifications: NSObject, UNUserNotificationCenterDelegate {
             let center = UNUserNotificationCenter.current()
             let now = Date()
             let watchesPlaces = await Self.watchesPlaces
+            let pending = await center.pendingNotificationRequests().map(\.identifier)
+            let fired = Self.firedPlaces(prefix: Self.prefix, pending: Set(pending))
             if everything {
                 var coming = Set(jobs.filter { ($0.date ?? .distantPast) > now }.map { Self.identifier($0.id) })
                 if watchesPlaces { coming.formUnion(jobs.filter { $0.place?.hasCoordinates == true }.map { Self.placeIdentifier($0.id) }) }
-                let pending = await center.pendingNotificationRequests().map(\.identifier)
                 center.removePendingNotificationRequests(withIdentifiers: pending.filter { $0.hasPrefix(Self.prefix) && !coming.contains($0) })
                 let all = Set(known.flatMap { [Self.identifier($0), Self.placeIdentifier($0)] })
                 let delivered = await center.deliveredNotifications().map(\.request.identifier)
@@ -110,7 +111,7 @@ final class ReminderNotifications: NSObject, UNUserNotificationCenterDelegate {
             }
             for job in jobs {
                 let isComing = (job.date ?? .distantPast) > now
-                let hasPlace = watchesPlaces && job.place?.hasCoordinates == true
+                let hasPlace = watchesPlaces && job.place?.hasCoordinates == true && !fired.contains(Self.placeIdentifier(job.id))
                 guard isComing || hasPlace else { continue }
                 let text = job.text ?? job.url.flatMap(Self.readIfHere)
                 if let date = job.date, isComing {
@@ -123,6 +124,7 @@ final class ReminderNotifications: NSObject, UNUserNotificationCenterDelegate {
                 }
                 #endif
             }
+            await Self.armPlaces(prefix: Self.prefix, center: center, keepingFired: everything ? Set(known.map(Self.placeIdentifier)) : nil)
         }
         last = task
         return task
@@ -140,9 +142,10 @@ final class ReminderNotifications: NSObject, UNUserNotificationCenterDelegate {
             let now = Date()
             let watchesPlaces = await Self.watchesPlaces
             let timed = jobs.filter { ($0.date ?? .distantPast) > now }.sorted { $0.date! < $1.date! }.prefix(Self.todoLimit)
-            let placed = watchesPlaces ? Array(jobs.filter { $0.place?.hasCoordinates == true }.prefix(Self.placeLimit)) : []
-            let wanted = Set(timed.map(\.identifier) + placed.map { $0.identifier + ".place" })
             let pending = Set(await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix(Self.todoPrefix) })
+            let fired = Self.firedPlaces(prefix: Self.todoPrefix, pending: pending)
+            let placed = watchesPlaces ? Array(jobs.filter { $0.place?.hasCoordinates == true && !fired.contains($0.identifier + ".place") }.prefix(Self.placeLimit)) : []
+            let wanted = Set(timed.map(\.identifier) + placed.map { $0.identifier + ".place" })
             center.removePendingNotificationRequests(withIdentifiers: Array(pending.subtracting(wanted)))
             let shown = await center.deliveredNotifications().map(\.request.identifier).filter { $0.hasPrefix(Self.todoPrefix) }
             center.removeDeliveredNotifications(withIdentifiers: shown.filter { !open.contains($0.replacingOccurrences(of: ".place", with: "")) })
@@ -155,21 +158,61 @@ final class ReminderNotifications: NSObject, UNUserNotificationCenterDelegate {
                 try? await center.add(UNNotificationRequest(identifier: job.identifier + ".place", content: Self.content(for: job, place: true), trigger: trigger))
             }
             #endif
+            await Self.armPlaces(prefix: Self.todoPrefix, center: center, keepingFired: Set(jobs.map { $0.identifier + ".place" }))
         }
         last = task
         return task
     }
 
+    // MARK: - Places, once
+
+    /// A place reminds you once, as a time does: the next arrival doesn't bring it again, until the reminder changes.
+    /// What was waiting at the last scheduling and isn't now has come (or was taken back, which `withdraw` says).
+    private nonisolated static let armedKey = "armedPlaces"
+    private nonisolated static let firedKey = "firedPlaces"
+
+    /// The places of `prefix` that have come since they were scheduled.
+    nonisolated static func firedPlaces(prefix: String, pending: Set<String>) -> Set<String> {
+        let defaults = UserDefaults.standard
+        let armed = Set(defaults.stringArray(forKey: armedKey) ?? []).filter { $0.hasPrefix(prefix) }
+        var fired = Set(defaults.stringArray(forKey: firedKey) ?? [])
+        fired.formUnion(armed.subtracting(pending))
+        defaults.set(Array(fired), forKey: firedKey)
+        return fired.filter { $0.hasPrefix(prefix) }
+    }
+
+    /// Notes which places of `prefix` are waiting now; with `keepingFired`, forgets the ones that came of reminders that
+    /// are gone.
+    nonisolated static func armPlaces(prefix: String, center: UNUserNotificationCenter, keepingFired known: Set<String>?) async {
+        let waiting = await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix(prefix) && $0.hasSuffix(".place") }
+        let defaults = UserDefaults.standard
+        let others = (defaults.stringArray(forKey: armedKey) ?? []).filter { !$0.hasPrefix(prefix) }
+        defaults.set(others + waiting, forKey: armedKey)
+        if let known {
+            let fired = (defaults.stringArray(forKey: firedKey) ?? []).filter { !$0.hasPrefix(prefix) || known.contains($0) }
+            defaults.set(fired, forKey: firedKey)
+        }
+    }
+
+    /// Taken back rather than come: a place changed or the reminder is done.
+    private nonisolated static func disarm(_ identifiers: [String]) {
+        let defaults = UserDefaults.standard
+        for key in [armedKey, firedKey] {
+            defaults.set((defaults.stringArray(forKey: key) ?? []).filter { !identifiers.contains($0) }, forKey: key)
+        }
+    }
+
     /// A reminder changed or finished: its notifications go, the ones waiting and the ones shown.
     func withdraw(_ id: UUID) {
         guard isActive else { return }
+        Self.disarm([Self.placeIdentifier(id)])
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [Self.identifier(id), Self.placeIdentifier(id)])
         center.removeDeliveredNotifications(withIdentifiers: [Self.identifier(id), Self.placeIdentifier(id)])
     }
 
-    /// A to-do's notification again at a later time, as it was but for the time.
-    func remindAgain(_ identifier: String, at date: Date, like shown: (title: String, subtitle: String, body: String, thread: String)) async {
+    /// A to-do's notification again at a later time, as it was but for the time, for the to-do as it is now.
+    func remindAgain(_ identifier: String, todo: TodoReference, at date: Date, like shown: (title: String, subtitle: String, body: String, thread: String)) async {
         guard isActive else { return }
         let content = UNMutableNotificationContent()
         content.title = shown.title
@@ -180,12 +223,14 @@ final class ReminderNotifications: NSObject, UNUserNotificationCenterDelegate {
         content.categoryIdentifier = Self.category
         content.interruptionLevel = .timeSensitive
         content.threadIdentifier = shown.thread
+        content.userInfo = ["todo": identifier, "path": todo.url.path, "line": todo.line, "source": todo.source]
         try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: identifier, content: content, trigger: Self.trigger(at: date)))
     }
 
     /// A to-do was done or changed: its notifications go at once, before the list of to-dos has caught up.
     func withdrawTodo(_ identifier: String) {
         guard isActive else { return }
+        Self.disarm([identifier + ".place"])
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [identifier, identifier + ".place"])
         center.removeDeliveredNotifications(withIdentifiers: [identifier, identifier + ".place"])
@@ -293,26 +338,26 @@ final class ReminderNotifications: NSObject, UNUserNotificationCenterDelegate {
                 MainActor.assumeIsolated {
                     let workspace = Workspace.shared
                     workspace.start()
-                    var task: Task<Void, Never>?
-                    switch action {
-                    case UNNotificationDefaultActionIdentifier: workspace.openTodo(todo, fromNotification: true)
-                    case Self.laterAction:
-                        let date = Workspace.minute(after: 60 * 60)
-                        let later = workspace.remindOfTodoAgain(todo, at: date, notes: again.value.body)
-                        // The app may only have this moment: the notification for the new time goes in now, under the
-                        // name the to-dos' own scheduling gives it, which keeps it.
-                        task = Task {
-                            await later.task?.value
-                            await Self.shared.remindAgain(later.identifier, at: date, like: again.value)
-                        }
-                    case Self.doneAction:
-                        Self.shared.withdrawTodo(identifier)
-                        task = workspace.setTodoDone(todo, true)
-                    default: break
+                    if action == UNNotificationDefaultActionIdentifier {
+                        workspace.openTodo(todo, fromNotification: true)
+                        return done.value()
                     }
-                    // From the Lock Screen the app gets a moment: the note is written first.
+                    // From the Lock Screen the app gets a moment: once the locations can be reached (the action may
+                    // have started the app), the note is written, and then the moment is over.
                     Task {
-                        await task?.value
+                        await workspace.surveyed()
+                        switch action {
+                        case Self.laterAction:
+                            let date = Workspace.minute(after: 60 * 60)
+                            let later = workspace.remindOfTodoAgain(todo, at: date, notes: again.value.body)
+                            await later.task?.value
+                            // The notification for the new time goes in now, as the to-dos' own scheduling will make it.
+                            await Self.shared.remindAgain(later.identifier, todo: later.todo, at: date, like: again.value)
+                        case Self.doneAction:
+                            Self.shared.withdrawTodo(identifier)
+                            await workspace.setTodoDone(todo, true)?.value
+                        default: break
+                        }
                         done.value()
                     }
                 }

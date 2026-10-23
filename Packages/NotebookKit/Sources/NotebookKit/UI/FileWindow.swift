@@ -70,6 +70,11 @@ public final class FileWindows {
         return controller.editor
     }
 
+    /// Writes the note a window shows, now.
+    func save(showing url: URL) {
+        controllers.values.first { FileNode.samePath($0.url, url) }?.save(quitting: false)
+    }
+
     /// The pills of to-dos in every window: their times turn red when they pass.
     func refreshTodoPills() {
         for controller in controllers.values { controller.editor.refreshTodoPills() }
