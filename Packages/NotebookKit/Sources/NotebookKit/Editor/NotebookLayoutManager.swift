@@ -386,29 +386,11 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
             default: NSBezierPath(rect: dot.insetBy(dx: 0.5, dy: 0.5)).fill()
             }
 
-        case .checkbox(let checked):
+        case .checkbox(let mark):
             // A circle, as in Notes and Reminders.
             let side = EditorStyle.checkboxSide
             let box = NSRect(x: rect.minX + 1, y: baseline - font.capHeight / 2 - side / 2, width: side, height: side)
-            if checked {
-                // Done: filled with the accent colour, the tick cut out of it.
-                Theme.accent.setFill()
-                NSBezierPath(ovalIn: box).fill()
-                let check = NSBezierPath()
-                check.move(to: CGPoint(x: box.minX + side * 0.28, y: box.midY + side * 0.01))
-                check.line(to: CGPoint(x: box.minX + side * 0.44, y: box.midY + side * 0.16))
-                check.line(to: CGPoint(x: box.minX + side * 0.73, y: box.midY - side * 0.16))
-                check.lineWidth = max(1.6, side * 0.09)
-                check.lineCapStyle = .round
-                check.lineJoinStyle = .round
-                Theme.panel.setStroke()
-                check.stroke()
-            } else {
-                let ring = NSBezierPath(ovalIn: box.insetBy(dx: 0.75, dy: 0.75))
-                ring.lineWidth = 1.5
-                Theme.faint.setStroke()
-                ring.stroke()
-            }
+            drawCheckbox(mark, in: box)
 
         case .quoteBar:
             Theme.cardBorder.blended(withFraction: 0.35, of: Theme.textTertiary)?.setFill()
@@ -599,12 +581,13 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
         case .normal: Theme.accent
         case .overdue: .systemRed
         case .done: Theme.textTertiary
+        case .quiet: Theme.textSecondary
         }
         let height = ceil(font.ascender - font.descender) + 5
         let middle = baseline - body.capHeight / 2
         let capsule = NSRect(x: rect.minX + TodoPill.gap, y: (middle - height / 2).rounded(), width: rect.width - TodoPill.gap - 1, height: height)
         let isDark = source?.isDarkAppearance == true
-        (pill.tone == .done ? Theme.control : color.withAlphaComponent(isDark ? 0.18 : 0.12)).setFill()
+        (pill.tone == .done || pill.tone == .quiet ? Theme.control : color.withAlphaComponent(isDark ? 0.18 : 0.12)).setFill()
         NSBezierPath(roundedRect: capsule, xRadius: height / 2, yRadius: height / 2).fill()
         let symbolSize = pill.symbolSize(font)
         drawSymbol(pill.symbol, size: symbolSize * 0.82, color: color, center: CGPoint(x: capsule.minX + TodoPill.padding + symbolSize / 2 + 1, y: middle), weight: .semibold)
@@ -618,6 +601,55 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
         drawSymbol(symbol, size: 15, color: Theme.textTertiary, center: CGPoint(x: rect.minX + 22, y: rect.midY))
         NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: Theme.textTertiary])
             .draw(with: NSRect(x: rect.minX + 40, y: rect.midY - 9, width: rect.width - 52, height: 18), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], context: nil)
+    }
+
+    /// A to-do's circle: a ring to do; filled with the accent colour and a tick cut out of it when done; grey with a
+    /// cross when cancelled; half filled in progress; and with the symbol or the character of another of Obsidian's
+    /// marks in it.
+    private func drawCheckbox(_ mark: TaskMark, in box: NSRect) {
+        let side = box.width
+        switch mark {
+        case .done, .cancelled:
+            (mark == .done ? Theme.accent : Theme.faint).setFill()
+            NSBezierPath(ovalIn: box).fill()
+            let cut = NSBezierPath()
+            if mark == .done {
+                cut.move(to: CGPoint(x: box.minX + side * 0.28, y: box.midY + side * 0.01))
+                cut.line(to: CGPoint(x: box.minX + side * 0.44, y: box.midY + side * 0.16))
+                cut.line(to: CGPoint(x: box.minX + side * 0.73, y: box.midY - side * 0.16))
+            } else {
+                let arm = side * 0.17
+                cut.move(to: CGPoint(x: box.midX - arm, y: box.midY - arm))
+                cut.line(to: CGPoint(x: box.midX + arm, y: box.midY + arm))
+                cut.move(to: CGPoint(x: box.midX + arm, y: box.midY - arm))
+                cut.line(to: CGPoint(x: box.midX - arm, y: box.midY + arm))
+            }
+            cut.lineWidth = max(1.6, side * 0.09)
+            cut.lineCapStyle = .round
+            cut.lineJoinStyle = .round
+            Theme.panel.setStroke()
+            cut.stroke()
+        default:
+            let ring = NSBezierPath(ovalIn: box.insetBy(dx: 0.75, dy: 0.75))
+            ring.lineWidth = 1.5
+            (mark == .inProgress ? Theme.accent : Theme.faint).setStroke()
+            ring.stroke()
+            let center = CGPoint(x: box.midX, y: box.midY)
+            if mark == .inProgress {
+                // Its right half filled, as a pie half eaten.
+                NSGraphicsContext.saveGraphicsState()
+                NSBezierPath(rect: NSRect(x: box.midX, y: box.minY, width: side / 2, height: side)).addClip()
+                Theme.accent.setFill()
+                NSBezierPath(ovalIn: box.insetBy(dx: 3, dy: 3)).fill()
+                NSGraphicsContext.restoreGraphicsState()
+            } else if let symbol = mark.symbol {
+                drawSymbol(symbol, size: side * 0.52, color: Theme.textSecondary, center: center, weight: .bold)
+            } else if case .other(let character) = mark {
+                let letter = NSAttributedString(string: String(character), attributes: [.font: NSFont.systemFont(ofSize: side * 0.6, weight: .semibold), .foregroundColor: Theme.textSecondary])
+                let size = letter.size()
+                letter.draw(at: CGPoint(x: center.x - size.width / 2, y: center.y - size.height / 2))
+            }
+        }
     }
 
     private func drawSymbol(_ name: String, size: CGFloat, color: NSColor, center: CGPoint, weight: NSFont.Weight = .medium) {

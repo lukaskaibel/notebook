@@ -104,7 +104,7 @@ struct FileRow: View {
             var plain = line.trimmingCharacters(in: .whitespaces)
             if plain.hasPrefix("---") || plain.hasPrefix("```") || plain.hasPrefix("$$") || plain.hasPrefix("![") || plain.hasPrefix("|") { continue }
             while let first = plain.first, "#>-*+ ".contains(first), plain.count > 1 { plain.removeFirst() }
-            for task in ["[ ] ", "[x] ", "[X] "] where plain.hasPrefix(task) { plain.removeFirst(task.count) }
+            if let box = Todos.checkboxLength(Substring(plain)) { plain.removeFirst(box) }
             plain = InlineRenderer.render(plain, font: .systemFont(ofSize: 15), color: .label).string
             if !plain.trimmingCharacters(in: .whitespaces).isEmpty { return plain }
         }

@@ -51,11 +51,20 @@ public struct TodoDue: Hashable, Sendable, Codable {
         TodoDue(year: year, month: month, day: day, hour: hour, minute: minute)
     }
 
-    /// As it is written in the note.
-    public var markdown: String {
+    /// As Notebook writes it: Tasks' `📅` for a day, the Reminder plugin's `⏰` for a time.
+    public var markdown: String { markdown(.tasks) }
+
+    /// As it is written in a style.
+    public func markdown(_ style: DueStyle) -> String {
         let day = String(format: "%04d-%02d-%02d", year, month, day)
-        guard let hour else { return "📅 " + day }
-        return "⏰ " + day + String(format: " %02d:%02d", hour, minute ?? 0)
+        let time = hour.map { String(format: "%02d:%02d", $0, minute ?? 0) }
+        switch style {
+        case .tasks: return time.map { "⏰ " + day + " " + $0 } ?? "📅 " + day
+        case .dataviewEmoji: return "🗓️" + day + (time.map { "T" + $0 } ?? "")
+        case .dataview(let parentheses): return (parentheses ? "(" : "[") + "due:: " + day + (time.map { "T" + $0 } ?? "") + (parentheses ? ")" : "]")
+        case .reminder: return "(@" + day + (time.map { " " + $0 } ?? "") + ")"
+        case .kanban: return "@{" + day + "}" + (time.map { " @@{" + $0 + "}" } ?? "")
+        }
     }
 }
 
@@ -123,43 +132,172 @@ public struct TodoPlace: Hashable, Sendable, Codable {
     }
 }
 
-/// A due date or a place written after a to-do's text.
+/// How a to-do's due date is written. Notebook writes Tasks' `📅` and the Reminder plugin's `⏰`, and reads what the
+/// other plugins write too, keeping their way when the date changes.
+public enum DueStyle: Equatable, Sendable {
+    /// `📅 2026-10-24`, and `⏰ 2026-10-24 14:00` with a time.
+    case tasks
+    /// Dataview's shorthand, `🗓️2026-10-24`.
+    case dataviewEmoji
+    /// Dataview's field, `[due:: 2026-10-24]` or `(due:: 2026-10-24)`.
+    case dataview(parentheses: Bool)
+    /// The Reminder plugin's own, `(@2026-10-24 14:00)`.
+    case reminder
+    /// The Kanban plugin's, `@{2026-10-24} @@{14:00}`.
+    case kanban
+}
+
+/// Another of the fields the Tasks plugin writes after a to-do, as an emoji or as Dataview's `[key:: value]`: when it
+/// is scheduled, starts, was made, done or cancelled, how important it is, how it repeats, its name and the to-dos it
+/// waits for. Notebook shows them and leaves them as they are.
+public struct TodoField: Hashable, Sendable {
+    public enum Kind: String, Hashable, Sendable {
+        case scheduled, start, created, done, cancelled, priority, repeats, id, dependsOn, onCompletion
+    }
+
+    public var kind: Kind
+    /// As written: a day (`2026-10-24`), a priority (`highest`, `high`, `medium`, `low`, `lowest`), a rule
+    /// (`every week`), names.
+    public var value: String
+
+    public init(_ kind: Kind, _ value: String) {
+        self.kind = kind
+        self.value = value
+    }
+
+    /// The day of a date field.
+    var day: TodoDue? {
+        let parts = value.prefix(10).split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3, (1...12).contains(parts[1]), (1...31).contains(parts[2]) else { return nil }
+        return TodoDue(year: parts[0], month: parts[1], day: parts[2])
+    }
+
+    public var symbol: String {
+        switch kind {
+        case .scheduled: "hourglass"
+        case .start: "airplane.departure"
+        case .created: "plus.circle"
+        case .done: "checkmark.circle"
+        case .cancelled: "xmark.circle"
+        case .priority:
+            switch value {
+            case "highest": "exclamationmark.3"
+            case "high": "exclamationmark.2"
+            case "low": "arrow.down"
+            case "lowest": "arrow.down.to.line"
+            default: "exclamationmark"
+            }
+        case .repeats: "repeat"
+        case .id: "number"
+        case .dependsOn: "arrow.turn.down.right"
+        case .onCompletion: "flag.checkered"
+        }
+    }
+
+    /// "Scheduled Friday", "High", "every week".
+    public func label(now: Date = .now) -> String {
+        func day(_ prefix: String) -> String {
+            guard let due = self.day else { return prefix + " " + value }
+            return prefix + " " + ReminderText.day(due.date(), now: now)
+        }
+        switch kind {
+        case .scheduled: return day("Scheduled")
+        case .start: return day("Starts")
+        case .created: return day("Created")
+        case .done: return day("Done")
+        case .cancelled: return day("Cancelled")
+        case .priority: return value.capitalized
+        case .repeats, .id, .onCompletion: return value
+        case .dependsOn: return "After " + value.replacingOccurrences(of: ",", with: ", ")
+        }
+    }
+}
+
+/// A due date, a place or another field written after a to-do's text.
 public struct TodoMark: Equatable, Sendable {
     public enum Kind: Equatable, Sendable {
         case due(TodoDue)
         case place(TodoPlace)
+        case field(TodoField)
     }
 
     public var kind: Kind
     /// From its symbol to its end.
     public var range: NSRange
+    /// How a due date is written.
+    public var style: DueStyle = .tasks
+
+    public var isField: Bool { if case .field = kind { true } else { false } }
 }
 
 /// Reads and writes the marks after a to-do's text.
 public enum TodoMarks {
-    private static let dueExpression = try! NSRegularExpression(
-        pattern: "(?:📅|⏰\u{FE0F}?)[ \\t]*(\\d{4})-(\\d{2})-(\\d{2})(?:[ T](\\d{1,2}):(\\d{2}))?(?![\\d:])")
-    private static let placeExpression = try! NSRegularExpression(
-        pattern: "📍\u{FE0F}?[ \\t]*(?:(Arriving|Leaving)[ \\t]+)?\\[([^\\]\\n]*)\\]\\(([^)\\s]*)\\)", options: [.caseInsensitive])
+    private static func expression(_ pattern: String, _ options: NSRegularExpression.Options = []) -> NSRegularExpression {
+        try! NSRegularExpression(pattern: pattern, options: options)
+    }
+
+    /// A day, and maybe a time after it: groups for the year, month, day, hour and minute.
+    private static let day = "(\\d{4})-(\\d{2})-(\\d{2})"
+    private static let time = "(?:[ T](\\d{1,2}):(\\d{2}))?"
+    /// The ways a due date is written, each with how.
+    private static let dueExpressions: [(NSRegularExpression, (NSTextCheckingResult, NSString) -> DueStyle)] = [
+        (expression("(📅|⏰|🗓)\u{FE0F}?[ \\t]*" + day + time + "(?![\\d:])"), { match, text in
+            text.substring(with: match.range(at: 1)) == "🗓" ? .dataviewEmoji : .tasks
+        }),
+        (expression("()\\[due::[ \\t]*" + day + time + "[ \\t]*\\]"), { _, _ in .dataview(parentheses: false) }),
+        (expression("()\\(due::[ \\t]*" + day + time + "[ \\t]*\\)"), { _, _ in .dataview(parentheses: true) }),
+        (expression("()\\(@" + day + time + "\\)"), { _, _ in .reminder }),
+        (expression("()@(?:\\{|\\[\\[)" + day + "(?:\\}|\\]\\])(?:[ \\t]*@@\\{(\\d{1,2}):(\\d{2})\\})?"), { _, _ in .kanban }),
+    ]
+    private static let placeExpression = expression(
+        "📍\u{FE0F}?[ \\t]*(?:(Arriving|Leaving)[ \\t]+)?\\[([^\\]\\n]*)\\]\\(([^)\\s]*)\\)", [.caseInsensitive])
+    /// Where a repeat rule ends: at the next field, or the end of the line.
+    private static let nextField = "(?=[ \\t]*(?:📅|⏰|🗓|⏳|🛫|➕|✅|❌|🔺|⏫|🔼|🔽|⏬|🔁|🆔|⛔|🏁|📍|\\(@|@\\{|@\\[\\[|[\\[(]\\w+::)|[ \\t]*$)"
+    private static let emojiFields: [(NSRegularExpression, (String, String) -> TodoField?)] = [
+        (expression("(⏳|🛫|➕|✅|❌)\u{FE0F}?[ \\t]*(\\d{4}-\\d{2}-\\d{2})"), { symbol, value in
+            let kinds: [String: TodoField.Kind] = ["⏳": .scheduled, "🛫": .start, "➕": .created, "✅": .done, "❌": .cancelled]
+            return kinds[symbol].map { TodoField($0, value) }
+        }),
+        (expression("(🔺|⏫|🔼|🔽|⏬)\u{FE0F}?()"), { symbol, _ in
+            let names = ["🔺": "highest", "⏫": "high", "🔼": "medium", "🔽": "low", "⏬": "lowest"]
+            return names[symbol].map { TodoField(.priority, $0) }
+        }),
+        (expression("(🔁)\u{FE0F}?[ \\t]*([^\\n]+?)" + nextField), { _, value in TodoField(.repeats, value) }),
+        (expression("(🆔)\u{FE0F}?[ \\t]*([\\w-]+)"), { _, value in TodoField(.id, value) }),
+        (expression("(⛔)\u{FE0F}?[ \\t]*([\\w-]+(?:[ \\t]*,[ \\t]*[\\w-]+)*)"), { _, value in TodoField(.dependsOn, value.replacingOccurrences(of: " ", with: "")) }),
+        (expression("(🏁)\u{FE0F}?[ \\t]*(keep|delete)", [.caseInsensitive]), { _, value in TodoField(.onCompletion, value.lowercased()) }),
+    ]
+    /// Dataview's fields for the same, in brackets or in parentheses.
+    private static let dataviewField = expression(
+        "(?:\\[(scheduled|start|created|completion|cancelled|priority|repeat|id|dependsOn|onCompletion)::[ \\t]*([^\\]\\n]*?)[ \\t]*\\]"
+            + "|\\((scheduled|start|created|completion|cancelled|priority|repeat|id|dependsOn|onCompletion)::[ \\t]*([^)\\n]*?)[ \\t]*\\))")
+    private static let dataviewKinds: [String: TodoField.Kind] = [
+        "scheduled": .scheduled, "start": .start, "created": .created, "completion": .done, "cancelled": .cancelled,
+        "priority": .priority, "repeat": .repeats, "id": .id, "dependsOn": .dependsOn, "onCompletion": .onCompletion,
+    ]
+    /// What a line has to hold for any mark to be in it.
+    private static let signs = ["📅", "⏰", "📍", "🗓", "⏳", "🛫", "➕", "✅", "❌", "🔺", "⏫", "🔼", "🔽", "⏬", "🔁", "🆔", "⛔", "🏁", "(@", "@{", "@[[", "::"]
 
     /// The marks in `range` of `text`, in order. A mark counts right after a word too: typing in front of a pill puts
     /// letters there.
     public static func find(in text: NSString, range: NSRange) -> [TodoMark] {
         guard range.length > 0, text.length >= range.upperBound else { return [] }
         // A quick look first: most to-dos have none.
-        guard ["📅", "⏰", "📍"].contains(where: { text.range(of: $0, options: .literal, range: range).location != NSNotFound }) else { return [] }
+        guard signs.contains(where: { text.range(of: $0, options: .literal, range: range).location != NSNotFound }) else { return [] }
         var marks: [TodoMark] = []
         let string = text as String
-        for match in dueExpression.matches(in: string, range: range) {
-            func number(_ group: Int) -> Int? {
-                let found = match.range(at: group)
-                return found.location == NSNotFound ? nil : Int(text.substring(with: found))
+        for (expression, style) in dueExpressions {
+            for match in expression.matches(in: string, range: range) {
+                func number(_ group: Int) -> Int? {
+                    let found = match.range(at: group)
+                    return found.location == NSNotFound ? nil : Int(text.substring(with: found))
+                }
+                guard let year = number(2), let month = number(3), let day = number(4), (1...12).contains(month), (1...31).contains(day) else { continue }
+                let hour = number(5), minute = number(6)
+                if let hour, !(0...23).contains(hour) { continue }
+                if let minute, !(0...59).contains(minute) { continue }
+                marks.append(TodoMark(kind: .due(TodoDue(year: year, month: month, day: day, hour: hour, minute: minute)), range: match.range, style: style(match, text)))
             }
-            guard let year = number(1), let month = number(2), let day = number(3), (1...12).contains(month), (1...31).contains(day) else { continue }
-            let hour = number(4), minute = number(5)
-            if let hour, !(0...23).contains(hour) { continue }
-            if let minute, !(0...59).contains(minute) { continue }
-            marks.append(TodoMark(kind: .due(TodoDue(year: year, month: month, day: day, hour: hour, minute: minute)), range: match.range))
         }
         for match in placeExpression.matches(in: string, range: range) {
             let way = match.range(at: 1)
@@ -167,6 +305,21 @@ public enum TodoMarks {
             let name = text.substring(with: match.range(at: 2)).trimmingCharacters(in: .whitespaces)
             let coordinates = TodoPlace.coordinates(in: text.substring(with: match.range(at: 3)))
             marks.append(TodoMark(kind: .place(TodoPlace(name: name, latitude: coordinates?.0, longitude: coordinates?.1, leaving: leaving)), range: match.range))
+        }
+        for (expression, field) in emojiFields {
+            for match in expression.matches(in: string, range: range) {
+                let value = match.range(at: 2).location == NSNotFound ? "" : text.substring(with: match.range(at: 2))
+                if let found = field(text.substring(with: match.range(at: 1)), value.trimmingCharacters(in: .whitespaces)) {
+                    marks.append(TodoMark(kind: .field(found), range: match.range))
+                }
+            }
+        }
+        for match in dataviewField.matches(in: string, range: range) {
+            let bracketed = match.range(at: 1).location != NSNotFound
+            let key = text.substring(with: match.range(at: bracketed ? 1 : 3))
+            let value = text.substring(with: match.range(at: bracketed ? 2 : 4))
+            guard let kind = dataviewKinds[key], !value.isEmpty else { continue }
+            marks.append(TodoMark(kind: .field(TodoField(kind, kind == .priority ? value.lowercased() : value)), range: match.range))
         }
         // A date written inside a place's name is part of the place.
         var kept: [TodoMark] = []
@@ -177,14 +330,26 @@ public enum TodoMarks {
         return kept
     }
 
-    /// The marks in a line being parsed, as spans: there are any only if one of the symbols is there.
+    /// The marks in a line being parsed, as spans: there are any only if one of their signs is there.
     static func spans(in u: [UInt16], range: NSRange) -> [InlineSpan] {
         var index = range.location
         var found = false
         while index < range.upperBound, !found {
             let unit = u[index]
-            // ⏰, or 📅 and 📍 (D83D DCC5, D83D DCCD).
-            found = unit == 0x23F0 || (unit == 0xD83D && index + 1 < range.upperBound && (u[index + 1] == 0xDCC5 || u[index + 1] == 0xDCCD))
+            let next = index + 1 < range.upperBound ? u[index + 1] : 0
+            switch unit {
+            // ⏰ ⏳ ➕ ✅ ❌ ⏫ ⏬ ⛔
+            case 0x23F0, 0x23F3, 0x2795, 0x2705, 0x274C, 0x23EB, 0x23EC, 0x26D4: found = true
+            // 📅 📍 🗓 🛫 🔺 🔼 🔽 🔁
+            case 0xD83D: found = [0xDCC5, 0xDCCD, 0xDDD3, 0xDEEB, 0xDD3A, 0xDD3C, 0xDD3D, 0xDD01].contains(next)
+            // 🆔 🏁
+            case 0xD83C: found = next == 0xDD94 || next == 0xDFC1
+            // (@, @{, @[, ::
+            case 40: found = next == 64
+            case 64: found = next == 123 || next == 91
+            case 58: found = next == 58
+            default: break
+            }
             index += 1
         }
         guard found else { return [] }
@@ -202,7 +367,17 @@ public enum TodoMarks {
 
     /// The first due date and the first place on a parsed line.
     public static func schedule(of line: MarkdownLine) -> (due: TodoDue?, place: TodoPlace?) {
-        schedule(of: line.spans.compactMap { if case .todoMark(let kind) = $0.kind { kind } else { nil } })
+        schedule(of: kinds(on: line))
+    }
+
+    /// The marks of a parsed line.
+    static func kinds(on line: MarkdownLine) -> [TodoMark.Kind] {
+        line.spans.compactMap { if case .todoMark(let kind) = $0.kind { kind } else { nil } }
+    }
+
+    /// The other fields of a parsed line, in order.
+    public static func fields(of line: MarkdownLine) -> [TodoField] {
+        kinds(on: line).compactMap { if case .field(let field) = $0 { field } else { nil } }
     }
 
     /// With a day (📅, Tasks' due date) and a time (⏰, the Reminder plugin's) on one line, the time is when it reminds.
@@ -212,20 +387,24 @@ public enum TodoMarks {
             switch kind {
             case .due(let value): if due == nil || (due?.hasTime == false && value.hasTime) { due = value }
             case .place(let value): if place == nil { place = value }
+            case .field: break
             }
         }
         return (due, place)
     }
 
     /// The change that gives a to-do these marks in place of the ones it has: the range of `text` to replace and what
-    /// goes there. The to-do's words stay as they are; the marks go at their end, the date first. A to-do that had both a
-    /// day (📅) and a time (⏰), for the two Obsidian plugins, keeps both, on the new day. Nil when nothing changes.
+    /// goes there. The to-do's words and its other fields stay as they are; the date and the place go at the end, the
+    /// date first, written the way the date it had was. A to-do that had both a day (📅) and a time (⏰), for the two
+    /// Obsidian plugins, keeps both, on the new day. Nil when nothing changes.
     public static func change(in text: NSString, content: NSRange, due: TodoDue?, place: TodoPlace?) -> (range: NSRange, replacement: String)? {
         let current = text.substring(with: content) as NSString
-        let found = find(in: text, range: content)
+        let found = find(in: text, range: content).filter { !$0.isField }
         let marks = found.map { $0.range.shifted(by: -content.location) }
-        let dues = found.compactMap { if case .due(let due) = $0.kind { due } else { nil } }
-        let keepsDay = dues.contains { !$0.hasTime } && dues.contains { $0.hasTime }
+        let dues = found.filter { if case .due = $0.kind { true } else { false } }
+        let style = dues.first?.style ?? .tasks
+        let keepsDay = style == .tasks && dues.contains { if case .due(let due) = $0.kind { !due.hasTime } else { false } }
+            && dues.contains { if case .due(let due) = $0.kind { due.hasTime } else { false } }
         // The words, without the marks and the spaces in front of them.
         let words = NSMutableString(string: current)
         for range in marks.reversed() {
@@ -235,7 +414,7 @@ public enum TodoMarks {
         }
         var wanted = (words as String).replacingOccurrences(of: "\\s+$", with: "", options: .regularExpression)
         let day = due.flatMap { keepsDay && $0.hasTime ? $0.at(hour: nil, minute: nil).markdown : nil }
-        for mark in [day, due?.markdown, place?.markdown].compactMap({ $0 }) {
+        for mark in [day, due?.markdown(style), place?.markdown].compactMap({ $0 }) {
             wanted += (wanted.isEmpty ? "" : " ") + mark
         }
         let new = wanted as NSString
@@ -249,22 +428,90 @@ public enum TodoMarks {
         let range = NSRange(location: content.location + prefix, length: current.length - prefix - suffix)
         return (range, new.substring(with: NSRange(location: prefix, length: new.length - prefix - suffix)))
     }
+
+    /// A to-do's words without its marks, as Markdown, and its marks as written, in order: what the words are edited
+    /// apart from.
+    public static func split(_ text: NSString, content: NSRange) -> (words: String, marks: [String]) {
+        let found = find(in: text, range: content)
+        let words = NSMutableString(string: text.substring(with: content))
+        for mark in found.reversed() {
+            let range = mark.range.shifted(by: -content.location)
+            var start = range.location
+            while start > 0, [32, 9].contains(words.character(at: start - 1)) { start -= 1 }
+            words.deleteCharacters(in: NSRange(location: start, length: range.upperBound - start))
+        }
+        return ((words as String).trimmingCharacters(in: .whitespaces), found.map { text.substring(with: $0.range) })
+    }
 }
 
 /// An open to-do in a note: a checkbox with its words, its due date and place, and the lines indented under it, which
-/// are its notes, as a reminder's notes are in Reminders.
+/// are its notes, as a reminder's notes are in Reminders, and its sub-to-dos.
 public struct Todo: Hashable, Sendable {
     /// Its line in the note, from 0, and that line as it was, to find it again after the note changed.
     public var line: Int
     public var source: String
     /// The words you read, without Markdown or marks.
     public var text: String
-    /// The lines indented under it, as plain text: "• " before a point, "○ " before an open to-do, "✓ " before a done one.
-    public var notes: [String]
+    /// Every line indented under it, as written.
+    public var lines: [TodoLine] = []
     public var due: TodoDue?
     public var place: TodoPlace?
+    /// What its brackets hold: to do, in progress, or another of Obsidian's marks.
+    public var mark: TaskMark = .open
+    /// The Tasks plugin's other fields: how important it is, how it repeats, when it is scheduled.
+    public var fields: [TodoField] = []
 
     public var hasReminder: Bool { due != nil || place != nil }
+
+    /// The lines under it as plain text, as a notification shows them: "• " before a point, "○ " before an open
+    /// to-do, "✓ " before a done one; at most `Todos.maximumNotes`.
+    public var notes: [String] {
+        var notes: [String] = []
+        for line in lines where !line.text.isEmpty {
+            switch line.kind {
+            case .todo(let mark): notes.append((mark.isClosed ? "✓ " : "○ ") + line.text)
+            case .ordered(let marker): notes.append(marker + " " + line.text)
+            case .bullet: notes.append("• " + line.text)
+            case .text: notes.append(line.text)
+            case .blank, .other: continue
+            }
+            if notes.count == Todos.maximumNotes { break }
+        }
+        return notes
+    }
+}
+
+/// A line indented under a to-do: a sub-to-do, a point, words, or something else kept as it is.
+public struct TodoLine: Hashable, Sendable {
+    public enum Kind: Hashable, Sendable {
+        /// A to-do of its own, which is part of the one above: what its brackets hold.
+        case todo(TaskMark)
+        case bullet
+        /// A numbered point, with its number: "2." or "2)".
+        case ordered(String)
+        /// Words, or a quote.
+        case text
+        case blank
+        /// Code, a table, a heading, a picture: kept as written.
+        case other
+    }
+
+    /// The line as it is written.
+    public var source: String
+    public var kind: Kind
+    /// How deep it is under the to-do, from 1.
+    public var depth: Int
+    /// The words you read.
+    public var text: String
+    /// What it starts with before its words: the indent, a list marker, a checkbox.
+    public var prefix: String
+
+    /// Its words as Markdown, after what it starts with.
+    public var words: String { String(source.utf16.dropFirst(prefix.utf16.count)) ?? "" }
+    /// The indent it starts with.
+    public var indent: String { String(source.prefix { $0 == " " || $0 == "\t" }) }
+
+    public var isTodo: Bool { if case .todo = kind { true } else { false } }
 }
 
 /// Finds the open to-dos in a note.
@@ -272,8 +519,7 @@ public enum Todos {
     /// The to-dos not yet done: each open checkbox, except one indented under another to-do, which is part of that
     /// one's notes, unless it has a date or a place of its own.
     public static func open(in markdown: String) -> [Todo] {
-        // Most notes have none, and this runs over every note there is.
-        guard markdown.contains("[ ]") else { return [] }
+        guard mayHaveOpen(markdown) else { return [] }
         let document = MarkdownParser.parse(markdown)
         let string = markdown as NSString
         var todos: [Todo] = []
@@ -291,9 +537,56 @@ public enum Todos {
             if isNested, schedule.due == nil, schedule.place == nil { continue }
             let text = NotePoints.plain(line, in: string)
             todos.append(Todo(line: index, source: string.substring(with: line.range), text: text,
-                              notes: notes(under: index, in: document, string: string), due: schedule.due, place: schedule.place))
+                              lines: lines(under: index, in: document, string: string), due: schedule.due, place: schedule.place,
+                              mark: item.mark, fields: TodoMarks.fields(of: line)))
         }
         return todos
+    }
+
+    /// Whether a note may have an open to-do: brackets around a mark that is neither done nor cancelled. Most notes
+    /// have none, and this runs over every note there is, so it only looks at bytes.
+    static func mayHaveOpen(_ markdown: String) -> Bool {
+        var markdown = markdown
+        return markdown.withUTF8 { bytes in
+            let count = bytes.count
+            var index = 0
+            while index + 2 < count {
+                defer { index += 1 }
+                guard bytes[index] == 0x5B else { continue }
+                let mark = bytes[index + 1]
+                if mark < 0x80 {
+                    if bytes[index + 2] == 0x5D, let found = TaskMark(UInt16(mark)), !found.isClosed { return true }
+                } else {
+                    // A character of several bytes, then the closing bracket.
+                    var end = index + 2
+                    while end < count, end <= index + 4, bytes[end] & 0xC0 == 0x80 { end += 1 }
+                    if end < count, bytes[end] == 0x5D { return true }
+                }
+            }
+            return false
+        }
+    }
+
+    /// How long the checkbox a line's text starts with is, with the space after it: `[ ] `, `[x] `, `[/] `.
+    static func checkboxLength(_ text: Substring) -> Int? {
+        let units = Array(text.utf16.prefix(4))
+        guard units.count >= 3, units[0] == 91, units[2] == 93, TaskMark(units[1]) != nil else { return nil }
+        if units.count == 3 { return 3 }
+        return units[3] == 32 ? 4 : nil
+    }
+
+    /// The line of a to-do once ticked: `[x]` in its brackets.
+    static func ticked(_ source: String) -> String {
+        guard mark(of: source)?.isClosed == false else { return source }
+        return marked(source, .done)
+    }
+
+    /// The line of a to-do with another mark in its brackets.
+    static func marked(_ source: String, _ mark: TaskMark) -> String {
+        line(source) { _, line in
+            guard case .listItem(let item) = line.kind, let box = item.checkbox, item.mark != mark else { return nil }
+            return (box, "[" + String(mark.character) + "]")
+        } ?? source
     }
 
     /// The lines indented under the to-do on line `index`, up to the first that isn't; blank lines between them count.
@@ -314,35 +607,47 @@ public enum Todos {
         return (index + 1)..<end
     }
 
-    /// At most this many lines of notes are kept with a to-do: what a row and a notification show.
+    /// At most this many lines of notes are in a to-do's notification.
     static let maximumNotes = 8
 
-    private static func notes(under index: Int, in document: MarkdownDocument, string: NSString) -> [String] {
-        var notes: [String] = []
+    /// The lines indented under the to-do on line `index`, as they are written and what they are.
+    static func lines(under index: Int, in document: MarkdownDocument, string: NSString) -> [TodoLine] {
+        guard case .listItem(let todo) = document.lines[index].kind else { return [] }
+        var result: [TodoLine] = []
+        /// The list items above in the block, with their indent and depth, for the depth of the words under them.
+        var items: [(indent: Int, depth: Int)] = []
         for lineIndex in noteLines(under: index, in: document, string: string) {
             let line = document.lines[lineIndex]
-            let text: String
+            let source = string.substring(with: line.range)
+            let indent = Self.indent(of: line, in: string)
+            let leading = String(source.prefix { $0 == " " || $0 == "\t" })
+            func under() -> Int { (items.last { $0.indent < indent }?.depth ?? 0) + 1 }
             switch line.kind {
             case .listItem(let item):
-                let words = NotePoints.plain(line, in: string)
-                guard !words.isEmpty else { continue }
+                let depth = max(1, item.level - todo.level)
+                while let last = items.last, last.indent >= item.indent { items.removeLast() }
+                items.append((item.indent, depth))
+                let kind: TodoLine.Kind
                 if item.isTask {
-                    text = (item.checked ? "✓ " : "○ ") + words
+                    kind = .todo(item.mark)
                 } else if case .ordered(let number, let delimiter) = item.marker {
-                    text = "\(number)\(delimiter) " + words
+                    kind = .ordered("\(number)\(delimiter)")
                 } else {
-                    text = "• " + words
+                    kind = .bullet
                 }
+                let prefix = string.substring(with: NSRange(location: line.range.location, length: line.content.location - line.range.location))
+                result.append(TodoLine(source: source, kind: kind, depth: depth, text: NotePoints.plain(line, in: string), prefix: prefix))
             case .paragraph, .quote:
-                text = NotePoints.plain(line, in: string)
-                guard !text.isEmpty else { continue }
+                let prefix = line.content.location > line.range.location
+                    ? string.substring(with: NSRange(location: line.range.location, length: line.content.location - line.range.location)) : leading
+                result.append(TodoLine(source: source, kind: .text, depth: under(), text: NotePoints.plain(line, in: string), prefix: prefix))
+            case .blank:
+                result.append(TodoLine(source: source, kind: .blank, depth: 1, text: "", prefix: source))
             default:
-                continue
+                result.append(TodoLine(source: source, kind: .other, depth: under(), text: source.trimmingCharacters(in: .whitespaces), prefix: leading))
             }
-            notes.append(text)
-            if notes.count == maximumNotes { break }
         }
-        return notes
+        return result
     }
 
     /// How far a line is indented: a list item's indent, or a line's spaces (a tab counts as four).
@@ -367,6 +672,30 @@ public enum Todos {
         guard let line = document.lines.first, case .listItem(let item) = line.kind, item.isTask else { return nil }
         let schedule = TodoMarks.schedule(of: line)
         return (NotePoints.plain(line, in: string), schedule.due, schedule.place, item.checked)
+    }
+
+    /// What a to-do's brackets hold, on its line on its own.
+    public static func mark(of source: String) -> TaskMark? {
+        let (_, document, _) = alone(source)
+        guard let line = document.lines.first, case .listItem(let item) = line.kind, item.isTask else { return nil }
+        return item.mark
+    }
+
+    /// A to-do's line on its own taken apart: what it starts with (indent, marker, checkbox), its words as Markdown,
+    /// and its marks as written, which the words are edited apart from.
+    public static func parts(of source: String) -> (prefix: String, words: String, marks: [String])? {
+        let (indent, document, string) = alone(source)
+        guard let line = document.lines.first, case .listItem(let item) = line.kind, item.isTask else { return nil }
+        let split = TodoMarks.split(string, content: line.content)
+        return (indent + string.substring(with: NSRange(location: 0, length: line.content.location)), split.words, split.marks)
+    }
+
+    /// A to-do's line with other words, its marks kept after them. The line as it is when the words are the same.
+    public static func replacingWords(in source: String, with words: String) -> String {
+        guard let parts = parts(of: source), parts.words != words else { return source }
+        let body = ([words.trimmingCharacters(in: .whitespaces)] + parts.marks).filter { !$0.isEmpty }.joined(separator: " ")
+        // `- [ ]` with nothing after it yet has no space after its box.
+        return parts.prefix + (body.isEmpty || parts.prefix.last?.isWhitespace == true ? "" : " ") + body
     }
 
     /// What a to-do's line says after an edit, worked out on the line alone.

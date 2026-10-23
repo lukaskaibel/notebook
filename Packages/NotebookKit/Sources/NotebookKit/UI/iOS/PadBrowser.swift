@@ -140,8 +140,10 @@ struct PadSidebar: View {
                 if isSearching {
                     SearchResultsList(workspace: workspace, query: query) { workspace.open($0) }
                 } else {
-                    TodosRowLabel(count: workspace.dueTodoCount)
-                        .tag(Workspace.todosURL)
+                    if NotebookSettings.shared.showsTodos {
+                        TodosRowLabel(count: workspace.dueTodoCount)
+                            .tag(Workspace.todosURL)
+                    }
                     let favorites = workspace.favoriteURLs
                     if !favorites.isEmpty {
                         Section("Favorites", isExpanded: sectionBinding("Favorites")) {

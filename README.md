@@ -175,10 +175,20 @@ with a keyboard, ⌘K works the same.
 
 Every open checkbox in your notes is a to-do, and To-dos at the top of the sidebar shows them all in one list, as
 Reminders does: what is overdue, then today's, tomorrow's, the next seven days', later ones, and those without a date,
-each with the lines indented under it as its notes and the note it is in. Notes with a reminder are in the list too,
-and the number next to To-dos counts what is due today or overdue. Tick a to-do off in the list and it is ticked in its
-note; click it to open the note at it. Drag it into another group, or choose Today, Tomorrow, This Weekend or Next
-Week in its menu, and its date moves; Undo (⌘Z) puts it back.
+each with the lines indented under it (its sub-to-dos, points and notes) and the note it is in. Notes with a reminder
+are in the list too, and the number next to To-dos counts what is due today or overdue. Tick a to-do off in the list,
+or a sub-to-do under it, and it is ticked in its note; click the note's name to open the note at it. Drag a to-do into
+another group, or choose Today, Tomorrow, This Weekend or Next Week in its menu, and its date moves; Undo (⌘Z) puts it
+back. If you keep your to-dos in another app, turn off Show To-dos in Settings › Sidebar (on iPhone and iPad, in
+Settings): the list goes, and Notebook doesn't remind you of to-dos either.
+
+Click a to-do's words to change them where they are, as in Reminders. Shift-Return starts a line under them; Return in
+that line starts the next one of the same kind, Tab and ⇧Tab move it in and out, and `[ ] ` or `- ` typed at its start
+make it a sub-to-do or a point, as in a note. Return on the to-do's words, Return on an empty line, Escape or a click
+elsewhere is done; what you type goes into the note as you go, and a line you leave empty goes. Under the to-do are
+buttons for its day, its time and its place, each with a few to pick at a click (Today, Tomorrow, This Weekend, Next
+Week; morning, noon, afternoon, evening, night; the places you used last) and Custom… for Remind Me, and Add
+Sub-to-do. On iPhone and iPad the same buttons are above the keyboard, with a line in and out.
 
 A to-do gets a date, a time and a place as a reminder in Reminders does: point at it and click the bell after its
 words, or right-click it and choose Remind Me…; on iPhone and iPad tap the bell above the keyboard while you're in it.
@@ -191,16 +201,30 @@ a notification brings the to-do and its notes, with Remind Me in 1 Hour and Done
 Unlike a note's reminder, a to-do's date and place are written into the note, after its words, the way Obsidian's
 Tasks and Reminder plugins write them: `⏰ 2026-10-24 14:00` for a day and a time, `📅 2026-11-01` for a day, and
 `📍 [Pharmacy](https://maps.apple.com/?ll=…)` for a place, a link any app opens in Maps. So they go with the note to
-your other devices and other apps, and a to-do keeps its date however and wherever you edit it.
+your other devices and other apps, and a to-do keeps its date however and wherever you edit it. Notebook reads what
+Obsidian's other plugins write too, and keeps their way when a date changes: the Reminder plugin's
+`(@2026-10-24 14:00)`, the Kanban plugin's `@{2026-10-24} @@{14:00}` and Dataview's `[due:: 2026-10-24]`. The Tasks
+plugin's other fields, such as how important a to-do is (`⏫`), how it repeats (`🔁 every week`) and when it is
+scheduled (`⏳ 2026-10-26`), show as grey pills and stay as they are.
+
+A checkbox can hold more than a space or an x, as in Obsidian: `[/]` is in progress and shows a half-filled circle,
+`[-]` is cancelled, grey and struck through, and the marks Obsidian's themes draw, such as `[!]`, `[?]`, `[*]` or `[>]`,
+show their sign in the circle. As in the Tasks plugin, all but done and cancelled are still to do. Right-click a to-do
+in To-dos to mark it in progress or cancelled.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/todos-dark.webp">
-  <img alt="To-dos selected at the top of the sidebar, with 3 next to it. The list shows Overdue with Return the library books from yesterday in red; Today with Pick up the dry cleaning at 5:30 PM, its two notes under it, and Send the map to Mia at 7:00 PM; Tomorrow with the note Questions for Dr. Weber and Tomatoes, basil, burrata; then Next 7 Days and Later. Each row has a circle to tick it and the note it is in" src="Design/screenshots/todos-light.webp">
+  <img alt="To-dos selected at the top of the sidebar, with 3 next to it. The list shows Overdue with Return the library books from yesterday in red; Today with Pick up the dry cleaning at 5:30 PM, its two notes under it, and Send the map to Mia at 7:00 PM; Tomorrow with the note Questions for Dr. Weber and Market shopping, with its sub-to-dos Tomatoes and basil, Burrata and Bags, ticked, under it; then Next 7 Days and Later. Each row has a circle to tick it and the note it is in" src="Design/screenshots/todos-light.webp">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/todo-editing-dark.webp">
+  <img alt="Market shopping being edited in To-dos, its sub-to-dos under it, and below them the buttons Tomorrow, 9:00 AM, Add Location and Add Sub-to-do, with the note Weekend at the end of the row" src="Design/screenshots/todo-editing-light.webp">
 </picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/todo-reminder-dark.webp">
-  <img alt="The note Errands, its to-dos followed by pills: Yesterday in red, Today 5:30 PM, the pharmacy at Rosenthaler Platz and a day next month. Remind Me is open for Buy plasters, with Date and Time off and Location on: the pharmacy on a map with the circle around it, and Arriving or Leaving" src="Design/screenshots/todo-reminder-light.webp">
+  <img alt="The note Errands, its to-dos followed by pills: Yesterday in red, Today 5:30 PM, the pharmacy at Rosenthaler Platz and a day next month on Renew the passport, which is half done, with a sub-to-do ticked and one not under it; Sell the old bike is cancelled, grey and struck through. Remind Me is open for Buy plasters, with Date and Time off and Location on: the pharmacy on a map with the circle around it, and Arriving or Leaving" src="Design/screenshots/todo-reminder-light.webp">
 </picture>
 
 ### Remind me of a note
@@ -322,8 +346,10 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   groups, suggested for its name or searched for, kept on the folder as the Finder keeps them, so the Finder shows them
   too.
 - **To-dos.** Every open checkbox in every note, in one list at the top of the sidebar, grouped by when it's due, with
-  the lines indented under it as its notes. Tick them off there, open their note, or drag them to another day. A to-do
-  takes a date, a time and a place, written after its words where other apps read them too, and shows them as pills.
+  the lines indented under it as its sub-to-dos and notes. Tick them off there, edit them in place as in Reminders,
+  open their note, or drag them to another day. A to-do takes a date, a time and a place, written after its words where
+  other apps read them too, and shows them as pills; Obsidian's Tasks, Reminder, Kanban and Dataview dates and its
+  `[/]` and `[-]` checkboxes are understood. Settings turns To-dos off.
 - **Reminders.** Remind Me… brings a note or a to-do back at a time you choose, picked or typed in a few words ("friday
   evening", "in 3 weeks"), or when you arrive at or leave a place, with a notification of its first points or the
   to-do's notes that gets through a Focus. A note's reminder follows it when you rename or move it in Notebook, goes
@@ -367,9 +393,12 @@ PDFs and the words read in pictures, is kept in the app's caches on each device,
 | Embed | `![[Recipes]]`, `![[Offer.pdf]]` | An excerpt of the note, or a card for the file |
 | Web link | `[text](https://…)` | The text, with a pencil to edit the address |
 | Checklist | `- [ ]`, `- [x]` | A round checkbox, filled when done; done items turn grey |
-| To-do's date | `- [ ] Call Dr. Weber ⏰ 2026-10-24 14:00`, `📅 2026-11-01` for a day | A pill: "Tomorrow 2:00 PM", red once it has passed |
+| In progress, cancelled | `- [/]`, `- [-]` | A half-filled circle; a grey one with a cross, the to-do struck through |
+| Obsidian's other marks | `- [!]`, `- [?]`, `- [*]`, `- [>]` and others | Their sign in the circle; still to do |
+| To-do's date | `- [ ] Call Dr. Weber ⏰ 2026-10-24 14:00`, `📅 2026-11-01` for a day; also `(@2026-10-24 14:00)`, `@{2026-10-24}`, `[due:: 2026-10-24]` | A pill: "Tomorrow 2:00 PM", red once it has passed |
 | To-do's place | `📍 [Pharmacy](https://maps.apple.com/?ll=52.53,13.4&q=Pharmacy)`, `📍 Leaving [Home](…)` | A pill with the place's name |
-| A to-do's notes | Lines indented under it | Shown under the to-do in To-dos and in its notification |
+| A to-do's notes | Lines indented under it | Shown under the to-do in To-dos, sub-to-dos with circles to tick, and in its notification |
+| Tasks' other fields | `⏫`, `🔁 every week`, `⏳ 2026-10-26`, `[priority:: high]` | Grey pills: "High", "every week", "Scheduled Monday" |
 | Highlight | `==text==` | A yellow highlight |
 | Callout | `> [!tip] Title` | A coloured box with a symbol |
 | Maths | `$x^2$`, `$$ … $$` | A typeset formula |
@@ -487,13 +516,26 @@ While writing:
 | ↑ on the first line, ← or Delete at the very start | Into the title, at its end |
 | Return, Tab, ↓, or → at the end of the title | Into the text |
 
+Editing a to-do in To-dos:
+
+| Shortcut | Action |
+| --- | --- |
+| Click its words | Edit it, the caret where you clicked |
+| Shift-Return on its words | A line under them: a sub-to-do, or a point where points are |
+| Return in a line under it | The next line of the same kind; on an empty line, done |
+| Tab, ⇧Tab | Move the line in or out |
+| `[ ] ` or `- ` at the start of a line | A sub-to-do or a point |
+| Delete at the start of a line | A sub-to-do or point becomes words; words join the line above |
+| ↑ and ↓ at either end of a line | The line above or below |
+| Return on its words, Escape | Done |
+
 In the sidebar: a double-click opens a note in a window of its own and any other file in its own app, as in the Finder;
 Return renames, ⌘⌫ moves to the Trash, and Space opens a file in Quick Look. Right-click a file or folder for everything
 else, including Open in New Window, New Folder, Copy Link, which copies a `[[link]]` to it, Remind Me…, Customize
 Folder… and Hide Folder. In a note, right-click a to-do for Remind Me…, or click the bell that comes up after it as you
-point at it; in To-dos, right-click a row to move it to another day or open its note. As you point at a location's name,
-a folder with a plus comes up next to it for a new folder at its top, and, when the location has hidden folders, an eye
-that shows them.
+point at it; in To-dos, right-click a row to move it to another day, mark it in progress or cancelled, or open its
+note. As you point at a location's name, a folder with a plus comes up next to it for a new folder at its top, and, when
+the location has hidden folders, an eye that shows them.
 
 On an iPad with a keyboard, ⌘N, ⌘Z and ⇧⌘Z, ⌘F, ⌘K, ⇧⌘R, ⌘[ and ⌘], ⌃⌘I, ⇧⌘. and the shortcuts for writing work as
 on the Mac. On iPhone and iPad:
@@ -506,6 +548,7 @@ on the Mac. On iPhone and iPad:
 | Pull a list down | Read the folder again |
 | Tap a checkbox, a link or a picture | Tick it, follow it, or look at it in Quick Look |
 | Tap a to-do's pill, or the bell above the keyboard in a to-do | Its date, time and place |
+| Tap a to-do's words in To-dos | Edit it; the bar above the keyboard sets its day, time and place, adds a sub-to-do and moves a line in or out |
 | Touch and hold a row in To-dos, or drag it | Today, Tomorrow, This Weekend, Next Week, Remind Me…, or another group |
 | Tap a drawing | Draw in it |
 | While drawing: one finger, two fingers | Draw, scroll (where only Apple Pencil draws, a finger scrolls) |
@@ -525,7 +568,8 @@ Planned, and not built yet:
 - **Spotlight:** notes don't turn up in Spotlight yet, only in Notebook's own search.
 - **Reminders when a calendar event starts,** and on the iPhone a Live Activity that keeps the note on the Lock Screen.
   A reminder set on another device reaches an iPhone or iPad the next time Notebook runs there or gets time in the
-  background. Reminders don't repeat, and a Mac doesn't remind you at places.
+  background. Reminders don't repeat, and a Mac doesn't remind you at places. A to-do with the Tasks plugin's
+  `🔁 every week` shows how it repeats, but ticking it off doesn't make the next one yet, as the plugin does.
 - Links follow a renamed note, but not yet a moved one, a renamed folder, or a note from outside your locations
   renamed in its own window.
   Footnotes are styled but don't jump to their text.
@@ -617,16 +661,17 @@ Debug builds can be driven from a file: launch with `-debugCommandFile <path>` a
 Travel/Kyoto trip.md`, `type Hello`, `key return` or `snapshot <file>` to it, one per line. The commands are listed in
 `Debug/DebugRemote.swift`, and for iPhone and iPad in `Debug/DebugRemote+UIKit.swift`; those for reminders, such as
 `remind 2 Personal/Questions for Dr. Weber.md` (in two minutes) and `notifications`, are in
-`Debug/DebugReminders.swift`, those for to-dos, such as `todos`, `ticktodo dry cleaning` and `firetodo dry cleaning`, in
-`Debug/DebugTodos.swift`, and those for folders' looks, such as `customize Travel`, `iconpick 🍕` and `setfoldericon
-Travel symbol=airplane color=blue`, in `Debug/DebugFolderIcons.swift`. In the Simulator the file is in the app's own
-folder (`-debugCommandFile ~/Documents/cmd`), where `xcrun simctl get_app_container` finds it, and `xcrun simctl io
-<device> screenshot` takes the pictures. `-NotebookSlowFolders 2` makes every folder take two seconds to read, as a slow
-iCloud might, to see that nothing waits for it, `-NotebookSlowFiles 2` does the same for every note, PDF, picture and
-video you open, and `-NotebookSlowWrites 2` for every change to files: a new note or folder, a rename, a move, a copy,
-the Trash. On the Mac, `mainthread` logs how many folders were read and files changed on the main thread, which should
-be none. `timeopen <note>` logs how long opening a note keeps the window busy, `search <text>` how long search takes,
-and `index` when after launch the kept index was read, search had every file and the files were checked, and how many
+`Debug/DebugReminders.swift`, those for to-dos, such as `todos`, `ticktodo dry cleaning`, `firetodo dry cleaning` and
+`edittodo end market` (edits it in To-dos; `todoediting` says what is typed), in `Debug/DebugTodos.swift`, and those
+for folders' looks, such as `customize Travel`, `iconpick 🍕` and `setfoldericon Travel symbol=airplane color=blue`, in
+`Debug/DebugFolderIcons.swift`. In the Simulator the file is in the app's own folder (`-debugCommandFile
+~/Documents/cmd`), where `xcrun simctl get_app_container` finds it, and `xcrun simctl io <device> screenshot` takes the
+pictures. `-NotebookSlowFolders 2` makes every folder take two seconds to read, as a slow iCloud might, to see that
+nothing waits for it, `-NotebookSlowFiles 2` does the same for every note, PDF, picture and video you open, and
+`-NotebookSlowWrites 2` for every change to files: a new note or folder, a rename, a move, a copy, the Trash. On the
+Mac, `mainthread` logs how many folders were read and files changed on the main thread, which should be none.
+`timeopen <note>` logs how long opening a note keeps the window busy, `search <text>` how long search takes, and
+`index` when after launch the kept index was read, search had every file and the files were checked, and how many
 notes that read. macOS shows notifications only from an app in a lasting place, not from one in `/tmp`.
 
 Builds for TestFlight are made and uploaded with [fastlane](https://fastlane.tools), signed in with an App Store

@@ -44,6 +44,8 @@ public final class Workspace: NSObject {
     @ObservationIgnored var todoScheduling: DispatchWorkItem?
     /// The last change to a to-do's file, which the next waits for, and what to-dos' lines became (`current(_:)`).
     @ObservationIgnored var lastTodoWrite: Task<Void, Never>?
+    /// The to-do being edited in To-dos, whose words are written with the notes when the app goes away.
+    @ObservationIgnored weak var todoEditing: TodoEditing?
     @ObservationIgnored var todoRewrites: [String: TodoReference] = [:]
     #if DEBUG
     /// The sample notes' reminders, shown but never scheduled: a run on the sample notes leaves no notification behind.
@@ -925,6 +927,7 @@ public final class Workspace: NSObject {
     /// Back or Forward to a place in the history, if it is still there.
     private func goTo(_ url: URL) -> Bool {
         if url == Self.todosURL {
+            guard NotebookSettings.shared.showsTodos else { return false }
             showTodos(recordHistory: false)
             return true
         }
@@ -938,7 +941,7 @@ public final class Workspace: NSObject {
 
     /// Shows the To-dos list in place of the file that is open, which is saved and left as when you open another.
     public func showTodos(recordHistory: Bool = true) {
-        guard !showsTodos else { return }
+        guard !showsTodos, NotebookSettings.shared.showsTodos else { return }
         #if os(macOS)
         if currentURL != nil { pages.willOpen(Self.todosURL) }
         #else
@@ -960,6 +963,19 @@ public final class Workspace: NSObject {
             historyIndex = history.count - 1
         }
         sidebarSelectTodos()
+    }
+
+    /// To-dos turned off or on in Settings. Off, the list goes back to what was open before it, and the notifications
+    /// of to-dos go; on, they come back.
+    func todosSettingChanged() {
+        if !NotebookSettings.shared.showsTodos, showsTodos {
+            goBack()
+            if showsTodos { showsTodos = false }
+        }
+        scheduleTodoNotifications()
+        #if os(macOS)
+        editor.updateTodoBellForPointer()
+        #endif
     }
 
     #if os(iOS)
@@ -1605,6 +1621,7 @@ public final class Workspace: NSObject {
     /// before it goes on.
     public func saveAll(quitting: Bool = false) {
         editor.saveDrawingsNow(waiting: quitting)
+        todoEditing?.commit(now: quitting)
         #if os(macOS)
         FileWindows.shared.saveAll(quitting: quitting)
         #endif

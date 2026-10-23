@@ -107,9 +107,11 @@ struct TouchCommands: Commands {
             Button { workspace.togglePalette() } label: { Label("Command Palette", systemImage: "command") }
                 .keyboardShortcut("k", modifiers: .command)
                 .disabled(workspace.locations.isEmpty)
-            Button { workspace.showTodos() } label: { Label("To-dos", systemImage: "checklist") }
-                .keyboardShortcut("r", modifiers: [.command, .shift])
-                .disabled(workspace.locations.isEmpty)
+            if NotebookSettings.shared.showsTodos {
+                Button { workspace.showTodos() } label: { Label("To-dos", systemImage: "checklist") }
+                    .keyboardShortcut("r", modifiers: [.command, .shift])
+                    .disabled(workspace.locations.isEmpty)
+            }
             Button { workspace.goBack() } label: { Label("Back", systemImage: "chevron.backward") }
                 .keyboardShortcut("[", modifiers: .command)
                 .disabled(!workspace.canGoBack)
@@ -259,6 +261,7 @@ struct TouchSettings: View {
                 } footer: {
                     Text("A new note you leave without giving it a title or text is deleted.")
                 }
+                TodosSetting()
                 Section {
                     LabeledContent("Indexed") {
                         Text(workspace.index.isBuilding ? "Reading your files…" : "\(workspace.index.count) files")

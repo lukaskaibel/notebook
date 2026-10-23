@@ -135,7 +135,7 @@ enum CaretTool: CaseIterable, Identifiable {
     static func tools(for caret: CaretContext) -> [CaretTool] {
         let context = caret.context
         var tools = allCases.filter { $0.style.map(context.styles.contains) ?? false }
-        if context.isChecklist { tools.append(contentsOf: [.checkbox, .remind]) }
+        if context.isChecklist { tools.append(contentsOf: NotebookSettings.shared.showsTodos ? [.checkbox, .remind] : [.checkbox]) }
         if context.canOutdent { tools.append(.outdent) }
         if context.canIndent { tools.append(.indent) }
         if caret.link != nil { tools.append(.openLink) }

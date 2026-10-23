@@ -4,6 +4,7 @@ import AppKit
 #else
 import UIKit
 #endif
+import SwiftUI
 
 /// The debug remote's commands for to-dos, the same on the Mac and on iPhone and iPad. A to-do is named by some of
 /// its words.
@@ -18,8 +19,18 @@ import UIKit
 ///     remindtodo <words>                         Remind Me for it: the popover from its pill, or the sheet
 ///     firetodo <words>                           its notification in a second, as at its time
 ///     todojobs                                   what the to-dos' notifications are made from
+///     edittodo <offset|end> <words>              edits it in To-dos, as a click on its words that many letters in
+///     todoediting                                the to-do being edited: its words, its lines and where the keyboard is
+///     todolines <words>                          the lines under it, as To-dos reads them
+///     showstodos 0|1                             To-dos on or off, as in Settings
 @MainActor
 enum DebugTodos {
+    /// Asks To-dos to edit a to-do: `item` and `offset` in its user info.
+    static let edit = Notification.Name("DebugTodosEdit")
+    /// The to-do To-dos is editing, and where its keyboard is.
+    static weak var session: TodoEditing?
+    static var focus: TodoFocus?
+
     static func run(_ command: String, _ argument: String, workspace: Workspace, log: @escaping (String) -> Void) -> Bool {
         func find(_ words: String) -> TodoList.Item? {
             let folded = words.lowercased()
@@ -97,6 +108,30 @@ enum DebugTodos {
             }
             ReminderNotifications.shared.fireSoon(job)
             log("firetodo \(job.identifier): \(job.title) | \(job.subtitle(forPlace: job.date == nil)) | \(job.body.replacingOccurrences(of: "\n", with: " / "))")
+        case "edittodo":
+            guard split.count == 2, let item = find(split[1]) else { log("edittodo: <offset|end> <words>"); break }
+            NotificationCenter.default.post(name: edit, object: nil, userInfo: ["item": item, "offset": Int(split[0]) as Any])
+            log("edittodo \(item.todo.text) at \(split[0])")
+        case "todoediting":
+            guard let session, !session.isEnded else { log("todoediting: none"); break }
+            let focus = switch self.focus {
+            case .title: "title"
+            case .line(let id): "line \(session.lines.firstIndex { $0.id == id } ?? -1)"
+            case nil: "none"
+            }
+            func caret(_ words: String, _ selection: TextSelection?) -> String {
+                guard selection != nil else { return "-" }
+                return "\(words.utf16.distance(from: words.startIndex, to: TodoEditing.caret(in: words, selection)))"
+            }
+            let lines = session.lines.enumerated().map { "  \($0.offset): [\($0.element.depth)] \($0.element.markdown.debugDescription) caret \(caret($0.element.words, $0.element.selection))" }
+            log("todoediting \(session.title.debugDescription) caret \(caret(session.title, session.titleSelection)) (focus \(focus), source \(session.current.source.debugDescription)):\n" + lines.joined(separator: "\n"))
+        case "todolines":
+            guard let item = find(argument) else { log("todolines: no to-do “\(argument)”"); break }
+            log("todolines \(item.todo.text) [\(item.todo.mark.character)] fields \(item.todo.fields.map { $0.label() }):\n"
+                + item.todo.lines.map { "  [\($0.depth)] \($0.kind) \($0.text.debugDescription) | \($0.source.debugDescription)" }.joined(separator: "\n"))
+        case "showstodos":
+            NotebookSettings.shared.showsTodos = argument == "1"
+            log("showstodos \(NotebookSettings.shared.showsTodos), showing \(workspace.showsTodos)")
         case "todojobs":
             let jobs = workspace.todoJobs()
             log("todojobs (\(jobs.count)):\n" + jobs.map { "  \($0.identifier) \($0.date?.formatted(date: .abbreviated, time: .shortened) ?? "-") \($0.place?.phrase ?? "") | \($0.title) | \($0.subtitle(forPlace: false))" }.joined(separator: "\n"))

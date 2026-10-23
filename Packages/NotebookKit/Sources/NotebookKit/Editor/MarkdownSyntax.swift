@@ -59,7 +59,7 @@ enum MarkdownSyntax {
 
     static let heading = regex(#"^(#{1,6})[ \t]+(.+)$"#)
     static let quote = regex(#"^(>[ \t]?)(.*)$"#)
-    static let listMarker = regex(#"^[ \t]*([-*+]|\d+[.)])[ \t]+(\[[ xX]\][ \t]+)?"#)
+    static let listMarker = regex(#"^[ \t]*([-*+]|\d+[.)])[ \t]+(\[(?: |[^\s0-9\[\]\\`\x{10000}-\x{10FFFF}])\][ \t]+)?"#)
     static let rule = regex(#"^[ \t]*([-*_])([ \t]*\1){2,}[ \t]*$"#)
     // A space before the closing marks still counts, unlike in CommonMark: it is there for a moment whenever a space
     // is typed in bold text, and the bold would flicker off and on with every word.
@@ -74,7 +74,8 @@ enum MarkdownSyntax {
     static let inlineCode = regex(#"`[^`\n]+`"#)
     static let fence = regex(#"^(```|~~~)[^\n]*\n[\s\S]*?(?:^\1[ \t]*$|\z)"#)
 
-    private static let listPrefix = regex(#"^([ \t]*)([-*+]|(\d{1,9})[.)])([ \t]+)(?:\[([ xX])\](?:[ \t]+|$))?"#)
+    /// A checkbox holds a space, an x or another of the marks `TaskMark` reads.
+    private static let listPrefix = regex(#"^([ \t]*)([-*+]|(\d{1,9})[.)])([ \t]+)(?:\[( |[^\s0-9\[\]\\`\x{10000}-\x{10FFFF}])\](?:[ \t]+|$))?"#)
     private static let headingPrefix = regex(#"^(#{1,6})[ \t]+"#)
     /// Nested quotes as one marker, `> > `, which Return carries on whole.
     private static let quotePrefix = regex(#"^(?:>[ \t]?)+"#)
@@ -126,7 +127,7 @@ enum MarkdownSyntax {
             let mark = match.range(at: 5)
             if mark.location != NSNotFound {
                 line.checkbox = NSRange(location: NSMaxRange(line.marker), length: NSMaxRange(match.range) - NSMaxRange(line.marker))
-                line.isChecked = text.substring(with: mark) != " "
+                line.isChecked = TaskMark(text.character(at: mark.location))?.isClosed ?? false
             }
         } else if let match = headingPrefix.firstMatch(in: string, range: range) {
             line.kind = .heading(match.range(at: 1).length)
