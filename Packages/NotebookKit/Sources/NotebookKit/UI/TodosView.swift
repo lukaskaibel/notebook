@@ -145,7 +145,7 @@ struct TodosView: View {
                     .font(.system(size: 13))
                     .foregroundStyle(Color.theme(Theme.textTertiary))
                     .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
-                    .padding(.leading, 30)
+                    .padding(.leading, TodoCircle.side + 10)
             }
             ForEach(section.rows) { row in
                 TodoRowView(workspace: workspace, row: row, section: section.kind, isTicked: ticked[row.id] != nil) {
@@ -154,7 +154,7 @@ struct TodosView: View {
                 .draggable(Self.dragPrefix + row.id) {
                     TodoDragPreview(title: title(of: row))
                 }
-                Divider().padding(.leading, 30)
+                Divider().padding(.leading, TodoCircle.side + 10)
             }
         }
         .padding(.horizontal, 8)
