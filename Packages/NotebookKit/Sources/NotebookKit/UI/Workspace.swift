@@ -111,6 +111,8 @@ public final class Workspace: NSObject {
     @ObservationIgnored weak var sidebar: SidebarController?
     /// Remind Me… while it is open, so another one takes its place.
     @ObservationIgnored weak var reminderPopover: NSPopover?
+    /// Customize Folder… while it is open, the same.
+    @ObservationIgnored weak var folderIconPopover: NSPopover?
     #else
     /// Counts changes to the folders that have been read, so the lists showing them read them again.
     private(set) var treeVersion = 0
@@ -137,6 +139,8 @@ public final class Workspace: NSObject {
     var reminderRequest: ReminderRequest?
     /// A to-do to set a reminder for, in a sheet.
     var todoReminderRequest: TodoReference?
+    /// A folder to customize, in a sheet.
+    var folderIconRequest: FolderIconRequest?
     /// What each note looked like when you went on from it, shown while the screen of the note you go on to slides
     /// over it, and while you swipe back to it. There is only one editor, and it is on the screen in front.
     @ObservationIgnored var pageSnapshots: [URL: UIView] = [:]

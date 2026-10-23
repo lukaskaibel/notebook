@@ -405,12 +405,15 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             workspace.prefetch(node)
             // Hidden folders show dimmed while their location shows them, as hidden files in the Finder.
             let dimmed = NotebookSettings.shared.dimsOtherFiles && !node.isFolder && node.kind != .note || node.isFolder && workspace.isHidden(node.url)
-            cell.configure(name: workspace.newName(for: node.url) ?? node.name, kind: node.kind, inCloud: node.isInCloud, url: node.url, nested: nested, dimmed: dimmed,
-                           reminder: node.kind == .note ? workspace.reminder(for: node.url) : nil)
+            cell.configure(name: workspace.newName(for: node.url) ?? node.name, kind: node.kind, inCloud: node.isInCloud, url: node.url, icon: node.icon, nested: nested,
+                           dimmed: dimmed, reminder: node.kind == .note ? workspace.reminder(for: node.url) : nil)
         } else if let entry = item as? SidebarEntry, let url = entry.url {
             let kind = FileKind(url: url, isDirectory: (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false)
             let name = workspace.newName(for: url) ?? (kind == .note ? url.deletingPathExtension().lastPathComponent : kind == .folder ? workspace.folderName(url) : url.lastPathComponent)
-            cell.configure(name: name, kind: kind, inCloud: false, url: url, symbol: { if case .favorite = entry.kind, kind == .folder { return "star" } else { return nil } }(),
+            // A favourite folder shows the look you gave it, else a star.
+            let icon = kind == .folder ? workspace.folderIcon(for: url) : nil
+            cell.configure(name: name, kind: kind, inCloud: false, url: url, icon: icon,
+                           symbol: { if case .favorite = entry.kind, kind == .folder, icon == nil { return "star" } else { return nil } }(),
                            nested: nested, reminder: kind == .note ? workspace.reminder(for: url) : nil)
         }
         return cell
@@ -604,8 +607,8 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             }
             add(menu, "Quick Look", "eye") { [weak self] in self?.workspace.quickLook(url) }
         }
+        let anchor = outline.view(atColumn: 0, row: row, makeIfNecessary: false)
         if FileKind(url: url, isDirectory: isFolder) == .note {
-            let anchor = outline.view(atColumn: 0, row: row, makeIfNecessary: false)
             add(menu, "Remind Me…", "bell") { [weak self] in self?.workspace.askForReminder(url, from: anchor) }
         }
         if !isLinked {
@@ -615,6 +618,9 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         }
         let favorite = workspace.isFavorite(url)
         add(menu, favorite ? "Remove from Favorites" : "Add to Favorites", favorite ? "star.slash" : "star") { [weak self] in self?.workspace.toggleFavorite(url) }
+        if isFolder, workspace.canCustomize(url) {
+            add(menu, "Customize Folder…", "paintpalette") { [weak self] in self?.workspace.customizeFolder(url, from: anchor) }
+        }
         if isFolder, workspace.canHide(url) {
             let isHidden = workspace.isHidden(url)
             add(menu, isHidden ? "Unhide Folder" : "Hide Folder", isHidden ? "eye" : "eye.slash") { [weak self] in self?.workspace.setHidden(url, !isHidden) }
@@ -942,15 +948,21 @@ final class SidebarFileCell: NSTableCellView {
         setAccessibilityLabel(due > 0 ? "To-dos, \(due) due" : "To-dos")
     }
 
-    func configure(name: String, kind: FileKind, inCloud: Bool, url: URL, symbol: String? = nil, nested: Bool, dimmed: Bool = false, reminder: Reminder? = nil) {
+    /// `look` is a folder's symbol or emoji and colour, if you chose any (Customize Folder).
+    func configure(name: String, kind: FileKind, inCloud: Bool, url: URL, icon look: FolderIcon? = nil, symbol: String? = nil, nested: Bool, dimmed: Bool = false,
+                   reminder: Reminder? = nil) {
         count.isHidden = true
         label.stringValue = name
         label.textColor = dimmed ? .tertiaryLabelColor : inCloud ? .secondaryLabelColor : .labelColor
         // As in Notes: large icons on a section's own rows, smaller ones inside a folder.
         icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular, scale: nested ? .medium : .large)
         icon.alphaValue = dimmed ? 0.5 : 1
-        icon.image = NSImage(systemSymbolName: symbol ?? kind.symbol, accessibilityDescription: nil)
-        tint = kind == .folder ? .controlAccentColor : kind == .note || kind == .other ? .secondaryLabelColor : kind.tint
+        if let emoji = look?.emoji {
+            icon.image = Self.picture(of: emoji, nested: nested)
+        } else {
+            icon.image = NSImage(systemSymbolName: look.flatMap { $0.symbol == nil ? nil : $0.shownSymbol } ?? symbol ?? kind.symbol, accessibilityDescription: nil)
+        }
+        tint = kind == .folder ? look?.color?.platformColor ?? .controlAccentColor : kind == .note || kind == .other ? .secondaryLabelColor : kind.tint
         updateTint()
         // A reminder's bell, red once its time has passed, goes before the cloud of a note still in iCloud.
         if let reminder {
@@ -965,6 +977,25 @@ final class SidebarFileCell: NSTableCellView {
     }
 
     private var isOverdue = false
+
+    private static var emojiPictures: [String: NSImage] = [:]
+
+    /// An emoji as a picture about as large as the symbols on the other rows: just its square, so it sits in their
+    /// middle rather than on the line's baseline.
+    private static func picture(of emoji: String, nested: Bool) -> NSImage {
+        let key = emoji + (nested ? " nested" : "")
+        if let picture = emojiPictures[key] { return picture }
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: emoji, attributes: [.font: NSFont.systemFont(ofSize: nested ? 12 : 13.5)]))
+        let square = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+        let picture = NSImage(size: square.size, flipped: false) { _ in
+            guard let context = NSGraphicsContext.current?.cgContext else { return false }
+            context.textPosition = CGPoint(x: -square.minX, y: -square.minY)
+            CTLineDraw(line, context)
+            return true
+        }
+        emojiPictures[key] = picture
+        return picture
+    }
 
     // On the accent-coloured selection of a focused sidebar, icons turn white like the text.
     override var backgroundStyle: NSView.BackgroundStyle {

@@ -40,6 +40,8 @@ MATH_BOX = (500, 104, 2140, 960)
 OBJECTS_BOX = (500, 150, 2140, 1400)
 # A note open for drawing, down to the palette at the bottom of the window.
 DRAWING_BOX = (500, 104, 2140, 1640)
+# The sidebar and Customize Folder… next to it, down to the popover's bottom.
+CUSTOMIZE_BOX = (0, 0, 1480, 1400)
 
 
 def typing_animation(theme):
@@ -105,6 +107,9 @@ for theme in [] if only == "devices" else ["dark", "light"]:
          f"drawing-{theme}")
     # The whole window: the bell in the sidebar, under the title and in the inspector, and Remind Me… open.
     webp(place(window(f"reminder-{theme}"), theme, (130, 110), 1800), f"reminder-{theme}")
+    # The sidebar's folders with their symbols, emoji and colours, and Customize Folder… open next to one of them.
+    webp(place(crop_card(window(f"customize-{theme}"), CUSTOMIZE_BOX, theme), theme, (110, 90), 1400, rim=False),
+         f"customize-{theme}")
     # To-dos, with its row selected at the top of the sidebar; then a note's to-dos with their pills, and Remind Me open
     # from one at a place.
     webp(place(window(f"todos-{theme}"), theme, (130, 110), 1800), f"todos-{theme}")

@@ -7,6 +7,12 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- Customize Folder…: right-click a folder in the sidebar, or touch and hold it on iPhone and iPad, and give it a colour
+  and a symbol or an emoji in place of the folder. Over 300 symbols and the emoji come in groups, with a few suggested
+  for the folder's name, and a search finds them by name or by what they are for. Notebook keeps them where the
+  Finder's own Customize Folder does, on the folder and as a colour tag, so they move with the folder, reach your other
+  devices through iCloud Drive and show in the Finder too; a folder customized in the Finder shows the same in
+  Notebook. Undo takes it all back in one step.
 - To-dos, at the top of the sidebar: every open checkbox in your notes in one list, as in Reminders, grouped into
   Overdue, Today, Tomorrow, Next 7 Days, Later and No Date, with the lines indented under each to-do as its notes and
   the note it is in. Notes with a reminder are there too, and the number next to To-dos counts what is due today or

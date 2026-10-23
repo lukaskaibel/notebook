@@ -227,6 +227,25 @@ a Mac can set one, and your iPhone reminds you.
   <img alt="The note Questions for Dr. Weber with a bell and Tomorrow 8:30 under its title, a bell in its row in the sidebar and a Reminder section in the inspector; Remind Me is open below the title with fri typed in its field, and Friday, Friday Afternoon and Friday Evening to choose from above Date and its day, Time, and Location" src="Design/screenshots/reminder-light.webp">
 </picture>
 
+### A symbol and a colour for a folder
+
+Folders start out as plain folders. To find one at a glance, right-click it and choose Customize Folder…, or on iPhone
+and iPad touch and hold it, and give it a colour and a symbol or an emoji instead of the folder. It shows in the
+sidebar as soon as you pick it. There are over 300 symbols and the emoji in groups, a few suggested for the folder's
+name (a plane for Travel, a fork and knife for Recipes), and a search that finds them by their names and by what they
+are for ("recipe", "japan"). The folder among the symbols brings back the plain folder, and the crossed-out circle takes
+the colour away; Undo (⌘Z) takes back everything you changed in one go.
+
+Notebook keeps them where the Finder keeps what its own Customize Folder chooses: the symbol or emoji on the folder,
+and the colour as one of the Finder's colour tags, which tint folders in the Finder. They stay with the folder when you
+rename or move it, iCloud Drive takes them along to your other devices, and a folder you customized in the Finder
+shows the same in Notebook.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/customize-dark.webp">
+  <img alt="The sidebar with Travel as a blue plane, Cooking as an orange fork and knife, Design as a palette emoji and University as a purple mortarboard, and Customize Folder open next to Travel: the plane in blue, a row of colours, Symbols and Emoji, a search field, and the symbols suggested for Travel above the groups of symbols" src="Design/screenshots/customize-light.webp">
+</picture>
+
 ### PDFs, pictures and every other file
 
 Notebook is a browser for your folders, not only for notes. A PDF opens right in the window the way Preview shows it, its
@@ -299,6 +318,9 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   choose Hide Folder, or on iPhone and iPad touch and hold it. It leaves the sidebar, search and Move To, and stays
   hidden on your other Macs, iPhones and iPads through iCloud. The eye next to the location's name, or ⇧⌘., shows
   hidden folders again, dimmed, until you click it again; on iPhone and iPad, Show Hidden Folders is in the ⋯ menu.
+- **Folders with a symbol and a colour.** Customize Folder… gives a folder a colour and a symbol or an emoji, found in
+  groups, suggested for its name or searched for, kept on the folder as the Finder keeps them, so the Finder shows them
+  too.
 - **To-dos.** Every open checkbox in every note, in one list at the top of the sidebar, grouped by when it's due, with
   the lines indented under it as its notes. Tick them off there, open their note, or drag them to another day. A to-do
   takes a date, a time and a place, written after its words where other apps read them too, and shows them as pills.
@@ -330,8 +352,9 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
 
 Everything is plain Markdown, so other apps keep reading your notes. Notebook adds no files of its own besides the
 `.assets` folders for pictures and files you add to notes, and in them, next to each drawing's picture, a `.drawing`
-file with its strokes. What isn't part of a note, such as the folders you hide and the reminders of notes you set, is
-kept in the app's settings and iCloud's key-value store, not in your folders. A to-do's date and place are part of the
+file with its strokes. A folder's symbol and colour are kept on the folder, as the Finder keeps them, not in a file.
+What isn't part of a note or a folder, such as the folders you hide and the reminders of notes you set, is kept in the
+app's settings and iCloud's key-value store, not in your folders. A to-do's date and place are part of the
 to-do, so they are in the note. What search knows, the text of your notes and
 PDFs and the words read in pictures, is kept in the app's caches on each device, from where it can always be read again.
 
@@ -352,6 +375,7 @@ PDFs and the words read in pictures, is kept in the app's caches on each device,
 | Maths | `$x^2$`, `$$ … $$` | A typeset formula |
 | Diagram | ```` ```mermaid ```` | The diagram |
 | Front matter | `---` YAML `---` at the start | A small pill; click to see the YAML |
+| A folder's look | `{"sym":"airplane"}` or `{"emoji":"🍕"}` in the folder's `com.apple.icon.folder#S` attribute, and a colour tag such as Blue | The symbol or emoji in the sidebar, in the tag's colour |
 
 `[[Name]]` finds the note by its name, ignoring case and accents: one in the same folder first, then the one with the
 shortest path. `[[Folder/Name]]` says exactly which. Remote pictures (`![](https://…)`) are not downloaded; Notebook
@@ -463,12 +487,13 @@ While writing:
 | ↑ on the first line, ← or Delete at the very start | Into the title, at its end |
 | Return, Tab, ↓, or → at the end of the title | Into the text |
 
-In the sidebar: a double-click opens a note in a window of its own and any other file in its own app, as in the
-Finder; Return renames, ⌘⌫ moves to the Trash, and Space opens a file in Quick Look. Right-click a file or folder for
-everything else, including Open in New Window, New Folder, Copy Link, which copies a `[[link]]` to it, Remind Me… and
-Hide Folder. In a note, right-click a to-do for Remind Me…, or click the bell that comes up after it as you point at
-it; in To-dos, right-click a row to move it to another day or open its note. As you point at a location's name, a folder with a plus comes up next to it for a new folder at its top,
-and, when the location has hidden folders, an eye that shows them.
+In the sidebar: a double-click opens a note in a window of its own and any other file in its own app, as in the Finder;
+Return renames, ⌘⌫ moves to the Trash, and Space opens a file in Quick Look. Right-click a file or folder for everything
+else, including Open in New Window, New Folder, Copy Link, which copies a `[[link]]` to it, Remind Me…, Customize
+Folder… and Hide Folder. In a note, right-click a to-do for Remind Me…, or click the bell that comes up after it as you
+point at it; in To-dos, right-click a row to move it to another day or open its note. As you point at a location's name,
+a folder with a plus comes up next to it for a new folder at its top, and, when the location has hidden folders, an eye
+that shows them.
 
 On an iPad with a keyboard, ⌘N, ⌘Z and ⇧⌘Z, ⌘F, ⌘K, ⇧⌘R, ⌘[ and ⌘], ⌃⌘I, ⇧⌘. and the shortcuts for writing work as
 on the Mac. On iPhone and iPad:
@@ -477,7 +502,7 @@ on the Mac. On iPhone and iPad:
 | --- | --- |
 | Swipe from the left edge | Back to the folder or the note you came from (iPhone) |
 | Swipe a file to the left or right | Move or delete it, add it to your favourites, or hide a folder |
-| Touch and hold a file or folder | Set a reminder, rename, move, duplicate, copy a link, hide a folder, share and more |
+| Touch and hold a file or folder | Set a reminder, rename, move, duplicate, copy a link, customize or hide a folder, share and more |
 | Pull a list down | Read the folder again |
 | Tap a checkbox, a link or a picture | Tick it, follow it, or look at it in Quick Look |
 | Tap a to-do's pill, or the bell above the keyboard in a to-do | Its date, time and place |
@@ -525,7 +550,8 @@ Packages/NotebookKit/
     Render/                  Tables, maths, diagrams and code highlighting
     Drawing/                 Drawings: the strokes file and its picture, and drawing them in notes
     Files/                   Locations, the file tree read in the background, file operations, saving, watching, the
-                             three-way merge, and the hidden folders and reminders kept in iCloud's key-value store
+                             three-way merge, the hidden folders and reminders kept in iCloud's key-value store, and
+                             folders' symbols and colours kept where the Finder keeps them
     Index/                   Search: the index of every file and how it is kept between launches, the corpus a
                              search goes through on every core, the text read in pictures, scans and drawings, and
                              how [[links]] resolve; the to-dos of every note, read from it
@@ -534,8 +560,8 @@ Packages/NotebookKit/
                              pictures, videos and Quick Look; what both share, such as the outline and search results
     UI/iOS/                  The iPhone's and iPad's screens: folders, the sidebar, the note, search and Settings
     Debug/                   The debug remotes and the sample notes (Debug builds only)
-  Tests/                     Parser, editor, merge, smoothness, search index, drawing, reminder, to-do and app icon
-                             tests
+  Tests/                     Parser, editor, merge, smoothness, search index, drawing, reminder, to-do, folder look and
+                             app icon tests
 Config/                      Build settings, Info.plist and entitlements
 Design/                      The icon, the README pictures and the social preview
 Website/                     The website, published to GitHub Pages by .github/workflows/website.yml
@@ -587,21 +613,21 @@ any leather, and the cover's grain for the website's button (it needs Python 3 w
 Tools/AppIcon/make.sh
 ```
 
-Debug builds can be driven from a file: launch with `-debugCommandFile <path>` and append commands such as
-`open Travel/Kyoto trip.md`, `type Hello`, `key return` or `snapshot <file>` to it, one per line. The commands are
-listed in `Debug/DebugRemote.swift`, and for iPhone and iPad in `Debug/DebugRemote+UIKit.swift`; those for reminders,
-such as `remind 2 Personal/Questions for Dr. Weber.md` (in two minutes) and `notifications`, are in
-`Debug/DebugReminders.swift`, and those for to-dos, such as `todos`, `ticktodo dry cleaning` and `firetodo dry
-cleaning`, in `Debug/DebugTodos.swift`. In the Simulator the file is in the app's own folder (`-debugCommandFile
-~/Documents/cmd`), where `xcrun simctl get_app_container` finds it, and `xcrun simctl io <device> screenshot` takes the
-pictures. `-NotebookSlowFolders 2` makes every folder take two seconds to read, as a slow iCloud might, to see that
-nothing waits for it, `-NotebookSlowFiles 2` does the same for every note, PDF, picture and video you open, and
-`-NotebookSlowWrites 2` for every change to files: a new note or folder, a rename, a move, a copy, the Trash. On the
-Mac, `mainthread` logs how many folders were read and files changed on the main thread, which should be none.
-`timeopen <note>` logs how long opening a note keeps the window busy, `search <text>` how long search takes, and
-`index` when after launch the kept index was read, search had every file and the files were checked, and how many
-notes that read. macOS
-shows notifications only from an app in a lasting place, not from one in `/tmp`.
+Debug builds can be driven from a file: launch with `-debugCommandFile <path>` and append commands such as `open
+Travel/Kyoto trip.md`, `type Hello`, `key return` or `snapshot <file>` to it, one per line. The commands are listed in
+`Debug/DebugRemote.swift`, and for iPhone and iPad in `Debug/DebugRemote+UIKit.swift`; those for reminders, such as
+`remind 2 Personal/Questions for Dr. Weber.md` (in two minutes) and `notifications`, are in
+`Debug/DebugReminders.swift`, those for to-dos, such as `todos`, `ticktodo dry cleaning` and `firetodo dry cleaning`, in
+`Debug/DebugTodos.swift`, and those for folders' looks, such as `customize Travel`, `iconpick 🍕` and `setfoldericon
+Travel symbol=airplane color=blue`, in `Debug/DebugFolderIcons.swift`. In the Simulator the file is in the app's own
+folder (`-debugCommandFile ~/Documents/cmd`), where `xcrun simctl get_app_container` finds it, and `xcrun simctl io
+<device> screenshot` takes the pictures. `-NotebookSlowFolders 2` makes every folder take two seconds to read, as a slow
+iCloud might, to see that nothing waits for it, `-NotebookSlowFiles 2` does the same for every note, PDF, picture and
+video you open, and `-NotebookSlowWrites 2` for every change to files: a new note or folder, a rename, a move, a copy,
+the Trash. On the Mac, `mainthread` logs how many folders were read and files changed on the main thread, which should
+be none. `timeopen <note>` logs how long opening a note keeps the window busy, `search <text>` how long search takes,
+and `index` when after launch the kept index was read, search had every file and the files were checked, and how many
+notes that read. macOS shows notifications only from an app in a lasting place, not from one in `/tmp`.
 
 Builds for TestFlight are made and uploaded with [fastlane](https://fastlane.tools), signed in with an App Store
 Connect API key, so Xcode needs no account. Copy `fastlane/.env.secret.example` to `fastlane/.env.secret` (it stays out

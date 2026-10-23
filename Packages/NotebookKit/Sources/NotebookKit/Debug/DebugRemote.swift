@@ -709,6 +709,7 @@ enum DebugRemote {
                 path.hasPrefix("/") ? URL(fileURLWithPath: path) : workspace?.locations.first?.url.appendingPathComponent(path)
             }
             if let workspace, DebugReminders.run(command, argument, workspace: workspace, url: resolve, log: log) { break }
+            if let workspace, DebugFolderIcons.run(command, argument, workspace: workspace, url: resolve, log: log) { break }
             if let workspace, DebugTodos.run(command, argument, workspace: workspace, log: log) { break }
             log("unknown command: \(line)")
         }
