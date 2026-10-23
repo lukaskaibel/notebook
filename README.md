@@ -206,12 +206,15 @@ your other devices and other apps, and a to-do keeps its date however and wherev
 ### Remind me of a note
 
 Questions for the doctor, points for a meeting: Remind Me… brings a note back at the time you choose, or when you
-arrive at or leave a place. Pick Later Today, This Evening or Tomorrow, or a date and a time, a place, or both, in a
-popover like a reminder's details in Reminders. The note then shows a bell and the time under its title ("Tomorrow
-8:30") and a bell in its row; a click on it changes the time or removes the reminder, and once the time has passed it
-turns red. At that time a notification comes with the note's name, the time and its first points: what is still to do
-first, then the rest, without pictures or front matter. It is Time Sensitive, so it gets through a Focus. Tap it to open
-the note, or choose Remind Me in 1 Hour or Done.
+arrive at or leave a place. Pick Later Today, This Evening or Tomorrow, type the time in a few words, set a date and a
+time, a place, or both, in a popover like a reminder's details in Reminders. It reads "friday evening", "tomorrow at
+9", "fri 3pm", "in 3 weeks", "in 2 hours", "next monday", "the 12th" or "12.11."; as you type it shows what that could
+mean, and the date and time below follow the one that is lit. Return or a click takes it, and the arrow keys go through
+the others. A day without a time is at nine in the morning. The note then shows a bell and the time under its title
+("Tomorrow 8:30") and a bell in its row; a click on it changes the time or removes the reminder, and once the time has
+passed it turns red. At that time a notification comes with the note's name, the time and its first points: what is
+still to do first, then the rest, without pictures or front matter. It is Time Sensitive, so it gets through a Focus.
+Tap it to open the note, or choose Remind Me in 1 Hour or Done. A to-do's Remind Me reads typed times the same way.
 
 On the Mac, Remind Me… is in the note's ⋯ menu, the sidebar's right-click menu and the inspector; on iPhone and iPad it
 is in the ⋯ menu, on touch and hold, and, once you add it in Settings › Writing Bar, as a bell above the keyboard. The
@@ -221,7 +224,7 @@ a Mac can set one, and your iPhone reminds you.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/reminder-dark.webp">
-  <img alt="The note Questions for Dr. Weber with a bell and Tomorrow 8:30 under its title, a bell in its row in the sidebar and a Reminder section in the inspector; Remind Me is open below the title with Later Today, This Evening and Tomorrow, then Date and its day, Time, and Location" src="Design/screenshots/reminder-light.webp">
+  <img alt="The note Questions for Dr. Weber with a bell and Tomorrow 8:30 under its title, a bell in its row in the sidebar and a Reminder section in the inspector; Remind Me is open below the title with fri typed in its field, and Friday, Friday Afternoon and Friday Evening to choose from above Date and its day, Time, and Location" src="Design/screenshots/reminder-light.webp">
 </picture>
 
 ### PDFs, pictures and every other file
@@ -299,11 +302,11 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
 - **To-dos.** Every open checkbox in every note, in one list at the top of the sidebar, grouped by when it's due, with
   the lines indented under it as its notes. Tick them off there, open their note, or drag them to another day. A to-do
   takes a date, a time and a place, written after its words where other apps read them too, and shows them as pills.
-- **Reminders.** Remind Me… brings a note or a to-do back at a time you choose, or when you arrive at or leave a place,
-  with a notification of its first points or the to-do's notes that gets through a Focus. A note's reminder follows it
-  when you rename or move it in Notebook, goes when you delete it, and reaches your other Macs, iPhones and iPads through
-  iCloud; a to-do's goes with its note. Each device shows the notification itself; places remind you on iPhone and
-  iPad.
+- **Reminders.** Remind Me… brings a note or a to-do back at a time you choose, picked or typed in a few words ("friday
+  evening", "in 3 weeks"), or when you arrive at or leave a place, with a notification of its first points or the
+  to-do's notes that gets through a Focus. A note's reminder follows it when you rename or move it in Notebook, goes
+  when you delete it, and reaches your other Macs, iPhones and iPads through iCloud; a to-do's goes with its note. Each
+  device shows the notification itself; places remind you on iPhone and iPad.
 - **Live preview editor.** Headings, bold, italic, strikethrough, `==highlight==`, inline code, links, checklists,
   bulleted and numbered lists, quotes, callouts, tables, code blocks, maths, Mermaid, footnotes and front matter, which
   folds into a small "properties" pill. Styles turn on and off where the caret is, their marks come and go as a pair,

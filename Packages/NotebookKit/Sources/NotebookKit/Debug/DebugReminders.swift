@@ -18,9 +18,15 @@ import UserNotifications
 ///     reminderline                                           the bell under the open note's title
 ///     remindme <note>                                        Remind Me… from a menu: the popover or the sheet
 ///     remindme close                                         puts the popover away (Mac)
+///     remindtype <text>                                      types a time into Remind Me (empty clears it)
+///     remindkey <down|up|return>                             a key in Remind Me's field (on the Mac a key event,
+///                                                            key equivalents first, as a keyboard's)
 ///     permission [provisional]                               asks for notifications, and logs the answer
 @MainActor
 enum DebugReminders {
+    /// Posted for remindtype and remindkey, which Remind Me takes as typed.
+    static let keyboard = Notification.Name("NotebookDebugReminderKeyboard")
+
     static func run(_ command: String, _ argument: String, workspace: Workspace, url: (String) -> URL?, log: @escaping (String) -> Void) -> Bool {
         let split = argument.split(separator: " ", maxSplits: 1).map(String.init)
         switch command {
@@ -89,6 +95,24 @@ enum DebugReminders {
             let title = button.configuration?.attributedTitle.map { String($0.characters) } ?? ""
             #endif
             log("reminderline: \(button.isHidden ? "none" : title) at \(button.frame.integral), meta “\(workspace.editor.metaText)” at \(workspace.editor.textView.metaLabel.frame.integral)")
+        case "remindtype", "remindkey":
+            #if os(macOS)
+            if command == "remindkey", let window = workspace.reminderPopover?.contentViewController?.view.window,
+               let (characters, code) = ["return": ("\r", UInt16(36)), "down": (String(UnicodeScalar(NSDownArrowFunctionKey)!), 125), "up": (String(UnicodeScalar(NSUpArrowFunctionKey)!), 126)][argument] {
+                let responder = window.firstResponder.map { String(describing: type(of: $0)) } ?? "nothing"
+                let modifiers: NSEvent.ModifierFlags = code == 36 ? [] : [.function, .numericPad]
+                for type in [NSEvent.EventType.keyDown, .keyUp] {
+                    guard let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: modifiers, timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                                       context: nil, characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code) else { continue }
+                    if type == .keyDown, window.performKeyEquivalent(with: event) { continue }
+                    window.sendEvent(event)
+                }
+                log("remindkey \(argument) to \(responder)")
+                break
+            }
+            #endif
+            NotificationCenter.default.post(name: keyboard, object: nil, userInfo: ["command": command, "argument": argument])
+            log("\(command) \(argument)")
         case "remindme":
             #if os(macOS)
             if argument == "close" {
