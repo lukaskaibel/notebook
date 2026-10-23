@@ -15,6 +15,10 @@ final class Page: Hashable {
         self.isFolder = isFolder
     }
 
+    /// The To-dos list's screen.
+    static func todos() -> Page { Page(url: Workspace.todosURL, isFolder: false) }
+    var isTodos: Bool { url == Workspace.todosURL }
+
     nonisolated static func == (a: Page, b: Page) -> Bool { a === b }
     nonisolated func hash(into hasher: inout Hasher) { hasher.combine(ObjectIdentifier(self)) }
 }
@@ -30,7 +34,9 @@ struct PhoneBrowser: View {
         NavigationStack(path: $path) {
             HomeScreen(workspace: workspace, newFolderIn: $newFolderIn)
                 .navigationDestination(for: Page.self) { page in
-                    if page.isFolder {
+                    if page.isTodos {
+                        TodosView(workspace: workspace)
+                    } else if page.isFolder {
                         FolderScreen(workspace: workspace, page: page, newFolderIn: $newFolderIn)
                     } else {
                         DocumentScreen(workspace: workspace, url: page.url)
@@ -52,6 +58,9 @@ struct PhoneBrowser: View {
         }
         .onChange(of: path) { _, path in pathChanged(path) }
         .onChange(of: workspace.currentURL) { _, url in fileChanged(url) }
+        .onChange(of: workspace.showsTodos) { _, shows in
+            if shows, path.last?.isTodos != true { path.append(.todos()) }
+        }
         .onChange(of: workspace.folderRequest?.id) { _, _ in
             guard let folder = workspace.folderRequest?.url, path.last?.url != folder else { return }
             path.append(Page(url: folder, isFolder: true))
@@ -76,6 +85,11 @@ struct PhoneBrowser: View {
 
     /// Back to a folder leaves the note (it is saved); back to a note opens it again where you were.
     private func pathChanged(_ path: [Page]) {
+        if let top = path.last, top.isTodos {
+            if !workspace.showsTodos { workspace.showTodos(recordHistory: false) }
+            return
+        }
+        if workspace.showsTodos { workspace.closeTodos() }
         if let top = path.last, !top.isFolder {
             if workspace.currentURL != top.url {
                 workspace.reopen(top.url)
@@ -93,10 +107,10 @@ struct PhoneBrowser: View {
     /// A file opened from a link, from search or as a new note gets a screen of its own; one deleted goes away.
     private func fileChanged(_ url: URL?) {
         guard let url else {
-            if let top = path.last, !top.isFolder { path.removeLast() }
+            if let top = path.last, !top.isFolder, !top.isTodos { path.removeLast() }
             return
         }
-        if let top = path.last, !top.isFolder {
+        if let top = path.last, !top.isFolder, !top.isTodos {
             if top.url == url { return }
             // Renamed or moved (itself or a folder it is in): the same screen, under the new name.
             if let relocation = workspace.relocation, Self.relocated(top.url, relocation.from, relocation.to) == url {
@@ -138,6 +152,9 @@ struct HomeScreen: View {
             if isSearching {
                 SearchResultsList(workspace: workspace, query: query) { open($0) }
             } else {
+                Section {
+                    NavigationLink(value: Page.todos()) { TodosRowLabel(count: workspace.dueTodoCount) }
+                }
                 let favorites = workspace.favoriteURLs
                 if !favorites.isEmpty {
                     Section("Favorites") {

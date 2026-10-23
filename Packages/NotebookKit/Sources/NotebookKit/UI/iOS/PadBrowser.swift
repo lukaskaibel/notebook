@@ -61,6 +61,11 @@ struct PadBrowser: View {
                 withAnimation { workspace.columnVisibility = .detailOnly }
             }
         }
+        .onChange(of: workspace.showsTodos) { _, shows in
+            if shows, !isWide, workspace.columnVisibility != .detailOnly {
+                withAnimation { workspace.columnVisibility = .detailOnly }
+            }
+        }
     }
 
     private var splitView: some View {
@@ -95,7 +100,9 @@ struct PadBrowser: View {
         } detail: {
             NavigationStack {
                 Group {
-                    if let url = workspace.currentURL {
+                    if workspace.showsTodos {
+                        TodosView(workspace: workspace, isInSplitView: true)
+                    } else if let url = workspace.currentURL {
                         DocumentScreen(workspace: workspace, url: url, isInSplitView: true)
                     } else {
                         EmptyState()
@@ -133,6 +140,8 @@ struct PadSidebar: View {
                 if isSearching {
                     SearchResultsList(workspace: workspace, query: query) { workspace.open($0) }
                 } else {
+                    TodosRowLabel(count: workspace.dueTodoCount)
+                        .tag(Workspace.todosURL)
                     let favorites = workspace.favoriteURLs
                     if !favorites.isEmpty {
                         Section("Favorites", isExpanded: sectionBinding("Favorites")) {
@@ -170,8 +179,12 @@ struct PadSidebar: View {
     }
 
     private var selection: Binding<URL?> {
-        Binding(get: { workspace.currentURL }, set: { url in
-            if let url, url != workspace.currentURL { workspace.open(url) }
+        Binding(get: { workspace.showsTodos ? Workspace.todosURL : workspace.currentURL }, set: { url in
+            if url == Workspace.todosURL {
+                workspace.showTodos()
+            } else if let url, url != workspace.currentURL {
+                workspace.open(url)
+            }
         })
     }
 

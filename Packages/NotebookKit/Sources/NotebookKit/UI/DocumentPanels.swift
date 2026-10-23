@@ -141,11 +141,11 @@ struct ReminderRow: View {
         let reminder = workspace.reminder(for: url)
         Button { isPicking = true } label: {
             Label {
-                Text(reminder.map { Workspace.reminderText($0.date) } ?? "Remind Me…")
+                Text(reminder?.text ?? "Remind Me…")
                     .foregroundStyle(reminder == nil ? Color.secondary : Color.primary)
             } icon: {
                 Image(systemName: reminder == nil ? "bell" : "bell.fill")
-                    .foregroundStyle(reminder.map { $0.date <= .now ? Color.red : Color.accentColor } ?? Color.secondary)
+                    .foregroundStyle(reminder.map { $0.isOverdue ? Color.red : Color.accentColor } ?? Color.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(.rect)

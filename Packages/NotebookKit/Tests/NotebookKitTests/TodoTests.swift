@@ -1,0 +1,146 @@
+import XCTest
+@testable import NotebookKit
+
+/// To-dos with reminders: the date, time and place written after a to-do's text, read back, changed, and the open
+/// to-dos of a note with the lines indented under them as their notes.
+final class TodoTests: XCTestCase {
+    private func marks(_ line: String) -> [TodoMark] {
+        let text = line as NSString
+        return TodoMarks.find(in: text, range: NSRange(location: 0, length: text.length))
+    }
+
+    // MARK: - Marks
+
+    func testMarksAreRead() throws {
+        XCTAssertEqual(marks("Call Dr. Weber ⏰ 2026-10-24 14:00").first?.kind, .due(TodoDue(year: 2026, month: 10, day: 24, hour: 14, minute: 0)))
+        XCTAssertEqual(marks("Pay rent 📅 2026-11-01").first?.kind, .due(TodoDue(year: 2026, month: 11, day: 1)))
+        XCTAssertEqual(marks("Pay rent 📅 2026-11-01 9:30").first?.kind, .due(TodoDue(year: 2026, month: 11, day: 1, hour: 9, minute: 30)), "a time after a day counts too")
+        XCTAssertEqual(marks("Alarm ⏰️ 2026-11-01 07:05").first?.kind, .due(TodoDue(year: 2026, month: 11, day: 1, hour: 7, minute: 5)), "with the emoji's variation selector")
+        XCTAssertTrue(marks("Buy a 📅2026-13-01").isEmpty, "no thirteenth month")
+        XCTAssertEqual(marks("Buy a📅 2026-10-01").count, 1, "letters typed in front of a pill keep it")
+        XCTAssertTrue(marks("Plain to-do").isEmpty)
+
+        let place = try XCTUnwrap(marks("Buy plasters 📍 [Pharmacy](https://maps.apple.com/?ll=52.520008,13.404954&q=Pharmacy)").first)
+        XCTAssertEqual(place.kind, .place(TodoPlace(name: "Pharmacy", latitude: 52.520008, longitude: 13.404954)))
+        XCTAssertEqual(place.range.location, ("Buy plasters " as NSString).length)
+        XCTAssertEqual(marks("Lock up 📍 Leaving [Home](https://maps.apple.com/place?coordinate=48.1,11.5&name=Home)").first?.kind,
+                       .place(TodoPlace(name: "Home", latitude: 48.1, longitude: 11.5, leaving: true)))
+        XCTAssertEqual(marks("Lock up 📍 [Home](https://example.com)").first?.kind, .place(TodoPlace(name: "Home", latitude: nil, longitude: nil)),
+                       "a place without coordinates still shows, it can't remind")
+
+        let both = marks("Ask about the knee ⏰ 2026-10-24 14:00 📍 [Praxis](https://maps.apple.com/?ll=1,2&q=Praxis)")
+        XCTAssertEqual(both.count, 2)
+        XCTAssertEqual(TodoMarks.schedule(of: both).due?.hour, 14)
+        XCTAssertEqual(TodoMarks.schedule(of: both).place?.name, "Praxis")
+    }
+
+    func testMarksAreWrittenAsOtherAppsReadThem() {
+        XCTAssertEqual(TodoDue(year: 2026, month: 10, day: 24, hour: 9, minute: 5).markdown, "⏰ 2026-10-24 09:05")
+        XCTAssertEqual(TodoDue(year: 2026, month: 1, day: 2).markdown, "📅 2026-01-02")
+        let place = TodoPlace(name: "Café [Mitte]", latitude: 52.5200081, longitude: 13.4, leaving: true)
+        XCTAssertEqual(place.markdown, "📍 Leaving [Café (Mitte)](https://maps.apple.com/?ll=52.520008,13.4&q=Caf%C3%A9%20%5BMitte%5D)")
+        // What is written is read back the same.
+        let line = "Coffee " + place.markdown
+        XCTAssertEqual(marks(line).first?.kind, .place(TodoPlace(name: "Café (Mitte)", latitude: 52.520008, longitude: 13.4, leaving: true)))
+    }
+
+    func testChangingMarksLeavesTheWords() throws {
+        func apply(_ line: String, due: TodoDue?, place: TodoPlace?) -> String {
+            let text = line as NSString
+            guard let change = TodoMarks.change(in: text, content: NSRange(location: 0, length: text.length), due: due, place: place) else { return line }
+            return text.replacingCharacters(in: change.range, with: change.replacement)
+        }
+        let due = TodoDue(year: 2026, month: 10, day: 24, hour: 14, minute: 0)
+        let pharmacy = TodoPlace(name: "Pharmacy", latitude: 1, longitude: 2)
+        XCTAssertEqual(apply("Call Dr. Weber", due: due, place: nil), "Call Dr. Weber ⏰ 2026-10-24 14:00")
+        XCTAssertEqual(apply("Call Dr. Weber  ", due: due, place: nil), "Call Dr. Weber ⏰ 2026-10-24 14:00", "trailing spaces go")
+        XCTAssertEqual(apply("Call Dr. Weber ⏰ 2026-10-24 14:00", due: due.at(hour: nil, minute: nil), place: nil), "Call Dr. Weber 📅 2026-10-24")
+        XCTAssertEqual(apply("Call ⏰ 2026-10-24 14:00 Dr. Weber", due: nil, place: nil), "Call Dr. Weber", "a mark in the middle goes too")
+        XCTAssertEqual(apply("Call Dr. Weber ⏰ 2026-10-24 14:00", due: due, place: pharmacy), "Call Dr. Weber ⏰ 2026-10-24 14:00 " + pharmacy.markdown)
+        XCTAssertEqual(apply("Call Dr. Weber " + pharmacy.markdown + " ⏰ 2026-10-24 14:00", due: due, place: pharmacy), "Call Dr. Weber ⏰ 2026-10-24 14:00 " + pharmacy.markdown, "the date first")
+        XCTAssertEqual(apply("", due: due, place: nil), "⏰ 2026-10-24 14:00")
+
+        // Only what differs is replaced.
+        let text = "Call ⏰ 2026-10-24 14:00" as NSString
+        let change = try XCTUnwrap(TodoMarks.change(in: text, content: NSRange(location: 0, length: text.length), due: due.at(hour: 15, minute: 0), place: nil))
+        XCTAssertEqual(change.replacement, "5")
+        XCTAssertNil(TodoMarks.change(in: text, content: NSRange(location: 0, length: text.length), due: due, place: nil), "nothing to change")
+    }
+
+    func testADayAndATimeTogetherKeepBoth() {
+        let line = "Call 📅 2026-10-24 ⏰ 2026-10-24 14:00" as NSString
+        XCTAssertEqual(TodoMarks.schedule(of: marks(line as String)).due, TodoDue(year: 2026, month: 10, day: 24, hour: 14, minute: 0), "the time is when it reminds")
+        let change = TodoMarks.change(in: line, content: NSRange(location: 0, length: line.length), due: TodoDue(year: 2026, month: 10, day: 25, hour: 9, minute: 0), place: nil)
+        XCTAssertEqual(change.map { line.replacingCharacters(in: $0.range, with: $0.replacement) }, "Call 📅 2026-10-25 ⏰ 2026-10-25 09:00", "both plugins' marks move along")
+    }
+
+    func testADateInsideAPlacesNameIsPartOfThePlace() throws {
+        let line = "Go 📍 [a ⏰ 2026-10-24 14:00](https://maps.apple.com/?q=a)" as NSString
+        let found = TodoMarks.find(in: line, range: NSRange(location: 0, length: line.length))
+        XCTAssertEqual(found.count, 1)
+        let change = try XCTUnwrap(TodoMarks.change(in: line, content: NSRange(location: 0, length: line.length), due: nil, place: nil))
+        XCTAssertEqual(line.replacingCharacters(in: change.range, with: change.replacement), "Go")
+    }
+
+    func testDueDates() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/Berlin")!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 10, day: 23, hour: 12))!
+        XCTAssertTrue(TodoDue(year: 2026, month: 10, day: 23, hour: 11, minute: 59).isOverdue(at: now, calendar: calendar))
+        XCTAssertFalse(TodoDue(year: 2026, month: 10, day: 23, hour: 12, minute: 1).isOverdue(at: now, calendar: calendar))
+        XCTAssertFalse(TodoDue(year: 2026, month: 10, day: 23).isOverdue(at: now, calendar: calendar), "today's to-do isn't overdue until tomorrow")
+        XCTAssertTrue(TodoDue(year: 2026, month: 10, day: 22).isOverdue(at: now, calendar: calendar))
+        XCTAssertEqual(calendar.component(.hour, from: TodoDue(year: 2026, month: 10, day: 24).alertDate(in: calendar)), TodoDue.dayAlertHour)
+        XCTAssertEqual(TodoDue(now, time: true, calendar: calendar), TodoDue(year: 2026, month: 10, day: 23, hour: 12, minute: 0))
+        XCTAssertEqual(TodoDue(now, time: false, calendar: calendar), TodoDue(year: 2026, month: 10, day: 23))
+    }
+
+    // MARK: - A note's to-dos
+
+    func testOpenTodosWithTheirNotes() {
+        let note = """
+        # Doctor
+
+        - [ ] Call Dr. Weber ⏰ 2026-10-24 14:00
+            - ask about the **results**
+            - [ ] bring the letter
+            - [x] book the taxi
+
+            Second paragraph of notes
+        - [x] Done already
+            - [ ] under a done one
+        - [ ] Buy plasters 📍 [Pharmacy](https://maps.apple.com/?ll=1,2&q=Pharmacy)
+        - Shopping
+            - [ ] Milk
+                - [ ] Nested with a date 📅 2026-10-25
+        ```
+        - [ ] in code
+        ```
+        > - [ ] in a quote
+        """
+        let todos = Todos.open(in: note)
+        XCTAssertEqual(todos.map(\.text), ["Call Dr. Weber", "Buy plasters", "Milk", "Nested with a date"])
+        XCTAssertEqual(todos[0].notes, ["• ask about the results", "○ bring the letter", "✓ book the taxi", "Second paragraph of notes"])
+        XCTAssertEqual(todos[0].due, TodoDue(year: 2026, month: 10, day: 24, hour: 14, minute: 0))
+        XCTAssertEqual(todos[0].line, 2)
+        XCTAssertEqual(todos[0].source, "- [ ] Call Dr. Weber ⏰ 2026-10-24 14:00")
+        XCTAssertEqual(todos[1].place?.name, "Pharmacy")
+        XCTAssertTrue(todos[1].notes.isEmpty)
+        XCTAssertEqual(todos[2].notes, ["○ Nested with a date"], "a to-do under a plain point is a to-do of its own")
+        XCTAssertEqual(todos[3].due, TodoDue(year: 2026, month: 10, day: 25), "nested, but with a date of its own")
+        XCTAssertTrue(Todos.open(in: "Nothing to do\n- [x] done").isEmpty)
+    }
+
+    func testATodoIsFoundAgainAfterTheNoteChanged() {
+        let before = "- [ ] One\n- [ ] Two\n"
+        let after = "Intro\n\n- [ ] One\n- [ ] Two\n- [ ] Two\n"
+        let todo = Todos.open(in: before)[1]
+        let document = MarkdownParser.parse(after)
+        XCTAssertEqual(Todos.find(todo.source, near: todo.line, in: document, string: after as NSString), 3, "the nearest line that says the same")
+        XCTAssertNil(Todos.find("- [ ] Three", near: 0, in: document, string: after as NSString))
+    }
+
+    func testNotificationPointsLeaveMarksOut() {
+        XCTAssertEqual(NotePoints.text(of: "- [ ] Call ⏰ 2026-10-24 14:00\n- Point"), "○ Call\n• Point")
+    }
+}

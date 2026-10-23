@@ -45,12 +45,13 @@ enum NotePoints {
         return result
     }
 
-    /// The text you read on a line: its Markdown marks, pictures and embeds left out, a link's words kept.
-    private static func plain(_ line: MarkdownLine, in string: NSString) -> String {
+    /// The text you read on a line: its Markdown marks, pictures, embeds and a to-do's date and place left out, a
+    /// link's words kept.
+    static func plain(_ line: MarkdownLine, in string: NSString) -> String {
         var dropped = IndexSet()
         for span in line.spans {
             switch span.kind {
-            case .image, .embed, .footnoteReference:
+            case .image, .embed, .footnoteReference, .todoMark:
                 dropped.insert(integersIn: span.range.location..<span.range.upperBound)
             default:
                 for marker in span.markers { dropped.insert(integersIn: marker.location..<marker.upperBound) }

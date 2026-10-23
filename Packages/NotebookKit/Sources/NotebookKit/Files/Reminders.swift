@@ -1,15 +1,31 @@
 import Foundation
 
-/// A reminder of a note at a time.
-struct Reminder: Codable, Equatable, Identifiable, Sendable {
+/// A reminder of a note: at a time, when you arrive at or leave a place, or both.
+struct Reminder: Codable, Hashable, Identifiable, Sendable {
     var id: UUID
     /// The note, by the name `HiddenFolders.key(for:links:)` gives it: its place in iCloud, the same on a Mac, an iPhone
     /// and an iPad, or its path when it isn't in iCloud.
     var note: String
-    var date: Date
+    var date: Date?
+    var place: TodoPlace?
+
+    init(id: UUID, note: String, date: Date?, place: TodoPlace? = nil) {
+        self.id = id
+        self.note = note
+        self.date = date
+        self.place = place
+    }
 
     /// The note's name, for when the note can't be found on this device.
     var name: String { ((note as NSString).lastPathComponent as NSString).deletingPathExtension }
+
+    /// Its time has passed.
+    var isOverdue: Bool { date.map { $0 <= .now } ?? false }
+
+    /// "Tomorrow 8:30", "Arriving at Pharmacy", or both.
+    var text: String {
+        [date.map { ReminderText.text($0, time: true) }, place?.phrase].compactMap { $0 }.joined(separator: ", ")
+    }
 }
 
 /// The reminders of notes. Not in the notes: setting one never changes the file, and the time doesn't go along with a
@@ -30,6 +46,9 @@ final class Reminders {
     private static let defaultsKey = "reminders"
     private static let uploadedKey = "remindersInICloud"
     private static let cloudPrefix = "reminder."
+    /// Reminders with a place, under keys of their own: a build from before places can't read them, and so never
+    /// writes one back without its place.
+    private static let placePrefix = "placeReminder."
 
     /// With no defaults and no cloud the reminders are kept for this run only (tests, the sample notes).
     init(defaults: UserDefaults? = .standard, cloud: NSUbiquitousKeyValueStore? = .default) {
@@ -83,11 +102,12 @@ final class Reminders {
         save()
     }
 
-    /// A note has one reminder: setting a time changes the one it has.
+    /// A note has one reminder: setting a time or a place changes the one it has.
     @discardableResult
-    func set(note: String, date: Date) -> Reminder {
-        var reminder = reminder(for: note) ?? Reminder(id: UUID(), note: note, date: date)
+    func set(note: String, date: Date?, place: TodoPlace? = nil) -> Reminder {
+        var reminder = reminder(for: note) ?? Reminder(id: UUID(), note: note, date: date, place: place)
         reminder.date = date
+        reminder.place = place
         set(reminder)
         return reminder
     }
@@ -97,6 +117,7 @@ final class Reminders {
         guard all.contains(where: { $0.id == id }) else { return }
         all.removeAll { $0.id == id }
         cloud?.removeObject(forKey: Self.cloudKey(id))
+        cloud?.removeObject(forKey: Self.placeKey(id))
         save()
     }
 
@@ -123,19 +144,34 @@ final class Reminders {
         cloudPrefix + id.uuidString
     }
 
+    static func placeKey(_ id: UUID) -> String {
+        placePrefix + id.uuidString
+    }
+
     private static func write(_ reminder: Reminder, to cloud: NSUbiquitousKeyValueStore) {
         guard let data = try? JSONEncoder().encode(reminder) else { return }
-        cloud.set(data, forKey: cloudKey(reminder.id))
+        // Under one key or the other, never both.
+        let (key, other) = reminder.place == nil ? (cloudKey(reminder.id), placeKey(reminder.id)) : (placeKey(reminder.id), cloudKey(reminder.id))
+        cloud.set(data, forKey: key)
+        cloud.removeObject(forKey: other)
     }
 
     private static func read(_ cloud: NSUbiquitousKeyValueStore) -> [Reminder] {
-        sorted(cloud.dictionaryRepresentation.compactMap { key, value in
-            guard key.hasPrefix(cloudPrefix), let data = value as? Data else { return nil }
-            return try? JSONDecoder().decode(Reminder.self, from: data)
-        })
+        var byID: [UUID: Reminder] = [:]
+        for (key, value) in cloud.dictionaryRepresentation {
+            guard key.hasPrefix(cloudPrefix) || key.hasPrefix(placePrefix), let data = value as? Data,
+                  let reminder = try? JSONDecoder().decode(Reminder.self, from: data) else { continue }
+            // Both, while another device moves one: the one with the place is the newer.
+            if byID[reminder.id]?.place == nil { byID[reminder.id] = reminder }
+        }
+        return sorted(Array(byID.values))
     }
 
     private static func sorted(_ reminders: [Reminder]) -> [Reminder] {
-        reminders.sorted { $0.date != $1.date ? $0.date < $1.date : $0.id.uuidString < $1.id.uuidString }
+        // Those at a place only after the rest.
+        reminders.sorted { a, b in
+            let aDate = a.date ?? .distantFuture, bDate = b.date ?? .distantFuture
+            return aDate != bDate ? aDate < bDate : a.id.uuidString < b.id.uuidString
+        }
     }
 }

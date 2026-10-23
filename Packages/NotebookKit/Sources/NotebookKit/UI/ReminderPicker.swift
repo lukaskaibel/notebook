@@ -1,28 +1,86 @@
 import SwiftUI
 
-/// Remind Me, as a reminder's details in Reminders: a time later today, this evening or tomorrow at a tap, a time typed
-/// in a few words ("friday evening", "in 3 weeks"), or a date and a time of your own. A note with a reminder changes or
-/// removes it here. A popover on the Mac, a sheet on iPhone and iPad.
+/// Remind Me for a note: changes or removes the reminder it has. A popover on the Mac, a sheet on iPhone and iPad.
 struct ReminderPicker: View {
     let workspace: Workspace
     let url: URL
     var close: () -> Void
+
+    var body: some View {
+        let reminder = workspace.reminder(for: url)
+        ReminderForm(subject: .note, name: SearchSection.displayName(url), due: reminder?.date.map { TodoDue($0, time: true) }, place: reminder?.place,
+                     isSet: reminder != nil, close: close) { due, place in
+            workspace.setReminder(for: url, at: due?.date(), place: place)
+        } remove: {
+            workspace.removeReminder(for: url)
+        }
+    }
+}
+
+/// Remind Me for a to-do: its date, time and place, written after its words in the note.
+struct TodoReminderPicker: View {
+    let workspace: Workspace
+    let todo: TodoReference
+    var close: () -> Void
+
+    var body: some View {
+        let current = workspace.schedule(of: todo)
+        ReminderForm(subject: .todo, name: current.text, due: current.due, place: current.place, isSet: current.due != nil || current.place != nil, close: close) { due, place in
+            workspace.setTodo(todo, due: due, place: place)
+        } remove: {
+            workspace.setTodo(todo, due: nil, place: nil)
+        }
+    }
+}
+
+/// Remind Me, as a reminder's details in Reminders: a time later today, this evening or tomorrow at a tap, a time typed
+/// in a few words ("friday evening", "in 3 weeks"), or a date, a time and a place of your own. A to-do can have a day
+/// without a time; a note's reminder has a time when it has a day.
+struct ReminderForm: View {
+    enum Subject {
+        case note, todo
+    }
+
+    let subject: Subject
+    /// What it reminds of: the note's name or the to-do's words.
+    let name: String
+    let isSet: Bool
+    var close: () -> Void
+    var set: (TodoDue?, TodoPlace?) -> Void
+    var remove: () -> Void
+
     @State private var date: Date
+    @State private var hasDate: Bool
+    @State private var hasTime: Bool
+    @State private var hasPlace: Bool
+    @State private var place: TodoPlace?
     /// The time as typed. While there is some, what it could mean takes the place of the quick choices.
     @State private var query = ""
     /// The suggestion Return takes, by its place in the list; the arrow keys move it. The date and time below show it.
     @State private var lit = 0
     @FocusState private var isTyping: Bool
 
-    init(workspace: Workspace, url: URL, close: @escaping () -> Void) {
-        self.workspace = workspace
-        self.url = url
+    init(subject: Subject, name: String, due: TodoDue?, place: TodoPlace?, isSet: Bool, close: @escaping () -> Void,
+         set: @escaping (TodoDue?, TodoPlace?) -> Void, remove: @escaping () -> Void) {
+        self.subject = subject
+        self.name = name
+        self.isSet = isSet
         self.close = close
-        _date = State(initialValue: workspace.reminder(for: url)?.date ?? Self.nextHour(after: .now))
+        self.set = set
+        self.remove = remove
+        // Nothing set yet: the next full hour, as a start.
+        let fresh = !isSet
+        var start = Self.nextHour(after: .now)
+        if let due {
+            start = due.hasTime ? due.date() : Calendar.current.date(bySettingHour: Calendar.current.component(.hour, from: start), minute: 0, second: 0, of: due.date()) ?? due.date()
+        }
+        _date = State(initialValue: start)
+        _hasDate = State(initialValue: due != nil || fresh)
+        _hasTime = State(initialValue: due?.hasTime ?? fresh)
+        _hasPlace = State(initialValue: place != nil)
+        _place = State(initialValue: place)
     }
 
-    private var reminder: Reminder? { workspace.reminder(for: url) }
-    private var name: String { SearchSection.displayName(url) }
     private var suggestions: [ReminderTimeParser.Suggestion] { ReminderTimeParser.suggestions(for: query, now: .now) }
     /// Typed, but nothing that reads as a time: Return does nothing.
     private var isUnreadable: Bool { !query.isEmpty && suggestions.isEmpty }
@@ -39,22 +97,23 @@ struct ReminderPicker: View {
             Form {
                 field
                 if query.isEmpty { choices } else { found }
-                pickers
+                when
+                whereSection
             }
             .formStyle(.grouped)
             .scrollDisabled(true)
             .fixedSize(horizontal: false, vertical: true)
             HStack {
-                if reminder != nil {
-                    Button("Remove Reminder", role: .destructive) { remove() }
+                if isSet {
+                    Button("Remove Reminder", role: .destructive) { removeAndClose() }
                 }
                 Spacer()
                 Button("Cancel", role: .cancel) { close() }
                     .keyboardShortcut(.cancelAction)
                 // Also Return in the field, which takes the suggestion the date and time show.
-                Button(reminder == nil ? "Remind Me" : "Change") { set(date) }
+                Button(isSet ? "Change" : "Remind Me") { commit() }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(date <= .now || isUnreadable)
+                    .disabled(!canSet)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 16)
@@ -65,22 +124,24 @@ struct ReminderPicker: View {
             Form {
                 field
                 if query.isEmpty { choices } else { found }
-                pickers
-                if reminder != nil {
+                when
+                whereSection
+                if isSet {
                     Section {
-                        Button("Remove Reminder", role: .destructive) { remove() }
+                        Button("Remove Reminder", role: .destructive) { removeAndClose() }
                     }
                 }
             }
             .navigationTitle("Remind Me")
+            .navigationSubtitle(name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", role: .cancel) { close() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(reminder == nil ? "Remind Me" : "Change", role: .confirm) { set(date) }
-                        .disabled(date <= .now || isUnreadable)
+                    Button(isSet ? "Change" : "Remind Me", role: .confirm) { commit() }
+                        .disabled(!canSet)
                 }
             }
         }
@@ -125,16 +186,14 @@ struct ReminderPicker: View {
         #endif
     }
 
-    /// Later Today, This Evening and Tomorrow: each sets the reminder at once.
+    /// Later Today, This Evening and Tomorrow: each sets the reminder at once, keeping its place.
     private var choices: some View {
         Section {
             ForEach(Self.choices(after: .now), id: \.title) { choice in
-                row(choice.title, symbol: choice.symbol, detail: choice.detail) { set(choice.date) }
+                row(choice.title, symbol: choice.symbol, detail: choice.detail) { setNow(choice.date) }
             }
         } footer: {
-            #if os(iOS)
-            Text("A notification with the note’s first points comes at that time.")
-            #endif
+            footer
         }
     }
 
@@ -143,17 +202,22 @@ struct ReminderPicker: View {
         Section {
             let suggestions = suggestions
             ForEach(Array(suggestions.enumerated()), id: \.element.date) { index, suggestion in
-                row(suggestion.title, symbol: suggestion.symbol, detail: suggestion.detail, isLit: index == lit) { set(suggestion.date) }
+                row(suggestion.title, symbol: suggestion.symbol, detail: suggestion.detail, isLit: index == lit) { setNow(suggestion.date) }
             }
             if suggestions.isEmpty {
                 Text("Try “tomorrow at 9”, “Friday evening” or “in 3 weeks”.")
                     .foregroundStyle(.secondary)
             }
         } footer: {
-            #if os(iOS)
-            Text("A notification with the note’s first points comes at that time.")
-            #endif
+            footer
         }
+    }
+
+    @ViewBuilder
+    private var footer: some View {
+        #if os(iOS)
+        Text(subject == .note ? "A notification with the note’s first points comes at that time." : "A notification with the to-do and its notes comes at that time.")
+        #endif
     }
 
     private func row(_ title: String, symbol: String, detail: String, isLit: Bool = false, action: @escaping () -> Void) -> some View {
@@ -191,35 +255,100 @@ struct ReminderPicker: View {
         .accessibilityAddTraits(isLit ? .isSelected : [])
     }
 
+    /// A choice or a suggestion: that day and time at once, keeping the place.
+    private func setNow(_ date: Date) {
+        set(TodoDue(date, time: true), hasPlace ? place : nil)
+        close()
+    }
+
     /// Return in the field: the lit suggestion, whose date and time show below. Nothing while nothing is typed, so the
     /// touch keyboard's Done only puts the keyboard away.
     private func submit() {
-        guard !query.isEmpty, !isUnreadable, date > .now else { return }
-        set(date)
+        guard !query.isEmpty, !isUnreadable, canSet else { return }
+        commit()
     }
 
-    /// Lights a suggestion, and shows its date and time below.
+    /// Lights a suggestion, and shows its date and time below, both turned on.
     private func light(_ index: Int) {
         let suggestions = suggestions
         lit = min(max(index, 0), max(suggestions.count - 1, 0))
         guard !suggestions.isEmpty else { return }
         date = suggestions[lit].date
+        hasDate = true
+        hasTime = true
     }
 
-    private var pickers: some View {
+    /// The day and the time, each turned on and off as in Reminders.
+    private var when: some View {
         Section {
-            DatePicker("Date", selection: $date, displayedComponents: .date)
-            DatePicker("Time", selection: $date, displayedComponents: .hourAndMinute)
+            Toggle(isOn: Binding(get: { hasDate }, set: { on in
+                withAnimation(Theme.quick) {
+                    hasDate = on
+                    if subject == .note { hasTime = on } else if !on { hasTime = false }
+                }
+            })) {
+                Label("Date", systemImage: "calendar")
+            }
+            if hasDate {
+                DatePicker("Day", selection: $date, displayedComponents: .date)
+            }
+            if subject == .todo {
+                Toggle(isOn: Binding(get: { hasTime }, set: { on in
+                    withAnimation(Theme.quick) {
+                        hasTime = on
+                        if on { hasDate = true }
+                    }
+                })) {
+                    Label("Time", systemImage: "clock")
+                }
+            }
+            if hasTime {
+                DatePicker("Time", selection: $date, displayedComponents: .hourAndMinute)
+            }
         }
     }
 
-    private func set(_ date: Date) {
-        workspace.setReminder(for: url, at: date)
+    /// A place to arrive at or leave.
+    private var whereSection: some View {
+        Section {
+            Toggle(isOn: Binding(get: { hasPlace }, set: { on in withAnimation(Theme.quick) { hasPlace = on } })) {
+                Label("Location", systemImage: "location")
+            }
+            if hasPlace {
+                PlacePicker(place: $place)
+            }
+        } footer: {
+            #if os(macOS)
+            if hasPlace {
+                Text("A Mac can’t tell where you are going: your iPhone or iPad reminds you there.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            #endif
+        }
+    }
+
+    private var due: TodoDue? {
+        hasDate ? TodoDue(date, time: hasTime) : nil
+    }
+
+    /// Something to remind of, complete: a place chosen if Location is on, a typed time that reads as one, and a note's
+    /// time still to come.
+    private var canSet: Bool {
+        if isUnreadable { return false }
+        if hasPlace, place == nil { return false }
+        if !hasDate, !hasPlace { return false }
+        if subject == .note, hasDate, date <= .now { return false }
+        return true
+    }
+
+    private func commit() {
+        set(due, hasPlace ? place : nil)
         close()
     }
 
-    private func remove() {
-        workspace.removeReminder(for: url)
+    private func removeAndClose() {
+        remove()
         close()
     }
 

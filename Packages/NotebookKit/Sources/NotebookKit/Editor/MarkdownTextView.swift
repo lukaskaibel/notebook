@@ -16,6 +16,7 @@ final class MarkdownTextView: NSTextView {
     /// The note's reminder, a bell and its time, before the date under the title. A click changes or removes it.
     let reminderButton = NSButton(title: "", target: nil, action: nil)
     let copyButton = CodeCopyButton()
+    let todoBell = TodoBellButton()
 
     static let titleTop: CGFloat = 44
     static let titleHeight: CGFloat = 40
@@ -59,6 +60,9 @@ final class MarkdownTextView: NSTextView {
         copyButton.target = self
         copyButton.action = #selector(copyCodeBlock(_:))
         addSubview(copyButton)
+        todoBell.target = self
+        todoBell.action = #selector(remindOfTodo(_:))
+        addSubview(todoBell)
         applyTypography()
     }
 
@@ -164,12 +168,14 @@ final class MarkdownTextView: NSTextView {
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
         controller?.updateCopyButton(at: convert(event.locationInWindow, from: nil))
+        controller?.updateTodoBell(at: convert(event.locationInWindow, from: nil))
         controller?.updateCursor(for: event)
     }
 
     override func mouseExited(with event: NSEvent) {
         super.mouseExited(with: event)
         controller?.updateCopyButton(at: nil)
+        controller?.updateTodoBell(at: nil)
     }
 
     // AppKit puts the I-beam back on every cursor update; links and checkboxes keep the hand.
@@ -193,6 +199,7 @@ final class MarkdownTextView: NSTextView {
 
     @objc private func windowResignedKey() {
         controller?.updateCopyButton(at: nil)
+        controller?.updateTodoBell(at: nil)
     }
 
     #if DEBUG

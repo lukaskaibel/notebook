@@ -226,11 +226,19 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
             return NSRect(x: 0, y: 0, width: width, height: 4)
         case .linkEdit:
             return NSRect(x: 0, y: 0, width: hidesEditingControls ? 0 : ceil(font.pointSize * 0.85) + 3, height: 4)
+        case .todoPill(let pill):
+            return NSRect(x: 0, y: 0, width: pill.width(after: bodyFont(at: index)), height: 4)
         case .frontmatter(let count):
             let text = frontmatterLabel(count) as NSString
             let textWidth = ceil(text.size(withAttributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium)]).width)
             return NSRect(x: 0, y: 0, width: textWidth + 40, height: 26)
         }
+    }
+
+    /// The text's own font at an index: an emoji's character has the emoji font the system put there for it.
+    private func bodyFont(at index: Int) -> NSFont {
+        guard let font = textStorage?.attribute(.font, at: index, effectiveRange: nil) as? NSFont else { return EditorStyle.body }
+        return font.familyName == "Apple Color Emoji" || font.fontName.contains("Emoji") ? EditorStyle.face(font.pointSize, weight: .regular) : font
     }
 
     private func frontmatterLabel(_ count: Int) -> String {
@@ -262,7 +270,7 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
 
     /// The baseline of the line a glyph is on, as drawn. The glyph's location is already raised by the line's baseline
     /// offset: taking it off again put checkboxes and bullets two points above the middle of their text.
-    private func baseline(forGlyphAt glyph: Int, origin: NSPoint) -> CGFloat {
+    func baseline(forGlyphAt glyph: Int, origin: NSPoint) -> CGFloat {
         let line = lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
         return origin.y + line.minY + location(forGlyphAt: glyph).y
     }
@@ -476,6 +484,9 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
                 text.draw(at: CGPoint(x: rect.minX + 24, y: baseline - NSFont.systemFont(ofSize: EditorStyle.bodySize).ascender))
             }
 
+        case .todoPill(let pill):
+            drawTodoPill(pill, in: rect, baseline: baseline, body: bodyFont(at: objectRange.location))
+
         case .linkEdit:
             guard !hidesEditingControls else { break }
             drawSymbol("pencil.line", size: font.pointSize * 0.72, color: Theme.accent.withAlphaComponent(0.75),
@@ -578,6 +589,27 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
         }
         let body = InlineRenderer.render(excerpt, font: NSFont.systemFont(ofSize: 13), color: Theme.textSecondary)
         body.draw(with: NSRect(x: rect.minX + 16, y: rect.minY + 42, width: rect.width - 32, height: rect.height - 52), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], context: nil)
+    }
+
+    /// The capsule after a to-do's words: its symbol and words in the accent colour on a tint of it, as a link to a
+    /// note is, centred on the line's letters.
+    private func drawTodoPill(_ pill: TodoPill, in rect: NSRect, baseline: CGFloat, body: NSFont) {
+        let font = TodoPill.font(for: body)
+        let color: NSColor = switch pill.tone {
+        case .normal: Theme.accent
+        case .overdue: .systemRed
+        case .done: Theme.textTertiary
+        }
+        let height = ceil(font.ascender - font.descender) + 5
+        let middle = baseline - body.capHeight / 2
+        let capsule = NSRect(x: rect.minX + TodoPill.gap, y: (middle - height / 2).rounded(), width: rect.width - TodoPill.gap - 1, height: height)
+        let isDark = source?.isDarkAppearance == true
+        (pill.tone == .done ? Theme.control : color.withAlphaComponent(isDark ? 0.18 : 0.12)).setFill()
+        NSBezierPath(roundedRect: capsule, xRadius: height / 2, yRadius: height / 2).fill()
+        let symbolSize = pill.symbolSize(font)
+        drawSymbol(pill.symbol, size: symbolSize * 0.82, color: color, center: CGPoint(x: capsule.minX + TodoPill.padding + symbolSize / 2 + 1, y: middle), weight: .semibold)
+        let words = NSAttributedString(string: pill.label, attributes: [.font: font, .foregroundColor: color])
+        words.draw(at: CGPoint(x: capsule.minX + TodoPill.padding + symbolSize + 2 + TodoPill.spacing, y: middle - font.capHeight / 2 - font.ascender + font.capHeight))
     }
 
     private func drawPlaceholder(_ text: String, symbol: String, in rect: NSRect) {

@@ -146,6 +146,7 @@ extension EditorController: NSTextViewDelegate, NSTextFieldDelegate {
     @objc func scrolled() {
         updatePosition()
         updateCopyButtonForPointer()
+        updateTodoBellForPointer()
     }
 
     // MARK: - NSTextViewDelegate

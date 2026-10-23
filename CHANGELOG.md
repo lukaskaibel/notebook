@@ -7,6 +7,21 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- To-dos, at the top of the sidebar: every open checkbox in your notes in one list, as in Reminders, grouped into
+  Overdue, Today, Tomorrow, Next 7 Days, Later and No Date, with the lines indented under each to-do as its notes and
+  the note it is in. Notes with a reminder are there too, and the number next to To-dos counts what is due today or
+  overdue. Tick a to-do off and it is ticked in its note; click it to open the note at it; drag it into another group,
+  or choose Today, Tomorrow, This Weekend or Next Week in its menu, to move its date. ⇧⌘R and ⌘K go there too. On the
+  iPhone it is the first row of the first screen, on the iPad the first row of the sidebar.
+- A to-do's date, time and place: click the bell that comes up after a to-do as you point at it, or right-click it and
+  choose Remind Me…; on iPhone and iPad tap the bell above the keyboard. They show as pills after the to-do's words, red
+  once the time has passed, and are written into the note the way Obsidian's Tasks and Reminder plugins write them
+  (`⏰ 2026-10-24 14:00`, `📅 2026-11-01`, and a place as a link to Apple Maps), so they go along with the note. At that
+  time, or when you arrive at or leave the place, a notification brings the to-do and its notes, with Remind Me in 1
+  Hour and Done.
+- Reminders at a place: Remind Me… for a note or a to-do can take a place, found in Apple Maps or where you are now, for
+  arriving or for leaving, shown on a little map. iPhone and iPad remind you there, once, when you let Notebook use your
+  location while you use it; a Mac can set the place, and your iPhone reminds you.
 - Notebook on iPhone and iPad, with the editor, search and files of the Mac. On the iPhone, one folder per screen as in
   the Files app, with search and a new note at the bottom as in Notes; on the iPad, the Mac's sidebar, the note and its
   outline.
@@ -107,6 +122,8 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Changed
 
+- Remind Me… has Date, Time and Location to turn on, as a reminder's details in Reminders, next to Later Today, This
+  Evening and Tomorrow.
 - Double-clicking a PDF, a picture or any other file in the sidebar opens it in its own app, such as Preview or
   QuickTime Player, as in the Finder, rather than in Quick Look; Space still opens Quick Look, and the file's menu has
   Open in Preview (or its app) next to it.

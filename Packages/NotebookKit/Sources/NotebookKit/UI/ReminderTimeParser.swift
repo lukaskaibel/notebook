@@ -371,8 +371,8 @@ enum ReminderTimeParser {
             } else if let day {
                 if day.start == today {
                     // As Later Today: on the hour, about three hours on, or the next hour late in the day.
-                    let later = ReminderPicker.nextHour(after: now.addingTimeInterval(2 * 60 * 60), calendar: calendar)
-                    let soon = ReminderPicker.nextHour(after: now, calendar: calendar)
+                    let later = ReminderForm.nextHour(after: now.addingTimeInterval(2 * 60 * 60), calendar: calendar)
+                    let soon = ReminderForm.nextHour(after: now, calendar: calendar)
                     guard let found = [later, soon].first(where: { calendar.isDate($0, inSameDayAs: now) }) else { return nil }
                     date = found
                 } else {

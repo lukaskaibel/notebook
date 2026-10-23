@@ -14,6 +14,7 @@ import UserNotifications
 ///     firereminder <note>                                    its notification in a second, as at its time
 ///     tapreminder <open|later|done> <note>                   a tap on the notification, or one of its actions
 ///     notifications                                          the notifications waiting and shown
+///     clearnotifications                                     takes away every notification waiting and shown
 ///     reminderline                                           the bell under the open note's title
 ///     remindme <note>                                        Remind Me… from a menu: the popover or the sheet
 ///     remindme close                                         puts the popover away (Mac)
@@ -41,13 +42,13 @@ enum DebugReminders {
             let lines = workspace.reminders.all.map { reminder in
                 let found = workspace.url(for: reminder)
                 let text = found.flatMap { NoteDocument.read($0) }.map(NotePoints.text(of:)) ?? ""
-                return "\(reminder.id) \(Workspace.reminderText(reminder.date)) \(reminder.note) -> \(found?.path ?? "not found")\n  " + text.replacingOccurrences(of: "\n", with: "\n  ")
+                return "\(reminder.id) \(reminder.text) \(reminder.note) -> \(found?.path ?? "not found")\n  " + text.replacingOccurrences(of: "\n", with: "\n  ")
             }
             log("reminders (\(workspace.reminders.all.count), iCloud \(workspace.reminders.isInICloud)):\n" + lines.joined(separator: "\n"))
         case "firereminder":
             guard let note = url(argument), let reminder = workspace.reminder(for: note) else { log("firereminder: no reminder for \(argument)"); break }
             let isOpen = note == workspace.currentURL && workspace.note?.isLoaded == true
-            ReminderNotifications.shared.fireSoon(ReminderNotifications.Job(id: reminder.id, date: reminder.date, title: SearchSection.displayName(note),
+            ReminderNotifications.shared.fireSoon(ReminderNotifications.Job(id: reminder.id, date: reminder.date, place: reminder.place, title: SearchSection.displayName(note),
                                                                            note: reminder.note, url: note, text: isOpen ? workspace.editor.text : nil))
             log("firereminder \(note.lastPathComponent) active \(ReminderNotifications.shared.isActive)")
         case "tapreminder":
@@ -57,7 +58,7 @@ enum DebugReminders {
             case "done": workspace.finishReminder(reminder.id)
             default: workspace.openReminder(reminder.id)
             }
-            log("tapreminder \(split[0]): open \(workspace.currentURL?.lastPathComponent ?? "nothing"), reminder \(workspace.reminders.reminder(reminder.id).map { Workspace.reminderText($0.date) } ?? "done")")
+            log("tapreminder \(split[0]): open \(workspace.currentURL?.lastPathComponent ?? "nothing"), reminder \(workspace.reminders.reminder(reminder.id)?.text ?? "done")")
         case "notifications":
             Task {
                 let center = UNUserNotificationCenter.current()
@@ -69,6 +70,11 @@ enum DebugReminders {
                 let delivered = await center.deliveredNotifications().map { "  shown \($0.request.identifier): \($0.request.content.title)" }
                 log("notifications (allowed \(settings.authorizationStatus.rawValue), time sensitive \(settings.timeSensitiveSetting.rawValue)):\n" + (pending + delivered).joined(separator: "\n"))
             }
+        case "clearnotifications":
+            let center = UNUserNotificationCenter.current()
+            center.removeAllPendingNotificationRequests()
+            center.removeAllDeliveredNotifications()
+            log("clearnotifications")
         case "permission":
             // permission [provisional]: asks for notifications as the first reminder does, and says what the system
             // answered. Provisional needs no answer from a person: notifications then go quietly to Notification Center.

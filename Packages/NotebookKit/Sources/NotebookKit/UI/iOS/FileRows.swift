@@ -50,12 +50,12 @@ struct FileRow: View {
 
     /// A reminder's bell, red once its time has passed, before the cloud of a file still in iCloud.
     private var badge: Text? {
-        if let reminder { return Text(Image(systemName: "bell.fill")).foregroundStyle(reminder.date <= .now ? Color.red : Color.secondary) }
+        if let reminder { return Text(Image(systemName: reminder.date == nil ? "location.fill" : "bell.fill")).foregroundStyle(reminder.isOverdue ? Color.red : Color.secondary) }
         return isInCloud ? Text(Image(systemName: "icloud.and.arrow.down")) : nil
     }
 
     private var accessibilityName: String {
-        if let reminder { return "\(name), reminder \(Workspace.reminderText(reminder.date))" }
+        if let reminder { return "\(name), reminder \(reminder.text)" }
         return isHidden ? "\(name), hidden" : isInCloud ? "\(name), in iCloud" : name
     }
 
@@ -419,6 +419,10 @@ struct FileAlerts: ViewModifier {
             .onChange(of: newFolderIn) { _, folder in if folder != nil { name = "" } }
             .sheet(item: $workspace.reminderRequest) { request in
                 ReminderPicker(workspace: workspace, url: request.url) { workspace.reminderRequest = nil }
+                    .presentationDetents([.medium, .large])
+            }
+            .sheet(item: $workspace.todoReminderRequest) { todo in
+                TodoReminderPicker(workspace: workspace, todo: todo) { workspace.todoReminderRequest = nil }
                     .presentationDetents([.medium, .large])
             }
             .alert(deleteTitle, isPresented: Binding(get: { workspace.deleting != nil }, set: { if !$0 { workspace.deleting = nil } })) {

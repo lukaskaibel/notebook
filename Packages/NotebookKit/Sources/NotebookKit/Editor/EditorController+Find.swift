@@ -11,6 +11,8 @@ public enum NotePlace: Equatable, Sendable {
     case heading(String)
     /// A picture or drawing from the note's `.assets` folder, by its name there.
     case asset(String)
+    /// A to-do: its line then, and what it said, to find it after the note changed.
+    case todo(line: Int, source: String)
 }
 
 extension EditorController {
@@ -43,6 +45,9 @@ extension EditorController {
             let from = start == NSNotFound ? reference.location : start
             let close = nsText.range(of: ")", range: NSRange(location: reference.upperBound, length: line.upperBound - reference.upperBound))
             reveal(NSRange(location: from, length: (close.location == NSNotFound ? reference.upperBound : close.upperBound) - from))
+        case .todo(let line, let source):
+            guard let index = todoLine(source, near: line) else { return reveal(.words(source)) }
+            reveal(NSRange(location: todoWordsEnd(line: index), length: 0))
         }
         return true
     }

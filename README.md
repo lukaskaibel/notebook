@@ -171,25 +171,60 @@ and Settings, each with the keys that do it without ⌘K. Type a few letters of 
 commands. Move To… lists the folders as you type their names. The arrow keys and Return pick, Escape closes. On an iPad
 with a keyboard, ⌘K works the same.
 
+### To-dos
+
+Every open checkbox in your notes is a to-do, and To-dos at the top of the sidebar shows them all in one list, as
+Reminders does: what is overdue, then today's, tomorrow's, the next seven days', later ones, and those without a date,
+each with the lines indented under it as its notes and the note it is in. Notes with a reminder are in the list too,
+and the number next to To-dos counts what is due today or overdue. Tick a to-do off in the list and it is ticked in its
+note; click it to open the note at it. Drag it into another group, or choose Today, Tomorrow, This Weekend or Next
+Week in its menu, and its date moves; Undo (⌘Z) puts it back.
+
+A to-do gets a date, a time and a place as a reminder in Reminders does: point at it and click the bell after its
+words, or right-click it and choose Remind Me…; on iPhone and iPad tap the bell above the keyboard while you're in it.
+Pick Later Today, This Evening or Tomorrow, or turn on Date, Time and Location: search Apple Maps for a place, or take
+Current Location, and say whether it's for arriving or leaving. The day, the time and the place then show as small pills
+after the to-do's words, red once the time has passed; a click on one changes it. At that time, or when you get there,
+a notification brings the to-do and its notes, with Remind Me in 1 Hour and Done. A day without a time reminds you at
+9 in the morning, and a place once, the first time you get there.
+
+Unlike a note's reminder, a to-do's date and place are written into the note, after its words, the way Obsidian's
+Tasks and Reminder plugins write them: `⏰ 2026-10-24 14:00` for a day and a time, `📅 2026-11-01` for a day, and
+`📍 [Pharmacy](https://maps.apple.com/?ll=…)` for a place, a link any app opens in Maps. So they go with the note to
+your other devices and other apps, and a to-do keeps its date however and wherever you edit it.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/todos-dark.webp">
+  <img alt="To-dos selected at the top of the sidebar, with 3 next to it. The list shows Overdue with Return the library books from yesterday in red; Today with Pick up the dry cleaning at 5:30 PM, its two notes under it, and Send the map to Mia at 7:00 PM; Tomorrow with the note Questions for Dr. Weber and Tomatoes, basil, burrata; then Next 7 Days and Later. Each row has a circle to tick it and the note it is in" src="Design/screenshots/todos-light.webp">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/todo-reminder-dark.webp">
+  <img alt="The note Errands, its to-dos followed by pills: Yesterday in red, Today 5:30 PM, the pharmacy at Rosenthaler Platz and a day next month. Remind Me is open for Buy plasters, with Date and Time off and Location on: the pharmacy on a map with the circle around it, and Arriving or Leaving" src="Design/screenshots/todo-reminder-light.webp">
+</picture>
+
 ### Remind me of a note
 
-Questions for the doctor, points for a meeting: Remind Me… brings a note back at the time you choose. Pick Later
-Today, This Evening or Tomorrow, set a date and a time, or type the time in a few words, in a popover like a reminder's
-details in Reminders. It reads "friday evening", "tomorrow at 9", "fri 3pm", "in 3 weeks", "in 2 hours", "next monday",
-"the 12th" or "12.11."; as you type it shows what that could mean, and the date and time below follow the one that is
-lit. Return or a click takes it, and the arrow keys go through the others. A day without a time is at nine in the
-morning. The note then shows a bell and the time under its title ("Tomorrow 8:30") and a bell in its row; a click on it changes the time
-or removes the reminder, and once the time has passed it turns red. At that time a notification comes with the note's
-name, the time and its first points: what is still to do first, then the rest, without pictures or front matter. It is
-Time Sensitive, so it gets through a Focus. Tap it to open the note, or choose Remind Me in 1 Hour or Done.
+Questions for the doctor, points for a meeting: Remind Me… brings a note back at the time you choose, or when you
+arrive at or leave a place. Pick Later Today, This Evening or Tomorrow, type the time in a few words, set a date and a
+time, a place, or both, in a popover like a reminder's details in Reminders. It reads "friday evening", "tomorrow at
+9", "fri 3pm", "in 3 weeks", "in 2 hours", "next monday", "the 12th" or "12.11."; as you type it shows what that could
+mean, and the date and time below follow the one that is lit. Return or a click takes it, and the arrow keys go through
+the others. A day without a time is at nine in the morning. The note then shows a bell and the time under its title
+("Tomorrow 8:30") and a bell in its row; a click on it changes the time or removes the reminder, and once the time has
+passed it turns red. At that time a notification comes with the note's name, the time and its first points: what is
+still to do first, then the rest, without pictures or front matter. It is Time Sensitive, so it gets through a Focus.
+Tap it to open the note, or choose Remind Me in 1 Hour or Done. A to-do's Remind Me reads typed times the same way.
 
 On the Mac, Remind Me… is in the note's ⋯ menu, the sidebar's right-click menu and the inspector; on iPhone and iPad it
 is in the ⋯ menu, on touch and hold, and, once you add it in Settings › Writing Bar, as a bell above the keyboard. The
-reminder isn't written into the note, so the file stays as it was and the time doesn't go along when you share it.
+reminder isn't written into the note, so the file stays as it was and the time or the place doesn't go along when you
+share it. Places remind you on iPhone and iPad, which watch them while Notebook may use your location ("While Using");
+a Mac can set one, and your iPhone reminds you.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/reminder-dark.webp">
-  <img alt="The note Questions for Dr. Weber with a bell and Tomorrow 8:30 under its title, a bell in its row in the sidebar and a Reminder section in the inspector; Remind Me is open below the title with fri typed in its field, and Friday, Friday Afternoon and Friday Evening to choose from above a date and a time" src="Design/screenshots/reminder-light.webp">
+  <img alt="The note Questions for Dr. Weber with a bell and Tomorrow 8:30 under its title, a bell in its row in the sidebar and a Reminder section in the inspector; Remind Me is open below the title with fri typed in its field, and Friday, Friday Afternoon and Friday Evening to choose from above Date and its day, Time, and Location" src="Design/screenshots/reminder-light.webp">
 </picture>
 
 ### PDFs, pictures and every other file
@@ -239,7 +274,7 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/devices-dark.webp">
-  <img alt="Notebook on an iPad, with the note Kyoto trip and its outline next to it, and on an iPhone in front of it, with the same note on a screen of its own and a checklist and attachment button at the bottom" src="Design/screenshots/devices-light.webp">
+  <img alt="Notebook on an iPad, with the note Kyoto trip and its outline next to it, and on an iPhone in front of it, with the same note on a screen of its own and a checklist and attachment button at the bottom; in its packing list, Power adapter, type A has a Monday pill after it" src="Design/screenshots/devices-light.webp">
 </picture>
 
 ## What it does
@@ -264,9 +299,14 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   choose Hide Folder, or on iPhone and iPad touch and hold it. It leaves the sidebar, search and Move To, and stays
   hidden on your other Macs, iPhones and iPads through iCloud. The eye next to the location's name, or ⇧⌘., shows
   hidden folders again, dimmed, until you click it again; on iPhone and iPad, Show Hidden Folders is in the ⋯ menu.
-- **Reminders.** Remind Me… brings a note back at a time you choose, picked or typed in a few words ("friday
-  evening", "in 3 weeks"), with a notification of its first points that gets through a Focus. The reminder follows the note when you rename or move it in Notebook, goes when you delete it,
-  and reaches your other Macs, iPhones and iPads through iCloud; each device shows the notification itself.
+- **To-dos.** Every open checkbox in every note, in one list at the top of the sidebar, grouped by when it's due, with
+  the lines indented under it as its notes. Tick them off there, open their note, or drag them to another day. A to-do
+  takes a date, a time and a place, written after its words where other apps read them too, and shows them as pills.
+- **Reminders.** Remind Me… brings a note or a to-do back at a time you choose, picked or typed in a few words ("friday
+  evening", "in 3 weeks"), or when you arrive at or leave a place, with a notification of its first points or the
+  to-do's notes that gets through a Focus. A note's reminder follows it when you rename or move it in Notebook, goes
+  when you delete it, and reaches your other Macs, iPhones and iPads through iCloud; a to-do's goes with its note. Each
+  device shows the notification itself; places remind you on iPhone and iPad.
 - **Live preview editor.** Headings, bold, italic, strikethrough, `==highlight==`, inline code, links, checklists,
   bulleted and numbered lists, quotes, callouts, tables, code blocks, maths, Mermaid, footnotes and front matter, which
   folds into a small "properties" pill. Styles turn on and off where the caret is, their marks come and go as a pair,
@@ -290,8 +330,9 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
 
 Everything is plain Markdown, so other apps keep reading your notes. Notebook adds no files of its own besides the
 `.assets` folders for pictures and files you add to notes, and in them, next to each drawing's picture, a `.drawing`
-file with its strokes. What isn't part of a note, such as the folders you hide and the reminders you set, is kept in
-the app's settings and iCloud's key-value store, not in your folders. What search knows, the text of your notes and
+file with its strokes. What isn't part of a note, such as the folders you hide and the reminders of notes you set, is
+kept in the app's settings and iCloud's key-value store, not in your folders. A to-do's date and place are part of the
+to-do, so they are in the note. What search knows, the text of your notes and
 PDFs and the words read in pictures, is kept in the app's caches on each device, from where it can always be read again.
 
 | What | In the file | In Notebook |
@@ -303,6 +344,9 @@ PDFs and the words read in pictures, is kept in the app's caches on each device,
 | Embed | `![[Recipes]]`, `![[Offer.pdf]]` | An excerpt of the note, or a card for the file |
 | Web link | `[text](https://…)` | The text, with a pencil to edit the address |
 | Checklist | `- [ ]`, `- [x]` | A round checkbox, filled when done; done items turn grey |
+| To-do's date | `- [ ] Call Dr. Weber ⏰ 2026-10-24 14:00`, `📅 2026-11-01` for a day | A pill: "Tomorrow 2:00 PM", red once it has passed |
+| To-do's place | `📍 [Pharmacy](https://maps.apple.com/?ll=52.53,13.4&q=Pharmacy)`, `📍 Leaving [Home](…)` | A pill with the place's name |
+| A to-do's notes | Lines indented under it | Shown under the to-do in To-dos and in its notification |
 | Highlight | `==text==` | A yellow highlight |
 | Callout | `> [!tip] Title` | A coloured box with a symbol |
 | Maths | `$x^2$`, `$$ … $$` | A typeset formula |
@@ -377,6 +421,7 @@ app's own folder there.
 | ⌘Z, ⇧⌘Z | Undo and redo: typing, and changes to files (the Trash, a rename, a move, a new note or folder), newest first |
 | ⌘F | Search |
 | ⌘K | Search and run commands; `>` for commands only |
+| ⇧⌘R | To-dos |
 | ⌘[ and ⌘], or swipe between pages | Back and forward; the swipe follows System Settings, as in Safari |
 | ⌘O | Open a Markdown file in a window of its own, or a folder in the sidebar |
 | ⌃⌘S | Show or hide the sidebar |
@@ -421,11 +466,12 @@ While writing:
 In the sidebar: a double-click opens a note in a window of its own and any other file in its own app, as in the
 Finder; Return renames, ⌘⌫ moves to the Trash, and Space opens a file in Quick Look. Right-click a file or folder for
 everything else, including Open in New Window, New Folder, Copy Link, which copies a `[[link]]` to it, Remind Me… and
-Hide Folder. As you point at a location's name, a folder with a plus comes up next to it for a new folder at its top,
+Hide Folder. In a note, right-click a to-do for Remind Me…, or click the bell that comes up after it as you point at
+it; in To-dos, right-click a row to move it to another day or open its note. As you point at a location's name, a folder with a plus comes up next to it for a new folder at its top,
 and, when the location has hidden folders, an eye that shows them.
 
-On an iPad with a keyboard, ⌘N, ⌘Z and ⇧⌘Z, ⌘F, ⌘K, ⌘[ and ⌘], ⌃⌘I, ⇧⌘. and the shortcuts for writing work as on the
-Mac. On iPhone and iPad:
+On an iPad with a keyboard, ⌘N, ⌘Z and ⇧⌘Z, ⌘F, ⌘K, ⇧⌘R, ⌘[ and ⌘], ⌃⌘I, ⇧⌘. and the shortcuts for writing work as
+on the Mac. On iPhone and iPad:
 
 | Gesture | Action |
 | --- | --- |
@@ -434,6 +480,8 @@ Mac. On iPhone and iPad:
 | Touch and hold a file or folder | Set a reminder, rename, move, duplicate, copy a link, hide a folder, share and more |
 | Pull a list down | Read the folder again |
 | Tap a checkbox, a link or a picture | Tick it, follow it, or look at it in Quick Look |
+| Tap a to-do's pill, or the bell above the keyboard in a to-do | Its date, time and place |
+| Touch and hold a row in To-dos, or drag it | Today, Tomorrow, This Weekend, Next Week, Remind Me…, or another group |
 | Tap a drawing | Draw in it |
 | While drawing: one finger, two fingers | Draw, scroll (where only Apple Pencil draws, a finger scrolls) |
 | While drawing on the iPhone: Undo at the top, or touch and hold it | Take back the last stroke, or Redo |
@@ -450,9 +498,9 @@ Planned, and not built yet:
 - **Quick capture:** a widget, a control in Control Center and on the Lock Screen, the Action button and a share
   extension, all adding a note to an Inbox folder.
 - **Spotlight:** notes don't turn up in Spotlight yet, only in Notebook's own search.
-- **Reminders at a place** (arriving or leaving) **and when a calendar event starts,** and on the iPhone a Live
-  Activity that keeps the note on the Lock Screen. A reminder set on another device reaches an iPhone or iPad the next
-  time Notebook runs there or gets time in the background. Reminders don't repeat.
+- **Reminders when a calendar event starts,** and on the iPhone a Live Activity that keeps the note on the Lock Screen.
+  A reminder set on another device reaches an iPhone or iPad the next time Notebook runs there or gets time in the
+  background. Reminders don't repeat, and a Mac doesn't remind you at places.
 - Links follow a renamed note, but not yet a moved one, a renamed folder, or a note from outside your locations
   renamed in its own window.
   Footnotes are styled but don't jump to their text.
@@ -480,13 +528,14 @@ Packages/NotebookKit/
                              three-way merge, and the hidden folders and reminders kept in iCloud's key-value store
     Index/                   Search: the index of every file and how it is kept between launches, the corpus a
                              search goes through on every core, the text read in pictures, scans and drawings, and
-                             how [[links]] resolve
+                             how [[links]] resolve; the to-dos of every note, read from it
     Platform/                The few names and calls that differ between AppKit and UIKit
     UI/                      The Mac's window, sidebar, inspector, search field, Settings and file windows; PDFs,
                              pictures, videos and Quick Look; what both share, such as the outline and search results
     UI/iOS/                  The iPhone's and iPad's screens: folders, the sidebar, the note, search and Settings
     Debug/                   The debug remotes and the sample notes (Debug builds only)
-  Tests/                     Parser, editor, merge, smoothness, search index, drawing, reminder and app icon tests
+  Tests/                     Parser, editor, merge, smoothness, search index, drawing, reminder, to-do and app icon
+                             tests
 Config/                      Build settings, Info.plist and entitlements
 Design/                      The icon, the README pictures and the social preview
 Website/                     The website, published to GitHub Pages by .github/workflows/website.yml
@@ -542,7 +591,8 @@ Debug builds can be driven from a file: launch with `-debugCommandFile <path>` a
 `open Travel/Kyoto trip.md`, `type Hello`, `key return` or `snapshot <file>` to it, one per line. The commands are
 listed in `Debug/DebugRemote.swift`, and for iPhone and iPad in `Debug/DebugRemote+UIKit.swift`; those for reminders,
 such as `remind 2 Personal/Questions for Dr. Weber.md` (in two minutes) and `notifications`, are in
-`Debug/DebugReminders.swift`. In the Simulator the file is in the app's own folder (`-debugCommandFile
+`Debug/DebugReminders.swift`, and those for to-dos, such as `todos`, `ticktodo dry cleaning` and `firetodo dry
+cleaning`, in `Debug/DebugTodos.swift`. In the Simulator the file is in the app's own folder (`-debugCommandFile
 ~/Documents/cmd`), where `xcrun simctl get_app_container` finds it, and `xcrun simctl io <device> screenshot` takes the
 pictures. `-NotebookSlowFolders 2` makes every folder take two seconds to read, as a slow iCloud might, to see that
 nothing waits for it, `-NotebookSlowFiles 2` does the same for every note, PDF, picture and video you open, and

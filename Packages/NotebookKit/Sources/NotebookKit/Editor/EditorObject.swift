@@ -30,6 +30,8 @@ final class EditorObject: NSObject {
         case frontmatter(count: Int)
         /// After a link's text: a pencil that edits where it goes.
         case linkEdit
+        /// A to-do's date or place, after its words.
+        case todoPill(TodoPill)
     }
 
     enum ChipIcon {
@@ -94,7 +96,57 @@ final class EditorObject: NSObject {
         case .callout(let type, let label): "callout\(type)\(label ?? "")"
         case .frontmatter(let count): "front\(count)"
         case .linkEdit: "linkEdit"
+        case .todoPill(let pill): "pill\(pill.symbol)\(pill.label)\(pill.tone)"
         }
+    }
+}
+
+/// A to-do's date or place as it shows after its words: a symbol and a few words in a tinted capsule, like a link to a
+/// note, red once its time has passed and grey once the to-do is done.
+struct TodoPill: Equatable {
+    enum Tone: Equatable {
+        case normal, overdue, done
+    }
+
+    var symbol: String
+    var label: String
+    var tone: Tone
+
+    init(_ mark: TodoMark.Kind, done: Bool, now: Date = .now) {
+        switch mark {
+        case .due(let due):
+            symbol = due.hasTime ? "bell.fill" : "calendar"
+            label = ReminderText.text(due.date(), time: due.hasTime, now: now)
+            tone = done ? .done : due.isOverdue(at: now) ? .overdue : .normal
+        case .place(let place):
+            symbol = "location.fill"
+            // A long name would take a line of its own.
+            let name = place.name.count > 26 ? place.name.prefix(24).trimmingCharacters(in: .whitespaces) + "…" : place.name
+            label = place.leaving ? "Leaving " + name : name
+            tone = done ? .done : .normal
+        }
+    }
+
+    /// Its words, a little smaller than the text they follow.
+    static func font(for body: NSFont) -> NSFont {
+        NSFont.systemFont(ofSize: max(11, (body.pointSize * 0.8).rounded()), weight: .medium)
+    }
+
+    /// Room before the capsule, and inside it around the symbol and the words.
+    static let gap: CGFloat = 6
+    static let padding: CGFloat = 6
+    static let spacing: CGFloat = 3
+
+    func labelWidth(_ font: NSFont) -> CGFloat {
+        ceil((label as NSString).size(withAttributes: [.font: font]).width)
+    }
+
+    func symbolSize(_ font: NSFont) -> CGFloat { (font.pointSize * 0.85).rounded() }
+
+    /// The whole room it takes after the words: the gap and the capsule.
+    func width(after body: NSFont) -> CGFloat {
+        let font = Self.font(for: body)
+        return Self.gap + Self.padding + symbolSize(font) + 2 + Self.spacing + labelWidth(font) + Self.padding + 1
     }
 }
 

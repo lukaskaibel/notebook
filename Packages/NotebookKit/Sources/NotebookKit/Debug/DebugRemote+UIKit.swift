@@ -365,6 +365,7 @@ enum DebugRemote {
             editor.debugTap(at: CGPoint(x: rect.midX, y: rect.midY))
         default:
             if DebugReminders.run(command, argument, workspace: workspace, url: url, log: log) { break }
+            if DebugTodos.run(command, argument, workspace: workspace, log: log) { break }
             // Everything else is the screens': going back, searching, showing settings.
             NotificationCenter.default.post(name: .notebookDebug, object: nil, userInfo: ["command": command, "argument": argument])
         }

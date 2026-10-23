@@ -62,12 +62,30 @@ public final class FileWindows {
     func refreshLinks() {
         for controller in controllers.values { controller.editor.refreshLinks() }
     }
+
+    /// The editor of the window that shows a note, once its text is in.
+    func editor(showing url: URL) -> EditorController? {
+        // File events and the index can name "/tmp/…" "/private/tmp/…".
+        guard let controller = controllers.values.first(where: { FileNode.samePath($0.url, url) }), controller.isLoaded else { return nil }
+        return controller.editor
+    }
+
+    /// Writes the note a window shows, now.
+    func save(showing url: URL) {
+        controllers.values.first { FileNode.samePath($0.url, url) }?.save(quitting: false)
+    }
+
+    /// The pills of to-dos in every window: their times turn red when they pass.
+    func refreshTodoPills() {
+        for controller in controllers.values { controller.editor.refreshTodoPills() }
+    }
 }
 
 @MainActor
 final class FileWindowController: NSWindowController, NSWindowDelegate, EditorControllerDelegate {
     private(set) var url: URL
     private let note: NoteDocument
+    var isLoaded: Bool { note.isLoaded }
     let editor = EditorController()
     var onClose: (() -> Void)?
 
@@ -190,6 +208,10 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
         case .note(let name):
             if let url = self.editor(editor, resolve: name) { FileWindows.shared.open(url) } else { NSSound.beep() }
         }
+    }
+
+    func editor(_ editor: EditorController, showTodoReminderOnLine line: Int) {
+        Workspace.shared.askForTodoReminder(in: editor, url: url, line: line)
     }
 
     func editor(_ editor: EditorController, quickLook url: URL) {

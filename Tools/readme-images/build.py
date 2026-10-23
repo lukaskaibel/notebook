@@ -105,6 +105,10 @@ for theme in [] if only == "devices" else ["dark", "light"]:
          f"drawing-{theme}")
     # The whole window: the bell in the sidebar, under the title and in the inspector, and Remind Me… open.
     webp(place(window(f"reminder-{theme}"), theme, (130, 110), 1800), f"reminder-{theme}")
+    # To-dos, with its row selected at the top of the sidebar; then a note's to-dos with their pills, and Remind Me open
+    # from one at a place.
+    webp(place(window(f"todos-{theme}"), theme, (130, 110), 1800), f"todos-{theme}")
+    webp(place(window(f"todo-reminder-{theme}"), theme, (130, 110), 1800), f"todo-reminder-{theme}")
     webp(place(window(f"quicklook-{theme}"), theme, (130, 110), 1800), f"quicklook-{theme}")
     # ⌘K over the dimmed window.
     webp(place(window(f"palette-{theme}"), theme, (130, 110), 1800), f"palette-{theme}")

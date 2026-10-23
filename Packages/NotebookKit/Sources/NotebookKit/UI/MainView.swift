@@ -41,7 +41,7 @@ struct MainView: View {
             .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 400)
         } detail: {
             DetailColumn(workspace: workspace)
-                .inspector(isPresented: $workspace.isOutlineVisible) {
+                .inspector(isPresented: $workspace.showsOutline) {
                     OutlinePanel(workspace: workspace)
                         .inspectorColumnWidth(min: 200, ideal: 240, max: 360)
                 }
@@ -115,7 +115,7 @@ struct DocumentToolbar: ToolbarContent {
                 .lineLimit(1)
                 .frame(maxWidth: 220, alignment: .leading)
                 .padding(.leading, 6)
-                .opacity(workspace.currentURL != nil && (workspace.isTitleScrolledAway || workspace.note == nil) ? 1 : 0)
+                .opacity(workspace.showsTodos ? (workspace.isTitleScrolledAway ? 1 : 0) : workspace.currentURL != nil && (workspace.isTitleScrolledAway || workspace.note == nil) ? 1 : 0)
                 .animation(Theme.quick, value: workspace.isTitleScrolledAway)
                 .accessibilityAddTraits(.isHeader)
         }
@@ -148,14 +148,16 @@ struct DocumentToolbar: ToolbarContent {
                 .padding(.horizontal, 6)
                 .help("Search notes, files and pictures (⌘F)")
         }
-        ToolbarSpacer(.fixed)
-        ToolbarItem {
-            Button {
-                withAnimation(Theme.spring) { workspace.isOutlineVisible.toggle() }
-            } label: {
-                Label(workspace.isOutlineVisible ? "Hide Outline" : "Show Outline", systemImage: "sidebar.right")
+        if !workspace.showsTodos {
+            ToolbarSpacer(.fixed)
+            ToolbarItem {
+                Button {
+                    withAnimation(Theme.spring) { workspace.isOutlineVisible.toggle() }
+                } label: {
+                    Label(workspace.isOutlineVisible ? "Hide Outline" : "Show Outline", systemImage: "sidebar.right")
+                }
+                .help(workspace.isOutlineVisible ? "Hide outline (⌃⌘I)" : "Show outline (⌃⌘I)")
             }
-            .help(workspace.isOutlineVisible ? "Hide outline (⌃⌘I)" : "Show outline (⌃⌘I)")
         }
     }
 }
@@ -247,7 +249,9 @@ struct DetailColumn: View {
 
     var body: some View {
         Group {
-            if let url = workspace.currentURL {
+            if workspace.showsTodos {
+                TodosView(workspace: workspace)
+            } else if let url = workspace.currentURL {
                 if workspace.note != nil {
                     // The wait for a note still in iCloud shows below the toolbar, as a PDF's does.
                     ZStack {

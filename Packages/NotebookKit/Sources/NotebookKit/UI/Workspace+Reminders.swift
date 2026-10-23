@@ -52,23 +52,7 @@ extension Workspace {
 
     /// "Today 14:00", "Tomorrow 9:00", "Friday 9:00", "24 Oct 9:00", in the words and the clock of your settings.
     static func reminderText(_ date: Date) -> String {
-        let calendar = Calendar.current
-        let time = date.formatted(date: .omitted, time: .shortened)
-        let day: String
-        if calendar.isDateInToday(date) {
-            day = "Today"
-        } else if calendar.isDateInTomorrow(date) {
-            day = "Tomorrow"
-        } else if calendar.isDateInYesterday(date) {
-            day = "Yesterday"
-        } else if let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: .now), to: date).day, (0..<7).contains(days) {
-            day = date.formatted(.dateTime.weekday(.wide))
-        } else if calendar.isDate(date, equalTo: .now, toGranularity: .year) {
-            day = date.formatted(.dateTime.day().month(.abbreviated))
-        } else {
-            day = date.formatted(date: .abbreviated, time: .omitted)
-        }
-        return "\(day) \(time)"
+        ReminderText.text(date, time: true)
     }
 
     // MARK: - Setting them
@@ -94,25 +78,50 @@ extension Workspace {
     }
     #endif
 
-    /// Sets a note's reminder, or changes its time. The first one asks whether Notebook may send notifications.
-    func setReminder(for url: URL, at date: Date) {
-        let reminder = reminders.set(note: hiddenKey(for: url), date: date)
+    /// Sets a note's reminder, or changes its time or place. The first one asks whether Notebook may send
+    /// notifications, and the first with a place whether it may use your location.
+    func setReminder(for url: URL, at date: Date?, place: TodoPlace? = nil) {
+        guard date != nil || place != nil else { return removeReminder(for: url) }
+        let reminder = reminders.set(note: hiddenKey(for: url), date: date, place: place)
         #if DEBUG
         unscheduledReminders.remove(reminder.id)
         #endif
+        if let place { PlaceHistory.add(place) }
         ReminderNotifications.shared.withdraw(reminder.id)
         remindersChanged(scheduling: [])
         Task {
-            let allowed = await ReminderNotifications.shared.requestPermission()
+            let allowed = await askForReminderPermissions(place: place != nil)
             // Scheduled either way: turned on later, notifications come for it.
             scheduleReminders([reminder.id])
-            guard !allowed else { return }
-            #if os(macOS)
-            report("Notifications for Notebook are turned off.", "The reminder is kept, but Notebook can’t tell you when it’s time. Turn on notifications for Notebook in System Settings › Notifications.")
-            #else
-            report("Notifications for Notebook are turned off.", "The reminder is kept, but Notebook can’t tell you when it’s time. Turn on notifications for Notebook in Settings › Apps › Notebook.")
-            #endif
+            if !allowed { reportNotificationsOff() }
         }
+    }
+
+    /// Asks whether Notebook may send notifications, and with a place whether it may use your location (on iPhone and
+    /// iPad, which remind you there). Says whether notifications may come.
+    func askForReminderPermissions(place: Bool) async -> Bool {
+        let allowed = await ReminderNotifications.shared.requestPermission()
+        #if os(iOS)
+        if place, ReminderNotifications.shared.isActive {
+            let wasAllowed = PlaceAccess.shared.isAllowed
+            if !(await PlaceAccess.shared.requestAccess()) {
+                report("Notebook can’t use your location.", "The place is kept, but your iPhone can’t remind you there. Allow Notebook to use your location in Settings › Apps › Notebook › Location.")
+            } else if !wasAllowed {
+                // Places weren't watched until now.
+                scheduleReminders()
+                scheduleTodoNotifications()
+            }
+        }
+        #endif
+        return allowed
+    }
+
+    func reportNotificationsOff() {
+        #if os(macOS)
+        report("Notifications for Notebook are turned off.", "The reminder is kept, but Notebook can’t tell you when it’s time. Turn on notifications for Notebook in System Settings › Notifications.")
+        #else
+        report("Notifications for Notebook are turned off.", "The reminder is kept, but Notebook can’t tell you when it’s time. Turn on notifications for Notebook in Settings › Apps › Notebook.")
+        #endif
     }
 
     func removeReminder(for url: URL) {
@@ -132,13 +141,19 @@ extension Workspace {
     func remindAgain(_ id: UUID, in interval: TimeInterval) -> Task<Void, Never>? {
         guard var reminder = reminders.reminder(id) else { return nil }
         // To the minute, so the time shown is the time it comes.
-        let later = Date(timeIntervalSinceNow: interval)
-        reminder.date = Calendar.current.date(bySetting: .second, value: 0, of: later) ?? later
-        if reminder.date < later { reminder.date += 60 }
+        reminder.date = Self.minute(after: interval)
         reminders.set(reminder)
         ReminderNotifications.shared.withdraw(id)
         remindersChanged(scheduling: [])
         return scheduleReminders([id])
+    }
+
+    /// A time this far from now, to the minute, so the time shown is the time it comes.
+    static func minute(after interval: TimeInterval) -> Date {
+        let later = Date(timeIntervalSinceNow: interval)
+        var date = Calendar.current.date(bySetting: .second, value: 0, of: later) ?? later
+        if date < later { date += 60 }
+        return date
     }
 
     /// A tap on the notification: the note opens, wherever it is now. When the tap started the app, once the
@@ -147,7 +162,7 @@ extension Workspace {
         start()
         whenSurveyed { [weak self] in
             guard let self else { return }
-            let reminder = reminders.reminder(id) ?? note.map { Reminder(id: id, note: $0, date: .now) }
+            let reminder = reminders.reminder(id) ?? note.map { Reminder(id: id, note: $0, date: nil) }
             guard let reminder, let url = url(for: reminder) else { return beep() }
             showWindow?()
             #if os(macOS)
@@ -182,7 +197,7 @@ extension Workspace {
             let url = url(for: reminder)
             // The open note's text is newer than its file while you type.
             let isOpen = url != nil && url == note?.url.standardizedFileURL && note?.isLoaded == true
-            jobs.append(ReminderNotifications.Job(id: reminder.id, date: reminder.date, title: url.map(SearchSection.displayName) ?? reminder.name,
+            jobs.append(ReminderNotifications.Job(id: reminder.id, date: reminder.date, place: reminder.place, title: url.map(SearchSection.displayName) ?? reminder.name,
                                                   note: reminder.note, url: url, text: isOpen ? editor.text : nil))
         }
         // Locations given on the command line come with reminders of their own: the ones you set stay scheduled.
@@ -220,17 +235,23 @@ extension Workspace {
         remindersChanged(scheduling: moved)
     }
 
-    /// Wakes up when the next reminder's time comes, for the bell under the title and in the rows to turn red.
+    /// Wakes up when the next reminder's time comes, for the bell under the title and in the rows to turn red, and a
+    /// to-do's pill and its row in To-dos; and at midnight, when Tomorrow becomes Today.
     func watchForDueReminders() {
         dueTimer?.invalidate()
         dueTimer = nil
-        guard let next = reminders.all.first(where: { $0.date > .now })?.date else { return }
+        let nextTodo = todos.items.lazy.compactMap { $0.todo.due }.map { $0.hasTime ? $0.date() : Calendar.current.date(byAdding: .day, value: 1, to: $0.date()) ?? $0.date() }.filter { $0 > .now }.min()
+        let nextNote = reminders.all.compactMap(\.date).first { $0 > .now }
+        // At midnight too: "Tomorrow" becomes "Today".
+        let midnight = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: .now))
+        guard let next = [nextTodo, nextNote, midnight].compactMap({ $0 }).min() else { return }
         let timer = Timer(fire: next.addingTimeInterval(0.5), interval: 0, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.remindersDue += 1
                 self.updateReminderLine()
                 self.sidebarRefreshRows()
+                self.refreshTodoPills()
                 self.watchForDueReminders()
             }
         }
@@ -244,7 +265,7 @@ extension Workspace {
             editor.setReminder(nil, isOverdue: false)
             return
         }
-        editor.setReminder(Self.reminderText(reminder.date), isOverdue: reminder.date <= .now)
+        editor.setReminder(reminder.text, isOverdue: reminder.isOverdue)
     }
 
     func sidebarRefreshRows() {
@@ -264,6 +285,12 @@ extension Workspace {
         start()
         reminders.reload()
         await scheduleReminders()?.value
+        // The to-dos once every note has been read, as far as the time given allows: changed on another device, their
+        // dates came with the files.
+        for _ in 0..<40 where !todos.isReady {
+            try? await Task.sleep(for: .milliseconds(500))
+        }
+        await scheduleTodoNotifications()?.value
         scheduleReminderRefresh()
     }
 

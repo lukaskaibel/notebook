@@ -85,7 +85,7 @@ public struct NotebookScene: Scene {
                     Label(workspace.isOutlineVisible ? "Hide Outline" : "Show Outline", systemImage: "sidebar.right")
                 }
                 .keyboardShortcut("i", modifiers: [.command, .control])
-                .disabled(workspace.locations.isEmpty)
+                .disabled(workspace.locations.isEmpty || workspace.showsTodos)
                 Divider()
                 Toggle(isOn: $settings.showsOnlyNotes) { Label("Show Only Notes", systemImage: "doc.text") }
                 Toggle(isOn: $settings.dimsOtherFiles) { Label("Dim Files That Aren’t Notes", systemImage: "sun.min") }
@@ -110,6 +110,9 @@ public struct NotebookScene: Scene {
                     .keyboardShortcut("f", modifiers: .command)
                 Button { workspace.togglePalette() } label: { Label("Command Palette…", systemImage: "command") }
                     .keyboardShortcut("k", modifiers: .command)
+                    .disabled(workspace.locations.isEmpty)
+                Button { workspace.showTodos() } label: { Label("To-dos", systemImage: "checklist") }
+                    .keyboardShortcut("r", modifiers: [.command, .shift])
                     .disabled(workspace.locations.isEmpty)
                 Divider()
                 Button { workspace.goBack() } label: { Label("Back", systemImage: "chevron.backward") }

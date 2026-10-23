@@ -15,6 +15,8 @@ public final class Workspace: NSObject {
     private(set) var roots: [UUID: FileNode] = [:]
     /// The file shown on the right.
     public private(set) var currentURL: URL?
+    /// The To-dos list is shown on the right, in place of a file.
+    public private(set) var showsTodos = false
     public private(set) var note: NoteDocument?
     @ObservationIgnored public let editor = EditorController()
     let index = SearchIndex()
@@ -33,9 +35,16 @@ public final class Workspace: NSObject {
     private(set) var hidden = HiddenFolders(defaults: nil, cloud: nil)
     /// The reminders of notes: kept in iCloud too, or only for this run with locations given on the command line.
     private(set) var reminders = Reminders(defaults: nil, cloud: nil)
+    /// Every open to-do in the notes, read from what search knows.
+    let todos = TodoList()
     /// Counts the reminders whose time came, so what shows them turns red then, without anything else changing.
     var remindersDue = 0
     @ObservationIgnored var dueTimer: Timer?
+    /// The to-dos' notifications, scheduled a moment after the to-dos changed.
+    @ObservationIgnored var todoScheduling: DispatchWorkItem?
+    /// The last change to a to-do's file, which the next waits for, and what to-dos' lines became (`current(_:)`).
+    @ObservationIgnored var lastTodoWrite: Task<Void, Never>?
+    @ObservationIgnored var todoRewrites: [String: TodoReference] = [:]
     #if DEBUG
     /// The sample notes' reminders, shown but never scheduled: a run on the sample notes leaves no notification behind.
     @ObservationIgnored var unscheduledReminders = Set<UUID>()
@@ -66,6 +75,12 @@ public final class Workspace: NSObject {
     /// The outline of the open note, on the right. On the iPad it starts hidden, leaving the note the room.
     var isOutlineVisible = UserDefaults.standard.object(forKey: "showsOutline") as? Bool ?? Workspace.showsOutlineAtFirst {
         didSet { UserDefaults.standard.set(isOutlineVisible, forKey: "showsOutline") }
+    }
+    /// The outline as the window shows it: To-dos has none, so the inspector makes way for it and comes back with the
+    /// next note.
+    var showsOutline: Bool {
+        get { isOutlineVisible && !showsTodos }
+        set { if !showsTodos { isOutlineVisible = newValue } }
     }
     #if os(macOS)
     private static let showsOutlineAtFirst = true
@@ -120,6 +135,8 @@ public final class Workspace: NSObject {
     var deleting: URL?
     /// A note to set a reminder for, in a sheet.
     var reminderRequest: ReminderRequest?
+    /// A to-do to set a reminder for, in a sheet.
+    var todoReminderRequest: TodoReference?
     /// What each note looked like when you went on from it, shown while the screen of the note you go on to slides
     /// over it, and while you swipe back to it. There is only one editor, and it is on the screen in front.
     @ObservationIgnored var pageSnapshots: [URL: UIView] = [:]
@@ -172,8 +189,11 @@ public final class Workspace: NSObject {
             self?.refreshLinks()
             // Notes moved in the Finder can be found by their names now.
             self?.scheduleReminders()
+            self?.indexChanged()
         }
         index.onFoldersChanged = { [weak self] in self?.prepareMoveFolders() }
+        index.onChanged = { [weak self] in self?.indexChanged() }
+        todos.onChange = { [weak self] in self?.todosChanged() }
         index.onRefreshed = { [weak self] in self?.refreshLinks() }
         index.onIndexed = { [weak self] entries in self?.recognizer.consider(entries) }
         #if os(macOS)
@@ -645,6 +665,7 @@ public final class Workspace: NSObject {
             if focusTitle { editor.focusTitle() }
             return
         }
+        showsTodos = false
         #if os(macOS)
         pages.willOpen(target)
         #else
@@ -886,22 +907,63 @@ public final class Workspace: NSObject {
     public func goBack() {
         while canGoBack {
             historyIndex -= 1
-            if FileManager.default.fileExists(atPath: history[historyIndex].path) {
-                open(history[historyIndex], recordHistory: false)
-                return
-            }
+            if goTo(history[historyIndex]) { return }
         }
     }
 
     public func goForward() {
         while canGoForward {
             historyIndex += 1
-            if FileManager.default.fileExists(atPath: history[historyIndex].path) {
-                open(history[historyIndex], recordHistory: false)
-                return
-            }
+            if goTo(history[historyIndex]) { return }
         }
     }
+
+    /// Back or Forward to a place in the history, if it is still there.
+    private func goTo(_ url: URL) -> Bool {
+        if url == Self.todosURL {
+            showTodos(recordHistory: false)
+            return true
+        }
+        guard FileManager.default.fileExists(atPath: url.path) else { return false }
+        open(url, recordHistory: false)
+        return true
+    }
+
+    /// The To-dos list's place in the history, among the files you opened.
+    static let todosURL = URL(string: "notebook:to-dos")!
+
+    /// Shows the To-dos list in place of the file that is open, which is saved and left as when you open another.
+    public func showTodos(recordHistory: Bool = true) {
+        guard !showsTodos else { return }
+        #if os(macOS)
+        if currentURL != nil { pages.willOpen(Self.todosURL) }
+        #else
+        keepSnapshot()
+        #endif
+        keepPlace()
+        leaveCurrentNote()
+        currentURL = nil
+        note = nil
+        outline = []
+        stats = NoteStats()
+        currentHeading = nil
+        isTitleScrolledAway = false
+        selectedFolder = nil
+        showsTodos = true
+        if recordHistory {
+            if historyIndex < history.count - 1 { history.removeSubrange((historyIndex + 1)...) }
+            history.append(Self.todosURL)
+            historyIndex = history.count - 1
+        }
+        sidebarSelectTodos()
+    }
+
+    #if os(iOS)
+    /// Leaves the To-dos list: the iPhone's Back.
+    public func closeTodos() {
+        showsTodos = false
+    }
+    #endif
 
     /// The open note was renamed or moved somewhere else, in the Finder or on another device: its reminder follows.
     private func noteMoved(to url: URL) {
@@ -1529,6 +1591,7 @@ public final class Workspace: NSObject {
 
     /// The open file's name as you read it: notes without their extension.
     var currentTitle: String {
+        if showsTodos { return "To-dos" }
         guard let currentURL else { return "Notebook" }
         if let name = newName(for: currentURL) { return name }
         return FileKind(url: currentURL, isDirectory: false) == .note ? currentURL.deletingPathExtension().lastPathComponent : currentURL.lastPathComponent
@@ -1642,6 +1705,11 @@ extension Workspace: EditorControllerDelegate {
         stats = editor.stats
     }
 
+    /// To-dos scrolled its title up under the toolbar, or back.
+    func todosTitleScrolled(away: Bool) {
+        if showsTodos, isTitleScrolledAway != away { isTitleScrolledAway = away }
+    }
+
     public func editorPositionDidChange(_ editor: EditorController) {
         if currentHeading != editor.currentHeading { currentHeading = editor.currentHeading }
         if isTitleScrolledAway != editor.isTitleScrolledAway { isTitleScrolledAway = editor.isTitleScrolledAway }
@@ -1719,5 +1787,10 @@ extension Workspace: EditorControllerDelegate {
     public func editorShowReminder(_ editor: EditorController) {
         guard let currentURL, note != nil else { return }
         askForReminder(currentURL)
+    }
+
+    public func editor(_ editor: EditorController, showTodoReminderOnLine line: Int) {
+        guard let currentURL, note != nil else { return }
+        askForTodoReminder(in: editor, url: currentURL, line: line)
     }
 }
