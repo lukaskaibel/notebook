@@ -493,8 +493,12 @@ final class SearchCorpus: Sendable {
         var changed = true
         while changed {
             changed = false
-            for prefix in ["> ", ">", "- [ ] ", "- [x] ", "- [X] ", "- ", "* ", "+ "] where result.hasPrefix(prefix) {
+            for prefix in ["> ", ">", "- ", "* ", "+ "] where result.hasPrefix(prefix) {
                 result = result.dropFirst(prefix.count)
+                changed = true
+            }
+            if let box = Todos.checkboxLength(result) {
+                result = result.dropFirst(box)
                 changed = true
             }
             if result.hasPrefix("#") {

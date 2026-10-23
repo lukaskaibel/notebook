@@ -60,8 +60,9 @@ extension EditorController {
                 return .block(index: blockIndex, caret: line.range.upperBound)
             case .linkEdit:
                 return .editLink(range: range)
-            case .todoPill:
-                return .todo(line: document.lineIndex(containing: index))
+            case .todoPill(let pill):
+                // With To-dos off, a date is only words.
+                return pill.isField || !NotebookSettings.shared.showsTodos ? nil : .todo(line: document.lineIndex(containing: index))
             case .chipLead, .chipTrail:
                 if let link = storage.attribute(.notebookLink, at: index, effectiveRange: nil) as? LinkTarget { return .link(link.kind) }
                 return nil

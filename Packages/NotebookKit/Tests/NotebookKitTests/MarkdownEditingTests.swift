@@ -357,6 +357,14 @@ struct MarkdownEditingTests {
         #expect(Editing.toggleCheckbox(in: state("- to|do")) == nil)
     }
 
+    @Test func obsidiansOtherCheckboxesTickAndCarryOn() {
+        #expect(marked(Editing.toggleCheckbox(in: state("- [/] half| done"))) == "- [x] half| done")
+        #expect(marked(Editing.toggleCheckbox(in: state("- [-] drop|ped"))) == "- [ ] drop|ped")
+        #expect(marked(Editing.toggleCheckbox(in: state("- [!] urg|ent"))) == "- [x] urg|ent")
+        #expect(marked(Editing.insertNewline(in: state("- [/] started|"))) == "- [/] started\n- [ ] |")
+        #expect(marked(Editing.deleteBackward(in: state("- [?] |ask"))) == "- |ask")
+    }
+
     @Test func itemsGoInUnderTheItemAboveAndOut() {
         #expect(marked(Editing.indent(in: state("- one\n- two|"))) == "- one\n  - two|")
         #expect(marked(Editing.indent(in: state("1. one\n2. two|"))) == "1. one\n   2. two|")

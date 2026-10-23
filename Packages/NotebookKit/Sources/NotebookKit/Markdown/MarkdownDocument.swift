@@ -81,12 +81,101 @@ public struct ListItem: Hashable {
     public var markerRange: NSRange
     /// Everything before the item's text: indent, marker, spaces, checkbox.
     public var prefix: NSRange
-    /// `[ ]` or `[x]` of a task.
+    /// `[ ]` or `[x]` of a task, or another mark between the brackets.
     public var checkbox: NSRange?
+    /// Done or cancelled: no longer to do.
     public var checked: Bool
+    /// What a task's brackets hold.
+    public var mark: TaskMark = .open
 
     public var isTask: Bool { checkbox != nil }
     public var isOrdered: Bool { if case .ordered = marker { true } else { false } }
+}
+
+/// What a task's brackets hold. Obsidian makes a checkbox of any character there, and its themes and the Tasks plugin
+/// give many of them a meaning: `[ ]` to do, `[x]` done, `[/]` in progress, `[-]` cancelled, `[!]` important, `[?]` a
+/// question, `[>]` moved on and so on. As in the Tasks plugin, all but done and cancelled are still to do.
+public enum TaskMark: Hashable, Sendable {
+    case open, done, inProgress, cancelled
+    case other(Character)
+
+    /// The mark a character between brackets makes, if it makes one: any character but a digit (`[1]` starts a
+    /// reference), a bracket, a backslash or a backtick, and no space but the space.
+    public init?(_ unit: UInt16) {
+        switch unit {
+        case 32: self = .open
+        case 120, 88: self = .done
+        case 47: self = .inProgress
+        case 45: self = .cancelled
+        case 48...57, 91, 92, 93, 96, 0..<32, 127, 0xD800...0xDFFF: return nil
+        default:
+            guard let scalar = UnicodeScalar(unit), !scalar.properties.isWhitespace else { return nil }
+            self = .other(Character(scalar))
+        }
+    }
+
+    /// Done or cancelled.
+    public var isClosed: Bool { self == .done || self == .cancelled }
+
+    /// As it is written between the brackets.
+    public var character: Character {
+        switch self {
+        case .open: " "
+        case .done: "x"
+        case .inProgress: "/"
+        case .cancelled: "-"
+        case .other(let character): character
+        }
+    }
+
+    /// The symbol drawn in the circle of a mark Obsidian's themes draw as one, as the Minimal and Things themes do.
+    public var symbol: String? {
+        guard case .other(let character) = self else { return nil }
+        return switch character {
+        case ">": "arrow.right"
+        case "<": "calendar"
+        case "!": "exclamationmark"
+        case "?": "questionmark"
+        case "*": "star.fill"
+        case "\"", "“": "quote.opening"
+        case "l", "L": "location.fill"
+        case "b": "bookmark.fill"
+        case "i": "info"
+        case "I": "lightbulb.fill"
+        case "S": "dollarsign"
+        case "p": "hand.thumbsup.fill"
+        case "c": "hand.thumbsdown.fill"
+        case "f": "flame.fill"
+        case "k": "key.fill"
+        case "w": "trophy.fill"
+        case "u": "arrow.up"
+        case "d": "arrow.down"
+        case "n", "N": "note.text"
+        case "+": "plus"
+        case "@": "person.fill"
+        case "T": "clock"
+        default: nil
+        }
+    }
+
+    /// What it means, in words, for VoiceOver and menus.
+    public var name: String {
+        switch self {
+        case .open: "To Do"
+        case .done: "Done"
+        case .inProgress: "In Progress"
+        case .cancelled: "Cancelled"
+        case .other(let character):
+            switch character {
+            case ">": "Moved On"
+            case "<": "Scheduled"
+            case "!": "Important"
+            case "?": "Question"
+            case "*": "Starred"
+            default: "To Do"
+            }
+        }
+    }
 }
 
 public struct MarkdownBlock: Equatable {

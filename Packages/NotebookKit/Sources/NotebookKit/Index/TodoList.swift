@@ -62,12 +62,86 @@ final class TodoList {
     private func finished(_ fresh: [Item], cache: [String: Cached], ready: Bool) {
         task = nil
         self.cache = cache
+        var fresh = fresh
+        applyPatches(to: &fresh)
         let changed = fresh != items
         if changed { items = fresh }
         let becameReady = ready && !isReady
         if becameReady { isReady = true }
         if changed || becameReady { onChange?() }
         readNext()
+    }
+
+    // MARK: - Changes not yet read
+
+    /// A change Notebook just made to a to-do, shown until its note has been read again.
+    private struct Patch {
+        var url: URL
+        /// The to-do's line before the change.
+        var source: String
+        var line: Int
+        /// When the note had last changed, as read then: a reading with another date has the change, or a later one.
+        var modified: Date?
+        /// The to-do after the change; nil once it is done.
+        var todo: Todo?
+        var until: Date
+    }
+
+    @ObservationIgnored private var patches: [Patch] = []
+
+    /// Shows a change to a to-do at once, before its note is read again: what its line says now, and the lines under it
+    /// when they changed too.
+    func patch(_ todo: TodoReference, to source: String, under: [String]?) {
+        guard let index = Self.index(of: todo.source, in: todo.url, near: todo.line, among: items) else { return }
+        let old = items[index].todo
+        patches.removeAll { FileNode.samePath($0.url, todo.url) && $0.source == todo.source }
+        patches.append(Patch(url: todo.url, source: todo.source, line: old.line, modified: items[index].modified,
+                             todo: Self.todo([source] + (under ?? old.lines.map(\.source)), line: old.line), until: .now.addingTimeInterval(10)))
+        var changed = items
+        applyPatches(to: &changed)
+        guard changed != items else { return }
+        items = changed
+        onChange?()
+    }
+
+    /// A change that couldn't be written: the note, read again, shows what is there.
+    func unpatch(_ todo: TodoReference) {
+        patches.removeAll { FileNode.samePath($0.url, todo.url) && $0.source == todo.source }
+    }
+
+    /// The changes in `items` that a reading may not have caught up with yet.
+    private func applyPatches(to items: inout [Item]) {
+        // Read again since the change: the note says what it says now.
+        patches.removeAll { patch in
+            patch.until < .now || items.contains { FileNode.samePath($0.url, patch.url) && $0.modified != patch.modified }
+        }
+        for patch in patches {
+            guard let index = Self.index(of: patch.source, in: patch.url, near: patch.line, among: items) else { continue }
+            if let todo = patch.todo { items[index].todo = todo } else { items.remove(at: index) }
+        }
+    }
+
+    private static func index(of source: String, in url: URL, near line: Int, among items: [Item]) -> Int? {
+        items.indices.filter { FileNode.samePath(items[$0].url, url) && items[$0].todo.source == source }
+            .min { abs(items[$0].todo.line - line) < abs(items[$1].todo.line - line) }
+    }
+
+    /// An open to-do made of its line and the lines under it, read on their own: nil once it is done.
+    nonisolated static func todo(_ lines: [String], line: Int) -> Todo? {
+        guard let first = lines.first else { return nil }
+        // Without the to-do's indent, which on its own would make it code.
+        let indent = String(first.prefix { $0 == " " || $0 == "\t" })
+        let alone = lines.map { $0.hasPrefix(indent) ? String($0.dropFirst(indent.count)) : $0.trimmingCharacters(in: .whitespaces) }
+        guard var todo = Todos.open(in: alone.joined(separator: "\n")).first, todo.line == 0 else { return nil }
+        todo.line = line
+        todo.source = first
+        for index in todo.lines.indices where index + 1 < lines.count {
+            let original = lines[index + 1]
+            let removed = original.count - alone[index + 1].count
+            todo.lines[index].source = original
+            todo.lines[index].prefix = String(original.prefix(removed)) + todo.lines[index].prefix
+        }
+        return todo
     }
 
     nonisolated private static func read(_ entries: [String: SearchIndex.Entry], hidden: [String], cache: [String: Cached]) -> ([Item], [String: Cached]) {

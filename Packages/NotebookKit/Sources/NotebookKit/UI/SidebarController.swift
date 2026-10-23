@@ -142,7 +142,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
 
     private func rebuildTop() {
         visible = [:]
-        var items: [AnyObject] = [todosEntry]
+        var items: [AnyObject] = NotebookSettings.shared.showsTodos ? [todosEntry] : []
         let favorites = workspace.favoriteURLs
         if !favorites.isEmpty {
             items.append(SidebarEntry(.header("Favorites", location: nil), children: favorites.map { SidebarEntry(.favorite($0)) }))

@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import NotebookKit
 
@@ -112,13 +113,92 @@ final class TodoListTests: XCTestCase {
         XCTAssertTrue(workspace.editor.text.contains("- [x] Call Dr. Weber ⏰ 2099-05-06 14:00\n    - ask about the results\n- [x] Book the taxi"))
     }
 
+    // MARK: - Editing in To-dos
+
+    func testEditingATodoAndItsLinesInItsFile() async throws {
+        let workspace = try await makeWorkspace()
+        let call = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Call Dr. Weber" })
+        let editing = TodoEditing(workspace: workspace, item: call)
+        XCTAssertEqual(editing.title, "Call Dr. Weber", "the words without the time")
+        XCTAssertEqual(editing.lines.map(\.words), ["ask about the results"])
+
+        // New words, a sub-to-do under them, and the point turned into one with "[ ] ".
+        editing.title = "Call Dr. Weber's office"
+        editing.addTodo()
+        let added = try XCTUnwrap(editing.lines.last)
+        editing.lines[editing.lines.count - 1].words = "bring the letter"
+        editing.typed(added.id)
+        editing.lines[0].words = "[ ] ask about the results"
+        editing.typed(editing.lines[0].id)
+        editing.commit()
+        // The list shows it at once, before the note is read again.
+        XCTAssertEqual(workspace.todos.items.first { $0.url == call.url }?.todo.notes, ["○ ask about the results", "○ bring the letter"])
+        await workspace.lastTodoWrite?.value
+        XCTAssertEqual(try String(contentsOf: doctor, encoding: .utf8),
+                       "# Doctor\n\n- [ ] Call Dr. Weber's office ⏰ 2026-10-24 14:00\n    - [ ] ask about the results\n    - [ ] bring the letter\n- [x] Book the taxi\n")
+
+        // Return after a sub-to-do makes the next; Tab takes it in under the one above; an empty one goes again.
+        editing.lines[1].selection = TextSelection(insertionPoint: editing.lines[1].words.endIndex)
+        XCTAssertTrue(editing.split(editing.lines[1].id))
+        editing.lines[2].words = "the blue one"
+        editing.indent(editing.lines[2].id)
+        XCTAssertEqual(editing.lines[2].depth, 2)
+        editing.commit()
+        await workspace.lastTodoWrite?.value
+        XCTAssertTrue(try String(contentsOf: doctor, encoding: .utf8).contains("    - [ ] bring the letter\n      - [ ] the blue one\n- [x] Book the taxi"))
+
+        // Ticking a sub-to-do in the list; Undo takes it back.
+        try await until { workspace.todos.items.first { $0.url == call.url }?.todo.lines.count == 3 }
+        let edited = try XCTUnwrap(workspace.todos.items.first { $0.url == call.url })
+        workspace.toggle(0, under: edited)
+        await workspace.lastTodoWrite?.value
+        XCTAssertTrue(try String(contentsOf: doctor, encoding: .utf8).contains("    - [x] ask about the results"))
+        workspace.fileUndoManager.undo()
+        try await until { (try? String(contentsOf: doctor, encoding: .utf8))?.contains("    - [ ] ask about the results") == true }
+
+        // Lines that changed in the note meanwhile are left alone.
+        try "# Doctor\n\n- [ ] Call Dr. Weber's office ⏰ 2026-10-24 14:00\n    - [ ] something else\n".write(to: doctor, atomically: true, encoding: .utf8)
+        editing.title = "Call the office"
+        editing.commit()
+        await workspace.lastTodoWrite?.value
+        XCTAssertEqual(try String(contentsOf: doctor, encoding: .utf8), "# Doctor\n\n- [ ] Call Dr. Weber's office ⏰ 2026-10-24 14:00\n    - [ ] something else\n")
+    }
+
+    func testWhatIsTypedInATodoIsWrittenAsTheAppQuits() async throws {
+        let workspace = try await makeWorkspace()
+        let pack = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Pack the adapter" })
+        let editing = TodoEditing(workspace: workspace, item: pack)
+        workspace.todoEditing = editing
+        editing.title = "Pack the adapter and its cable"
+        workspace.saveAll(quitting: true)
+        XCTAssertEqual(try String(contentsOf: trip, encoding: .utf8), "- [ ] Pack the adapter and its cable\n- [ ] Print the tickets 📅 2099-01-02\n")
+    }
+
+    func testEditingATodoInTheOpenNoteChangesItsEditor() async throws {
+        let workspace = try await makeWorkspace()
+        workspace.open(doctor)
+        try await until { workspace.note?.isLoaded == true }
+        let call = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Call Dr. Weber" })
+        let editing = TodoEditing(workspace: workspace, item: call)
+        editing.addLineUnderTitle()
+        editing.lines[0].words = "the letter"
+        // Shift-Return on the words starts a line of the kind under them, a point here, before the others.
+        editing.commit()
+        XCTAssertEqual(workspace.editor.text, "# Doctor\n\n- [ ] Call Dr. Weber ⏰ 2026-10-24 14:00\n    - the letter\n    - ask about the results\n- [x] Book the taxi\n")
+        // A date set from its buttons in between keeps what is typed after it.
+        workspace.moveTodo(editing.beforeChanging(), to: Calendar.current.date(from: DateComponents(year: 2099, month: 5, day: 6)))
+        editing.title = "Call Dr. Weber again"
+        editing.end()
+        XCTAssertTrue(workspace.editor.text.hasPrefix("# Doctor\n\n- [ ] Call Dr. Weber again ⏰ 2099-05-06 14:00\n    - the letter\n"))
+    }
+
     func testTodosAndNotesAreGroupedByWhenTheyAreDue() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = .current
         let now = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 23, hour: 12)))
         func item(_ text: String, _ due: TodoDue?, place: TodoPlace? = nil) -> TodoList.Item {
             TodoList.Item(url: URL(fileURLWithPath: "/n/\(text).md"), note: text, modified: nil,
-                          todo: Todo(line: 0, source: "- [ ] " + text, text: text, notes: [], due: due, place: place))
+                          todo: Todo(line: 0, source: "- [ ] " + text, text: text, due: due, place: place))
         }
         let items = [
             item("late", TodoDue(year: 2026, month: 10, day: 23, hour: 9, minute: 0)),

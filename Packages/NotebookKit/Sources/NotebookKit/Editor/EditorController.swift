@@ -510,7 +510,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
             hasher.combine(1); hasher.combine(level); hasher.combine(relative(marker))
         case .listItem(let item):
             hasher.combine(2); hasher.combine(item.indent); hasher.combine(item.level); hasher.combine(item.marker)
-            hasher.combine(relative(item.markerRange)); hasher.combine(relative(item.prefix)); hasher.combine(item.checked)
+            hasher.combine(relative(item.markerRange)); hasher.combine(relative(item.prefix)); hasher.combine(item.mark)
             hasher.combine(item.checkbox.map(relative) ?? -1)
         case .quote(let depth, let prefix):
             hasher.combine(3); hasher.combine(depth); hasher.combine(relative(prefix))

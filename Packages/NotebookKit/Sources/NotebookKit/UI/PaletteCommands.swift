@@ -154,7 +154,7 @@ extension Workspace {
         #endif
 
         let go = "Go"
-        if !showsTodos {
+        if !showsTodos, NotebookSettings.shared.showsTodos {
             list.append(PaletteCommand(id: "todos", title: "To-dos", symbol: "checklist", section: go, keys: ["⇧", "⌘", "R"],
                                        keywords: ["reminders", "tasks", "checklist", "today", "due"]) { [self] in showTodos() })
         }

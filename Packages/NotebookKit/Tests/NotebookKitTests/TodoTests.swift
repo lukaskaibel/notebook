@@ -140,6 +140,93 @@ final class TodoTests: XCTestCase {
         XCTAssertNil(Todos.find("- [ ] Three", near: 0, in: document, string: after as NSString))
     }
 
+    // MARK: - Obsidian's checkboxes and the plugins' marks
+
+    func testEveryMarkObsidianDrawsIsACheckbox() throws {
+        func item(_ line: String) -> ListItem? {
+            if case .listItem(let item) = MarkdownParser.parse(line).lines.first?.kind, item.isTask { return item }
+            return nil
+        }
+        XCTAssertEqual(item("- [ ] To do")?.mark, .open)
+        XCTAssertEqual(item("- [x] Done")?.mark, .done)
+        XCTAssertEqual(item("- [X] Done")?.mark, .done)
+        XCTAssertEqual(item("- [/] Half done")?.mark, .inProgress)
+        XCTAssertEqual(item("- [-] Dropped")?.mark, .cancelled)
+        XCTAssertEqual(item("* [!] Important")?.mark, .other("!"))
+        XCTAssertEqual(item("1. [?] Question")?.mark, .other("?"))
+        XCTAssertEqual(item("- [>] Moved on")?.mark, .other(">"))
+        XCTAssertEqual(item("- [“] Quote")?.mark, .other("“"))
+        XCTAssertEqual(item("- [/]")?.mark, .inProgress, "an empty one too")
+        XCTAssertNil(item("- [1] Smith, 2020"), "a number starts a reference")
+        XCTAssertNil(item("- [a](https://example.com) a link"))
+        XCTAssertNil(item("- [[Note]] a link to a note"))
+        XCTAssertNil(item("- [ab] two letters"))
+        XCTAssertEqual(item("- [x] Done")?.checked, true)
+        XCTAssertEqual(item("- [-] Dropped")?.checked, true, "cancelled is no longer to do")
+        XCTAssertEqual(item("- [/] Half done")?.checked, false)
+        XCTAssertEqual(item("- [!] Important")?.checked, false)
+    }
+
+    func testAllButDoneAndCancelledAreStillToDo() {
+        let note = "- [ ] Open\n- [/] Started\n- [!] Urgent\n- [x] Done\n- [-] Dropped\n- [?] Ask\n"
+        XCTAssertEqual(Todos.open(in: note).map(\.text), ["Open", "Started", "Urgent", "Ask"])
+        XCTAssertEqual(Todos.open(in: "- [/] Only this").map(\.text), ["Only this"], "found without an empty box in the note")
+        XCTAssertTrue(Todos.open(in: "- [x] done\n- [-] dropped\n[a](b) [1]").isEmpty)
+        XCTAssertEqual(Todos.ticked("- [/] Started 📅 2026-10-24"), "- [x] Started 📅 2026-10-24")
+        XCTAssertEqual(NotePoints.text(of: "- [/] Started\n- [-] Dropped\n- Point"), "○ Started\n• Point")
+    }
+
+    func testTheOtherPluginsDatesAreRead() {
+        let day = TodoDue(year: 2026, month: 10, day: 24)
+        let time = day.at(hour: 14, minute: 0)
+        XCTAssertEqual(marks("Call (@2026-10-24 14:00)").first?.kind, .due(time), "the Reminder plugin")
+        XCTAssertEqual(marks("Call (@2026-10-24)").first?.kind, .due(day))
+        XCTAssertEqual(marks("Call @{2026-10-24} @@{14:00}").first?.kind, .due(time), "the Kanban plugin")
+        XCTAssertEqual(marks("Call @[[2026-10-24]]").first?.kind, .due(day))
+        XCTAssertEqual(marks("Call [due:: 2026-10-24]").first?.kind, .due(day), "Dataview")
+        XCTAssertEqual(marks("Call (due:: 2026-10-24T14:00)").first?.kind, .due(time))
+        XCTAssertEqual(marks("Call 🗓️2026-10-24").first?.kind, .due(day), "Dataview's shorthand")
+        XCTAssertEqual(marks("Call @{2026-10-24} @@{14:00}").first?.range.length, ("@{2026-10-24} @@{14:00}" as NSString).length, "the time is part of it")
+        XCTAssertTrue(marks("Mail me at a@b.com (@ home)").isEmpty)
+    }
+
+    func testADateKeepsTheWayItWasWritten() {
+        func apply(_ line: String, due: TodoDue?) -> String {
+            let text = line as NSString
+            guard let change = TodoMarks.change(in: text, content: NSRange(location: 0, length: text.length), due: due, place: nil) else { return line }
+            return text.replacingCharacters(in: change.range, with: change.replacement)
+        }
+        let day = TodoDue(year: 2026, month: 10, day: 25)
+        let time = day.at(hour: 9, minute: 30)
+        XCTAssertEqual(apply("Call (@2026-10-24)", due: time), "Call (@2026-10-25 09:30)")
+        XCTAssertEqual(apply("Call @{2026-10-24} @@{14:00}", due: day), "Call @{2026-10-25}")
+        XCTAssertEqual(apply("Call [due:: 2026-10-24]", due: time), "Call [due:: 2026-10-25T09:30]")
+        XCTAssertEqual(apply("Call (due:: 2026-10-24)", due: day), "Call (due:: 2026-10-25)")
+        XCTAssertEqual(apply("Call 🗓️2026-10-24", due: day), "Call 🗓️2026-10-25")
+        XCTAssertEqual(apply("Call", due: day), "Call 📅 2026-10-25", "Tasks' when there was none")
+    }
+
+    func testTheTasksPluginsOtherFieldsShowAndStay() throws {
+        let line = "Water the plants ⏫ 🔁 every week on Monday ⏳ 2026-10-26 📅 2026-10-27 ➕ 2026-10-01 🆔 abc ⛔ x1, y2 🏁 delete"
+        let found = marks(line)
+        let fields = found.compactMap { if case .field(let field) = $0.kind { field } else { nil } }
+        XCTAssertEqual(fields, [TodoField(.priority, "high"), TodoField(.repeats, "every week on Monday"), TodoField(.scheduled, "2026-10-26"),
+                                TodoField(.created, "2026-10-01"), TodoField(.id, "abc"), TodoField(.dependsOn, "x1,y2"), TodoField(.onCompletion, "delete")])
+        XCTAssertEqual(TodoMarks.schedule(of: found).due, TodoDue(year: 2026, month: 10, day: 27))
+        XCTAssertEqual(marks("Plan [priority:: High] [repeat:: every day] (scheduled:: 2026-10-26)").map(\.kind),
+                       [.field(TodoField(.priority, "high")), .field(TodoField(.repeats, "every day")), .field(TodoField(.scheduled, "2026-10-26"))])
+
+        // The words read without them, and a new date leaves them where they are.
+        let todo = try XCTUnwrap(Todos.open(in: "- [ ] " + line).first)
+        XCTAssertEqual(todo.text, "Water the plants")
+        let text = line as NSString
+        let change = try XCTUnwrap(TodoMarks.change(in: text, content: NSRange(location: 0, length: text.length), due: TodoDue(year: 2026, month: 11, day: 3), place: nil))
+        XCTAssertEqual(text.replacingCharacters(in: change.range, with: change.replacement),
+                       "Water the plants ⏫ 🔁 every week on Monday ⏳ 2026-10-26 ➕ 2026-10-01 🆔 abc ⛔ x1, y2 🏁 delete 📅 2026-11-03")
+        XCTAssertEqual(TodoField(.priority, "high").label(), "High")
+        XCTAssertEqual(TodoField(.dependsOn, "x1,y2").label(), "After x1, y2")
+    }
+
     func testNotificationPointsLeaveMarksOut() {
         XCTAssertEqual(NotePoints.text(of: "- [ ] Call ⏰ 2026-10-24 14:00\n- Point"), "○ Call\n• Point")
     }

@@ -10,9 +10,25 @@ versions follow [semantic versioning](https://semver.org).
 - To-dos, at the top of the sidebar: every open checkbox in your notes in one list, as in Reminders, grouped into
   Overdue, Today, Tomorrow, Next 7 Days, Later and No Date, with the lines indented under each to-do as its notes and
   the note it is in. Notes with a reminder are there too, and the number next to To-dos counts what is due today or
-  overdue. Tick a to-do off and it is ticked in its note; click it to open the note at it; drag it into another group,
-  or choose Today, Tomorrow, This Weekend or Next Week in its menu, to move its date. ⇧⌘R and ⌘K go there too. On the
-  iPhone it is the first row of the first screen, on the iPad the first row of the sidebar.
+  overdue. Tick a to-do or a sub-to-do off and it is ticked in its note; click the note's name to open the note at it;
+  drag a to-do into another group, or choose Today, Tomorrow, This Weekend or Next Week in its menu, to move its date.
+  ⇧⌘R and ⌘K go there too. On the iPhone it is the first row of the first screen, on the iPad the first row of the
+  sidebar.
+- Editing in To-dos, as in Reminders: click a to-do's words to change them where they are, and the lines under it too.
+  Shift-Return starts a line under the words; Return in it starts the next one, Tab and ⇧Tab move it in and out, and
+  `[ ] ` or `- ` typed at its start make it a sub-to-do or a point. Under a to-do being edited are buttons for its day,
+  its time and its place, each with a few to pick from and Custom…, and Add Sub-to-do; on iPhone and iPad they are above
+  the keyboard. Sub-to-dos show with circles of their own under their to-do.
+- Settings › Sidebar › Show To-dos (on iPhone and iPad, in Settings) turns To-dos off, for when you keep your to-dos in
+  another app: the list goes, and Notebook doesn't remind you of to-dos.
+- Obsidian's other checkboxes: `[/]` in progress shows a half-filled circle, `[-]` cancelled a grey one with the to-do
+  struck through, and the marks of Obsidian's themes and the Tasks plugin, such as `[!]`, `[?]`, `[*]` or `[>]`, their
+  sign in the circle. All but done and cancelled are still to do. A to-do's menu in To-dos marks it in progress or
+  cancelled.
+- Dates written by Obsidian's other plugins count too, and keep their way when they change: the Reminder plugin's
+  `(@2026-10-24 14:00)`, the Kanban plugin's `@{2026-10-24} @@{14:00}`, and Dataview's `[due:: 2026-10-24]` and
+  `🗓️2026-10-24`. The Tasks plugin's other fields, such as priority (`⏫`), repeating (`🔁 every week`) and scheduled
+  (`⏳ 2026-10-26`), show as grey pills and stay as they are.
 - A to-do's date, time and place: click the bell that comes up after a to-do as you point at it, or right-click it and
   choose Remind Me…; on iPhone and iPad tap the bell above the keyboard. They show as pills after the to-do's words, red
   once the time has passed, and are written into the note the way Obsidian's Tasks and Reminder plugins write them

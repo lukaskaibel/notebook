@@ -294,11 +294,11 @@ public enum MarkdownParser {
         while i < end, u[i] == 32 || u[i] == 9 { i += 1 }
 
         var checkbox: NSRange?
-        var checked = false
-        if i + 3 <= end, u[i] == 91, u[i + 2] == 93, [32, 120, 88].contains(u[i + 1]),
+        var mark = TaskMark.open
+        if i + 3 <= end, u[i] == 91, u[i + 2] == 93, let found = TaskMark(u[i + 1]),
            i + 3 == end || u[i + 3] == 32 || u[i + 3] == 9 {
             checkbox = NSRange(location: i, length: 3)
-            checked = u[i + 1] != 32
+            mark = found
             i += 3
             while i < end, u[i] == 32 || u[i] == 9 { i += 1 }
         }
@@ -315,7 +315,8 @@ public enum MarkdownParser {
             markerRange: markerRange,
             prefix: NSRange(location: range.location, length: i - range.location),
             checkbox: checkbox,
-            checked: checked
+            checked: checkbox != nil && mark.isClosed,
+            mark: mark
         )
     }
 
