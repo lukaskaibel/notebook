@@ -186,7 +186,7 @@ Pick Later Today, This Evening or Tomorrow, or turn on Date, Time and Location: 
 Current Location, and say whether it's for arriving or leaving. The day, the time and the place then show as small pills
 after the to-do's words, red once the time has passed; a click on one changes it. At that time, or when you get there,
 a notification brings the to-do and its notes, with Remind Me in 1 Hour and Done. A day without a time reminds you at
-9 in the morning.
+9 in the morning, and a place once, the first time you get there.
 
 Unlike a note's reminder, a to-do's date and place are written into the note, after its words, the way Obsidian's
 Tasks and Reminder plugins write them: `⏰ 2026-10-24 14:00` for a day and a time, `📅 2026-11-01` for a day, and

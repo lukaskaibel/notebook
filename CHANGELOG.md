@@ -20,7 +20,7 @@ versions follow [semantic versioning](https://semver.org).
   time, or when you arrive at or leave the place, a notification brings the to-do and its notes, with Remind Me in 1
   Hour and Done.
 - Reminders at a place: Remind Me… for a note or a to-do can take a place, found in Apple Maps or where you are now, for
-  arriving or for leaving, shown on a little map. iPhone and iPad remind you there once you let Notebook use your
+  arriving or for leaving, shown on a little map. iPhone and iPad remind you there, once, when you let Notebook use your
   location while you use it; a Mac can set the place, and your iPhone reminds you.
 - Notebook on iPhone and iPad, with the editor, search and files of the Mac. On the iPhone, one folder per screen as in
   the Files app, with search and a new note at the bottom as in Notes; on the iPad, the Mac's sidebar, the note and its
