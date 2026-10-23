@@ -73,11 +73,32 @@ struct TextSettings: View {
     }
 }
 
+/// Whether To-dos is there: off for those who keep their to-dos in another app.
+struct TodosSetting: View {
+    @Bindable private var settings = NotebookSettings.shared
+
+    var body: some View {
+        Section {
+            Toggle("Show To-dos", isOn: $settings.showsTodos)
+        } footer: {
+            #if os(macOS)
+            Text("Every checkbox in your notes, by when it is due, at the top of the sidebar. Turned off, Notebook doesn’t remind you of to-dos either, for when you keep them in another app.")
+                .foregroundStyle(.secondary)
+            #else
+            Text("Every checkbox in your notes, by when it is due, above your folders. Turned off, Notebook doesn’t remind you of to-dos either, for when you keep them in another app.")
+            #endif
+        }
+    }
+}
+
 struct SidebarSettings: View {
     @Bindable private var settings = NotebookSettings.shared
 
     var body: some View {
         Form {
+            #if os(macOS)
+            TodosSetting()
+            #endif
             Section {
                 Toggle("Show only notes", isOn: $settings.showsOnlyNotes)
                 Toggle("Dim files that aren’t notes", isOn: $settings.dimsOtherFiles)

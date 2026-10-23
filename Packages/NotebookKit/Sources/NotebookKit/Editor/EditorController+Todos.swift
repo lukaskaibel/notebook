@@ -40,8 +40,17 @@ extension EditorController {
     /// Changes the line of a to-do as `edit` says, as an edit Undo takes back.
     @discardableResult
     func editTodo(line index: Int, actionName: String, edit: (NSString, MarkdownLine) -> (range: NSRange, replacement: String)?) -> Bool {
-        guard !isWaitingForText, let line = document.lines[safe: index], case .listItem(let item) = line.kind, item.isTask,
-              let change = edit(nsText, line) else { return false }
+        editTodoLines(line: index, actionName: actionName) { text, document, index in
+            guard let line = document.lines[safe: index], case .listItem(let item) = line.kind, item.isTask else { return nil }
+            return edit(text, line)
+        }
+    }
+
+    /// Changes a to-do and the lines under it as `edit` says, given the text, its lines and the to-do's line, as an
+    /// edit Undo takes back.
+    @discardableResult
+    func editTodoLines(line index: Int, actionName: String, edit: (NSString, MarkdownDocument, Int) -> (range: NSRange, replacement: String)?) -> Bool {
+        guard !isWaitingForText, document.lines.indices.contains(index), let change = edit(nsText, document, index) else { return false }
         let selection = self.selection
         var caret = selection
         let delta = (change.replacement as NSString).length - change.range.length
@@ -120,7 +129,8 @@ extension EditorController {
     /// Shows the bell after the to-do under the pointer, or hides it.
     func updateTodoBell(at point: NSPoint?) {
         let button = textView.todoBell
-        guard !isDrawing, !isWaitingForText, textView.isEditable, let point, let line = todoWithoutReminder(at: point), let end = todoEnd(line: line) else {
+        guard !isDrawing, !isWaitingForText, textView.isEditable, NotebookSettings.shared.showsTodos, let point,
+              let line = todoWithoutReminder(at: point), let end = todoEnd(line: line) else {
             button.isHidden = true
             button.line = nil
             return
@@ -140,6 +150,7 @@ extension EditorController {
 
     /// Remind Me… in the context menu of a to-do.
     func addTodoReminder(to menu: NSMenu, at point: NSPoint) {
+        guard NotebookSettings.shared.showsTodos else { return }
         let origin = textOrigin
         let glyph = layoutManager.glyphIndex(for: NSPoint(x: point.x - origin.x, y: point.y - origin.y), in: container)
         guard glyph < layoutManager.numberOfGlyphs else { return }

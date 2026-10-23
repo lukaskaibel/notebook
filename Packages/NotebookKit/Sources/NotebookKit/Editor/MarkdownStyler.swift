@@ -192,12 +192,15 @@ enum MarkdownStyler {
             }
         }
         if let checkbox = item.checkbox {
-            s.addAttribute(.notebookObject, value: EditorObject(.checkbox(checked: item.checked), range: item.prefix, at: checkbox.location), range: NSRange(location: checkbox.location, length: 1))
+            s.addAttribute(.notebookObject, value: EditorObject(.checkbox(item.mark), range: item.prefix, at: checkbox.location), range: NSRange(location: checkbox.location, length: 1))
             hide(s, NSRange(location: checkbox.location + 1, length: item.prefix.upperBound - checkbox.location - 1), .always)
             prefixWidth = EditorStyle.checkboxWidth
             if item.checked {
-                // Done: greyed out, as in Reminders, without striking it through.
+                // Done: greyed out, as in Reminders, without striking it through. Cancelled is struck through as well.
                 s.addAttribute(.foregroundColor, value: Theme.textTertiary, range: line.content)
+                if item.mark == .cancelled {
+                    s.addAttributes([.strikethroughStyle: NSUnderlineStyle.single.rawValue, .strikethroughColor: Theme.textTertiary], range: line.content)
+                }
             }
         }
         s.addAttribute(.paragraphStyle, value: EditorStyle.paragraph(after: 3, firstIndent: first, indent: first + prefixWidth), range: full)

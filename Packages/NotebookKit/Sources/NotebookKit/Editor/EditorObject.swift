@@ -10,7 +10,7 @@ import UIKit
 final class EditorObject: NSObject {
     enum Kind {
         case bullet(level: Int)
-        case checkbox(checked: Bool)
+        case checkbox(TaskMark)
         case quoteBar
         /// The front of a link to a note: its icon.
         case chipLead(icon: ChipIcon)
@@ -80,7 +80,7 @@ final class EditorObject: NSObject {
     var signature: String {
         switch kind {
         case .bullet(let level): "bullet\(level)"
-        case .checkbox(let checked): "check\(checked)"
+        case .checkbox(let mark): "check\(mark.character)"
         case .quoteBar: "quote"
         case .chipLead(let icon): "lead\(icon)"
         case .chipTrail: "trail"
@@ -105,15 +105,23 @@ final class EditorObject: NSObject {
 /// note, red once its time has passed and grey once the to-do is done.
 struct TodoPill: Equatable {
     enum Tone: Equatable {
-        case normal, overdue, done
+        /// `quiet`: another of the Tasks plugin's fields, which only shows.
+        case normal, overdue, done, quiet
     }
 
     var symbol: String
     var label: String
     var tone: Tone
+    /// Another of the Tasks plugin's fields, which only shows: a click on it is a click in the text.
+    var isField = false
 
     init(_ mark: TodoMark.Kind, done: Bool, now: Date = .now) {
         switch mark {
+        case .field(let field):
+            symbol = field.symbol
+            label = field.label(now: now)
+            tone = done ? .done : .quiet
+            isField = true
         case .due(let due):
             symbol = due.hasTime ? "bell.fill" : "calendar"
             label = ReminderText.text(due.date(), time: due.hasTime, now: now)

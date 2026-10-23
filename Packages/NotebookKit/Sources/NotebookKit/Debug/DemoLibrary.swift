@@ -65,9 +65,12 @@ enum DemoLibrary {
             - The ticket is in the blue jacket
             - Closes at 6
         - [ ] Buy plasters \(pharmacy.markdown)
-        - [ ] Renew the passport \(due(24))
-            - Two photos, the old passport, €70
+        - [/] Renew the passport \(due(24))
+            - [x] Two photos from the booth at the station
+            - [ ] Find the old passport
+            - €70, by card at the town hall
         - [x] Pay the electricity bill
+        - [-] Sell the old bike
 
         """)
         write("Inbox/Shared link.md", "https://example.com/an-article-worth-reading\n\nRead this on the train.\n")
@@ -133,10 +136,10 @@ enum DemoLibrary {
         Market on Saturday morning, cooking with Mia in the evening. Sunday stays empty on purpose.
 
         ## Saturday
-        - [ ] Tomatoes, basil, burrata \(due(1, 9))
-            - The good burrata is at the cheese stall at the back
-        - [ ] Sourdough from the corner bakery
-        - [ ] Flowers for the table
+        - [ ] Market shopping \(due(1, 9))
+            - [ ] Tomatoes and basil
+            - [ ] Burrata, from the cheese stall at the back
+            - [x] Bags
 
         Dinner: the mushroom risotto from [[Recipes]].
 

@@ -152,8 +152,10 @@ struct HomeScreen: View {
             if isSearching {
                 SearchResultsList(workspace: workspace, query: query) { open($0) }
             } else {
-                Section {
-                    NavigationLink(value: Page.todos()) { TodosRowLabel(count: workspace.dueTodoCount) }
+                if NotebookSettings.shared.showsTodos {
+                    Section {
+                        NavigationLink(value: Page.todos()) { TodosRowLabel(count: workspace.dueTodoCount) }
+                    }
                 }
                 let favorites = workspace.favoriteURLs
                 if !favorites.isEmpty {

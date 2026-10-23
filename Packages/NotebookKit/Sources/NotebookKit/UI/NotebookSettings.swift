@@ -129,6 +129,16 @@ public final class NotebookSettings {
         }
     }
 
+    /// To-dos at the top of the sidebar, and the reminders of to-dos with a date, a time or a place. Off for those who
+    /// keep their to-dos in another app.
+    public var showsTodos: Bool {
+        didSet {
+            UserDefaults.standard.set(showsTodos, forKey: "showsTodos")
+            Workspace.shared.todosSettingChanged()
+            NotificationCenter.default.post(name: .notebookSidebarOptionsChanged, object: nil)
+        }
+    }
+
     /// A new note left without a title or text goes away again, as if it had never been made.
     public var deletesEmptyNewNotes: Bool {
         didSet { UserDefaults.standard.set(deletesEmptyNewNotes, forKey: "deletesEmptyNewNotes") }
@@ -150,6 +160,7 @@ public final class NotebookSettings {
         headingMarks = HeadingMarks(rawValue: defaults.string(forKey: "headingMarks") ?? "") ?? .margin
         readsTextInPictures = defaults.object(forKey: "readsTextInPictures") as? Bool ?? true
         deletesEmptyNewNotes = defaults.object(forKey: "deletesEmptyNewNotes") as? Bool ?? true
+        showsTodos = defaults.object(forKey: "showsTodos") as? Bool ?? true
         #if os(iOS)
         writingBarTools = defaults.stringArray(forKey: "writingBarTools")?.compactMap(WritingTool.init(rawValue:)) ?? WritingTool.standard
         #endif

@@ -40,6 +40,8 @@ MATH_BOX = (500, 104, 2140, 960)
 OBJECTS_BOX = (500, 150, 2140, 1400)
 # A note open for drawing, down to the palette at the bottom of the window.
 DRAWING_BOX = (500, 104, 2140, 1640)
+# To-dos from Today down to the to-do being edited and the buttons under it.
+TODO_EDITING_BOX = (790, 560, 2290, 1450)
 
 
 def typing_animation(theme):
@@ -109,6 +111,8 @@ for theme in [] if only == "devices" else ["dark", "light"]:
     # from one at a place.
     webp(place(window(f"todos-{theme}"), theme, (130, 110), 1800), f"todos-{theme}")
     webp(place(window(f"todo-reminder-{theme}"), theme, (130, 110), 1800), f"todo-reminder-{theme}")
+    webp(place(crop_card(window(f"todo-editing-{theme}"), TODO_EDITING_BOX, theme), theme, (110, 90), 1400, rim=False),
+         f"todo-editing-{theme}")
     webp(place(window(f"quicklook-{theme}"), theme, (130, 110), 1800), f"quicklook-{theme}")
     # ⌘K over the dimmed window.
     webp(place(window(f"palette-{theme}"), theme, (130, 110), 1800), f"palette-{theme}")
