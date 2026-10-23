@@ -112,6 +112,10 @@ for theme in dark light; do
   say "remindme Personal/Questions for Dr. Weber.md"; sleep 1.2
   say "remindtype fri"; sleep 1; shot "reminder-$theme"
   say "remindme close"; sleep 0.5
+  # Customize Folder… open from Travel in the sidebar, with the symbols suggested for its name; the other sample
+  # folders with a look of their own around it. Travel is far enough down for the popover to fit in the window.
+  say "customize Travel"; sleep 1.5; shot "customize-$theme"
+  say "customize close"; sleep 0.5
   # To-dos: every open to-do of the sample notes, by when it's due.
   say "showtodos"; sleep 1.5; shot "todos-$theme"
   # Market shopping edited in place: its sub-to-dos, and the buttons for its day, time and place under them.

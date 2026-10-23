@@ -3,6 +3,7 @@ import AppKit
 #else
 import UIKit
 #endif
+import Observation
 import Synchronization
 import UniformTypeIdentifiers
 
@@ -63,13 +64,27 @@ public enum FileKind: Equatable, Sendable {
 
 /// A file or folder in the sidebar's tree. Folders read their contents only when opened.
 @MainActor
-public final class FileNode: NSObject {
+public final class FileNode: NSObject, Observable {
     public let url: URL
     public private(set) var name: String
     public let kind: FileKind
     /// In iCloud but not on this Mac yet.
     public private(set) var isInCloud: Bool
     public private(set) var modified: Date?
+    /// A folder's symbol or emoji and colour, as the Finder keeps them; nil for the plain folder. Observed: the lists on
+    /// iPhone and iPad redraw a row when what is in its folder changes, and its look alone changes nothing there.
+    public private(set) var icon: FolderIcon? {
+        get {
+            looks.access(self, keyPath: \.icon)
+            return storedIcon
+        }
+        set {
+            guard newValue != storedIcon else { return }
+            looks.withMutation(of: self, keyPath: \.icon) { storedIcon = newValue }
+        }
+    }
+    private var storedIcon: FolderIcon?
+    private let looks = ObservationRegistrar()
     weak var parent: FileNode?
     private(set) var children: [FileNode]?
     /// A folder from somewhere else shown in a location (iCloud Drive's Desktop), which can't be renamed or moved.
@@ -77,11 +92,12 @@ public final class FileNode: NSObject {
     /// For a location's top: the folders from elsewhere it shows next to its own files.
     var linked: [LinkedFolder] = []
 
-    init(url: URL, kind: FileKind, isInCloud: Bool = false, modified: Date? = nil, parent: FileNode?, linkedAs name: String? = nil) {
+    init(url: URL, kind: FileKind, isInCloud: Bool = false, modified: Date? = nil, icon: FolderIcon? = nil, parent: FileNode?, linkedAs name: String? = nil) {
         self.url = url
         self.kind = kind
         self.isInCloud = isInCloud
         self.modified = modified
+        storedIcon = icon
         self.parent = parent
         self.isLinked = name != nil
         self.name = name ?? (kind == .note ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent)
@@ -128,9 +144,10 @@ public final class FileNode: NSObject {
         let merged = listing.map { item -> FileNode in
             let name = item.linkedName ?? Self.name(of: item.url, kind: item.kind)
             if let existing = byPath[item.url.path], existing.kind == item.kind, existing.name == name {
-                if existing.isInCloud != item.isInCloud || existing.modified != item.modified { changed = true }
+                if existing.isInCloud != item.isInCloud || existing.modified != item.modified || existing.icon != item.icon { changed = true }
                 existing.isInCloud = item.isInCloud
                 existing.modified = item.modified
+                existing.icon = item.icon
                 return existing
             }
             changed = true
@@ -167,7 +184,7 @@ public final class FileNode: NSObject {
         guard isFolder, children == nil, let contents = old.children else { return }
         children = contents.map { child in
             let node = FileNode(url: url.appendingPathComponent(child.url.lastPathComponent, isDirectory: child.isFolder), kind: child.kind,
-                                isInCloud: child.isInCloud, modified: child.modified, parent: self, linkedAs: child.isLinked ? child.name : nil)
+                                isInCloud: child.isInCloud, modified: child.modified, icon: child.icon, parent: self, linkedAs: child.isLinked ? child.name : nil)
             node.takeContents(of: child)
             return node
         }
@@ -175,7 +192,12 @@ public final class FileNode: NSObject {
 
     /// The node as reading its folder found it.
     var listing: Listing {
-        Listing(url: url, kind: kind, isInCloud: isInCloud, modified: modified, linkedName: isLinked ? name : nil)
+        Listing(url: url, kind: kind, isInCloud: isInCloud, modified: modified, icon: icon, linkedName: isLinked ? name : nil)
+    }
+
+    /// Shows a look you just chose, before the folder it is in has been read again.
+    func show(_ icon: FolderIcon?) {
+        self.icon = icon
     }
 
     /// "/private/var/…" (what reading a temporary folder names what is in it) and "/var/…" are one place.
@@ -191,7 +213,7 @@ public final class FileNode: NSObject {
     }
 
     private convenience init(_ item: Listing, parent: FileNode) {
-        self.init(url: item.url, kind: item.kind, isInCloud: item.isInCloud, modified: item.modified, parent: parent, linkedAs: item.linkedName)
+        self.init(url: item.url, kind: item.kind, isInCloud: item.isInCloud, modified: item.modified, icon: item.icon, parent: parent, linkedAs: item.linkedName)
     }
 
     private static func name(of url: URL, kind: FileKind) -> String {
@@ -210,6 +232,7 @@ public final class FileNode: NSObject {
         var kind: FileKind
         var isInCloud = false
         var modified: Date?
+        var icon: FolderIcon?
         /// For a folder from elsewhere shown in a location: its name there.
         var linkedName: String?
     }
@@ -265,7 +288,8 @@ public final class FileNode: NSObject {
         if values?.isHidden == true, !inCloud { return nil }
         let isDirectory = (values?.isDirectory ?? false) && !(values?.isPackage ?? false)
         if let status = values?.ubiquitousItemDownloadingStatus, status == .notDownloaded { inCloud = true }
-        return Listing(url: url, kind: FileKind(url: url, isDirectory: isDirectory), isInCloud: inCloud, modified: values?.contentModificationDate)
+        let kind = FileKind(url: url, isDirectory: isDirectory)
+        return Listing(url: url, kind: kind, isInCloud: inCloud, modified: values?.contentModificationDate, icon: kind == .folder ? FolderIcons.read(url) : nil)
     }
 
     /// The sidebar's order: folders first, then by name as the Finder sorts.

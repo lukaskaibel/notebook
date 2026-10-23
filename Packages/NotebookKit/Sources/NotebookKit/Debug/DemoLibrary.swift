@@ -54,6 +54,11 @@ enum DemoLibrary {
         _ = folder("Travel/Photos")
         _ = folder("Travel/.assets")
         _ = folder("University/Linear algebra")
+        // A few folders customized, as Customize Folder does, to show it with; the others stay plain.
+        FolderIcons.write(FolderIcon(symbol: "airplane", color: .blue), to: folder("Travel"))
+        FolderIcons.write(FolderIcon(symbol: "graduationcap", color: .purple), to: folder("University"))
+        FolderIcons.write(FolderIcon(symbol: "fork.knife", color: .orange), to: folder("Personal/Cooking"))
+        FolderIcons.write(FolderIcon(emoji: "🎨"), to: folder("Projects/Design"))
 
         write("Archive/2025/Old apartment.md", "# Handover\n\n- [x] Meter readings\n- [x] Keys returned\n- [ ] Deposit back\n")
         write("Inbox/Gift ideas.md", "- [ ] Book for Mia: *The Remains of the Day*\n- [ ] Good olive oil\n- [x] Concert tickets\n")

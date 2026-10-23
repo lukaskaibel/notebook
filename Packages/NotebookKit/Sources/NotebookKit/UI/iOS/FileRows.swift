@@ -12,6 +12,8 @@ struct FileRow: View {
     var isInCloud = false
     /// Instead of the kind's symbol: a star for a favourite folder, a cloud for iCloud Drive.
     var symbol: String?
+    /// A folder's symbol or emoji and colour, if you chose any (Customize Folder).
+    var icon: FolderIcon?
     /// Shows the date and the start of a note, or the date and size of a file, under the name.
     var showsDetail = false
     /// A hidden folder, there while its location shows hidden folders.
@@ -34,9 +36,15 @@ struct FileRow: View {
                 }
             }
         } icon: {
-            Image(systemName: symbol ?? kind.symbol)
-                .foregroundStyle(tint)
-                .opacity(dimmed ? 0.5 : 1)
+            Group {
+                if let emoji = icon?.emoji {
+                    Text(emoji)
+                } else {
+                    Image(systemName: icon.flatMap { $0.symbol == nil ? nil : $0.shownSymbol } ?? symbol ?? kind.symbol)
+                        .foregroundStyle(tint)
+                }
+            }
+            .opacity(dimmed ? 0.5 : 1)
         }
         .badge(badge)
         .accessibilityLabel(accessibilityName)
@@ -61,7 +69,7 @@ struct FileRow: View {
 
     private var tint: Color {
         switch kind {
-        case .folder: .accentColor
+        case .folder: icon?.color?.color ?? .accentColor
         case .note, .other, .audio: .secondary
         default: Color.theme(kind.tint)
         }
@@ -109,7 +117,7 @@ extension FileNode {
     @MainActor
     func row(in workspace: Workspace, showsDetail: Bool = false) -> FileRow {
         FileRow(workspace: workspace, url: url, name: isLinked ? name : workspace.newName(for: url) ?? (kind == .folder ? workspace.folderName(url) : name), kind: kind,
-                isInCloud: isInCloud, showsDetail: showsDetail, isHidden: isFolder && workspace.isHidden(url))
+                isInCloud: isInCloud, icon: icon, showsDetail: showsDetail, isHidden: isFolder && workspace.isHidden(url))
     }
 }
 
@@ -139,8 +147,10 @@ extension Workspace {
         let kind = FileKind(url: url, isDirectory: isFolder)
         let name = kind == .folder ? folderName(url) : SearchSection.displayName(url)
         let isLocation = locations.contains { $0.url == url.standardizedFileURL }
-        let symbol = isLocation ? (Location.isICloudDriveRoot(url) || url.path == Location.iCloudDrivePath ? "icloud" : "externaldrive") : favorite && kind == .folder ? "star" : nil
-        return FileRow(workspace: self, url: url, name: name, kind: kind, symbol: symbol, showsDetail: showsDetail)
+        // A favourite folder shows the look you gave it, else a star.
+        let icon = kind == .folder && !isLocation ? folderIcon(for: url) : nil
+        let symbol = isLocation ? (Location.isICloudDriveRoot(url) || url.path == Location.iCloudDrivePath ? "icloud" : "externaldrive") : favorite && kind == .folder && icon == nil ? "star" : nil
+        return FileRow(workspace: self, url: url, name: name, kind: kind, symbol: symbol, icon: icon, showsDetail: showsDetail)
     }
 }
 
@@ -232,6 +242,9 @@ struct FileActions: View {
             let favorite = workspace.isFavorite(url)
             Button { withAnimation { workspace.toggleFavorite(url) } } label: {
                 Label(favorite ? "Remove from Favorites" : "Add to Favorites", systemImage: favorite ? "star.slash" : "star")
+            }
+            if isFolder, workspace.canCustomize(url) {
+                Button { workspace.customizeFolder(url) } label: { Label("Customize Folder…", systemImage: "paintpalette") }
             }
             if isFolder, workspace.canHide(url) {
                 HideFolderButton(workspace: workspace, url: url)
@@ -423,6 +436,10 @@ struct FileAlerts: ViewModifier {
             }
             .sheet(item: $workspace.todoReminderRequest) { todo in
                 TodoReminderPicker(workspace: workspace, todo: todo) { workspace.todoReminderRequest = nil }
+                    .presentationDetents([.medium, .large])
+            }
+            .sheet(item: $workspace.folderIconRequest) { request in
+                FolderIconEditor(workspace: workspace, url: request.url) { workspace.folderIconRequest = nil }
                     .presentationDetents([.medium, .large])
             }
             .alert(deleteTitle, isPresented: Binding(get: { workspace.deleting != nil }, set: { if !$0 { workspace.deleting = nil } })) {
