@@ -573,6 +573,9 @@ enum DebugRemote {
             // index: how the index was built and kept since launch, and what search has now.
             guard let index = workspace?.index else { break }
             log("index files=\(index.count) building=\(index.isBuilding) search=\(index.corpus.items.count) | " + index.history.joined(separator: " | "))
+        case "spotlight":
+            // spotlight […]: see `Workspace.spotlightCommand`.
+            if let workspace { log(workspace.spotlightCommand(argument)) }
         case "recognizer":
             // recognizer [file]: what reading text in pictures is doing, or what it read in a file.
             if argument.isEmpty {

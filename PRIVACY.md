@@ -30,14 +30,21 @@ advertising, and it collects nothing about you.
 - **The search index** of file names, the text of notes and PDFs, and the words Notebook reads in pictures, scanned
   pages and handwriting is kept in the app's caches on each device, so search is ready the moment the app opens. Each
   device builds its own from your files, and it never leaves the device.
+- **Spotlight** gets the name, the first lines, the folder and the text of every note in your locations, except those in
+  hidden folders, so the system's search finds them. Spotlight keeps its index on your Mac, iPhone or iPad, as it does
+  for Mail or Notes, and it never leaves the device. Notebook keeps a list of the notes it gave Spotlight, by their
+  places in your folders, in the app's own folder on that device. A note leaves Spotlight when you delete it, hide its
+  folder or remove its location. To leave Notebook's notes out of Spotlight, turn Notebook off in System Settings ›
+  Spotlight on the Mac, or in Notebook's search settings in Settings on iPhone and iPad.
 - **The camera** on iPhone and iPad is used only when you take a photo or scan a document into a note, and only after
   you have allowed it. **Photos** are chosen in the system's photo picker: Notebook receives only the pictures you pick.
   Either is saved next to the note, like any other picture.
 
 On iPhone and iPad, deleting the app deletes everything it stored on the device, along with the notes kept in its own
-folder there. On the Mac, the app's preferences and its search index stay in its container,
-`~/Library/Containers/com.lukaskbl.Notebook`, until you delete that folder too. The folders you hide and your
-reminders stay in iCloud's key-value store for your other devices. Your notes are your files and stay where they are.
+folder there. On the Mac, the app's preferences, its search index and its list of the notes in Spotlight stay in its
+container, `~/Library/Containers/com.lukaskbl.Notebook`, until you delete that folder too. The folders you hide and
+your reminders stay in iCloud's key-value store for your other devices. Your notes are your files and stay where they
+are.
 
 ## What is sent, and to whom
 

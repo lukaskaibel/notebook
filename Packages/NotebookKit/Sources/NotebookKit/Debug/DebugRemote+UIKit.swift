@@ -342,6 +342,9 @@ enum DebugRemote {
             // index: how the index was built and kept since launch, and what search has now.
             let index = workspace.index
             log("index files=\(index.count) building=\(index.isBuilding) search=\(index.corpus.items.count) | " + index.history.joined(separator: " | "))
+        case "spotlight":
+            // spotlight […]: see `Workspace.spotlightCommand`.
+            log(workspace.spotlightCommand(argument))
         case "resolve":
             log("resolve \(argument): \(workspace.index.resolve(argument, from: workspace.currentURL)?.path ?? "nothing") building \(workspace.index.isBuilding) entries \(workspace.index.count)")
         case "suggestions":

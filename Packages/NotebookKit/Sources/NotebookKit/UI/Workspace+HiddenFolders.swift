@@ -63,11 +63,18 @@ extension Workspace {
         }
         updateHiddenPaths()
         sidebarReloadAll()
+        spotlight?.setNeedsUpdate()
     }
 
     /// Where the hidden folders are on this device, for search and Move To to leave out.
     func updateHiddenPaths() {
         index.hiddenPaths = locations.filter { !showsHiddenFolders(in: $0) }.flatMap { hiddenFolderURLs(in: $0).map(\.path) }
+    }
+
+    /// Every hidden folder on this device, whether its location shows hidden folders for now or not: Spotlight leaves
+    /// them all out.
+    var allHiddenFolderPaths: [String] {
+        locations.flatMap { hiddenFolderURLs(in: $0).map(\.path) }
     }
 
     /// A folder renamed or moved in Notebook stays hidden; one thrown away is forgotten.

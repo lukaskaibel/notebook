@@ -297,7 +297,8 @@ final class PassThroughHostingView<Content: View>: NSHostingView<Content> {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
-/// Files opened from the Finder or dropped on the Dock icon open in windows of their own, folders in the sidebar.
+/// Files opened from the Finder or dropped on the Dock icon open in windows of their own, folders in the sidebar, and notes
+/// picked in Spotlight in the main window.
 public final class NotebookAppDelegate: NSObject, NSApplicationDelegate {
     /// Before a click on a reminder's notification, which can be what started the app, reaches it.
     public func applicationWillFinishLaunching(_ notification: Notification) {
@@ -309,6 +310,14 @@ public final class NotebookAppDelegate: NSObject, NSApplicationDelegate {
     public func application(_ application: NSApplication, open urls: [URL]) {
         MainActor.assumeIsolated {
             FileWindows.shared.open(urls)
+        }
+    }
+
+    /// A note picked in Spotlight, or its Search in App, also when that is what started the app.
+    public func application(_ application: NSApplication, continue userActivity: NSUserActivity,
+                            restorationHandler: @escaping ([any NSUserActivityRestoring]) -> Void) -> Bool {
+        MainActor.assumeIsolated {
+            Workspace.shared.continueActivity(userActivity)
         }
     }
 }

@@ -158,6 +158,10 @@ while it is still reading your files, it finds what it has read so far. Pictures
 Mac, iPhone or iPad with Apple's own text recognition, in the background and once each; Settings › General › Search
 turns it off.
 
+Your notes are in Spotlight too, on the Mac and on iPhone and iPad: it finds a note by its name or any word in it, with
+its first lines and its folder, and picking it opens it in Notebook. Search in App takes the words to ⌘K. Notes in
+hidden folders stay out of Spotlight, and it follows as you write, rename, move and delete notes.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/search-dark.webp">
   <img alt="The search field with kyoto typed in: the note Kyoto trip under Files, and under In Notes and PDFs a match on page 1 of Flight tickets.pdf and one in the note Budget, then New Note kyoto" src="Design/screenshots/search-light.webp">
@@ -382,6 +386,8 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   QuickTime Player, the rest in Quick Look. Double-click one in the sidebar to open it in its own app, such as Preview.
 - **Search** for the names of notes, files and folders, headings, words in notes and PDFs, and the text in pictures,
   scans and handwriting, in the background as you type. ⌘K finds the same and runs commands.
+- **Spotlight** finds your notes by their names and words too, on the Mac, iPhone and iPad, and opens them in
+  Notebook. It gets what search has already read, in the background, and after a launch only what changed.
 - **Saves as you type,** and never overwrites a change made somewhere else (see below).
 - **Export** a note as a PDF or a PNG image, or print it (on iPhone and iPad: as a PDF to share, or print).
 - **Notes in windows of their own.** Double-click a note in the sidebar, or open any Markdown file from the Finder or
@@ -397,6 +403,7 @@ What isn't part of a note or a folder, such as the folders you hide and the remi
 app's settings and iCloud's key-value store, not in your folders. A to-do's date and place are part of the
 to-do, so they are in the note. What search knows, the text of your notes and
 PDFs and the words read in pictures, is kept in the app's caches on each device, from where it can always be read again.
+The list of the notes Spotlight has is kept in the app's own folder on each device.
 
 | What | In the file | In Notebook |
 | --- | --- | --- |
@@ -589,7 +596,6 @@ Planned, and not built yet:
 
 - **More quick capture:** a widget, a control in Control Center and on the Lock Screen, and a share extension, all
   adding a note to the default folder as New Note in Shortcuts does.
-- **Spotlight:** notes don't turn up in Spotlight yet, only in Notebook's own search.
 - **Reminders when a calendar event starts,** and on the iPhone a Live Activity that keeps the note on the Lock Screen.
   A reminder set on another device reaches an iPhone or iPad the next time Notebook runs there or gets time in the
   background. Reminders don't repeat, and a Mac doesn't remind you at places. A to-do with the Tasks plugin's
@@ -620,14 +626,15 @@ Packages/NotebookKit/
                              folders' symbols and colours kept where the Finder keeps them, and the sample notes
     Index/                   Search: the index of every file and how it is kept between launches, the corpus a
                              search goes through on every core, the text read in pictures, scans and drawings, and
-                             how [[links]] resolve and follow files renamed or moved; the to-dos of every note
+                             how [[links]] resolve and follow files renamed or moved; the to-dos of every note, and
+                             what Spotlight gets of each note
     Platform/                The few names and calls that differ between AppKit and UIKit
     UI/                      The Mac's window, sidebar, inspector, search field, Settings and file windows; PDFs,
                              pictures, videos and Quick Look; what both share, such as the outline and search results
     UI/iOS/                  The iPhone's and iPad's screens: folders, the sidebar, the note, search and Settings
     Debug/                   The debug remotes (Debug builds only)
-  Tests/                     Parser, editor, merge, smoothness, search index, link, drawing, reminder, to-do, folder
-                             look and app icon tests
+  Tests/                     Parser, editor, merge, smoothness, search index, Spotlight, link, drawing, reminder,
+                             to-do, folder look and app icon tests
 Config/                      Build settings, Info.plist and entitlements
 Design/                      The icon, the README pictures, the social preview, and the App Store screenshots and
                              what is set in App Store Connect (app-store.md)

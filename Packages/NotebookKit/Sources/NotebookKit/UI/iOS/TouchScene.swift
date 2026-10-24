@@ -23,6 +23,7 @@ public struct NotebookScene: Scene {
                     #endif
                 }
                 .onOpenURL { url in workspace.openFromOutside(url) }
+                .continuesSpotlight(workspace)
         }
         .commands { TouchCommands(workspace: workspace) }
         // Reminders set on another device: iOS doesn't wake the app for them, but gives it time now and then.

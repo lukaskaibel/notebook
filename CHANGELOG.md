@@ -7,6 +7,11 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- Notes in Spotlight, on the Mac and in the search of iPhone and iPad: Spotlight finds every note in your locations by
+  its name or any word in it, with its first lines and its folder, and picking one opens it in Notebook. Spotlight
+  follows as you write, rename, move and delete notes; notes in hidden folders stay out, and so do the notes of a
+  location you remove. Search in App takes the words you typed in Spotlight to ⌘K. Notebook gives Spotlight what search
+  has already read, in the background, and after a launch only the notes that changed since.
 - Try Sample Notes… on the first screen, to look around before you add your own folders: made-up notes, a drawing,
   pictures and PDFs in a new folder Sample Notes, in a folder you pick on the Mac and in Notebook's own folder on iPhone
   and iPad. It shows in the sidebar like any location, and removing it leaves the files where they are.

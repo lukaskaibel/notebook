@@ -97,6 +97,12 @@ struct CommandPalette: View {
             configure()
             search.update(query)
         }
+        // Spotlight's Search in App, as the palette opens or while it is open.
+        .onChange(of: workspace.paletteStart?.id, initial: true) { _, _ in
+            guard let start = workspace.paletteStart else { return }
+            workspace.paletteStart = nil
+            query = start.query
+        }
         #if DEBUG && os(iOS)
         // palettetype <text>, palettekey down|up|return|escape: the keyboard, for the debug remote.
         .onReceive(NotificationCenter.default.publisher(for: .notebookDebug)) { notification in
