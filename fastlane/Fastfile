@@ -7,6 +7,7 @@
 #
 #   bundle exec fastlane screenshots   # take the App Store screenshots of the iPhone, iPad and Mac apps
 #   bundle exec fastlane metadata      # upload the texts, the age rating and the screenshots of both platforms
+#                                      # (screenshots:false leaves the ones in App Store Connect as they are)
 #   bundle exec fastlane build         # build the Mac, iPhone and iPad apps for the App Store, without uploading
 #   bundle exec fastlane beta          # build the Mac, iPhone and iPad apps and upload them to TestFlight
 #   bundle exec fastlane submit        # submit the builds uploaded by `beta` for review, after testing them
@@ -359,8 +360,9 @@ def prepare_store_version(platform)
   app
 end
 
-# Texts, age rating, review notes and screenshots of one platform, with its new build when there is one.
-def store_upload(platform, package: nil, submit: false, automatic_release: false)
+# Texts, age rating, review notes and screenshots of one platform, with its new build when there is one. Without
+# `screenshots`, the screenshots already in App Store Connect stay as they are.
+def store_upload(platform, package: nil, submit: false, automatic_release: false, screenshots: true)
   config = PLATFORMS.fetch(platform)
   UI.header("#{config[:name]}: App Store #{version}")
   prepare_store_version(platform)
@@ -369,8 +371,7 @@ def store_upload(platform, package: nil, submit: false, automatic_release: false
     platform: config[:store],
     app_version: version,
     metadata_path: METADATA,
-    screenshots_path: stage_screenshots(platform),
-    overwrite_screenshots: true,
+    skip_screenshots: !screenshots,
     app_rating_config_path: File.join(HERE, "rating.json"),
     app_review_information: review_contact(required: submit),
     skip_binary_upload: package.nil?,
@@ -386,6 +387,7 @@ def store_upload(platform, package: nil, submit: false, automatic_release: false
     run_precheck_before_submit: false,
     precheck_include_in_app_purchases: false
   }
+  options.merge!(screenshots_path: stage_screenshots(platform), overwrite_screenshots: true) if screenshots
   options[config[:package]] = package if package
   upload_to_app_store(options)
 end
@@ -402,8 +404,9 @@ lane :screenshots do
 end
 
 desc "Uploads the texts, the age rating and the screenshots of the Mac, iPhone and iPad apps"
-lane :metadata do
-  PLATFORMS.each_key { |platform| store_upload(platform) }
+desc "screenshots:false uploads the texts alone, leaving the screenshots in App Store Connect as they are"
+lane :metadata do |options|
+  PLATFORMS.each_key { |platform| store_upload(platform, screenshots: options[:screenshots].nil? || flag(options[:screenshots])) }
 end
 
 desc "Builds the Mac, iPhone and iPad apps for the App Store, signed, without uploading them"
@@ -433,7 +436,7 @@ platform :ios do
   lane(:screenshots) { sh(File.join(ROOT, "Tools", PLATFORMS[:ios][:screenshot_tool])) }
 
   desc "Uploads the texts, the age rating and the screenshots of the iPhone and iPad app"
-  lane(:metadata) { store_upload(:ios) }
+  lane(:metadata) { |options| store_upload(:ios, screenshots: options[:screenshots].nil? || flag(options[:screenshots])) }
 
   desc "Builds the iPhone and iPad app for the App Store, signed, without uploading it"
   lane(:build) { archive_for_store(:ios) }
@@ -453,7 +456,7 @@ platform :mac do
   lane(:screenshots) { sh(File.join(ROOT, "Tools", PLATFORMS[:mac][:screenshot_tool])) }
 
   desc "Uploads the texts, the age rating and the screenshots of the Mac app"
-  lane(:metadata) { store_upload(:mac) }
+  lane(:metadata) { |options| store_upload(:mac, screenshots: options[:screenshots].nil? || flag(options[:screenshots])) }
 
   desc "Builds the Mac app for the App Store, signed, without uploading it"
   lane(:build) { archive_for_store(:mac) }
