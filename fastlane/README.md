@@ -29,6 +29,8 @@ Takes the App Store screenshots of the iPhone, iPad and Mac apps on the sample n
 
 Uploads the texts, the age rating and the screenshots of the Mac, iPhone and iPad apps
 
+screenshots:false uploads the texts alone, leaving the screenshots in App Store Connect as they are
+
 ### build
 
 ```sh
