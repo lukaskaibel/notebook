@@ -34,16 +34,10 @@ OUTPUT = File.join(ROOT, "build", "fastlane")
 # One app on two App Store platforms. Both build the AppStore configuration: only it has the sandbox on the Mac and
 # the entitlements for iCloud's key-value store and Time Sensitive notifications.
 PLATFORMS = {
-  ios: { name: "iPhone and iPad", sdk: "iphoneos", destination: "generic/platform=iOS", store: "ios", connect: "IOS",
-         package: :ipa },
-  mac: { name: "Mac", sdk: "macosx", destination: "generic/platform=macOS", store: "osx", connect: "MAC_OS",
-         package: :pkg }
+  ios: { name: "iPhone and iPad", sdk: "iphoneos", destination: "generic/platform=iOS", store: "ios", package: :ipa },
+  mac: { name: "Mac", sdk: "macosx", destination: "generic/platform=macOS", store: "osx", package: :pkg }
 }.freeze
 CONFIGURATION = "AppStore"
-
-# The TestFlight group of testers outside the team, such as family, who get every build once Apple's Beta App Review
-# has passed it.
-EXTERNAL_GROUP = "Family and friends"
 
 # fastlane/.env.secret holds the API key and the team. Values already in the environment win.
 secrets = File.join(HERE, ".env.secret")
@@ -270,6 +264,11 @@ def upload_beta(platform, package)
   send_to_external_testers(platform)
 end
 
+# The TestFlight group of testers outside the team, such as family, who get every build once Apple's Beta App Review
+# has passed it, and what App Store Connect calls the platforms of its builds.
+EXTERNAL_GROUP = "Family and friends"
+CONNECT_PLATFORMS = { ios: "IOS", mac: "MAC_OS" }.freeze
+
 # Adds the build just uploaded to EXTERNAL_GROUP and submits it for Beta App Review; TestFlight offers it to the group
 # once Apple has passed it. The test information and the reviewer's contact are filled in on App Store Connect. pilot's
 # own distribute_external isn't used: a refused submission (say while another build still waits for review) would fail
@@ -283,7 +282,7 @@ def send_to_external_testers(platform)
   return UI.important("There's no TestFlight group \"#{EXTERNAL_GROUP}\"; only the team gets #{build_name}.") if group.nil?
 
   build = Spaceship::ConnectAPI::Build.all(app_id: app.id, version: beta_version, build_number: build_number,
-                                           platform: PLATFORMS.fetch(platform)[:connect]).first
+                                           platform: CONNECT_PLATFORMS.fetch(platform)).first
   return UI.important("App Store Connect doesn't list #{build_name} yet; only the team gets it.") if build.nil?
 
   build.add_beta_groups(beta_groups: [group])
