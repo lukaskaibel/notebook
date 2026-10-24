@@ -226,6 +226,10 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
     func editor(_ editor: EditorController, commitTitle title: String) {
         let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, name != url.deletingPathExtension().lastPathComponent else { return }
+        guard library != nil || FolderAccess.ensure(url.deletingLastPathComponent(), to: "rename this note") else {
+            editor.setTitle(url.deletingPathExtension().lastPathComponent)
+            return
+        }
         // Off the main thread, as in the main window: in iCloud Drive the write can wait for iCloud. The note saves
         // what is typed meanwhile once it is done, under the new name.
         let (url, note, library) = (url, note, library)
@@ -253,6 +257,10 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
             // Links to it in the notes next to it follow it.
             if let next { Workspace.shared.followLinks(LinkUpdate.Move(from: url, to: renamed), from: Workspace.LinkSnapshot(targets: next)) }
         }
+    }
+
+    func editor(_ editor: EditorController, mayWriteIn folder: URL) -> Bool {
+        library != nil || FolderAccess.ensure(folder, to: "keep this note's pictures and drawings next to it")
     }
 
     /// Notes next to this one, for `[[`, or every note of its location.

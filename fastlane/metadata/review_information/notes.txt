@@ -1,0 +1,16 @@
+Notebook is a notes app for the Markdown files in folders the user chooses. It has no accounts and no server (Guideline 4.8 does not apply).
+
+To review without notes of your own, choose "Try Sample Notes" on the first screen ("Try Sample Notes…" on the Mac). On the Mac it asks where to put them (Documents, say) and makes a folder Sample Notes there; on iPhone and iPad it makes it in the app's own folder, which the Files app shows under On My iPhone › Notebook. The folder then shows in the sidebar, with notes, pictures, a drawing, PDFs and to-dos. Every feature works there. To use your own files instead, choose "Open iCloud Drive" or "Choose another folder…".
+
+The Mac app runs in the App Sandbox and reaches only the folders the user chose, through security-scoped bookmarks.
+
+Network: Notebook connects to nothing of its own. Searching for a place for a reminder or a to-do uses Apple Maps (MapKit), with the words typed, and Current Location asks MapKit for the address.
+
+iCloud: the folders the user hides and the reminders they set are kept in iCloud's key-value store of the user's own Apple account, so their devices agree. Notes in iCloud Drive are synced by iCloud Drive itself. Nothing goes to the developer.
+
+Permissions, each asked for only when first needed:
+• Notifications: when the user sets the first reminder of a note or a to-do with Remind Me…, for instance on a to-do in Inbox › Errands of the sample notes. Reminders are local notifications scheduled on the device; to-dos with a time remind only once notifications are allowed.
+• Location (While Using only): when the user gives a reminder a place, or chooses Current Location. On iPhone and iPad the place is handed to the system as a region to watch; the app keeps no record of where the user is.
+• Camera (iPhone and iPad): when the user takes a photo or scans a document into a note from the bar above the keyboard.
+
+On iPhone and iPad, background refresh lets reminders set on another device be scheduled while the app is closed.

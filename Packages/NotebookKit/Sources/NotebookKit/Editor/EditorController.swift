@@ -44,6 +44,9 @@ public protocol EditorControllerDelegate: AnyObject {
     func editorShowReminder(_ editor: EditorController)
     /// A to-do's pill or bell was clicked: to set, change or remove its date or place, or with `.reminder` both.
     func editor(_ editor: EditorController, showTodoReminderOnLine line: Int, part: TodoPart)
+    /// Whether pictures and drawings may go into the note's folder, which a note opened from the Finder in the
+    /// sandboxed build has to be given first.
+    func editor(_ editor: EditorController, mayWriteIn folder: URL) -> Bool
 }
 
 /// What of a to-do's reminder a click asks to change: its date (its date's pill, the bell), its place (its place's
@@ -59,6 +62,7 @@ public extension EditorControllerDelegate {
     func editorDrawingDidChange(_ editor: EditorController) {}
     func editorShowReminder(_ editor: EditorController) {}
     func editor(_ editor: EditorController, showTodoReminderOnLine line: Int, part: TodoPart) {}
+    func editor(_ editor: EditorController, mayWriteIn folder: URL) -> Bool { true }
 }
 
 /// Notebook's editor: a TextKit 1 text view whose storage holds the note's Markdown exactly, styled so that it reads as

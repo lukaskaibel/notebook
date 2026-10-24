@@ -1,16 +1,17 @@
 # Privacy
 
-Notebook is a notes app for files on your Mac. It has no server, no accounts, no analytics and no advertising, and it
-collects nothing about you.
+Notebook is a notes app for the files on your Mac, iPhone and iPad. It has no server, no accounts, no analytics and no
+advertising, and it collects nothing about you.
 
 ## What the app stores, and where
 
 - **Your notes** are the Markdown files in your own folders. Notebook reads and writes them in place. Pictures and files
   you add to a note go into a hidden `.assets` folder next to it.
-- **The folders you add** as locations are remembered on your Mac, with the permission to open them again (a
-  security-scoped bookmark).
+- **The folders you add** as locations are remembered on your device, with the permission to open them again (a
+  security-scoped bookmark). On iPhone and iPad, notes you keep on the device are in Notebook's own folder, which the
+  Files app shows under On My iPhone › Notebook.
 - **Favourites, recently opened files, the folders open in the sidebar and your settings** (typeface, text size,
-  what the sidebar shows) are kept in the app's preferences on your Mac.
+  what the sidebar shows, the notebook on the app icon) are kept in the app's preferences on your device.
 - **The folders you hide and the reminders of notes you set** are kept in the app's preferences and, in the App Store
   build, in iCloud's key-value store, which Apple syncs to your other devices signed in to the same Apple Account. A
   reminder of a note is the place of the note in your folders, its time and the place it reminds you at (a name and its
@@ -26,31 +27,41 @@ collects nothing about you.
   notification when you arrive or leave; Notebook itself isn't told where you are and keeps no record of it. Current
   Location asks once where you are, to name the place, and keeps only the place you chose. A Mac doesn't watch places.
 - **The places you chose last**, to choose again at a tap, are kept in the app's preferences on that device.
-- **The search index** of file names, the text of notes and PDFs and the words read in pictures is kept in the app's
-  caches on each device, so search has everything as soon as Notebook opens; it can always be made again from your
-  files.
+- **The search index** of file names, the text of notes and PDFs, and the words Notebook reads in pictures, scanned
+  pages and handwriting is kept in the app's caches on each device, so search is ready the moment the app opens. Each
+  device builds its own from your files, and it never leaves the device.
 - **Spotlight** gets the name, the first lines, the folder and the text of every note in your locations, except those in
   hidden folders, so the system's search finds them. Spotlight keeps its index on your Mac, iPhone or iPad, as it does
-  for Mail or Notes, and Notebook keeps a list of the notes it gave it, by their places in your folders, in the app's
-  own folder on that device. A note leaves Spotlight when you delete it, hide its folder or remove its location. To
-  leave Notebook's notes out of Spotlight, turn Notebook off in System Settings › Spotlight on the Mac, or in
-  Notebook's search settings in Settings on iPhone and iPad.
+  for Mail or Notes, and it never leaves the device. Notebook keeps a list of the notes it gave Spotlight, by their
+  places in your folders, in the app's own folder on that device. A note leaves Spotlight when you delete it, hide its
+  folder or remove its location. To leave Notebook's notes out of Spotlight, turn Notebook off in System Settings ›
+  Spotlight on the Mac, or in Notebook's search settings in Settings on iPhone and iPad.
+- **The camera** on iPhone and iPad is used only when you take a photo or scan a document into a note, and only after
+  you have allowed it. **Photos** are chosen in the system's photo picker: Notebook receives only the pictures you pick.
+  Either is saved next to the note, like any other picture.
+
+On iPhone and iPad, deleting the app deletes everything it stored on the device, along with the notes kept in its own
+folder there. On the Mac, the app's preferences, its search index and its list of the notes in Spotlight stay in its
+container, `~/Library/Containers/com.lukaskbl.Notebook`, until you delete that folder too. The folders you hide and
+your reminders stay in iCloud's key-value store for your other devices. Your notes are your files and stay where they
+are.
 
 ## What is sent, and to whom
 
-- **Nothing of yours, with one exception you start:** searching for a place for a reminder asks Apple Maps, as the Maps
-  app does, with the words you type; Current Location asks it for the address of where you are, and the map in Remind
-  Me loads from it. Notebook has no other code that connects to the internet. Pictures in notes that point to a web
-  address are not downloaded; Notebook shows the address instead.
-- When you click a web link in a note, your browser opens it.
+- **Nothing of yours, with one exception you start:** searching for a place for a reminder or a to-do asks Apple Maps,
+  as the Maps app does, with the words you type; Current Location asks it for the address of where you are, and the
+  map in Remind Me loads from it. Notebook has no other code that connects to the internet. Pictures in notes that
+  point to a web address are not downloaded; Notebook shows the address instead.
+- When you click or tap a web link in a note, your browser opens it.
 - If your notes are in iCloud Drive, Apple syncs them as it syncs every other file there; Notebook asks the system to
-  download notes that aren't on your Mac yet, so it can show and search them. What Apple does with iCloud Drive is
+  download notes that aren't on your device yet, so it can show and search them. What Apple does with iCloud Drive is
   described in [Apple's privacy policy](https://www.apple.com/legal/privacy/).
 
 ## Sample notes
 
-Debug builds can create sample notes in a folder you name (`-NotebookDemo YES`), for trying the app and for the README's
-pictures. They are made up, and nothing about them is sent anywhere.
+Try Sample Notes… on the first screen writes sample notes to a folder Sample Notes, in the folder you pick on the Mac
+and in Notebook's own folder on iPhone and iPad; Debug builds can also write them to a folder you name
+(`-NotebookDemo YES`), for the README's pictures. They are made up, and nothing about them is sent anywhere.
 
 ## Questions
 

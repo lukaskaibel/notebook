@@ -186,6 +186,8 @@ struct TouchWelcomeView: View {
                     workspace.addLocation(Workspace.onDeviceFolder)
                 }
                 .font(.subheadline)
+                Button("Try Sample Notes") { workspace.addSampleNotes(in: Workspace.onDeviceFolder) }
+                    .font(.subheadline)
                 Text("Pick iCloud Drive to have the notes you write on your Mac here too.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -279,6 +281,7 @@ struct TouchSettings: View {
                 }
                 Section {
                     LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
+                    NavigationLink("Acknowledgements") { AcknowledgementsView() }
                 }
             }
             .navigationTitle("Settings")

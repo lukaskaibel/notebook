@@ -89,6 +89,9 @@ enum DebugRemote {
             workspace.closeFile()
         case "newnote":
             workspace.newNote(title: argument.isEmpty ? nil : argument)
+        case "samplenotes":
+            // samplenotes: what Try Sample Notes does on the first screen.
+            workspace.addSampleNotes(in: Workspace.onDeviceFolder)
         case "defaultfolder":
             // defaultfolder [<path>|inbox]: chooses Settings' default folder, then says which it is.
             if argument == "inbox" { workspace.chooseDefaultFolder(nil) } else if !argument.isEmpty, let url = url(argument) { workspace.chooseDefaultFolder(url) }

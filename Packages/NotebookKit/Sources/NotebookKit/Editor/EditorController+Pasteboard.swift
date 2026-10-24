@@ -152,7 +152,7 @@ extension EditorController {
     }
 
     private func uniqueAssetURL(named name: String) -> URL? {
-        guard let assets = assetsFolder else { return nil }
+        guard let folder, let assets = assetsFolder, delegate?.editor(self, mayWriteIn: folder) ?? true else { return nil }
         try? FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
         let base = (name as NSString).deletingPathExtension
         let ext = (name as NSString).pathExtension

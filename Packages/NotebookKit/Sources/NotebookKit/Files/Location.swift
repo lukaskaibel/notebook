@@ -203,13 +203,13 @@ enum LocationStore {
 
     #if os(macOS)
     /// Asks for a folder, starting in iCloud Drive or wherever `directory` says.
-    static func choose(startingIn directory: URL? = nil, message: String? = nil) -> URL? {
+    static func choose(startingIn directory: URL? = nil, message: String? = nil, prompt: String = "Open") -> URL? {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = true
-        panel.prompt = "Open"
+        panel.prompt = prompt
         panel.message = message ?? "Choose a folder with your notes. Notebook shows everything in it."
         panel.directoryURL = directory ?? URL(fileURLWithPath: Location.iCloudDrivePath, isDirectory: true)
         return panel.runModal() == .OK ? panel.url : nil

@@ -1,4 +1,3 @@
-#if DEBUG
 #if os(macOS)
 import AppKit
 #else
@@ -11,7 +10,8 @@ import PencilKit
 import UniformTypeIdentifiers
 
 /// Sample notes and files for trying Notebook and for its screenshots and tests, written to a folder of your choice so
-/// your own files are never touched. Launch with `-NotebookLibrary <folder> -NotebookDemo YES`.
+/// your own files are never touched: Try Sample Notes on the first screen (App Review starts there too), or in Debug
+/// builds `-NotebookLibrary <folder> -NotebookDemo YES`, which also hides a folder and sets a reminder to show them.
 enum DemoLibrary {
     /// Hidden from the sidebar at first, to show hiding with: the header's eye button brings them back.
     static let hiddenFolders = ["Archive"]
@@ -434,4 +434,3 @@ enum DemoLibrary {
         context.closePDF()
     }
 }
-#endif

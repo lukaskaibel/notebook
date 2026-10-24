@@ -446,7 +446,25 @@ public final class Workspace: NSObject {
         guard let url = LocationStore.choose(startingIn: start, message: iCloud ? "Click Open to show iCloud Drive in Notebook." : nil) else { return }
         addLocation(url)
     }
+
+    /// Asks where to put the sample notes, since the sandbox writes only where you chose, and makes them there.
+    func chooseSampleNotesFolder() {
+        guard let url = LocationStore.choose(startingIn: FileManager.default.homeDirectoryForCurrentUser,
+                                             message: "Choose where to put the sample notes. Notebook makes a folder Sample Notes there.",
+                                             prompt: "Make Sample Notes") else { return }
+        addSampleNotes(in: url)
+    }
     #endif
+
+    /// Try Sample Notes: made-up notes, pictures, a drawing and PDFs in a new folder Sample Notes in `folder`, which
+    /// becomes a location of its own. They are written off the main thread and show once they are there.
+    func addSampleNotes(in folder: URL) {
+        let url = folder.appendingPathComponent("Sample Notes", isDirectory: true)
+        Task {
+            await Task.detached(priority: .userInitiated) { DemoLibrary.create(at: url) }.value
+            addLocation(url)
+        }
+    }
 
     /// A folder from File › Open or the Dock icon: shown where it is in the sidebar, or added as a location of its own
     /// (iCloud Drive, say) when no location has it yet.
