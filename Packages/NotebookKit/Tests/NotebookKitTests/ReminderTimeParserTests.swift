@@ -145,6 +145,50 @@ final class ReminderTimeParserTests: XCTestCase {
         XCTAssertTrue(read("this morning").allSatisfy { $0.date > now })
     }
 
+    func testWeekdayInWeeksToCome() throws {
+        // Thursday 22 October: three weeks on is Thursday 12 November, in the week of Sunday 8 November.
+        for text in ["thursday in 3 weeks", "thu in 3 weeks", "in 3 weeks on thursday", "in 3 weeks thursday", "thursday in 3w"] {
+            XCTAssertEqual(try first(text).date, at(12, 11, 9), text)
+        }
+        XCTAssertEqual(try first("thursday in 3 weeks").title, "Thursday in 3 Weeks")
+        XCTAssertEqual(try first("monday in 2 weeks").date, at(2, 11, 9))
+        XCTAssertEqual(try first("saturday in 2 weeks evening").date, at(7, 11, 18))
+        // As you type the unit.
+        XCTAssertEqual(try first("fri in 2 we").date, at(6, 11, 9))
+    }
+
+    /// A to-do's date: a day stays a day, today too, and a time makes it a time.
+    private func day(_ text: String, file: StaticString = #filePath, line: UInt = #line) throws -> ReminderTimeParser.Suggestion {
+        try XCTUnwrap(ReminderTimeParser.suggestions(for: text, now: now, calendar: calendar, days: true).first, "nothing for “\(text)”", file: file, line: line)
+    }
+
+    func testDaysForToDos() throws {
+        XCTAssertEqual(try day("friday").date, at(23, 10, 0))
+        XCTAssertFalse(try day("friday").hasTime)
+        XCTAssertEqual(try day("friday").detail, "Fri, Oct 23")
+        XCTAssertEqual(try day("today").date, at(22, 10, 0))
+        XCTAssertEqual(try day("today").symbol, "star")
+        XCTAssertEqual(try day("thursday in 3 weeks").date, at(12, 11, 0))
+        XCTAssertEqual(try day("12.11.").title, "Thursday, November 12")
+        XCTAssertEqual(try day("12.11.").detail, "In 21 Days")
+        // A number is a day of the month first.
+        XCTAssertEqual(try day("12").date, at(12, 11, 0))
+        // No afternoon or evening of a day alone.
+        XCTAssertEqual(ReminderTimeParser.suggestions(for: "fri", now: now, calendar: calendar, days: true).map(\.title), ["Friday"])
+        XCTAssertEqual(try day("friday 3pm").date, at(23, 10, 15))
+        XCTAssertTrue(try day("friday 3pm").hasTime)
+    }
+
+    func testTimesWithoutADay() {
+        XCTAssertEqual(ReminderTimeParser.times(for: "9").map(\.hour), [9, 21])
+        XCTAssertEqual(ReminderTimeParser.times(for: "eve").map(\.hour), [18])
+        XCTAssertEqual(ReminderTimeParser.times(for: "3:30pm").map { [$0.hour, $0.minute] }, [[15, 30]])
+        XCTAssertTrue(ReminderTimeParser.times(for: "friday").isEmpty)
+        XCTAssertEqual(ReminderTimeParser.times(for: "930").map { [$0.hour, $0.minute] }, [[9, 30], [21, 30]])
+        XCTAssertEqual(ReminderTimeParser.times(for: "1430").map { [$0.hour, $0.minute] }, [[14, 30]])
+        XCTAssertEqual(ReminderTimeParser.times(for: "745pm").map { [$0.hour, $0.minute] }, [[19, 45]])
+    }
+
     func testTwentyFourHours() throws {
         calendar.locale = Locale(identifier: "de_DE")
         XCTAssertEqual(try first("18:30").date, at(22, 10, 18, 30))

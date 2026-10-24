@@ -168,7 +168,7 @@ final class EditorHarness: NSObject, EditorControllerDelegate {
     }
     func editor(_ editor: EditorController, resolve target: String) -> URL? { notes[target.lowercased()] }
     func editorNoteName(_ editor: EditorController) -> String { "Kyoto trip" }
-    func editor(_ editor: EditorController, showTodoReminderOnLine line: Int) { todoReminders.append(line) }
+    func editor(_ editor: EditorController, showTodoReminderOnLine line: Int, part: TodoPart) { todoReminders.append(line) }
 
     private func writeSampleImage(to url: URL) {
         let size = NSSize(width: 1200, height: 520)
