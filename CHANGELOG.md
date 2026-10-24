@@ -217,6 +217,9 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- On iPhone and iPad, a location's name over its folders brought up no menu, though it should have: touching and
+  holding it did nothing. A tap on the name now brings up New Note, New Folder, Add to Favorites, Share, Show Hidden
+  Folders and Remove from Notebook.
 - On iPhone and iPad, opening a note could keep Notebook busy for seconds in a location with thousands of folders,
   such as a whole iCloud Drive: the ⋯ menu made an item for every folder under Move To, each time. Move in the ⋯ menu
   and in a file's touch-and-hold menu now asks where to in a sheet, as swiping a file does and as the Files app asks.

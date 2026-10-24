@@ -186,7 +186,6 @@ struct HomeScreen: View {
                         }
                     } header: {
                         LocationHeader(workspace: workspace, location: location) { newFolderIn = $0 }
-                            .contextMenu { FileActions(workspace: workspace, url: location.url) { newFolderIn = $0 } }
                     }
                 }
                 Section {
