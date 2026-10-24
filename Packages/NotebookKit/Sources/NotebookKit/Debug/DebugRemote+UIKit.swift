@@ -77,6 +77,10 @@ enum DebugRemote {
             workspace.closeFile()
         case "newnote":
             workspace.newNote(title: argument.isEmpty ? nil : argument)
+        case "defaultfolder":
+            // defaultfolder [<path>|inbox]: chooses Settings' default folder, then says which it is.
+            if argument == "inbox" { workspace.chooseDefaultFolder(nil) } else if !argument.isEmpty, let url = url(argument) { workspace.chooseDefaultFolder(url) }
+            log("defaultfolder: \(workspace.defaultFolder?.path ?? "none") (chosen \(workspace.chosenDefaultFolder ?? "none"))")
         case "focus":
             editor.focusText(atEnd: argument == "end")
         case "focustitle":

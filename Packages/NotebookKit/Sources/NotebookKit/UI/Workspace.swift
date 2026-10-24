@@ -31,6 +31,8 @@ public final class Workspace: NSObject {
     @ObservationIgnored private var places: [URL: EditorController.Place] = [:]
     private(set) var favorites: [String] = []
     private(set) var recents: [String] = []
+    /// The folder chosen in Settings for new notes made outside a folder, by its path. Without one they go to the Inbox.
+    private(set) var chosenDefaultFolder: String?
     /// The folders hidden from the sidebar: kept in iCloud, or only for this run with locations given on the command line.
     private(set) var hidden = HiddenFolders(defaults: nil, cloud: nil)
     /// The reminders of notes: kept in iCloud too, or only for this run with locations given on the command line.
@@ -245,6 +247,7 @@ public final class Workspace: NSObject {
         #endif
         favorites = UserDefaults.standard.stringArray(forKey: "favorites") ?? []
         recents = UserDefaults.standard.stringArray(forKey: "recents") ?? []
+        chosenDefaultFolder = UserDefaults.standard.string(forKey: "defaultFolder")
         if let path = UserDefaults.standard.string(forKey: "NotebookLibrary") {
             // A folder given on the command line (tests, screenshots): used for this run, not remembered.
             temporaryLocations = true
@@ -255,6 +258,7 @@ public final class Workspace: NSObject {
             locations = [Location(id: UUID(), name: UserDefaults.standard.string(forKey: "NotebookLibraryName") ?? url.lastPathComponent, path: url.path, bookmark: nil)]
             favorites = []
             recents = []
+            chosenDefaultFolder = nil
         } else {
             locations = LocationStore.load()
             hidden = HiddenFolders()
@@ -1047,6 +1051,7 @@ public final class Workspace: NSObject {
         func fix(_ url: URL) -> URL { Self.relocated(url, from: old, to: new) }
         hiddenFolderMoved(from: old, to: new)
         reminderMoved(from: old, to: new)
+        defaultFolderMoved(from: old, to: new)
         favorites = favorites.map(fix)
         recents = recents.map(fix)
         history = history.map(fix)
@@ -1065,10 +1070,18 @@ public final class Workspace: NSObject {
 
     // MARK: - Making and changing files
 
-    /// Where a new note goes: next to the open one, into the folder selected in the sidebar, or the Inbox.
+    /// Where a new note goes: next to the open one, into the folder selected in the sidebar, or the default folder.
     var folderForNewNote: URL? {
         if let selectedFolder { return selectedFolder }
         if let currentURL { return currentURL.deletingLastPathComponent() }
+        return defaultFolder
+    }
+
+    /// Where new notes made outside a folder go: the folder chosen in Settings while it is in a location, or the Inbox.
+    var defaultFolder: URL? {
+        if let chosen = chosenDefaultFolder.map({ URL(fileURLWithPath: $0, isDirectory: true) }), location(containing: chosen) != nil {
+            return chosen
+        }
         return inboxFolder
     }
 
@@ -1076,6 +1089,27 @@ public final class Workspace: NSObject {
     var inboxFolder: URL? {
         guard let location = locations.first else { return nil }
         return location.url.appendingPathComponent("Inbox", isDirectory: true)
+    }
+
+    /// Settings' default folder; the Inbox, or nil, goes back to having none chosen.
+    func chooseDefaultFolder(_ folder: URL?) {
+        let folder = folder?.standardizedFileURL
+        chosenDefaultFolder = folder.flatMap { folder in inboxFolder.map { FileNode.samePath($0, folder) } == true ? nil : folder.path }
+        if !temporaryLocations { UserDefaults.standard.set(chosenDefaultFolder, forKey: "defaultFolder") }
+    }
+
+    /// The default folder renamed or moved in Notebook, or the folder it is in, stays the default; thrown away, the
+    /// Inbox is again.
+    private func defaultFolderMoved(from old: URL, to new: URL?) {
+        guard let chosen = chosenDefaultFolder, FileNode.isSameOrInside(URL(fileURLWithPath: chosen), old) else { return }
+        chooseDefaultFolder(new.map { URL(fileURLWithPath: Self.relocated(chosen, from: old.path, to: $0.path), isDirectory: true) })
+    }
+
+    /// Where a folder is, as the sidebar leads to it: "iCloud Drive › Projects › Inbox".
+    func place(of folder: URL) -> String {
+        let path = folder.standardizedFileURL.path
+        guard let top = location(containing: folder)?.folder(containing: path) else { return folder.lastPathComponent }
+        return ([top.place] + path.dropFirst(top.url.path.count).split(separator: "/").map(String.init)).joined(separator: " › ")
     }
 
     /// Does a change to files once the changes asked for before it are done, one after another in the order they were
@@ -1159,22 +1193,27 @@ public final class Workspace: NSObject {
     @discardableResult
     public func newNote(in folder: URL? = nil, title: String? = nil) -> Task<URL?, Never> {
         let folder = folder ?? folderForNewNote
+        // The default folder gone from the disk, thrown away in the Finder, say: the note goes to the Inbox instead.
+        let inbox = folder.flatMap { folder in chosenDefaultFolder.map { FileNode.samePath(URL(fileURLWithPath: $0), folder) } == true ? inboxFolder : nil }
         let change = keepForUndo(FileChange(.make, "New Note"))
         return changeFiles { [self] follow in
-            guard let folder = folder.map(follow) else {
+            guard let chosen = folder.map(follow) else {
                 dropFromUndo(change)
                 return nil
             }
-            let made = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?, madeFolder: Bool)? in
+            let inbox = inbox.map(follow)
+            let made = await Task.detached(priority: .userInitiated) { () -> (url: URL, folder: URL, listing: FileNode.Listing?, madeFolder: Bool)? in
+                let folder = inbox.flatMap { FileManager.default.fileExists(atPath: chosen.path) ? nil : $0 } ?? chosen
                 guard let made = FileOperations.createNote(in: folder, title: title ?? "Untitled") else { return nil }
-                return (made.url, FileNode.listing(of: made.url), made.madeFolder)
+                return (made.url, folder, FileNode.listing(of: made.url), made.madeFolder)
             }.value
             changeDone(change, to: made?.url)
             guard let made else {
-                report("The note couldn’t be made.", "Notebook can’t write in “\(folderName(folder))”.")
+                report("The note couldn’t be made.", "Notebook can’t write in “\(folderName(chosen))”.")
                 return nil
             }
             // The Inbox, made for the first note in it, shows too.
+            let folder = made.folder
             let parent = folder.deletingLastPathComponent()
             showChanges(in: made.madeFolder ? [parent, folder] : [folder],
                         adding: (made.listing.map { [$0] } ?? []) + (made.madeFolder ? [FileNode.Listing(url: folder, kind: .folder)] : []))
@@ -1444,6 +1483,20 @@ public final class Workspace: NSObject {
         }
     }
 
+    /// The folders Settings offers as the default folder: Move To's, with the Inbox among the first location's folders
+    /// before its first note has made it.
+    var defaultFolderChoices: [(location: Location, folders: [(url: URL, name: String, depth: Int)])] {
+        let inbox = inboxFolder
+        return currentMoveFolders().targets.enumerated().map { number, target in
+            var folders = target.folders.map { (url: $0.url, name: $0.name, depth: $0.depth) }
+            if number == 0, let inbox, !folders.contains(where: { FileNode.samePath($0.url, inbox) }) {
+                let place = folders.firstIndex { $0.depth == 0 && $0.name.localizedStandardCompare("Inbox") == .orderedDescending } ?? folders.endIndex
+                folders.insert((inbox, "Inbox", 0), at: place)
+            }
+            return (target.location, folders)
+        }
+    }
+
     /// What the folders Move To lists now were sorted from: when it changes, so do they.
     var moveFoldersInUse: MoveFolders.Key { currentMoveFolders().key }
 
@@ -1555,6 +1608,7 @@ public final class Workspace: NSObject {
     private func thrownAway(_ url: URL) {
         hiddenFolderMoved(from: url, to: nil)
         reminderMoved(from: url, to: nil)
+        defaultFolderMoved(from: url, to: nil)
         favorites.removeAll { HiddenFolders.withoutPrivate($0) == HiddenFolders.withoutPrivate(url.path) }
         if !temporaryLocations { UserDefaults.standard.set(favorites, forKey: "favorites") }
         showChanges(in: [url.deletingLastPathComponent()], removing: [url])

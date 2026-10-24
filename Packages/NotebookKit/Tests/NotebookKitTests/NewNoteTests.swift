@@ -162,4 +162,108 @@ final class NewNoteTests: XCTestCase {
         workspace.saveAll(quitting: true)
         XCTAssertTrue(exists(untitled))
     }
+
+    // MARK: - The default folder
+
+    private var inbox: URL { library.appendingPathComponent("Inbox") }
+
+    private func folder(of note: URL?) -> String? {
+        note.map { HiddenFolders.withoutPrivate($0.deletingLastPathComponent().path) }
+    }
+
+    private func path(_ url: URL?) -> String? {
+        url.map { HiddenFolders.withoutPrivate($0.standardizedFileURL.path) }
+    }
+
+    func testWithNoFolderChosenANewNoteGoesToTheInbox() async throws {
+        let workspace = try await makeWorkspace()
+        let made = await workspace.newNote().value
+        XCTAssertEqual(folder(of: made), path(inbox))
+        XCTAssertEqual(workspace.place(of: inbox), "Notes › Inbox")
+    }
+
+    func testANewNoteMadeOutsideAFolderGoesToTheDefaultFolder() async throws {
+        let workspace = try await makeWorkspace()
+        workspace.chooseDefaultFolder(papers)
+        XCTAssertEqual(path(workspace.defaultFolder), path(papers))
+        XCTAssertEqual(workspace.place(of: papers), "Notes › Papers")
+        let made = await workspace.newNote().value
+        XCTAssertEqual(folder(of: made), path(papers))
+        XCTAssertFalse(exists(inbox), "the Inbox was made all the same")
+    }
+
+    /// Next to the open note, as before.
+    func testANewNoteNextToTheOpenOneDoesntGoToTheDefaultFolder() async throws {
+        let other = library.appendingPathComponent("Other", isDirectory: true)
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        let workspace = try await makeWorkspace()
+        workspace.chooseDefaultFolder(other)
+        workspace.open(draft)
+        let made = await workspace.newNote().value
+        XCTAssertEqual(folder(of: made), path(papers))
+    }
+
+    func testChoosingTheInboxIsChoosingNone() async throws {
+        let workspace = try await makeWorkspace()
+        workspace.chooseDefaultFolder(papers)
+        workspace.chooseDefaultFolder(inbox)
+        XCTAssertNil(workspace.chosenDefaultFolder)
+        workspace.chooseDefaultFolder(papers)
+        workspace.chooseDefaultFolder(nil)
+        XCTAssertNil(workspace.chosenDefaultFolder)
+        XCTAssertEqual(path(workspace.defaultFolder), path(inbox))
+    }
+
+    /// One outside every location, kept from a location removed since, say.
+    func testAFolderOutsideTheLocationsIsntUsed() async throws {
+        let workspace = try await makeWorkspace()
+        workspace.chooseDefaultFolder(FileManager.default.temporaryDirectory)
+        XCTAssertEqual(path(workspace.defaultFolder), path(inbox))
+    }
+
+    func testTheDefaultFolderFollowsARename() async throws {
+        let drafts = papers.appendingPathComponent("Drafts", isDirectory: true)
+        try FileManager.default.createDirectory(at: drafts, withIntermediateDirectories: true)
+        let workspace = try await makeWorkspace()
+        workspace.chooseDefaultFolder(drafts)
+        let renaming = await workspace.rename(papers, to: "Essays").value
+        let renamed = try XCTUnwrap(renaming)
+        XCTAssertEqual(path(workspace.defaultFolder), path(renamed.appendingPathComponent("Drafts")), "the folder it is in was renamed")
+        let moving = await workspace.move(renamed.appendingPathComponent("Drafts"), into: library).value
+        let moved = try XCTUnwrap(moving)
+        XCTAssertEqual(path(workspace.defaultFolder), path(moved))
+        let made = await workspace.newNote().value
+        XCTAssertEqual(folder(of: made), path(moved))
+    }
+
+    func testADefaultFolderThrownAwayLeavesTheInbox() async throws {
+        let workspace = try await makeWorkspace()
+        workspace.chooseDefaultFolder(papers)
+        let trashed = await workspace.trash(papers).value
+        XCTAssertTrue(trashed)
+        XCTAssertNil(workspace.chosenDefaultFolder)
+        XCTAssertEqual(path(workspace.defaultFolder), path(inbox))
+    }
+
+    /// Thrown away in the Finder: the note goes to the Inbox, and the folder isn't made again.
+    func testADefaultFolderGoneFromTheDiskLeavesTheInbox() async throws {
+        let workspace = try await makeWorkspace()
+        workspace.chooseDefaultFolder(papers)
+        try FileManager.default.removeItem(at: papers)
+        let made = await workspace.newNote().value
+        XCTAssertEqual(folder(of: made), path(inbox))
+        XCTAssertFalse(exists(papers))
+    }
+
+    /// Settings lists the Inbox before the first note made it, in its place among the folders, and only once after.
+    func testSettingsOfferTheInboxAmongTheFolders() async throws {
+        try FileManager.default.createDirectory(at: library.appendingPathComponent("Archive"), withIntermediateDirectories: true)
+        let workspace = try await makeWorkspace()
+        func names() -> [String] { workspace.defaultFolderChoices.first?.folders.map(\.name) ?? [] }
+        try await until("the folders were found") { names().contains("Papers") && names().contains("Archive") }
+        XCTAssertEqual(names(), ["Notes", "Archive", "Inbox", "Papers"])
+        _ = await workspace.newNote().value
+        try await until("the Inbox was found") { workspace.index.allFolders().contains { $0.name == "Inbox" } }
+        try await until("the list was sorted again") { names() == ["Notes", "Archive", "Inbox", "Papers"] }
+    }
 }

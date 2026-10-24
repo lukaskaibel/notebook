@@ -18,9 +18,29 @@ everyone time.
 2. Build and run from Xcode (see the README). Try your change on the sample notes (`-NotebookLibrary <folder>
    -NotebookDemo YES`) rather than your own.
 3. Run the tests: `cd Packages/NotebookKit && swift test`.
-4. Open a pull request against `main` and describe what changed and how you checked it.
+4. Open a pull request against `main`, describe what changed and how you checked it, and tick the box agreeing to the
+   terms below.
 
 Every pull request is reviewed and merged by the maintainer; nothing lands on `main` without that approval.
+
+## Licensing your contribution
+
+Notebook is licensed under the GNU General Public License, version 3, with one additional permission, for linking with
+elk-swift (see [License](README.md#license)). Lukas Kaibel holds the copyright in it, and that is why Notebook can be on
+TestFlight and the App Store: the GPL and Apple's terms don't fit together, so others can't put copies there, but the
+copyright holder isn't bound by the GPL.
+
+For that to stay true with your code in it, by opening a pull request you agree that:
+
+1. your contribution is licensed under the same terms as the rest of Notebook, the GPL version 3 with that additional
+   permission; and
+2. you also grant Lukas Kaibel a perpetual, worldwide, non-exclusive, royalty-free and irrevocable licence to use,
+   copy, modify and distribute your contribution under other terms, including in builds for TestFlight, the App Store
+   and other stores, free or paid, and in versions that aren't open source.
+
+You keep the copyright in what you wrote, and you confirm that it is yours to give on these terms: you wrote it, or it
+comes under a licence that allows this. The pull request template has a box to tick for it. If you'd rather not agree,
+open an issue that describes the change instead.
 
 ## What to keep in mind
 

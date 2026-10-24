@@ -219,7 +219,7 @@ struct HomeScreen: View {
             DefaultToolbarItem(kind: .search, placement: .bottomBar)
             ToolbarSpacer(.fixed, placement: .bottomBar)
             ToolbarItem(placement: .bottomBar) {
-                NewNoteButton { workspace.newNote(in: workspace.inboxFolder) }
+                NewNoteButton { workspace.newNote(in: workspace.defaultFolder) }
             }
         }
         .sheet(isPresented: $showsSettings) { TouchSettings(workspace: workspace) }

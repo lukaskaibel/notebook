@@ -15,6 +15,11 @@ versions follow [semantic versioning](https://semver.org).
   finding what they found too, and so do links in the front matter. Undo puts every link back as it was; a copy
   (Option-drag) or a duplicate changes none. A note from outside your locations, renamed in its own window, takes the
   links to it in the notes next to it along.
+- Choose where new notes go when they aren't made in a folder: Settings › General › Default folder on the Mac, Settings
+  › Default Folder on iPhone and iPad. That is ⌘N with no note open and no folder selected, and New Note on the
+  iPhone's first screen. Every folder of your locations is there, indented as in Move To; until you choose one, it is
+  the Inbox at the top of your first location, as before. Rename or move the folder in Notebook and it stays the
+  default; throw it away and new notes go to the Inbox again.
 - Customize Folder…: right-click a folder in the sidebar, or touch and hold it on iPhone and iPad, and give it a colour
   and a symbol or an emoji in place of the folder. Over 300 symbols and the emoji come in groups, with a few suggested
   for the folder's name, and a search finds them by name or by what they are for. Notebook keeps them where the
@@ -152,6 +157,9 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Changed
 
+- Notebook's source code is now under the GNU General Public License, version 3, in place of the MIT License, with a
+  permission to link it with elk-swift, which lays out the diagrams. Copies from before 24 October 2026 can still be
+  used under the MIT License.
 - Remind Me… has Date, Time and Location to turn on, as a reminder's details in Reminders, next to Later Today, This
   Evening and Tomorrow.
 - Double-clicking a PDF, a picture or any other file in the sidebar opens it in its own app, such as Preview or

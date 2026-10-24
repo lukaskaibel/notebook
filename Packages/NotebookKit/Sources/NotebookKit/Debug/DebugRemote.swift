@@ -319,7 +319,10 @@ enum DebugRemote {
         case "settings":
             // settings <general|text|sidebar>: opens Settings at that tab.
             UserDefaults.standard.set(argument.isEmpty ? "general" : argument, forKey: "settingsTab")
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            // The app menu's Settings…: SwiftUI's Settings window no longer answers showSettingsWindow:.
+            if let menu = NSApp.mainMenu?.items.first?.submenu, let index = menu.items.firstIndex(where: { $0.keyEquivalent == "," }) {
+                menu.performActionForItem(at: index)
+            }
         case "usewindow":
             usesFileWindow = argument == "file"
         case "windows":
@@ -641,6 +644,38 @@ enum DebugRemote {
             }
         case "newnote":
             workspace?.newNote()
+        case "defaultfolder":
+            // defaultfolder [<path>|inbox]: chooses Settings' default folder, then says which it is.
+            guard let workspace else { break }
+            if argument == "inbox" { workspace.chooseDefaultFolder(nil) }
+            if argument.hasPrefix("/") { workspace.chooseDefaultFolder(URL(fileURLWithPath: argument, isDirectory: true)) }
+            log("defaultfolder: \(workspace.defaultFolder?.path ?? "none") (chosen \(workspace.chosenDefaultFolder ?? "none"))")
+        case "defaultfoldermenu":
+            // defaultfoldermenu [<folder>]: what Settings' default folder pop-up holds as it opens, and with a folder,
+            // chooses it; then what it holds closed again. defaultfoldermenu open: opens it for real for two seconds,
+            // for a picture.
+            func popUps(in view: NSView) -> [NSPopUpButton] {
+                (view as? NSPopUpButton).map { [$0] } ?? view.subviews.flatMap(popUps)
+            }
+            guard let button = NSApp.windows.lazy.compactMap({ $0.contentView }).flatMap(popUps).first(where: { $0.accessibilityLabel() == "Default folder" }),
+                  let menu = button.menu else { log("defaultfoldermenu: no pop-up; open Settings first"); break }
+            if argument == "open" {
+                let timer = Timer(timeInterval: 2, repeats: false) { _ in MainActor.assumeIsolated { menu.cancelTracking() } }
+                RunLoop.main.add(timer, forMode: .common)
+                DispatchQueue.main.async { button.performClick(nil) }
+                break
+            }
+            let start = CACurrentMediaTime()
+            menu.delegate?.menuNeedsUpdate?(menu)
+            let titles = menu.items.map { ($0.isSectionHeader ? "[" : "") + String(repeating: "·", count: $0.indentationLevel) + $0.title + ($0.isSectionHeader ? "]" : "") }
+            log(String(format: "defaultfoldermenu: %d items in %.1f ms, selected %@: ", titles.count, (CACurrentMediaTime() - start) * 1000, button.titleOfSelectedItem ?? "nothing") + titles.prefix(20).joined(separator: ", "))
+            if !argument.isEmpty, let index = menu.items.firstIndex(where: { $0.title == argument && !$0.isSectionHeader }) {
+                menu.performActionForItem(at: index)
+            }
+            menu.delegate?.menuDidClose?(menu)
+            DispatchQueue.main.async {
+                log("defaultfoldermenu: closed with \(menu.items.map(\.title)), selected \(button.titleOfSelectedItem ?? "nothing"), now \(workspace?.defaultFolder?.path ?? "none")")
+            }
         case "drop":
             // drop <file> > <folder>: what dragging a file onto a folder in the sidebar does (Option: dropcopy).
             let paths = argument.components(separatedBy: " > ")
