@@ -5,8 +5,9 @@
 <h1 align="center">Notebook</h1>
 
 <p align="center">
-  <b>Markdown notes for Mac, iPhone and iPad that write like Apple Notes</b>, kept as plain files in your own folders.<br>
-  No database, no import and no sync of its own: iCloud Drive, or any folder you choose, is the library.
+  <b>The ease of Notes. The freedom of files.</b><br>
+  A notes app for Mac, iPhone and iPad that writes like Apple Notes. Every note is a Markdown file in iCloud Drive or
+  any folder you choose, right next to your other documents: no vault, no database, no sync to set up.
 </p>
 
 <p align="center">
