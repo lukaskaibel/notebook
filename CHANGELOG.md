@@ -149,6 +149,9 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Changed
 
+- Notebook's source code is now under the GNU General Public License, version 3, in place of the MIT License, with a
+  permission to link it with elk-swift, which lays out the diagrams. Copies from before 24 October 2026 can still be
+  used under the MIT License.
 - Remind Me… has Date, Time and Location to turn on, as a reminder's details in Reminders, next to Later Today, This
   Evening and Tomorrow.
 - Double-clicking a PDF, a picture or any other file in the sidebar opens it in its own app, such as Preview or
