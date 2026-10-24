@@ -212,6 +212,9 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- In the App Store build, a note opened from the Finder outside your locations couldn't be renamed or take pictures and
+  drawings, since the sandbox gives Notebook only the file. The first time it needs the note's folder, Notebook now
+  asks for it, and remembers it after that.
 - Renaming a note also changed the links to another note of the same name in another folder, and could leave links
   finding a third note of the new name. Now only links to the note renamed change, in every location, and no link
   written in code. Links to a renamed PDF, picture or other file follow it too.

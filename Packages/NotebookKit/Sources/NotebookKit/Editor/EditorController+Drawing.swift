@@ -276,7 +276,7 @@ extension EditorController {
 
     /// "Note drawing 2026-10-16 at 10.20.15.png", with neither the picture nor its strokes there yet.
     private func newDrawingURL() -> URL? {
-        guard let assets = assetsFolder else { return nil }
+        guard let folder, let assets = assetsFolder, delegate?.editor(self, mayWriteIn: folder) ?? true else { return nil }
         try? FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
