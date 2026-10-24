@@ -45,7 +45,7 @@ final class FileAttributeTests: XCTestCase {
     func testTagsAndAttributesStayWhenANoteIsWritten() async throws {
         let document = NoteDocument(url: note)
         document.update(text: document.text + "More.\n")
-        document.saveNow()
+        await document.save()
         document.close()
         XCTAssertTrue(try String(contentsOf: note, encoding: .utf8).hasSuffix("More.\n"))
         assertKept("saving")

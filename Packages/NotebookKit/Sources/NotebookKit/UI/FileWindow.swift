@@ -149,7 +149,7 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
     func save(quitting: Bool) {
         editor.saveDrawingsNow(waiting: quitting)
         note.update(text: editor.text)
-        note.saveNow()
+        if quitting { note.saveWaiting() } else { note.saveNow() }
     }
 
     /// The main window's workspace, for a note in one of its locations: links reach every note there, and a new title
@@ -231,6 +231,8 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
         let (url, note, library) = (url, note, library)
         note.beginMove()
         Task {
+            // A save under way is written where the note is still.
+            await note.save()
             var next: LinkTargets?
             let renamed: URL?
             if let library {

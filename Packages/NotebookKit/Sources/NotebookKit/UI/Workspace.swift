@@ -857,13 +857,19 @@ public final class Workspace: NSObject {
         note.close()
         let folder = note.url.deletingLastPathComponent()
         let dropped = assetsInUse.subtracting(FileOperations.assetNames(in: note.text))
-        // It reads every note in the folder, which takes a while in a large one.
-        if !dropped.isEmpty { Task.detached(priority: .utility) { FileOperations.cleanUpAssets(in: folder, candidates: dropped) } }
+        if !dropped.isEmpty {
+            Task {
+                // It reads the notes in the folder, this one as it was saved; in a large folder that takes a while.
+                await note.save()
+                Task.detached(priority: .utility) { FileOperations.cleanUpAssets(in: folder, candidates: dropped) }
+            }
+        }
         if isLeftEmpty(note) {
             let url = note.url
             // Nothing was made that Undo could take back.
             if let change = newNoteChange, change.after.map({ FileNode.samePath($0, url) }) == true { dropFromUndo(change) }
             changeFiles { [self] follow in
+                await note.save()
                 let url = follow(url)
                 let thrownAway = await Task.detached(priority: .userInitiated) { () -> Bool in
                     #if os(iOS)
@@ -1303,6 +1309,8 @@ public final class Workspace: NSObject {
         let links = updatingLinks && !undoing ? linkSnapshot() : nil
         let document = noteMoving(with: url)
         document?.beginMove()
+        // A save under way is written where the note is still.
+        await document?.save()
         let result = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?)? in
             let renamed = fileName ? FileOperations.rename(url, toFileName: name, presenter: document) : FileOperations.rename(url, to: name, presenter: document)
             guard let renamed else { return nil }
@@ -1351,6 +1359,7 @@ public final class Workspace: NSObject {
         let links = undoing ? nil : linkSnapshot()
         let document = noteMoving(with: url)
         document?.beginMove()
+        await document?.save()
         let name = fileName ?? url.lastPathComponent
         let result = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?, assets: (names: Set<String>, renamed: Bool)?)? in
             // Read before it moves only when that is quick: a note still in iCloud would have to come down first.
@@ -1565,10 +1574,12 @@ public final class Workspace: NSObject {
     /// note is in it. Says where in the Trash it went.
     func trashNow(_ url: URL) async -> (done: Bool, place: URL?) {
         let wasCurrent = currentURL.map { FileNode.isSameOrInside($0, url) } ?? false
-        if wasCurrent {
-            note?.close()
-            note = nil
+        if wasCurrent, let note {
+            note.close()
+            self.note = nil
             currentURL = nil
+            // What it saves as it closes goes along to the Trash, not back where it was.
+            await note.save()
         }
         let trashed = await Task.detached(priority: .userInitiated, operation: { FileOperations.moveToTrash(url) }).value
         guard trashed.done else { return trashed }
@@ -1690,8 +1701,8 @@ public final class Workspace: NSObject {
         return FileKind(url: currentURL, isDirectory: false) == .note ? currentURL.deletingPathExtension().lastPathComponent : currentURL.lastPathComponent
     }
 
-    /// Saves everything; called when the app goes to the background or (`quitting`) quits, when drawings are written
-    /// before it goes on.
+    /// Saves everything; called when the app goes to the background or (`quitting`) quits, when drawings and the note
+    /// are written before it goes on.
     public func saveAll(quitting: Bool = false) {
         editor.saveDrawingsNow(waiting: quitting)
         todoEditing?.commit(now: quitting)
@@ -1702,7 +1713,7 @@ public final class Workspace: NSObject {
         if !quitting { index.keepChanges() }
         guard let note else { return }
         note.update(text: editor.text)
-        note.saveNow()
+        if quitting { note.saveWaiting() } else { note.saveNow() }
         #if os(macOS)
         if quitting { trashAsQuitting(note) }
         #endif

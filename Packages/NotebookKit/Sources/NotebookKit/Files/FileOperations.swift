@@ -14,9 +14,9 @@ enum FileOperations {
     #endif
 
     /// A slow iCloud, for trying out that nothing waits for a change to files: in Debug builds, with
-    /// `-NotebookSlowWrites <seconds>`, each one waits that long first. One on the main thread isn't slowed down but
+    /// `-NotebookSlowWrites <seconds>`, each one, and each save of a note, waits that long first. One on the main thread isn't slowed down but
     /// logged, to find any that shouldn't be there.
-    private static func debugWait(_ what: String, _ url: URL) {
+    static func debugWait(_ what: String, _ url: URL) {
         #if DEBUG
         if Thread.isMainThread {
             mainThreadWrites.withLock { $0 += 1 }
@@ -305,12 +305,15 @@ enum FileOperations {
     }
 
     /// Pictures and files in a folder's `.assets` that no note in the folder uses any more, among `candidates`,
-    /// go to the Trash.
+    /// go to the Trash. With a note there still in iCloud, which would have to come down to be read, they all stay.
     static func cleanUpAssets(in folder: URL, candidates: Set<String>) {
         guard !candidates.isEmpty else { return }
-        let notes = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
+        let keys: Set<URLResourceKey> = [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey]
+        let notes = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: Array(keys))) ?? []
         var used = Set<String>()
         for note in notes where note.pathExtension.lowercased() == "md" {
+            if let values = try? note.resourceValues(forKeys: keys), values.isUbiquitousItem == true,
+               values.ubiquitousItemDownloadingStatus != .current { return }
             guard let text = NoteDocument.read(note) else { continue }
             used.formUnion(assetNames(in: text))
         }

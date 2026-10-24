@@ -44,6 +44,17 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     /// Notebook is renaming or moving the file (or its folder) off the main thread: saving waits until it is done, as a
     /// save meanwhile would write the note again where it was.
     @ObservationIgnored private var moves = 0
+    /// The save, or the look at what changed on disk, under way off the main thread. One at a time: what is asked for
+    /// meanwhile comes after it (`wantsSave`, `wantsRead`), as does whatever waits for the note to be saved.
+    @ObservationIgnored private var job: Job?
+    @ObservationIgnored private var wantsSave = false
+    @ObservationIgnored private var wantsRead = false
+    @ObservationIgnored private var whenSaved: [() -> Void] = []
+    /// A conflict was settled, and what is on disk now is being read, to save over: nothing is saved until it is in.
+    @ObservationIgnored private var isSettling = false
+    @ObservationIgnored private var settleNext: (() -> Void)?
+    /// The file was deleted on purpose: it isn't written again. Read where it is written, off the main thread.
+    @ObservationIgnored private let wasDeleted = Mutex(false)
     /// Where notes are read in the background. The coordinated read waits for iCloud without holding a thread.
     private nonisolated static let readQueue: OperationQueue = {
         let queue = OperationQueue()
@@ -177,39 +188,187 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         }
     }
 
+    /// Saves what was typed, off the main thread. A save under way is finished first, and this one comes after it.
     func saveNow() {
         saveTimer?.invalidate()
         saveTimer = nil
-        guard isLoaded, moves == 0, text != savedText, conflict == nil else { return }
-        // Never write over a change made elsewhere since the last save: merge it in, or ask.
-        if let disk = Self.read(url), disk != savedText {
-            if disk == text {
-                savedText = disk
-                return
-            }
-            guard let merged = Diff3.merge(base: savedText, mine: text, theirs: disk) else {
-                conflict = Conflict(otherText: disk, source: "another device", date: Self.modificationDate(url))
-                return
-            }
-            savedText = disk
-            text = merged
-            onExternalChange?(merged)
-            guard merged != disk else { return }
+        guard canSave else { return }
+        guard job == nil else {
+            wantsSave = true
+            return
         }
-        let data = Data(text.utf8)
-        var error: NSError?
-        var written = false
-        NSFileCoordinator(filePresenter: self).coordinate(writingItemAt: url, options: .forReplacing, error: &error) { url in
-            written = FileOperations.write(data, to: url)
-        }
-        if written {
-            savedText = text
-            modified = Self.modificationDate(url)
-            onSave?()
+        write()
+    }
+
+    /// Saves what was typed and calls `then` once it is written, or can't be for now (a conflict, a move under way).
+    func save(then: @escaping () -> Void) {
+        saveNow()
+        if job == nil { then() } else { whenSaved.append(then) }
+    }
+
+    func save() async {
+        await withCheckedContinuation { continuation in save { continuation.resume() } }
+    }
+
+    /// Saves what was typed and waits until it is on disk: the app is quitting, and wouldn't wait otherwise. What is
+    /// done off the main thread never needs the main thread, so it can wait here.
+    func saveWaiting() {
+        saveNow()
+        while let job {
+            job.done.wait()
+            finish(job)
+            if case .failed = job.outcome { break }
         }
     }
 
     var hasUnsavedChanges: Bool { text != savedText }
+
+    private var canSave: Bool { isLoaded && moves == 0 && conflict == nil && !isSettling && text != savedText }
+
+    /// A save or a read off the main thread. What it found is taken in on the main thread, or at once when quitting
+    /// waits for it (`saveWaiting`).
+    private final class Job: @unchecked Sendable {
+        let done = DispatchSemaphore(value: 0)
+        /// Set once, before `done` is signalled, and read after.
+        private(set) var outcome: Outcome = .failed
+        #if os(iOS)
+        var endBackgroundTask: (() -> Void)?
+        #endif
+
+        func finish(_ outcome: Outcome) {
+            self.outcome = outcome
+            done.signal()
+        }
+    }
+
+    private enum Outcome: Sendable {
+        /// This text was written.
+        case written(String, modified: Date?)
+        /// It changed elsewhere since the last save, to this, and wasn't written: what it says is merged in first.
+        case changed(String, modified: Date?)
+        /// What it says, read after it changed elsewhere.
+        case read(String, modified: Date?)
+        /// What it says once a conflict was settled (nil when it couldn't be read).
+        case settled(String?)
+        case failed
+    }
+
+    /// Writes the text in a coordinated write off the main thread, which waits for iCloud or another app holding the
+    /// file without the window waiting. What is typed meanwhile is saved after. The file is read in the same write:
+    /// changed elsewhere since the last save, it isn't written over, but what it says is merged in, or asked about.
+    /// (Replacing, not merging, asks no other note open on the file to save first, which would need the main thread.)
+    private func write() {
+        let (base, mine) = (savedText, text)
+        let intent = NSFileAccessIntent.writingIntent(with: url, options: .forReplacing)
+        start { job in
+            NSFileCoordinator(filePresenter: self).coordinate(with: [intent], queue: Self.readQueue) { error in
+                job.finish(error == nil ? Self.write(mine, over: base, at: intent.url, unless: self.wasDeleted) : .failed)
+                DispatchQueue.main.async { MainActor.assumeIsolated { self.finish(job) } }
+            }
+        }
+    }
+
+    nonisolated private static func write(_ mine: String, over base: String, at url: URL, unless deleted: borrowing Mutex<Bool>) -> Outcome {
+        FileOperations.debugWait("saved", url)
+        guard !deleted.withLock({ $0 }) else { return .failed }
+        let disk = (try? Data(contentsOf: url)).flatMap(decode)
+        // Never written over a change made elsewhere since the last save. (Gone, it is written again.)
+        if let disk, disk != base { return .changed(disk, modified: modificationDate(url)) }
+        guard FileOperations.write(Data(mine.utf8), to: url) else { return .failed }
+        return .written(mine, modified: modificationDate(url))
+    }
+
+    /// Reads the file after it changed elsewhere, off the main thread, and takes in what it says.
+    private func readChanges() {
+        // Without asking other notes open on it to save first: it has been changed already.
+        let intent = NSFileAccessIntent.readingIntent(with: url, options: .withoutChanges)
+        start { job in
+            NSFileCoordinator(filePresenter: self).coordinate(with: [intent], queue: Self.readQueue) { error in
+                let disk = error == nil ? (try? Data(contentsOf: intent.url)).flatMap(Self.decode) : nil
+                job.finish(disk.map { .read($0, modified: Self.modificationDate(intent.url)) } ?? .failed)
+                DispatchQueue.main.async { MainActor.assumeIsolated { self.finish(job) } }
+            }
+        }
+    }
+
+    private func start(_ work: (Job) -> Void) {
+        let job = Job()
+        self.job = job
+        #if os(iOS)
+        // Going to the background, the app is suspended a moment later: it stays awake until the note is written.
+        let task = UIApplication.shared.beginBackgroundTask(withName: "Saving a note")
+        job.endBackgroundTask = { UIApplication.shared.endBackgroundTask(task) }
+        #endif
+        work(job)
+    }
+
+    /// Takes in what a save or read found, then does what was asked for meanwhile.
+    private func finish(_ job: Job) {
+        // Taken in already, as quitting waited for it.
+        guard self.job === job else { return }
+        self.job = nil
+        #if os(iOS)
+        job.endBackgroundTask?()
+        #endif
+        switch job.outcome {
+        case .written(let written, let modified):
+            savedText = written
+            if let modified { self.modified = modified }
+            onSave?()
+        case .changed(let disk, let modified):
+            takeIn(disk, modified: modified)
+        case .read(let disk, let modified):
+            takeIn(disk, modified: modified)
+            checkForConflictVersions()
+        case .settled(let disk):
+            // The choice is made: what is on disk now is the base, and this note's text goes over it.
+            savedText = disk ?? ""
+            isSettling = false
+            wantsSave = true
+        case .failed:
+            break
+        }
+        if let settle = settleNext {
+            // What was asked for meanwhile comes after it.
+            settleNext = nil
+            return settle()
+        }
+        let (save, read) = (wantsSave || !whenSaved.isEmpty, wantsRead)
+        wantsSave = false
+        wantsRead = false
+        if save, canSave {
+            // It reads what changed elsewhere too.
+            write()
+        } else if read {
+            readChanges()
+        }
+        guard self.job == nil else { return }
+        let waiting = whenSaved
+        whenSaved = []
+        for action in waiting { action() }
+    }
+
+    /// What the file says after it changed elsewhere: taken as it is when nothing is typed here that isn't saved, merged
+    /// with what is when the changes touch different lines (and the merge saved), else asked about.
+    private func takeIn(_ disk: String, modified: Date?) {
+        guard disk != savedText else { return }
+        if let modified { self.modified = modified }
+        if disk == text {
+            savedText = disk
+        } else if text == savedText {
+            text = disk
+            savedText = disk
+            if !isClosed { onExternalChange?(disk) }
+        } else if let merged = Diff3.merge(base: savedText, mine: text, theirs: disk) {
+            // Edits here and there touched different lines: keep both.
+            savedText = disk
+            text = merged
+            if !isClosed { onExternalChange?(merged) }
+            if merged != disk { wantsSave = true }
+        } else {
+            conflict = Conflict(otherText: disk, source: "another device", date: self.modified)
+        }
+    }
 
     /// Notebook moved or renamed the file itself: follow it right away instead of waiting for the coordinator to say so.
     func moved(to newURL: URL) {
@@ -253,28 +412,41 @@ public final class NoteDocument: NSObject, NSFilePresenter {
 
     enum Resolution { case keepThis, takeOther, keepBoth }
 
-    /// Settles a conflict; returns the text to show.
+    /// Settles a conflict; returns the text to show. The rest is done off the main thread: the other version written
+    /// next to the note (Keep Both), iCloud told, and what is on disk then read, as the base this note's text goes over.
+    /// Nothing is saved before that.
     func resolve(_ resolution: Resolution) -> String {
         guard let conflict else { return text }
-        switch resolution {
-        case .keepThis:
-            break
-        case .takeOther:
-            text = conflict.otherText
-        case .keepBoth:
-            let base = url.deletingPathExtension().lastPathComponent
-            let copy = FileOperations.uniqueURL(in: url.deletingLastPathComponent(), name: "\(base) (\(conflict.source))", extension: "md")
-            try? Data(conflict.otherText.utf8).write(to: copy, options: .atomic)
-        }
+        if resolution == .takeOther { text = conflict.otherText }
         self.conflict = nil
+        isSettling = true
+        let (url, copy) = (url, resolution == .keepBoth ? conflict : nil)
+        let settle = { [self] in
+            start { job in
+                Self.readQueue.addOperation {
+                    job.finish(Self.settle(url, keeping: copy, presenter: self))
+                    DispatchQueue.main.async { MainActor.assumeIsolated { self.finish(job) } }
+                }
+            }
+        }
+        if job == nil { settle() } else { settleNext = settle }
+        return text
+    }
+
+    nonisolated private static func settle(_ url: URL, keeping copy: Conflict?, presenter: NSFilePresenter) -> Outcome {
+        if let copy {
+            let name = "\(url.deletingPathExtension().lastPathComponent) (\(copy.source))"
+            FileOperations.createNote(in: url.deletingLastPathComponent(), title: name, text: copy.otherText)
+        }
         if let versions = NSFileVersion.unresolvedConflictVersionsOfItem(at: url) {
             for version in versions { version.isResolved = true }
             try? NSFileVersion.removeOtherVersionsOfItem(at: url)
         }
-        // The choice is made: what is on disk now is the base, and this note's text goes over it.
-        savedText = Self.read(url) ?? ""
-        saveNow()
-        return text
+        var disk: String?
+        NSFileCoordinator(filePresenter: presenter).coordinate(readingItemAt: url, options: .withoutChanges, error: nil) { url in
+            disk = (try? Data(contentsOf: url)).flatMap(decode)
+        }
+        return .settled(disk)
     }
 
     // MARK: - NSFilePresenter
@@ -297,6 +469,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     }
 
     nonisolated public func accommodatePresentedItemDeletion(completionHandler: @escaping (Error?) -> Void) {
+        wasDeleted.withLock { $0 = true }
         MainActor.assumeIsolated {
             saveTimer?.invalidate()
             onDelete?()
@@ -310,9 +483,9 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         }
     }
 
+    /// Another app or Notebook itself is about to read or change the file: it waits until what was typed is written.
     nonisolated public func savePresentedItemChanges(completionHandler: @escaping (Error?) -> Void) {
-        MainActor.assumeIsolated { saveNow() }
-        completionHandler(nil)
+        MainActor.assumeIsolated { save { completionHandler(nil) } }
     }
 
     private func fileChangedOnDisk() {
@@ -328,21 +501,10 @@ public final class NoteDocument: NSObject, NSFilePresenter {
             changedWhileReading = true
             return
         }
-        guard let disk = Self.read(url), disk != savedText else { return }
-        modified = Self.modificationDate(url)
-        if text == savedText {
-            text = disk
-            savedText = disk
-            onExternalChange?(disk)
-        } else if let merged = Diff3.merge(base: savedText, mine: text, theirs: disk) {
-            // Edits here and there touched different lines: keep both.
-            savedText = disk
-            text = merged
-            onExternalChange?(merged)
-            if merged != disk { saveNow() }
-        } else {
-            conflict = Conflict(otherText: disk, source: "another device", date: modified)
+        guard job == nil else {
+            wantsRead = true
+            return
         }
-        checkForConflictVersions()
+        readChanges()
     }
 }

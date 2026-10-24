@@ -99,6 +99,7 @@ final class NewNoteTests: XCTestCase {
         _ = await workspace.newNote(in: papers).value
         typeText("Milk", in: workspace)
         workspace.saveAll()
+        await workspace.note?.save()
         XCTAssertEqual(try String(contentsOf: untitled, encoding: .utf8), "Milk")
         let textView = workspace.editor.textView
         textView.setSelectedRange(NSRange(location: 0, length: 4))

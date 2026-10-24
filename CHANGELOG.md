@@ -217,6 +217,11 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- Saving a note could stop Notebook for a moment while iCloud or another app was busy with the file. Notes are now
+  saved in the background, on the Mac, iPhone and iPad: what you type meanwhile is saved right after, a change made
+  elsewhere in the meantime is still merged in, and quitting waits until everything is written. Pictures a note no
+  longer uses are no longer looked for by bringing down every note of its folder from iCloud; while some are still
+  there, the pictures stay.
 - Saving a note took away its Finder tags, and whatever else other apps keep on the file, such as where it was
   downloaded from; so did ticking a to-do off in To-dos and links changing after a rename or a move. They stay now, and
   so does the date the note was made.

@@ -339,7 +339,7 @@ extension Workspace {
         return task
     }
 
-    /// Writes the note an editor shows, now.
+    /// Saves the note an editor shows, now.
     func saveNote(showing url: URL) {
         if let note, note.isLoaded, FileNode.samePath(note.url, url) {
             note.update(text: editor.text)

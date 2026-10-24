@@ -55,8 +55,10 @@ open an issue that describes the change instead.
   read off the main thread (`Files/FolderReader.swift`, `Files/LocationSurvey.swift`, `Index/SearchIndex.swift`), and
   what the main thread does with the result is only the part that changed. Changes to files (a new note, a rename, a
   move, the Trash) are written off the main thread too, one after another (`Workspace.changeFiles`), and show in the
-  sidebar as soon as they are done, before their folder has been read again. A note or other file still in iCloud
-  opens at once and fills in when it has come down (`Files/NoteDocument.swift`, `UI/FileLoadingView.swift`). Try a
+  sidebar as soon as they are done, before their folder has been read again. So is saving a note
+  (`NoteDocument.saveNow`): what is typed meanwhile waits for the next save, and quitting waits for it. A note or
+  other file still in iCloud opens at once and fills in when it has come down (`Files/NoteDocument.swift`,
+  `UI/FileLoadingView.swift`). Try a
   change with `-NotebookSlowFolders 2`, `-NotebookSlowFiles 2` and `-NotebookSlowWrites 2`. Nothing that happens as a note opens or as you type goes
   through every file or folder either: a whole iCloud Drive has a hundred thousand. Look things up by name
   (`SearchIndex.resolve`), keep sorted lists ready, and make long menus when they open (`UI/MoveToSubmenu.swift`).

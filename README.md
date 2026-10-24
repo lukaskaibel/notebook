@@ -684,8 +684,9 @@ for folders' looks, such as `customize Travel`, `iconpick 🍕` and `setfolderic
 ~/Documents/cmd`), where `xcrun simctl get_app_container` finds it, and `xcrun simctl io <device> screenshot` takes the
 pictures. `-NotebookSlowFolders 2` makes every folder take two seconds to read, as a slow iCloud might, to see that
 nothing waits for it, `-NotebookSlowFiles 2` does the same for every note, PDF, picture and video you open, and
-`-NotebookSlowWrites 2` for every change to files: a new note or folder, a rename, a move, a copy, the Trash. On the
-Mac, `mainthread` logs how many folders were read and files changed on the main thread, which should be none, and
+`-NotebookSlowWrites 2` for every change to files: a new note or folder, a rename, a move, a copy, the Trash and
+saving a note. On the Mac, `mainthread` logs how many folders were read and files changed on the main thread,
+which should be none, and
 `fakekey` makes the test window say it is key, as the window you click in is, while the app stays in the background.
 `timeopen <note>` logs how long opening a note keeps the window busy, `search <text>` how long search takes, and
 `index` when after launch the kept index was read, search had every file and the files were checked, and how many
