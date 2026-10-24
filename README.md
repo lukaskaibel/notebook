@@ -14,7 +14,7 @@
   <img alt="Platform: iOS and iPadOS 27 or later" src="https://img.shields.io/badge/iOS%20%26%20iPadOS-27%2B-34508F">
   <img alt="Apple silicon" src="https://img.shields.io/badge/Apple%20silicon-native-34508F">
   <img alt="Built with Swift, SwiftUI, AppKit and UIKit" src="https://img.shields.io/badge/Swift-SwiftUI%20%2B%20AppKit%20%2B%20UIKit-F05138">
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-34508F"></a>
+  <a href="#license"><img alt="License: GPLv3" src="https://img.shields.io/badge/license-GPLv3-34508F"></a>
   <a href="CHANGELOG.md"><img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-34508F"></a>
 </p>
 
@@ -331,7 +331,9 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
 ## What it does
 
 - **Notes are files.** The title is the file name: rename a note by editing its title, and links to it in other notes
-  follow. New notes go into the folder you're in, and one you leave empty goes away again.
+  follow, as they do when you move it or rename or move its folder. New notes go into the folder you're in; made
+  anywhere else, they go to the default folder you choose in Settings, an Inbox at the top of your first location
+  until you do. One you leave empty goes away again.
 - **Folders as they are.** Add iCloud Drive or any folder as a location with Add Location at the bottom of the
   sidebar, or drop the folder from the Finder below the sidebar's sections. iCloud Drive shows what the Finder shows
   in it: Desktop and Documents when they are kept in iCloud, and the folders of apps such as Pages or Obsidian.
@@ -415,8 +417,11 @@ PDFs and the words read in pictures, is kept in the app's caches on each device,
 | A folder's look | `{"sym":"airplane"}` or `{"emoji":"🍕"}` in the folder's `com.apple.icon.folder#S` attribute, and a colour tag such as Blue | The symbol or emoji in the sidebar, in the tag's colour |
 
 `[[Name]]` finds the note by its name, ignoring case and accents: one in the same folder first, then the one with the
-shortest path. `[[Folder/Name]]` says exactly which. Remote pictures (`![](https://…)`) are not downloaded; Notebook
-shows their address instead.
+shortest path. `[[Folder/Name]]` says exactly which. When you rename or move a note, a file or a folder in Notebook,
+the links that would find something else afterwards, in other notes and in the ones moved, are rewritten to find what
+they found, with no more of the path than it takes; the rest stay as you wrote them, and Undo puts them back. A file
+renamed or moved in the Finder or another app isn't followed: a link that no longer finds it shows as a link to a note
+that doesn't exist yet. Remote pictures (`![](https://…)`) are not downloaded; Notebook shows their address instead.
 
 ## When a note changes somewhere else
 
@@ -477,7 +482,7 @@ app's own folder there.
 
 | Shortcut | Action |
 | --- | --- |
-| ⌘N | New note in the current folder |
+| ⌘N | New note in the current folder, or with none, in the default folder |
 | ⇧⌘N | New folder in the current folder, named in place |
 | ⌘Z, ⇧⌘Z | Undo and redo: typing, and changes to files (the Trash, a rename, a move, a new note or folder), newest first |
 | ⌘F | Search |
@@ -574,15 +579,13 @@ on the Mac. On iPhone and iPad:
 Planned, and not built yet:
 
 - **Quick capture:** a widget, a control in Control Center and on the Lock Screen, the Action button and a share
-  extension, all adding a note to an Inbox folder.
+  extension, all adding a note to the default folder.
 - **Spotlight:** notes don't turn up in Spotlight yet, only in Notebook's own search.
 - **Reminders when a calendar event starts,** and on the iPhone a Live Activity that keeps the note on the Lock Screen.
   A reminder set on another device reaches an iPhone or iPad the next time Notebook runs there or gets time in the
   background. Reminders don't repeat, and a Mac doesn't remind you at places. A to-do with the Tasks plugin's
   `🔁 every week` shows how it repeats, but ticking it off doesn't make the next one yet, as the plugin does.
-- Links follow a renamed note, but not yet a moved one, a renamed folder, or a note from outside your locations
-  renamed in its own window.
-  Footnotes are styled but don't jump to their text.
+- Footnotes are styled but don't jump to their text.
 - On iPhone and iPad there is no Settings › App Icon (iOS only switches between icons built into the app), no PNG
   export and no window of its own for a single file.
 - **Sketches** as files of their own, next to your notes rather than in one.
@@ -595,7 +598,7 @@ The full plan, with what is deliberately left out (tags, backlinks, a database, 
 
 ```
 Notebook/                    The app target (Mac, iPhone and iPad): the entry point and the icon
-NotebookUITests/             UI tests on an iPad simulator, for what only a real keyboard or touch reaches
+NotebookUITests/             UI tests on iPhone and iPad simulators, for what only a real keyboard or touch reaches
 Packages/NotebookKit/
   Sources/NotebookKit/
     Editor/                  The live-preview editor on TextKit 1: styling, hidden marks, objects, typing, export;
@@ -608,14 +611,14 @@ Packages/NotebookKit/
                              folders' symbols and colours kept where the Finder keeps them
     Index/                   Search: the index of every file and how it is kept between launches, the corpus a
                              search goes through on every core, the text read in pictures, scans and drawings, and
-                             how [[links]] resolve; the to-dos of every note, read from it
+                             how [[links]] resolve and follow files renamed or moved; the to-dos of every note
     Platform/                The few names and calls that differ between AppKit and UIKit
     UI/                      The Mac's window, sidebar, inspector, search field, Settings and file windows; PDFs,
                              pictures, videos and Quick Look; what both share, such as the outline and search results
     UI/iOS/                  The iPhone's and iPad's screens: folders, the sidebar, the note, search and Settings
     Debug/                   The debug remotes and the sample notes (Debug builds only)
-  Tests/                     Parser, editor, merge, smoothness, search index, drawing, reminder, to-do, folder look and
-                             app icon tests
+  Tests/                     Parser, editor, merge, smoothness, search index, link, drawing, reminder, to-do, folder
+                             look and app icon tests
 Config/                      Build settings, Info.plist and entitlements
 Design/                      The icon, the README pictures and the social preview
 Website/                     The website, published to GitHub Pages by .github/workflows/website.yml
@@ -640,11 +643,13 @@ Run the tests (they use off-screen windows and temporary folders, and touch none
 cd Packages/NotebookKit && swift test
 ```
 
-The UI tests start the app on fresh sample notes in the simulator's own folders. Run them on an iPad simulator of
-your own, here one called Notebook iPad:
+The UI tests start the app on fresh sample notes in the simulator's own folders. Each is for an iPad or an iPhone and
+is skipped on the other, so run them on a simulator of each of your own, here ones called Notebook iPad and Notebook
+iPhone:
 
 ```bash
 xcodebuild test -project Notebook.xcodeproj -scheme NotebookUITests -destination "platform=iOS Simulator,name=Notebook iPad"
+xcodebuild test -project Notebook.xcodeproj -scheme NotebookUITests -destination "platform=iOS Simulator,name=Notebook iPhone"
 ```
 
 The pictures in this README are made by a script. It builds the app, runs it in the background on the sample notes,
@@ -720,4 +725,20 @@ Notebook is an independent project and is not affiliated with, endorsed by, or s
 
 ## License
 
-[MIT](LICENSE) © Lukas Kaibel
+Copyright © 2026 Lukas Kaibel
+
+Notebook is free software: you can redistribute it and modify it under the terms of the
+[GNU General Public License, version 3](LICENSE), as published by the Free Software Foundation. It comes with no
+warranty of any kind; the licence has the details.
+
+**Additional permission under GNU GPL version 3 section 7.** If you modify this program, or any covered work, by
+linking or combining it with [elk-swift](https://github.com/lukilabs/elk-swift) (or a modified version of that
+library), containing parts covered by the terms of the Eclipse Public License 2.0, the licensors of this program grant
+you additional permission to convey the resulting work. Corresponding Source for a non-source form of such a
+combination shall include the source code for the parts of elk-swift used as well as that of the covered work.
+
+Notebook was released under the [MIT License](https://github.com/lukaskaibel/notebook/blob/e4b72a6/LICENSE) until
+24 October 2026. Copies from before then, up to commit `e4b72a6`, can still be used under that licence.
+
+Contributions come with terms of their own, so that Notebook can be published on the App Store: see
+[CONTRIBUTING.md](CONTRIBUTING.md#licensing-your-contribution).

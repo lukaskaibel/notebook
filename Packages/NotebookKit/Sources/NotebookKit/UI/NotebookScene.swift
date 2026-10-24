@@ -204,11 +204,16 @@ struct GeneralSettings: View {
                 Button("Add Location…") { workspace.chooseLocation(iCloud: false) }
             }
             Section("New notes") {
-                LabeledContent("Inbox") {
-                    Text(workspace.locations.first.map { "\($0.name) › Inbox" } ?? "Add a location first")
-                        .foregroundStyle(.secondary)
+                let folder = workspace.defaultFolder
+                LabeledContent("Default folder") {
+                    if folder != nil {
+                        DefaultFolderPopUp(workspace: workspace, folder: folder)
+                            .fixedSize()
+                    } else {
+                        Text("Add a location first").foregroundStyle(.secondary)
+                    }
                 }
-                Text("Notes made with ⌘N go next to the note you have open, or into the folder you selected in the sidebar. Without either, they go to the Inbox.")
+                Text("Notes made with ⌘N go next to the note you have open, or into the folder you selected in the sidebar. Without either, they go to \(folder.map(workspace.place(of:)) ?? "the default folder").")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                 Toggle("Delete new notes left empty", isOn: Bindable(NotebookSettings.shared).deletesEmptyNewNotes)

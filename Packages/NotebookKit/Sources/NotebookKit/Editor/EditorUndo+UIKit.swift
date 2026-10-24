@@ -24,6 +24,7 @@ final class EditorUndoManager: UndoManager {
     private var undoOrders: [Int] = []
     private var redoOrders: [Int] = []
     private var isReplaying = false
+    private var isOpeningGroup = false
 
     override func registerUndo(withTarget target: Any, selector: Selector, object anObject: Any?) {
         guard acceptsRegistrations else { return }
@@ -35,10 +36,14 @@ final class EditorUndoManager: UndoManager {
     }
 
     override func beginUndoGrouping() {
-        if groupingLevel == 0, !isReplaying, !isUndoing, !isRedoing {
+        if groupingLevel == 0, !isOpeningGroup, !isReplaying, !isUndoing, !isRedoing {
             undoOrders.append(MainActor.assumeIsolated { UndoOrder.next() })
         }
+        // A group opened by hand outside an event opens the event's group around it first, by calling this again:
+        // one group, counted once.
+        isOpeningGroup = true
         super.beginUndoGrouping()
+        isOpeningGroup = false
     }
 
     override func removeAllActions() {

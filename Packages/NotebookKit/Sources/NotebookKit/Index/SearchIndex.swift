@@ -483,7 +483,7 @@ public final class SearchIndex {
     }
 
     /// The names a link finds a file by: a note's with and without ".md", any other file's in full. None for folders.
-    nonisolated private static func nameKeys(of entry: Entry) -> [String] {
+    nonisolated static func nameKeys(of entry: Entry) -> [String] {
         switch entry.kind {
         case .folder: []
         case .note: entry.foldedName == entry.foldedFileName ? [entry.foldedName] : [entry.foldedName, entry.foldedFileName]
@@ -847,18 +847,27 @@ public final class SearchIndex {
 
     /// The file a `[[link]]` means: by name (".md" for notes left out), nearest to the note it is in first.
     public func resolve(_ target: String, from note: URL?) -> URL? {
+        _ = version
+        return Self.resolve(target, from: note, byName: byName, byPath: byPath)?.url
+    }
+
+    /// What every file is and where, as `resolve` reads it: for working out off the main thread where links point
+    /// before and after files move (`LinkUpdate`).
+    var linkTargets: LinkTargets { LinkTargets(byPath: byPath, byName: byName) }
+
+    /// `resolve`, in lookups that can be the index's or a copy of them as they are after files moved.
+    nonisolated static func resolve(_ target: String, from note: URL?, byName: [String: Set<String>], byPath: [String: Entry]) -> Entry? {
         var name = target
         if let hash = name.firstIndex(of: "#") { name = String(name[..<hash]) }
         name = name.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return nil }
-        let folded = Self.fold(name)
+        let folded = fold(name)
         let pathPart = folded.contains("/") ? folded : nil
         let baseName = pathPart.map { String($0.split(separator: "/").last ?? "") } ?? folded
-        _ = version
         let candidates = (byName[baseName] ?? []).compactMap { byPath[$0] }.filter { entry in
             if let pathPart {
-                let path = Self.fold(entry.url.deletingPathExtension().path)
-                return path.hasSuffix("/" + pathPart) || Self.fold(entry.url.path).hasSuffix("/" + pathPart)
+                let path = fold(entry.url.deletingPathExtension().path)
+                return path.hasSuffix("/" + pathPart) || fold(entry.url.path).hasSuffix("/" + pathPart)
             }
             return true
         }
@@ -871,7 +880,7 @@ public final class SearchIndex {
             let aDepth = a.url.pathComponents.count, bDepth = b.url.pathComponents.count
             if aDepth != bDepth { return aDepth < bDepth }
             return a.path < b.path
-        }?.url
+        }
     }
 
     /// Notes and files whose names match, best first: names starting with the query, then words starting with it,

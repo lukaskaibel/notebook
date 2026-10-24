@@ -252,14 +252,18 @@ struct TouchSettings: View {
                     NavigationLink { TextSettings().navigationTitle("Text") } label: { Label("Text", systemImage: "textformat") }
                     NavigationLink { SidebarSettings().navigationTitle("Files") } label: { Label("Files", systemImage: "folder") }
                     NavigationLink { WritingBarSettings() } label: { Label("Writing Bar", systemImage: "keyboard") }
-                    LabeledContent("New Notes Without a Folder") {
-                        Text(workspace.locations.first.map { "\($0.name) › Inbox" } ?? "–")
+                    if let folder = workspace.defaultFolder {
+                        NavigationLink { DefaultFolderList(workspace: workspace) } label: {
+                            LabeledContent("Default Folder", value: workspace.folderName(folder))
+                        }
+                    } else {
+                        LabeledContent("Default Folder", value: "–")
                     }
                     Toggle("Delete New Notes Left Empty", isOn: Bindable(NotebookSettings.shared).deletesEmptyNewNotes)
                 } header: {
                     Text("Notes")
                 } footer: {
-                    Text("A new note you leave without giving it a title or text is deleted.")
+                    Text("New notes go into the folder you’re in; made anywhere else, they go to the default folder. A new note you leave without giving it a title or text is deleted.")
                 }
                 TodosSetting()
                 Section {

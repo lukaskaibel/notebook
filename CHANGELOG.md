@@ -7,6 +7,19 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- Links follow notes, files and folders you move, as they follow a note you rename: drag a note onto another folder,
+  choose Move To, or rename or move a folder, on the Mac, iPhone and iPad, and the `[[links]]`, embeds and Markdown
+  links to them in your other notes still open the same note or file. A link changes only where it would find
+  something else now, such as when another note of the same name comes first, and then says no more than it takes,
+  such as `[[Archive/Plan]]`, as in Obsidian. The links in a note you move, and in the notes in a folder you move, keep
+  finding what they found too, and so do links in the front matter. Undo puts every link back as it was; a copy
+  (Option-drag) or a duplicate changes none. A note from outside your locations, renamed in its own window, takes the
+  links to it in the notes next to it along.
+- Choose where new notes go when they aren't made in a folder: Settings › General › Default folder on the Mac, Settings
+  › Default Folder on iPhone and iPad. That is ⌘N with no note open and no folder selected, and New Note on the
+  iPhone's first screen. Every folder of your locations is there, indented as in Move To; until you choose one, it is
+  the Inbox at the top of your first location, as before. Rename or move the folder in Notebook and it stays the
+  default; throw it away and new notes go to the Inbox again.
 - Customize Folder…: right-click a folder in the sidebar, or touch and hold it on iPhone and iPad, and give it a colour
   and a symbol or an emoji in place of the folder. Over 300 symbols and the emoji come in groups, with a few suggested
   for the folder's name, and a search finds them by name or by what they are for. Notebook keeps them where the
@@ -155,6 +168,9 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Changed
 
+- Notebook's source code is now under the GNU General Public License, version 3, in place of the MIT License, with a
+  permission to link it with elk-swift, which lays out the diagrams. Copies from before 24 October 2026 can still be
+  used under the MIT License.
 - Remind Me… has Date, Time and Location to turn on, as a reminder's details in Reminders, next to Later Today, This
   Evening and Tomorrow.
 - Double-clicking a PDF, a picture or any other file in the sidebar opens it in its own app, such as Preview or
@@ -205,6 +221,11 @@ versions follow [semantic versioning](https://semver.org).
   second click. Now it goes on until you press Return or Escape or click outside the to-do, also beside the list, on a
   group's name or in the sidebar, which before didn't end it. A to-do given another date while you edit it stays in
   editing in its new group.
+- Renaming a note also changed the links to another note of the same name in another folder, and could leave links
+  finding a third note of the new name. Now only links to the note renamed change, in every location, and no link
+  written in code. Links to a renamed PDF, picture or other file follow it too.
+- A note moved into a folder whose `.assets` already had a different picture of the same name showed that picture
+  instead of its own, and its own went to the Trash. Its picture now comes along under a name of its own.
 - Links in a note opened while Notebook was still reading your folders showed as links to notes that don't exist yet.
 - Giving a new note its name could stop Notebook for a long time in a large folder in iCloud Drive. Renaming a note
   still updates the links to it in other notes, now in the background.

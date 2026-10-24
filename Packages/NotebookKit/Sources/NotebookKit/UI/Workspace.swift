@@ -31,6 +31,8 @@ public final class Workspace: NSObject {
     @ObservationIgnored private var places: [URL: EditorController.Place] = [:]
     private(set) var favorites: [String] = []
     private(set) var recents: [String] = []
+    /// The folder chosen in Settings for new notes made outside a folder, by its path. Without one they go to the Inbox.
+    private(set) var chosenDefaultFolder: String?
     /// The folders hidden from the sidebar: kept in iCloud, or only for this run with locations given on the command line.
     private(set) var hidden = HiddenFolders(defaults: nil, cloud: nil)
     /// The reminders of notes: kept in iCloud too, or only for this run with locations given on the command line.
@@ -176,6 +178,14 @@ public final class Workspace: NSObject {
     @ObservationIgnored private var changesUnderWay = 0
     /// Files renamed or moved while changes were under way, for those asked for meanwhile to find them.
     @ObservationIgnored private var relocations: [(from: URL, to: URL)] = []
+    /// Files renamed or moved a moment ago, which the index may not have read again yet: links are worked out with
+    /// them where they went (`linkSnapshot`).
+    @ObservationIgnored var recentMoves: [(move: LinkUpdate.Move, date: Date)] = []
+    /// The text Notebook gave notes a moment ago when links in them followed a file, by their paths, for the index to
+    /// catch up with the same way.
+    @ObservationIgnored var recentLinkTexts: [String: (text: String, date: Date)] = [:]
+    /// The last rewriting of links after a rename or move, which the next one waits for (`followLinks`).
+    @ObservationIgnored var lastLinkChange: Task<Void, Never>?
     /// The names files get while they are renamed, by path: shown until the rename is done, so a row never shows the
     /// old name again in between.
     private(set) var newNames: [String: String] = [:]
@@ -239,6 +249,7 @@ public final class Workspace: NSObject {
         #endif
         favorites = UserDefaults.standard.stringArray(forKey: "favorites") ?? []
         recents = UserDefaults.standard.stringArray(forKey: "recents") ?? []
+        chosenDefaultFolder = UserDefaults.standard.string(forKey: "defaultFolder")
         if let path = UserDefaults.standard.string(forKey: "NotebookLibrary") {
             // A folder given on the command line (tests, screenshots): used for this run, not remembered.
             temporaryLocations = true
@@ -249,6 +260,7 @@ public final class Workspace: NSObject {
             locations = [Location(id: UUID(), name: UserDefaults.standard.string(forKey: "NotebookLibraryName") ?? url.lastPathComponent, path: url.path, bookmark: nil)]
             favorites = []
             recents = []
+            chosenDefaultFolder = nil
         } else {
             locations = LocationStore.load()
             hidden = HiddenFolders()
@@ -1041,6 +1053,7 @@ public final class Workspace: NSObject {
         func fix(_ url: URL) -> URL { Self.relocated(url, from: old, to: new) }
         hiddenFolderMoved(from: old, to: new)
         reminderMoved(from: old, to: new)
+        defaultFolderMoved(from: old, to: new)
         favorites = favorites.map(fix)
         recents = recents.map(fix)
         history = history.map(fix)
@@ -1059,10 +1072,18 @@ public final class Workspace: NSObject {
 
     // MARK: - Making and changing files
 
-    /// Where a new note goes: next to the open one, into the folder selected in the sidebar, or the Inbox.
+    /// Where a new note goes: next to the open one, into the folder selected in the sidebar, or the default folder.
     var folderForNewNote: URL? {
         if let selectedFolder { return selectedFolder }
         if let currentURL { return currentURL.deletingLastPathComponent() }
+        return defaultFolder
+    }
+
+    /// Where new notes made outside a folder go: the folder chosen in Settings while it is in a location, or the Inbox.
+    var defaultFolder: URL? {
+        if let chosen = chosenDefaultFolder.map({ URL(fileURLWithPath: $0, isDirectory: true) }), location(containing: chosen) != nil {
+            return chosen
+        }
         return inboxFolder
     }
 
@@ -1070,6 +1091,27 @@ public final class Workspace: NSObject {
     var inboxFolder: URL? {
         guard let location = locations.first else { return nil }
         return location.url.appendingPathComponent("Inbox", isDirectory: true)
+    }
+
+    /// Settings' default folder; the Inbox, or nil, goes back to having none chosen.
+    func chooseDefaultFolder(_ folder: URL?) {
+        let folder = folder?.standardizedFileURL
+        chosenDefaultFolder = folder.flatMap { folder in inboxFolder.map { FileNode.samePath($0, folder) } == true ? nil : folder.path }
+        if !temporaryLocations { UserDefaults.standard.set(chosenDefaultFolder, forKey: "defaultFolder") }
+    }
+
+    /// The default folder renamed or moved in Notebook, or the folder it is in, stays the default; thrown away, the
+    /// Inbox is again.
+    private func defaultFolderMoved(from old: URL, to new: URL?) {
+        guard let chosen = chosenDefaultFolder, FileNode.isSameOrInside(URL(fileURLWithPath: chosen), old) else { return }
+        chooseDefaultFolder(new.map { URL(fileURLWithPath: Self.relocated(chosen, from: old.path, to: $0.path), isDirectory: true) })
+    }
+
+    /// Where a folder is, as the sidebar leads to it: "iCloud Drive › Projects › Inbox".
+    func place(of folder: URL) -> String {
+        let path = folder.standardizedFileURL.path
+        guard let top = location(containing: folder)?.folder(containing: path) else { return folder.lastPathComponent }
+        return ([top.place] + path.dropFirst(top.url.path.count).split(separator: "/").map(String.init)).joined(separator: " › ")
     }
 
     /// Does a change to files once the changes asked for before it are done, one after another in the order they were
@@ -1153,22 +1195,27 @@ public final class Workspace: NSObject {
     @discardableResult
     public func newNote(in folder: URL? = nil, title: String? = nil) -> Task<URL?, Never> {
         let folder = folder ?? folderForNewNote
+        // The default folder gone from the disk, thrown away in the Finder, say: the note goes to the Inbox instead.
+        let inbox = folder.flatMap { folder in chosenDefaultFolder.map { FileNode.samePath(URL(fileURLWithPath: $0), folder) } == true ? inboxFolder : nil }
         let change = keepForUndo(FileChange(.make, "New Note"))
         return changeFiles { [self] follow in
-            guard let folder = folder.map(follow) else {
+            guard let chosen = folder.map(follow) else {
                 dropFromUndo(change)
                 return nil
             }
-            let made = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?, madeFolder: Bool)? in
+            let inbox = inbox.map(follow)
+            let made = await Task.detached(priority: .userInitiated) { () -> (url: URL, folder: URL, listing: FileNode.Listing?, madeFolder: Bool)? in
+                let folder = inbox.flatMap { FileManager.default.fileExists(atPath: chosen.path) ? nil : $0 } ?? chosen
                 guard let made = FileOperations.createNote(in: folder, title: title ?? "Untitled") else { return nil }
-                return (made.url, FileNode.listing(of: made.url), made.madeFolder)
+                return (made.url, folder, FileNode.listing(of: made.url), made.madeFolder)
             }.value
             changeDone(change, to: made?.url)
             guard let made else {
-                report("The note couldn’t be made.", "Notebook can’t write in “\(folderName(folder))”.")
+                report("The note couldn’t be made.", "Notebook can’t write in “\(folderName(chosen))”.")
                 return nil
             }
             // The Inbox, made for the first note in it, shows too.
+            let folder = made.folder
             let parent = folder.deletingLastPathComponent()
             showChanges(in: made.madeFolder ? [parent, folder] : [folder],
                         adding: (made.listing.map { [$0] } ?? []) + (made.madeFolder ? [FileNode.Listing(url: folder, kind: .folder)] : []))
@@ -1216,8 +1263,8 @@ public final class Workspace: NSObject {
         newNames.isEmpty ? nil : newNames[HiddenFolders.withoutPrivate(url.path)]
     }
 
-    /// Renames a file or folder. Links to a renamed note in other notes follow it, unless it is a new note getting its
-    /// first name, which nothing links to yet. The task gives the new address, or nil when the name is taken.
+    /// Renames a file or folder. Links to it and to what is in it follow (`followLinks`), unless it is a new note
+    /// getting its first name, which nothing links to yet. The task gives the new address, or nil when the name is taken.
     @discardableResult
     func rename(_ url: URL, to name: String, updatingLinks: Bool = true) -> Task<URL?, Never> {
         guard !isLinkedFolder(url) else { beep(); return Task { nil } }
@@ -1242,17 +1289,18 @@ public final class Workspace: NSObject {
                     sidebarShowName(of: url)
                 }
             }
-            let renamed = await renameNow(url, to: name, updatingLinks: updatingLinks)
+            let renamed = await renameNow(url, to: name, updatingLinks: updatingLinks, change: change)
             changeDone(change, from: url, to: renamed)
             return renamed
         }
     }
 
     /// Renames a file or folder, in a change to files under way: to a name as typed, which keeps the file's extension,
-    /// or (`fileName`) to a file name as it is, as Undo does. Nil when the name is taken, which an alert says.
-    func renameNow(_ url: URL, to name: String, fileName: Bool = false, updatingLinks: Bool) async -> URL? {
+    /// or (`fileName`) to a file name as it is, as Undo does. Nil when the name is taken, which an alert says. The links
+    /// it rewrites are kept in `change`, and when `undoing` it, the links its rename rewrote are put back.
+    func renameNow(_ url: URL, to name: String, fileName: Bool = false, updatingLinks: Bool, change: FileChange? = nil, undoing: Bool = false) async -> URL? {
         let isNote = FileKind(url: url, isDirectory: false) == .note
-        let oldName = url.deletingPathExtension().lastPathComponent
+        let links = updatingLinks && !undoing ? linkSnapshot() : nil
         let document = noteMoving(with: url)
         document?.beginMove()
         let result = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?)? in
@@ -1267,16 +1315,10 @@ public final class Workspace: NSObject {
             return nil
         }
         moved(url, to: renamed, listing: result?.listing, document: document)
-        if isNote, updatingLinks, let location = location(containing: renamed) {
-            let newName = renamed.deletingPathExtension().lastPathComponent
-            let roots = location.folders.map(\.url)
-            // At a low priority: it reads every note of the location, which in a large folder in iCloud Drive takes
-            // long (and waits for notes still to download). The notes it changes come back as changes on disk.
-            Task.detached(priority: .utility) {
-                for root in roots {
-                    _ = FileOperations.updateLinks(from: oldName, to: newName, under: root, skipping: nil)
-                }
-            }
+        if undoing {
+            takeBackLinks(change?.links, from: url, to: renamed)
+        } else if let links {
+            change?.links = followLinks(LinkUpdate.Move(from: url, to: renamed), from: links)
         }
         // A folder selected in the sidebar stays selected under its new name, as in the Finder.
         reveal(renamed, select: isCurrent(renamed) || selectedFolder.map { FileNode.samePath($0, renamed) } == true)
@@ -1284,37 +1326,40 @@ public final class Workspace: NSObject {
     }
 
     /// Moves a file or folder into another folder. A note takes the pictures it uses along; for one still in iCloud
-    /// that waits until it has come down, and nothing else waits for it.
+    /// that waits until it has come down, and nothing else waits for it. Links to it, to what is in it, and in it
+    /// follow (`followLinks`).
     @discardableResult
     func move(_ url: URL, into folder: URL) -> Task<URL?, Never> {
         guard !isLinkedFolder(url) else { beep(); return Task { nil } }
         let change = keepForUndo(FileChange(.move, "Move", from: url))
         return changeFiles { [self] follow in
             let url = follow(url)
-            let moved = await moveNow(url, into: follow(folder))
+            let moved = await moveNow(url, into: follow(folder), change: change)
             changeDone(change, from: url, to: moved)
             return moved
         }
     }
 
     /// Moves a file or folder into another folder, in a change to files under way: under its own name, or the one Undo
-    /// gives it back (`fileName`), with a number when that is taken there.
-    func moveNow(_ url: URL, into folder: URL, fileName: String? = nil) async -> URL? {
+    /// gives it back (`fileName`), with a number when that is taken there. The links it rewrites are kept in `change`,
+    /// and when `undoing` it, the links its move rewrote are put back.
+    func moveNow(_ url: URL, into folder: URL, fileName: String? = nil, change: FileChange? = nil, undoing: Bool = false) async -> URL? {
         let source = url.deletingLastPathComponent()
         // Already there: nothing to do (rather than a copy of its name with a number).
         guard !FileNode.samePath(source, folder) else { return url }
         let isNote = FileKind(url: url, isDirectory: false) == .note
+        let links = undoing ? nil : linkSnapshot()
         let document = noteMoving(with: url)
         document?.beginMove()
         let name = fileName ?? url.lastPathComponent
-        let result = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?, assets: Set<String>?)? in
+        let result = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?, assets: (names: Set<String>, renamed: Bool)?)? in
             // Read before it moves only when that is quick: a note still in iCloud would have to come down first.
             let isHere = isNote && NoteDocument.wait(for: url) == nil
             let ext = (name as NSString).pathExtension
             let destination = FileOperations.uniqueURL(in: folder, name: (name as NSString).deletingPathExtension, extension: ext.isEmpty ? nil : ext)
             guard let moved = FileOperations.move(url, to: destination, presenter: document) else { return nil }
             // Its pictures come along before it shows there, when they can.
-            let assets = isHere ? FileOperations.copyAssets(of: moved, from: source) : nil
+            let assets = isHere ? FileOperations.copyAssets(of: moved, from: source, renaming: !undoing) : nil
             return (moved, FileNode.listing(of: moved), assets)
         }.value
         guard let result else {
@@ -1325,13 +1370,20 @@ public final class Workspace: NSObject {
         let moved = result.url
         if isNote {
             Task.detached(priority: .utility) {
-                let assets = result.assets ?? FileOperations.copyAssets(of: moved, from: source)
+                let assets = result.assets ?? FileOperations.copyAssets(of: moved, from: source, renaming: !undoing)
                 // Open meanwhile, it shows the pictures that came after it.
-                if result.assets == nil, !assets.isEmpty { await self.picturesArrived(for: moved) }
-                FileOperations.cleanUpAssets(in: source, candidates: assets)
+                if result.assets == nil, !assets.names.isEmpty { await self.picturesArrived(for: moved) }
+                FileOperations.cleanUpAssets(in: source, candidates: assets.names)
             }
         }
         self.moved(url, to: moved, listing: result.listing, document: document)
+        // A picture whose name another had there came under a name of its own: the open note takes in what it says now.
+        if result.assets?.renamed == true { document?.presentedItemDidChange() }
+        if undoing {
+            takeBackLinks(change?.links, from: url, to: moved)
+        } else if let links {
+            change?.links = followLinks(LinkUpdate.Move(from: url, to: moved), from: links)
+        }
         reveal(moved, select: isCurrent(moved))
         return moved
     }
@@ -1359,6 +1411,10 @@ public final class Workspace: NSObject {
         #endif
         replacePath(old, with: new)
         relocations.append((old, new))
+        recentMoves.append((LinkUpdate.Move(from: old, to: new), Date()))
+        if !recentLinkTexts.isEmpty {
+            recentLinkTexts = Dictionary(recentLinkTexts.map { (Self.relocated($0.key, from: old.path, to: new.path), $0.value) }) { a, _ in a }
+        }
         // The open note in it, or it: its name, and the folder its pictures are in. Nothing else in the editor changes.
         if let note, document === note, let current = currentURL, FileNode.samePath(note.url, current) {
             editor.setTitle(note.url.deletingPathExtension().lastPathComponent)
@@ -1426,6 +1482,20 @@ public final class Workspace: NSObject {
             (target.location, target.folders.compactMap { folder in
                 folder.depth >= 0 && (folder.path == source || folder.path.hasPrefix(source + "/")) ? nil : (folder.url, folder.name, folder.depth)
             })
+        }
+    }
+
+    /// The folders Settings offers as the default folder: Move To's, with the Inbox among the first location's folders
+    /// before its first note has made it.
+    var defaultFolderChoices: [(location: Location, folders: [(url: URL, name: String, depth: Int)])] {
+        let inbox = inboxFolder
+        return currentMoveFolders().targets.enumerated().map { number, target in
+            var folders = target.folders.map { (url: $0.url, name: $0.name, depth: $0.depth) }
+            if number == 0, let inbox, !folders.contains(where: { FileNode.samePath($0.url, inbox) }) {
+                let place = folders.firstIndex { $0.depth == 0 && $0.name.localizedStandardCompare("Inbox") == .orderedDescending } ?? folders.endIndex
+                folders.insert((inbox, "Inbox", 0), at: place)
+            }
+            return (target.location, folders)
         }
     }
 
@@ -1540,6 +1610,7 @@ public final class Workspace: NSObject {
     private func thrownAway(_ url: URL) {
         hiddenFolderMoved(from: url, to: nil)
         reminderMoved(from: url, to: nil)
+        defaultFolderMoved(from: url, to: nil)
         favorites.removeAll { HiddenFolders.withoutPrivate($0) == HiddenFolders.withoutPrivate(url.path) }
         if !temporaryLocations { UserDefaults.standard.set(favorites, forKey: "favorites") }
         showChanges(in: [url.deletingLastPathComponent()], removing: [url])
