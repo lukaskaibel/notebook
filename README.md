@@ -465,10 +465,14 @@ On iPhone and iPad, **Choose a Folder** opens the Files app's picker: pick iClou
 write on the Mac, or any folder in it or on the device. **Keep Notes on This iPhone** (or iPad) uses Notebook's own
 folder, which the Files app shows under On My iPhone › Notebook. Add more in Settings, from the ⋯ menu.
 
-To look around without your own notes, run a Debug build with the arguments `-NotebookLibrary /tmp/NotebookSample
--NotebookDemo YES` (Product › Scheme › Edit Scheme › Arguments). It writes a few sample notes, pictures and PDFs to that
-folder and shows only them, for that run. In the Simulator, use `-NotebookLibrary ~/Documents/Sample`, which is in the
-app's own folder there.
+To look around without your own notes, choose **Try Sample Notes…** on the first screen. It writes made-up notes, a
+drawing, pictures and PDFs to a new folder Sample Notes, in the folder you pick on the Mac and in Notebook's own folder
+on iPhone and iPad, and adds it as a location. Remove it in Settings when you're done; the files stay where they are.
+
+For development, a Debug build run with the arguments `-NotebookLibrary /tmp/NotebookSample -NotebookDemo YES`
+(Product › Scheme › Edit Scheme › Arguments) writes the same notes to that folder and shows only them, for that run,
+with a hidden folder and a reminder. In the Simulator, use `-NotebookLibrary ~/Documents/Sample`, which is in the app's
+own folder there.
 
 ## Using it
 
@@ -597,8 +601,8 @@ Packages/NotebookKit/
     Render/                  Tables, maths, diagrams and code highlighting
     Drawing/                 Drawings: the strokes file and its picture, and drawing them in notes
     Files/                   Locations, the file tree read in the background, file operations, saving, watching, the
-                             three-way merge, the hidden folders and reminders kept in iCloud's key-value store, and
-                             folders' symbols and colours kept where the Finder keeps them
+                             three-way merge, the hidden folders and reminders kept in iCloud's key-value store,
+                             folders' symbols and colours kept where the Finder keeps them, and the sample notes
     Index/                   Search: the index of every file and how it is kept between launches, the corpus a
                              search goes through on every core, the text read in pictures, scans and drawings, and
                              how [[links]] resolve and follow files renamed or moved; the to-dos of every note
@@ -606,7 +610,7 @@ Packages/NotebookKit/
     UI/                      The Mac's window, sidebar, inspector, search field, Settings and file windows; PDFs,
                              pictures, videos and Quick Look; what both share, such as the outline and search results
     UI/iOS/                  The iPhone's and iPad's screens: folders, the sidebar, the note, search and Settings
-    Debug/                   The debug remotes and the sample notes (Debug builds only)
+    Debug/                   The debug remotes (Debug builds only)
   Tests/                     Parser, editor, merge, smoothness, search index, link, drawing, reminder, to-do, folder
                              look and app icon tests
 Config/                      Build settings, Info.plist and entitlements

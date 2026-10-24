@@ -333,6 +333,9 @@ enum DebugRemote {
             }
         case "openfile":
             FileWindows.shared.open(URL(fileURLWithPath: argument))
+        case "samplenotes":
+            // samplenotes <folder>: what Try Sample Notes… does once a folder is chosen.
+            workspace?.addSampleNotes(in: URL(fileURLWithPath: argument, isDirectory: true))
         case "openurls":
             // openurls <path>: what File › Open and the Dock icon do with a file or folder.
             FileWindows.shared.open([URL(fileURLWithPath: argument)])

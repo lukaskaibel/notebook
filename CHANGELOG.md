@@ -7,6 +7,9 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- Try Sample Notes… on the first screen, to look around before you add your own folders: made-up notes, a drawing,
+  pictures and PDFs in a new folder Sample Notes, in a folder you pick on the Mac and in Notebook's own folder on iPhone
+  and iPad. It shows in the sidebar like any location, and removing it leaves the files where they are.
 - Acknowledgements: Notebook's licence and those of BeautifulMermaid, SwiftMath and elk-swift, which it is built with,
   with links to their source code, in Notebook › About Notebook on the Mac and Settings › Acknowledgements on iPhone and
   iPad.

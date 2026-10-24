@@ -52,8 +52,9 @@ reminders stay in iCloud's key-value store for your other devices. Your notes ar
 
 ## Sample notes
 
-Debug builds can create sample notes in a folder you name (`-NotebookDemo YES`), for trying the app and for the README's
-pictures. They are made up, and nothing about them is sent anywhere.
+Try Sample Notes… on the first screen writes sample notes to a folder Sample Notes, in the folder you pick on the Mac
+and in Notebook's own folder on iPhone and iPad; Debug builds can also write them to a folder you name
+(`-NotebookDemo YES`), for the README's pictures. They are made up, and nothing about them is sent anywhere.
 
 ## Questions
 

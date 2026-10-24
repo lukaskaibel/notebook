@@ -20,7 +20,7 @@ being asked. Before calling such a change done, go through this list and do what
   - Look at every image before committing it.
   - A headline feature may deserve its own picture: add a scene to `Tools/readme-images.sh` and
     `Tools/readme-images/build.py`, and a section with a light and a dark `<picture>` to the README, like the others.
-- **Sample notes** (`Debug/DemoLibrary.swift`): the pictures are taken on them, so a new feature needs something there
+- **Sample notes** (`Files/DemoLibrary.swift`): the pictures are taken on them, so a new feature needs something there
   to show it with.
 - **The repository on GitHub:** when the app's scope changes (a platform, a headline feature), update the description
   and topics with `gh repo edit lukaskaibel/notebook --description "…" --add-topic …` and say that you did. When
