@@ -217,6 +217,8 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- If you had changed the bar above the keyboard in Settings › Writing Bar, tools that came later, such as Drawing,
+  never joined it. They now come in where they stand in the standard bar, once; tools you took out stay out.
 - On iPhone and iPad, a location's name over its folders brought up no menu, though it should have: touching and
   holding it did nothing. A tap on the name now brings up New Note, New Folder, Add to Favorites, Share, Show Hidden
   Folders and Remove from Notebook.
