@@ -36,8 +36,8 @@
 </picture>
 
 > **Status: early.** Version 0.1.0 runs on the Mac, iPhone and iPad, and you build it from source (five minutes, see
-> below). It already covers writing, organising and finding notes day to day. Quick capture and the App Store come
-> later; see [Not there yet](#not-there-yet).
+> below). It already covers writing, organising and finding notes day to day. A widget, controls and a share extension
+> for quick capture, and the App Store, come later; see [Not there yet](#not-there-yet).
 
 ## Why
 
@@ -335,6 +335,9 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   follow, as they do when you move it or rename or move its folder. New notes go into the folder you're in; made
   anywhere else, they go to the default folder you choose in Settings, an Inbox at the top of your first location
   until you do. One you leave empty goes away again.
+- **A new note from anywhere.** New Note is in Shortcuts, Spotlight and Siri ("New note in Notebook") and can go on the
+  iPhone's Action button (Settings › Action Button › Shortcut): Notebook opens with a new note in the default folder,
+  the caret in its title. In a shortcut of your own it takes text for the note to start with.
 - **Folders as they are.** Add iCloud Drive or any folder as a location with Add Location at the bottom of the
   sidebar, or drop the folder from the Finder below the sidebar's sections. iCloud Drive shows what the Finder shows
   in it: Desktop and Documents when they are kept in iCloud, and the folders of apps such as Pages or Obsidian.
@@ -579,8 +582,8 @@ on the Mac. On iPhone and iPad:
 
 Planned, and not built yet:
 
-- **Quick capture:** a widget, a control in Control Center and on the Lock Screen, the Action button and a share
-  extension, all adding a note to the default folder.
+- **More quick capture:** a widget, a control in Control Center and on the Lock Screen, and a share extension, all
+  adding a note to the default folder as New Note in Shortcuts does.
 - **Spotlight:** notes don't turn up in Spotlight yet, only in Notebook's own search.
 - **Reminders when a calendar event starts,** and on the iPhone a Live Activity that keeps the note on the Lock Screen.
   A reminder set on another device reaches an iPhone or iPad the next time Notebook runs there or gets time in the
@@ -598,7 +601,7 @@ The full plan, with what is deliberately left out (tags, backlinks, a database, 
 ## For contributors
 
 ```
-Notebook/                    The app target (Mac, iPhone and iPad): the entry point and the icon
+Notebook/                    The app target (Mac, iPhone and iPad): the entry point, the icon and the App Shortcuts
 NotebookUITests/             UI tests on iPhone and iPad simulators, for what only a real keyboard or touch reaches
 Packages/NotebookKit/
   Sources/NotebookKit/
