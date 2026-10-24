@@ -37,6 +37,7 @@ final class SpotlightTests: XCTestCase {
         let workspace = Workspace()
         let index = SpotlightIndex(store: spotlight, recordURL: record)
         index.delay = .zero
+        index.retryDelay = .milliseconds(100)
         workspace.spotlight = index
         workspace.start()
         try await until("Spotlight has the notes") { workspace.index.hasBuilt && !workspace.index.isBuilding && index.updates > 0 && !index.isUpdating }
@@ -154,6 +155,49 @@ final class SpotlightTests: XCTestCase {
         XCTAssertEqual(spotlight.batches.count, batches)
     }
 
+    /// Spotlight took a batch the app didn't hear back about, and a folder was hidden meanwhile: its notes still go,
+    /// the one that batch gave too.
+    func testABatchTakenWithoutAnAnswerLeavesNothingBehind() async throws {
+        let workspace = try await makeWorkspace()
+        let index = try XCTUnwrap(workspace.spotlight)
+        let id = try XCTUnwrap(workspace.locations.first).id.uuidString
+        spotlight.lateAnswers = 1
+        let updates = index.updates
+        try "Boxes for the move\n".write(to: library.appendingPathComponent("Archive/Boxes.md"), atomically: true, encoding: .utf8)
+        workspace.readAgain([library.appendingPathComponent("Archive")])
+        try await updated(workspace, since: updates)
+        XCTAssertTrue(index.lastUpdate.failed)
+        XCTAssertNotNil(spotlight.items[id + "/Archive/Boxes.md"], "Spotlight has it, the app doesn't know")
+
+        workspace.setHidden(library.appendingPathComponent("Archive"), true)
+        try await until("the hidden folder's notes left Spotlight") {
+            self.spotlight.items[id + "/Archive/Boxes.md"] == nil && self.spotlight.items[id + "/Archive/Old flat.md"] == nil
+        }
+        XCTAssertEqual(titles, ["Kyoto trip", "Doctor"])
+    }
+
+    /// Spotlight is a batch ahead of the record at launch, and a note went while the app was closed: it goes from
+    /// Spotlight too.
+    func testANoteGoneWhileTheRecordWasBehindIsTakenOut() async throws {
+        _ = try await makeWorkspace()
+        spotlight.lateAnswers = 0
+        spotlight.advance()
+        try FileManager.default.removeItem(at: old)
+        _ = try await makeWorkspace()
+        XCTAssertEqual(titles, ["Kyoto trip", "Doctor"])
+        XCTAssertEqual(spotlight.deletions, 0, "not emptied")
+    }
+
+    /// Spotlight couldn't be asked at launch: it is asked again a moment later.
+    func testSpotlightIsAskedAgainWhenItCantBeAtLaunch() async throws {
+        _ = try await makeWorkspace()
+        spotlight.failures = 1
+        try "The old flat, sold\n".write(to: old, atomically: true, encoding: .utf8)
+        _ = try await makeWorkspace()
+        XCTAssertEqual(spotlight.refusals, 1)
+        XCTAssertEqual(spotlight.batches.last?.items.map(\.title), ["Old flat"])
+    }
+
     /// A batch Spotlight doesn't take is given again.
     func testABatchThatFailedIsGivenAgain() async throws {
         spotlight.failures = 1
@@ -169,11 +213,26 @@ final class SpotlightTests: XCTestCase {
 
     func testANotePickedInSpotlightOpens() async throws {
         let workspace = try await makeWorkspace()
+        let index = try XCTUnwrap(workspace.spotlight)
         let id = try XCTUnwrap(workspace.locations.first).id.uuidString
         workspace.openSpotlightItem(id + "/Travel/Kyoto trip.md")
         XCTAssertEqual(workspace.currentURL?.path, trip.path)
 
-        // Moved since Spotlight heard of it: found by its name.
+        // Not there at all: nothing opens, and Spotlight lets go of it.
+        let updates = index.updates
+        spotlight.add(id + "/Travel/Gone.md")
+        workspace.openSpotlightItem(id + "/Travel/Gone.md")
+        XCTAssertEqual(workspace.currentURL?.path, trip.path)
+        try await updated(workspace, since: updates)
+        XCTAssertNil(spotlight.items[id + "/Travel/Gone.md"])
+
+        // Nothing outside a location opens, whatever the identifier says.
+        workspace.openSpotlightItem(id + "/../../etc/hosts")
+        workspace.openSpotlightItem(UUID().uuidString + "/Travel/Kyoto trip.md")
+        XCTAssertEqual(workspace.currentURL?.path, trip.path)
+
+        // Moved before Spotlight heard of it: found by its name. (Once it has, the old item is gone from Spotlight.)
+        index.delay = .seconds(60)
         let moved = library.appendingPathComponent("Personal/Kyoto trip.md")
         try FileManager.default.moveItem(at: trip, to: moved)
         workspace.readAgain([library.appendingPathComponent("Travel"), library.appendingPathComponent("Personal")])
@@ -181,19 +240,38 @@ final class SpotlightTests: XCTestCase {
         workspace.open(doctor)
         workspace.openSpotlightItem(id + "/Travel/Kyoto trip.md")
         XCTAssertEqual(workspace.currentURL?.path, moved.path)
+    }
 
-        // Not there at all: nothing opens, and Spotlight lets go of it.
+    /// A pick never opens a note in a hidden folder, nor another note than the one picked: one Spotlight has under its
+    /// own identifier, or one whose name only starts the same.
+    func testAPickOpensNothingHiddenOrElse() async throws {
+        for (path, text) in [("Travel/Ideas.md", "Temples\n"), ("Personal/Ideas.md", "Birthday\n"), ("Travel/C# notes.md", "Generics\n"),
+                             ("Travel/C.md", "Pointers\n")] {
+            try text.write(to: library.appendingPathComponent(path), atomically: true, encoding: .utf8)
+        }
+        let workspace = try await makeWorkspace()
         let index = try XCTUnwrap(workspace.spotlight)
-        let updates = index.updates
-        spotlight.add(id + "/Travel/Gone.md")
-        workspace.openSpotlightItem(id + "/Travel/Gone.md")
-        XCTAssertEqual(workspace.currentURL?.path, moved.path)
-        try await updated(workspace, since: updates)
-        XCTAssertNil(spotlight.items[id + "/Travel/Gone.md"])
+        let id = try XCTUnwrap(workspace.locations.first).id.uuidString
+        workspace.open(doctor)
 
-        // Nothing outside a location opens, whatever the identifier says.
-        workspace.openSpotlightItem(id + "/../../etc/hosts")
-        workspace.openSpotlightItem(UUID().uuidString + "/Travel/Kyoto trip.md")
+        // In a hidden folder, though it's there.
+        workspace.setHidden(library.appendingPathComponent("Archive"), true)
+        workspace.openSpotlightItem(id + "/Archive/Old flat.md")
+        XCTAssertEqual(workspace.currentURL?.path, doctor.path)
+
+        // Gone, and the other note of its name has an item of its own.
+        try FileManager.default.removeItem(at: library.appendingPathComponent("Travel/Ideas.md"))
+        workspace.openSpotlightItem(id + "/Travel/Ideas.md")
+        XCTAssertEqual(workspace.currentURL?.path, doctor.path)
+
+        // Moved before Spotlight heard of it: found by its whole name, not as "C".
+        try await until("Spotlight is up to date") { !index.isUpdating }
+        index.delay = .seconds(60)
+        let moved = library.appendingPathComponent("Personal/C# notes.md")
+        try FileManager.default.moveItem(at: library.appendingPathComponent("Travel/C# notes.md"), to: moved)
+        workspace.readAgain([library.appendingPathComponent("Travel"), library.appendingPathComponent("Personal")])
+        try await until("the index has the moved note") { workspace.index.entry(for: moved) != nil }
+        workspace.openSpotlightItem(id + "/Travel/C# notes.md")
         XCTAssertEqual(workspace.currentURL?.path, moved.path)
     }
 
@@ -268,6 +346,8 @@ final class StandInSpotlight: SpotlightStore {
         var batches: [SpotlightIndex.Batch] = []
         var deletions = 0
         var failures = 0
+        var lateAnswers = 0
+        var refusals = 0
     }
 
     private struct Refused: Error {}
@@ -281,6 +361,12 @@ final class StandInSpotlight: SpotlightStore {
         get { contents.withLock { $0.failures } }
         set { contents.withLock { $0.failures = newValue } }
     }
+    /// Batches Spotlight takes, but answers too late for: the app hears it didn't.
+    var lateAnswers: Int {
+        get { contents.withLock { $0.lateAnswers } }
+        set { contents.withLock { $0.lateAnswers = newValue } }
+    }
+    var refusals: Int { contents.withLock { $0.refusals } }
 
     var isAvailable: Bool { true }
 
@@ -288,6 +374,7 @@ final class StandInSpotlight: SpotlightStore {
         try contents.withLock { contents in
             if contents.failures > 0 {
                 contents.failures -= 1
+                contents.refusals += 1
                 throw Refused()
             }
             if let expected, expected != contents.state { throw SpotlightMismatch.state }
@@ -296,6 +383,10 @@ final class StandInSpotlight: SpotlightStore {
             contents.state = state
             // The empty batch of a launch, which only checks the number, gives nothing.
             if !batch.items.isEmpty || !batch.deleted.isEmpty { contents.batches.append(batch) }
+            if contents.lateAnswers > 0 {
+                contents.lateAnswers -= 1
+                throw SpotlightMismatch.timeout
+            }
         }
     }
 
@@ -305,6 +396,11 @@ final class StandInSpotlight: SpotlightStore {
             contents.state = 0
             contents.deletions += 1
         }
+    }
+
+    /// As when Spotlight took a batch the app never heard back about.
+    func advance() {
+        contents.withLock { $0.state += 1 }
     }
 
     /// As when Spotlight's own index is made again.

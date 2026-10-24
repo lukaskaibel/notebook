@@ -70,16 +70,26 @@ extension Workspace {
         #endif
     }
 
-    /// Where the note is: where its identifier says, or, moved since Spotlight last heard of it, the note of its name
-    /// nearest to there in the same location.
+    /// Where the note is: where its identifier says, or, moved since Spotlight last heard of it, a note of the same file
+    /// name in the same location, nearest to there, that Spotlight doesn't have under an identifier of its own. Never a
+    /// note in a hidden folder, which Spotlight isn't to show.
     func url(forSpotlightItem identifier: String) -> URL? {
         guard let path = SpotlightIndex.path(of: identifier, in: locations) else { return nil }
         let url = URL(fileURLWithPath: path).standardizedFileURL
-        if FileManager.default.fileExists(atPath: url.path) { return url }
-        let name = url.deletingPathExtension().lastPathComponent
-        guard let found = index.resolve(name, from: url), FileKind(url: found, isDirectory: false) == .note,
-              let location = location(containing: url), location.contains(found) else { return nil }
-        return found
+        guard let location = location(containing: url) else { return nil }
+        let hidden = allHiddenFolderPaths
+        if FileManager.default.fileExists(atPath: url.path) { return SearchIndex.isHidden(url.path, in: hidden) ? nil : url }
+        let donated = spotlight?.donated ?? [:]
+        let folder = url.deletingLastPathComponent().path
+        let candidates = index.notes(named: url.lastPathComponent).filter { entry in
+            guard location.contains(entry.url), !SearchIndex.isHidden(entry.path, in: hidden),
+                  let own = SpotlightIndex.identifier(of: entry.path, in: location), donated[own] == nil else { return false }
+            return FileManager.default.fileExists(atPath: entry.url.path)
+        }
+        // In the same folder first, then the least deep, then by address, to always pick the same.
+        return candidates.min { a, b in
+            (a.folder == folder ? 0 : 1, a.url.pathComponents.count, a.path) < (b.folder == folder ? 0 : 1, b.url.pathComponents.count, b.path)
+        }?.url
     }
 
     #if DEBUG

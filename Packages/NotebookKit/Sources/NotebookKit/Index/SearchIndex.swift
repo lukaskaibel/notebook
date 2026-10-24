@@ -854,6 +854,13 @@ public final class SearchIndex {
         return Self.resolve(target, from: note, byName: byName, byPath: byPath)?.url
     }
 
+    /// The notes of a file name ("Plan.md"), ignoring case and accents, wherever they are: for a note looked for by its
+    /// name alone, which `resolve` would read as a link ("C# notes" as the heading "notes" of "C").
+    func notes(named fileName: String) -> [Entry] {
+        _ = version
+        return (byName[Self.fold(fileName)] ?? []).compactMap { byPath[$0] }.filter { $0.kind == .note }
+    }
+
     /// What every file is and where, as `resolve` reads it: for working out off the main thread where links point
     /// before and after files move (`LinkUpdate`).
     var linkTargets: LinkTargets { LinkTargets(byPath: byPath, byName: byName) }

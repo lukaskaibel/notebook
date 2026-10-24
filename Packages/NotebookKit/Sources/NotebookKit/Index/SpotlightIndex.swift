@@ -14,8 +14,8 @@ import UniformTypeIdentifiers
 ///
 /// What Spotlight has is written down in Application Support (`Record`), with the number of the last batch, which
 /// Spotlight keeps with its items too: a launch gives it only what changed since. When the two numbers differ
-/// (Spotlight's index was made again, the record lost, the app stopped between a batch and writing it down), Spotlight
-/// gets every note again.
+/// (Spotlight's index was made again, a batch taken without the app hearing back), Spotlight gets every note again,
+/// and what it may still have that isn't a note there now is taken out (`startingRecord`).
 @MainActor
 final class SpotlightIndex {
     /// A note as Spotlight has it.
@@ -77,8 +77,11 @@ final class SpotlightIndex {
     var source: (() -> Snapshot?)?
     /// How long an update waits for more changes, so a burst of them (typing, iCloud syncing) is one.
     var delay: Duration = .seconds(2)
+    /// How long it waits after Spotlight didn't answer or didn't take a batch.
+    var retryDelay: Duration = .seconds(60)
     private var isWanted = false
     private var task: Task<Void, Never>?
+    private var retry: Task<Void, Never>?
     /// Notes Spotlight showed that aren't there any more, to take out with the next update.
     private var stale = Set<String>()
     /// How many notes the last update gave Spotlight and took out, for tests and the debug remote.
@@ -136,9 +139,11 @@ final class SpotlightIndex {
         }
         let store = store, recordURL = recordURL
         if record == nil {
+            // Nothing to try again: Spotlight doesn't take items on this device.
+            guard store.isAvailable else { return }
             record = await Task.detached(priority: .utility) { await Self.startingRecord(store: store, url: recordURL) }.value
         }
-        guard let record else { return }
+        guard let record else { return retryLater() }
         let started = ContinuousClock.now
         let plan: Plan
         // The snapshot goes as soon as the plan is made: the index changing meanwhile would copy all of it.
@@ -161,37 +166,49 @@ final class SpotlightIndex {
         updates += 1
         lastUpdate = (outcome.given, outcome.taken, outcome.failed)
         lastDuration = (ContinuousClock.now - started) / .seconds(1)
-        if outcome.failed {
-            Task { [weak self] in
-                try? await Task.sleep(for: .seconds(60))
-                self?.setNeedsUpdate()
-            }
+        if outcome.failed { retryLater() }
+    }
+
+    /// After Spotlight didn't answer or didn't take a batch: another update a while later.
+    private func retryLater() {
+        retry?.cancel()
+        let delay = retryDelay
+        retry = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            self?.setNeedsUpdate()
         }
     }
 
     // MARK: - Working out what changed
 
-    /// What Spotlight has at the first update since launch: the record kept last time, if Spotlight has all of it, and
-    /// else nothing, for every note to go in again, in place of what Spotlight has of it. Spotlight tells by taking an
-    /// empty batch only if the last it kept carried the record's number. Nil when it can't be asked now.
+    /// What Spotlight has at the first update since launch: the record kept last time, if Spotlight has all of it.
+    /// Spotlight tells by taking an empty batch only if the last it kept carried the record's number. When it doesn't
+    /// (its index made again, or a batch it took without the app hearing back), it may have any of the notes written
+    /// down: they are all given again, and those that aren't notes there now (in a hidden folder, of a removed
+    /// location, gone) taken out. Nil when Spotlight can't be asked now.
     ///
-    /// Spotlight isn't emptied first: on iOS 27 in the Simulator, taking everything out never finishes, and holds up
-    /// everything asked after it. Spotlight's own index made again is empty anyway; a note gone while the record was
-    /// lost stays until it is picked (`remove`).
+    /// Spotlight isn't emptied instead: on iOS 27 in the Simulator, taking everything out never finishes, and holds up
+    /// everything asked after it.
     nonisolated static func startingRecord(store: any SpotlightStore, url: URL?) async -> Record? {
-        guard store.isAvailable else { return nil }
-        guard var kept = url.flatMap(read), kept.state != 0 else { return Record() }
-        do {
-            try await store.apply(Batch(), expected: kept.state, state: kept.state + 1)
-        } catch SpotlightMismatch.state {
-            return Record()
-        } catch {
-            return nil
+        guard var kept = url.flatMap(read) else { return Record() }
+        if kept.state != 0 {
+            do {
+                try await store.apply(Batch(), expected: kept.state, state: kept.state + 1)
+                kept.state += 1
+                // Not written, the next launch finds the numbers apart and gives everything again: nothing is lost.
+                if let url { write(kept, to: url) }
+                return kept
+            } catch SpotlightMismatch.state {
+            } catch {
+                return nil
+            }
         }
-        kept.state += 1
-        if let url { write(kept, to: url) }
-        return kept
+        return Record(state: 0, items: kept.items.mapValues { _ in unknown })
     }
+
+    /// The fingerprint of a note Spotlight may or may not have: no note's, so it is given again, or taken out.
+    nonisolated static let unknown: Int64 = 0
 
     /// The notes that are new or changed since Spotlight last had them, newest first, and those that went: in a
     /// hidden folder, outside the locations, or no longer there at all; with `stale`, which Spotlight showed and
@@ -216,7 +233,8 @@ final class SpotlightIndex {
     nonisolated static func fingerprint(of entry: SearchIndex.Entry) -> Int64 {
         let modified = entry.modified?.timeIntervalSinceReferenceDate ?? 0
         let parts = "\(version)\u{0}\(entry.name)\u{0}\(entry.place)\u{0}\(modified)\u{0}\(entry.size ?? -1)\u{0}\(entry.text != nil)"
-        return Int64(bitPattern: SearchIndex.stableHash(parts))
+        let fingerprint = Int64(bitPattern: SearchIndex.stableHash(parts))
+        return fingerprint == unknown ? unknown + 1 : fingerprint
     }
 
     nonisolated static func item(for entry: SearchIndex.Entry, id: String, domain: String) -> Item {
@@ -224,8 +242,10 @@ final class SpotlightIndex {
              folder: entry.place.components(separatedBy: " › ").last ?? entry.place, text: entry.text, modified: entry.modified)
     }
 
-    /// Gives Spotlight the plan in batches, each carrying the number after the last, and writes down what it has after
-    /// each. Stops at the first batch Spotlight doesn't take.
+    /// Gives Spotlight the plan in batches, each carrying the number after the last. Before each, what Spotlight has is
+    /// written down with the notes the batch gives as `unknown`: should Spotlight take a batch without the app hearing
+    /// back (stopped meanwhile, or the answer too late), the next update still knows those notes may be there. Stops
+    /// at the first batch Spotlight doesn't take, or that can't be written down first.
     nonisolated static func apply(_ plan: Plan, to record: Record, store: any SpotlightStore, recordURL: URL?) async -> (record: Record, given: Int, taken: Int, failed: Bool) {
         var record = record
         var gone = plan.gone[...]
@@ -243,19 +263,23 @@ final class SpotlightIndex {
                 batch.items.append(item)
                 fingerprints.append((next.id, next.fingerprint))
             }
+            var pending = record
+            for (id, _) in fingerprints { pending.items[id] = unknown }
+            if let recordURL, !write(pending, to: recordURL) { return (record, given, taken, true) }
             let state = record.state + 1
             do {
                 try await store.apply(batch, expected: record.state == 0 ? nil : record.state, state: state)
             } catch {
-                return (record, given, taken, true)
+                return (pending, given, taken, true)
             }
             record.state = state
             for id in batch.deleted { record.items[id] = nil }
             for (id, fingerprint) in fingerprints { record.items[id] = fingerprint }
-            if let recordURL { write(record, to: recordURL) }
             given += batch.items.count
             taken += batch.deleted.count
         }
+        // Not written, the next launch finds the numbers apart, and the last batch's notes as `unknown`.
+        if let recordURL { write(record, to: recordURL) }
         return (record, given, taken, false)
     }
 
@@ -310,12 +334,14 @@ final class SpotlightIndex {
         return try? PropertyListDecoder().decode(Record.self, from: data)
     }
 
-    nonisolated static func write(_ record: Record, to url: URL) {
+    /// Whether it was written.
+    @discardableResult
+    nonisolated static func write(_ record: Record, to url: URL) -> Bool {
         let encoder = PropertyListEncoder()
         encoder.outputFormat = .binary
-        guard let data = try? encoder.encode(record) else { return }
+        guard let data = try? encoder.encode(record) else { return false }
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: url, options: .atomic)
+        return (try? data.write(to: url, options: .atomic)) != nil
     }
 }
 
