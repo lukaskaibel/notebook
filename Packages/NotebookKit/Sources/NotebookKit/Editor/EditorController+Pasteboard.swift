@@ -10,9 +10,10 @@ import UniformTypeIdentifiers
 extension EditorController {
     static let fragmentIdentifier = "com.lukaskbl.notebook.fragment"
 
-    /// What copying the selection puts on the pasteboard: its Markdown, Notebook's own fragment (the Markdown and the
-    /// folder its pictures are in) and, for a single picture or file, the file. Nil when nothing is selected.
-    func clipping(cut: Bool) -> (range: NSRange, markdown: String, fragment: Data?, file: URL?)? {
+    typealias Clipping = (range: NSRange, markdown: String, fragment: Data?, file: URL?)
+
+    /// What copying the selection puts on the pasteboard (`clipping(of:)`). Nil when nothing is selected.
+    func clipping(cut: Bool) -> Clipping? {
         var range = expandSelection(selection)
         // A whole heading copies as a heading: its hidden #s come along.
         if !cut, range.length > 0, !document.lines.isEmpty {
@@ -22,8 +23,17 @@ extension EditorController {
             }
         }
         guard range.length > 0 else { return nil }
+        return clipping(of: range)
+    }
+
+    /// What copying or dragging part of the note takes along: its Markdown, Notebook's own fragment (the Markdown,
+    /// the folder its pictures are in, and whether it is one picture or file, which goes on lines of its own where it
+    /// is pasted) and, for a single picture or file, the file.
+    func clipping(of range: NSRange) -> Clipping {
         let markdown = nsText.substring(with: range)
-        let fragment = try? JSONSerialization.data(withJSONObject: ["markdown": markdown, "folder": folder?.path ?? ""])
+        var contents = ["markdown": markdown, "folder": folder?.path ?? ""]
+        if isWholeObject(range) { contents["object"] = "1" }
+        let fragment = try? JSONSerialization.data(withJSONObject: contents)
         var file: URL?
         if let object = layoutManager.object(at: range.location), object.range(at: range.location) == range {
             switch object.kind {
@@ -46,15 +56,19 @@ extension EditorController {
     @discardableResult
     func copySelection(cut: Bool) -> Bool {
         guard let clipping = clipping(cut: cut) else { return false }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.writeObjects([pasteboardItem(for: clipping)])
+        if cut { replace(clipping.range, with: "", select: NSRange(location: clipping.range.location, length: 0), actionName: "Cut") }
+        return true
+    }
+
+    func pasteboardItem(for clipping: Clipping) -> NSPasteboardItem {
         let item = NSPasteboardItem()
         item.setString(clipping.markdown, forType: .string)
         if let data = clipping.fragment { item.setData(data, forType: Self.fragmentType) }
         if let url = clipping.file { item.setString(url.absoluteString, forType: .fileURL) }
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.writeObjects([item])
-        if cut { replace(clipping.range, with: "", select: NSRange(location: clipping.range.location, length: 0), actionName: "Cut") }
-        return true
+        return item
     }
 
     /// Pastes or drops at `index` (or over the selection). Returns false to leave it to AppKit.
@@ -67,6 +81,13 @@ extension EditorController {
         // Files from the Finder or the sidebar.
         if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL], !urls.isEmpty {
             return pasteFiles(urls, at: target)
+        }
+
+        // Photos from Photos, pictures from Safari, attachments from Mail: files that are written once they are dropped.
+        let promises = promisedFiles(on: pasteboard)
+        if !promises.isEmpty {
+            receive(promises, at: target)
+            return true
         }
 
         // A picture copied from another app.
@@ -83,13 +104,66 @@ extension EditorController {
         }
         return false
     }
+
+    /// Files an app writes only once they are dropped. A link or text dragged from Safari promises a file too, which
+    /// isn't what it is for: that goes in as text.
+    func promisedFiles(on pasteboard: NSPasteboard) -> [NSFilePromiseReceiver] {
+        guard let promises = pasteboard.readObjects(forClasses: [NSFilePromiseReceiver.self]) as? [NSFilePromiseReceiver],
+              !promises.isEmpty else { return [] }
+        let isMedia = promises.allSatisfy { promise in
+            promise.fileTypes.contains { UTType($0).map { $0.conforms(to: .image) || $0.conforms(to: .audiovisualContent) || $0.conforms(to: .pdf) } ?? false }
+        }
+        return isMedia || pasteboard.availableType(from: [.string, .URL]) == nil ? promises : []
+    }
+
+    private static let promiseQueue: OperationQueue = {
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 1
+        queue.qualityOfService = .userInitiated
+        return queue
+    }()
+
+    /// Takes promised files as files dropped from the Finder, once they have all been written: a photo in iCloud
+    /// comes down first. They are asked for while the drop goes on, the only time AppKit allows it.
+    private func receive(_ promises: [NSFilePromiseReceiver], at target: NSRange) {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("Notebook drop \(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let note = loadCount
+        // In the order they were dragged, each written on the promise queue.
+        let received = PromisedFiles(count: promises.count)
+        let group = DispatchGroup()
+        for (index, promise) in promises.enumerated() {
+            let expected = max(1, promise.fileTypes.count)
+            var calls = 0
+            group.enter()
+            promise.receivePromisedFiles(atDestination: folder, options: [:], operationQueue: Self.promiseQueue) { url, error in
+                calls += 1
+                if error == nil { received.files[index].append(url) }
+                if calls == expected { group.leave() }
+            }
+        }
+        group.notify(queue: .main) { [weak self] in
+            MainActor.assumeIsolated {
+                defer { try? FileManager.default.removeItem(at: folder) }
+                let files = received.files.flatMap { $0 }
+                // By then another note may be open, which they aren't for.
+                guard let self, !files.isEmpty, self.loadCount == note else { return }
+                _ = self.pasteFiles(files, at: NSRange(location: min(target.location, self.storage.length), length: 0))
+            }
+        }
+    }
     #endif
 
-    /// Copied in Notebook: Markdown, with its pictures copied along when it goes to a note in another folder.
+    /// Copied in Notebook: Markdown, with its pictures copied along when it goes to a note in another folder. A picture
+    /// or file by itself goes on lines of its own.
     func pasteFragment(_ data: Data, at target: NSRange) -> Bool {
         guard let fragment = try? JSONSerialization.jsonObject(with: data) as? [String: String], let markdown = fragment["markdown"] else { return false }
         let source = fragment["folder"].flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) }
         let adjusted = copyAssets(in: markdown, from: source)
+        if fragment["object"] == "1" {
+            insertOnOwnLines(adjusted, at: target)
+            return true
+        }
         replace(target, with: adjusted, select: NSRange(location: target.location + (adjusted as NSString).length, length: 0), actionName: "Paste")
         return true
     }
@@ -132,12 +206,31 @@ extension EditorController {
     /// Puts Markdown for a picture or file on lines of its own.
     func insertOnOwnLines(_ markdown: String, at range: NSRange) {
         var text = markdown
+        var range = range
         let line = nsText.lineRange(for: NSRange(location: range.location, length: 0))
         var lineEnd = line.upperBound
         if lineEnd > line.location, lineEnd <= storage.length, nsText.character(at: lineEnd - 1) == 10 { lineEnd -= 1 }
+        // At the start of a heading's or list item's text, the caret is after its #s or bullet, and at the end of a
+        // line maybe before the marks that close it: the picture goes before or after the whole line, not between
+        // marks and their text.
+        if range.length == 0, range.location > line.location, (line.location..<range.location).allSatisfy(isMark) {
+            range.location = line.location
+        } else if range.length == 0, range.location < lineEnd, (range.location..<lineEnd).allSatisfy(isMark) {
+            range.location = lineEnd
+        }
         if range.location > line.location { text = "\n" + text }
         if range.upperBound < lineEnd { text += "\n" }
         replace(range, with: text, select: NSRange(location: range.location + (text as NSString).length, length: 0), actionName: "Insert")
+    }
+
+    /// Markdown that marks a line or a span rather than being text: a heading's #s, a list item's bullet or checkbox,
+    /// a quote's >, the stars around bold.
+    private func isMark(_ index: Int) -> Bool {
+        if storage.attribute(.notebookHidden, at: index, effectiveRange: nil) != nil { return true }
+        switch layoutManager.object(at: index)?.kind {
+        case .bullet, .checkbox, .quoteBar, .callout: return true
+        default: return false
+        }
     }
 
     // MARK: - Assets
@@ -237,3 +330,11 @@ extension EditorController {
         return "[[\(name)]]"
     }
 }
+
+#if os(macOS)
+/// The files each promise of a drop was for, as they are written.
+private final class PromisedFiles: @unchecked Sendable {
+    var files: [[URL]]
+    init(count: Int) { files = Array(repeating: [], count: count) }
+}
+#endif
