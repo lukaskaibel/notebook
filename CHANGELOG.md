@@ -7,6 +7,11 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- Notes in Spotlight, on the Mac and in the search of iPhone and iPad: Spotlight finds every note in your locations by
+  its name or any word in it, with its first lines and its folder, and picking one opens it in Notebook. Spotlight
+  follows as you write, rename, move and delete notes; notes in hidden folders stay out, and so do the notes of a
+  location you remove. Search in App takes the words you typed in Spotlight to ⌘K. Notebook gives Spotlight what search
+  has already read, in the background, and after a launch only the notes that changed since.
 - Links follow notes, files and folders you move, as they follow a note you rename: drag a note onto another folder,
   choose Move To, or rename or move a folder, on the Mac, iPhone and iPad, and the `[[links]]`, embeds and Markdown
   links to them in your other notes still open the same note or file. A link changes only where it would find

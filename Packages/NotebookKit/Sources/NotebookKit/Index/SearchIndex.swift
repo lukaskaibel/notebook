@@ -671,14 +671,17 @@ public final class SearchIndex {
     /// Where the index is kept: in the app's caches, as it can always be made again. A folder given on the command line
     /// (`library`) gets a file of its own, so a run on the sample notes leaves the one for your locations alone. None
     /// in tests, which keep theirs where they say.
-    nonisolated static func storeURL(library: String? = nil) -> URL? {
+    nonisolated static func storeURL(library: String? = nil, name: String = "Search index", in directory: FileManager.SearchPathDirectory = .cachesDirectory) -> URL? {
         guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil,
-              let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
-        let folder = caches.appendingPathComponent(Bundle.main.bundleIdentifier ?? "Notebook", isDirectory: true)
-        guard let library else { return folder.appendingPathComponent("Search index") }
-        // FNV-1a: the same for the same folder at every launch, as Swift's own hashes aren't.
-        let hash = library.utf8.reduce(UInt64(0xcbf2_9ce4_8422_2325)) { ($0 ^ UInt64($1)) &* 0x100_0000_01b3 }
-        return folder.appendingPathComponent("Search index " + String(hash, radix: 36))
+              let base = FileManager.default.urls(for: directory, in: .userDomainMask).first else { return nil }
+        let folder = base.appendingPathComponent(Bundle.main.bundleIdentifier ?? "Notebook", isDirectory: true)
+        guard let library else { return folder.appendingPathComponent(name) }
+        return folder.appendingPathComponent(name + " " + String(stableHash(library), radix: 36))
+    }
+
+    /// FNV-1a: the same for the same string at every launch, as Swift's own hashes aren't.
+    nonisolated static func stableHash(_ string: String, from start: UInt64 = 0xcbf2_9ce4_8422_2325) -> UInt64 {
+        string.utf8.reduce(start) { ($0 ^ UInt64($1)) &* 0x100_0000_01b3 }
     }
 
     /// Starts reading the index kept from the last run, for the first build to show at once and to check the files

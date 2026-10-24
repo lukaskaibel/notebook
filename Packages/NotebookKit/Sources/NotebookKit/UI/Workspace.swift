@@ -39,6 +39,10 @@ public final class Workspace: NSObject {
     private(set) var reminders = Reminders(defaults: nil, cloud: nil)
     /// Every open to-do in the notes, read from what search knows.
     let todos = TodoList()
+    /// The notes in Spotlight, fed from what search knows; nil when Spotlight doesn't get them (`startSpotlight`).
+    @ObservationIgnored var spotlight: SpotlightIndex?
+    /// Words to search for in ⌘K as it opens: Spotlight's Search in App.
+    var paletteStart: (query: String, id: UUID)?
     /// Counts the reminders whose time came, so what shows them turns red then, without anything else changing.
     var remindersDue = 0
     @ObservationIgnored var dueTimer: Timer?
@@ -208,9 +212,13 @@ public final class Workspace: NSObject {
             // Notes moved in the Finder can be found by their names now.
             self?.scheduleReminders()
             self?.indexChanged()
+            self?.spotlight?.setNeedsUpdate()
         }
         index.onFoldersChanged = { [weak self] in self?.prepareMoveFolders() }
-        index.onChanged = { [weak self] in self?.indexChanged() }
+        index.onChanged = { [weak self] in
+            self?.indexChanged()
+            self?.spotlight?.setNeedsUpdate()
+        }
         todos.onChange = { [weak self] in self?.todosChanged() }
         index.onRefreshed = { [weak self] in self?.refreshLinks() }
         index.onIndexed = { [weak self] entries in self?.recognizer.consider(entries) }
@@ -257,7 +265,7 @@ public final class Workspace: NSObject {
             #if DEBUG
             if UserDefaults.standard.bool(forKey: "NotebookDemo") { DemoLibrary.create(at: url) }
             #endif
-            locations = [Location(id: UUID(), name: UserDefaults.standard.string(forKey: "NotebookLibraryName") ?? url.lastPathComponent, path: url.path, bookmark: nil)]
+            locations = [Location(id: Location.id(for: url.path), name: UserDefaults.standard.string(forKey: "NotebookLibraryName") ?? url.lastPathComponent, path: url.path, bookmark: nil)]
             favorites = []
             recents = []
             chosenDefaultFolder = nil
@@ -277,6 +285,7 @@ public final class Workspace: NSObject {
         // The index kept from the last run is read while the locations are looked up, for search to have it all at once.
         index.storeURL = SearchIndex.storeURL(library: temporaryLocations ? locations.first?.url.path : nil)
         index.loadKept(for: locations)
+        startSpotlight()
         hidden.onChange = { [weak self] in self?.hiddenFoldersChanged() }
         reminders.onChange = { [weak self] in self?.remindersChanged() }
         readTextInPictures(NotebookSettings.shared.readsTextInPictures)

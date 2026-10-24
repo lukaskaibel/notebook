@@ -26,7 +26,15 @@ collects nothing about you.
   notification when you arrive or leave; Notebook itself isn't told where you are and keeps no record of it. Current
   Location asks once where you are, to name the place, and keeps only the place you chose. A Mac doesn't watch places.
 - **The places you chose last**, to choose again at a tap, are kept in the app's preferences on that device.
-- **The search index** of file names, note text and PDF text is kept in memory only, and built again at every launch.
+- **The search index** of file names, the text of notes and PDFs and the words read in pictures is kept in the app's
+  caches on each device, so search has everything as soon as Notebook opens; it can always be made again from your
+  files.
+- **Spotlight** gets the name, the first lines, the folder and the text of every note in your locations, except those in
+  hidden folders, so the system's search finds them. Spotlight keeps its index on your Mac, iPhone or iPad, as it does
+  for Mail or Notes, and Notebook keeps a list of the notes it gave it, by their places in your folders, in the app's
+  own folder on that device. A note leaves Spotlight when you delete it, hide its folder or remove its location. To
+  leave Notebook's notes out of Spotlight, turn Notebook off in System Settings › Spotlight on the Mac, or in
+  Notebook's search settings in Settings on iPhone and iPad.
 
 ## What is sent, and to whom
 
