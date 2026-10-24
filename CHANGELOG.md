@@ -217,6 +217,9 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- Saving a note took away its Finder tags, and whatever else other apps keep on the file, such as where it was
+  downloaded from; so did ticking a to-do off in To-dos and links changing after a rename or a move. They stay now, and
+  so does the date the note was made.
 - Editing a to-do in To-dos could stop by itself as soon as you moved the pointer after clicking it, so it took a
   second click. Now it goes on until you press Return or Escape or click outside the to-do, also beside the list, on a
   group's name or in the sidebar, which before didn't end it. A to-do given another date while you edit it stays in
