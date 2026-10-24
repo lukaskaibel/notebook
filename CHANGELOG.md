@@ -7,6 +7,11 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- Drag pictures, drawings and files around a note on the Mac, as on iPhone and iPad: press one and move the mouse, and
+  it goes on a line of its own before the line you let go on, or after it when you let go at its end. One Undo puts it
+  back, and Option-dragging leaves the picture where it was and drops a copy. Drag one into another note for a copy
+  there, with its file, or onto a folder in the sidebar, into the Finder, Mail or another app for a copy of the file;
+  the note keeps its own. Photos from Photos and pictures from Safari can be dropped into a note too.
 - Notes in Spotlight, on the Mac and in the search of iPhone and iPad: Spotlight finds every note in your locations by
   its name or any word in it, with its first lines and its folder, and picking one opens it in Notebook. Spotlight
   follows as you write, rename, move and delete notes; notes in hidden folders stay out, and so do the notes of a
@@ -191,6 +196,9 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Changed
 
+- A picture or file copied from a note and pasted, or dropped from another note, in the middle of a line goes on a line
+  of its own, as a picture from another app does. Text dragged into a note in another folder brings its pictures along,
+  as copied text does. On iPhone and iPad too, a picture dragged to the end of a line now goes after that line.
 - Notebook's source code is now under the GNU General Public License, version 3, in place of the MIT License, with a
   permission to link it with elk-swift, which lays out the diagrams. Copies from before 24 October 2026 can still be
   used under the MIT License.
@@ -240,6 +248,9 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- A picture or file dropped or pasted at the start of a heading or a list item went between its `##` or bullet and its
+  words, which broke the heading or the item. It now goes on a line of its own before it, and at the end of a line
+  after it, past marks such as the closing `**` of bold text.
 - In the App Store build, a note opened from the Finder outside your locations couldn't be renamed or take pictures and
   drawings, since the sandbox gives Notebook only the file. The first time it needs the note's folder, Notebook now
   asks for it, and remembers it after that.

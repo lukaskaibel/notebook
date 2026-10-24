@@ -188,12 +188,15 @@ final class MarkdownTextView: NSTextView {
         controller?.contextMenu(for: event, base: super.menu(for: event)) ?? super.menu(for: event)
     }
 
-    // The pointer isn't tracked in a window in the background, so nothing would hide the copy button there.
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        // The pointer isn't tracked in a window in the background, so nothing would hide the copy button there.
         NotificationCenter.default.removeObserver(self, name: NSWindow.didResignKeyNotification, object: nil)
         if let window {
             NotificationCenter.default.addObserver(self, selector: #selector(windowResignedKey), name: NSWindow.didResignKeyNotification, object: window)
+            // Drops reach the text view only once it has registered for them, which takes a window and which it does
+            // by itself only when it is made editable again: a note that opens at once was never ready for them.
+            updateDragTypeRegistration()
         }
     }
 
@@ -276,10 +279,28 @@ final class MarkdownTextView: NSTextView {
         [.fileURL, .png, .tiff, .string, EditorController.fragmentType] + super.readablePasteboardTypes
     }
 
+    // Text dragged to another note brings its pictures along, as copied text does.
+    override var writablePasteboardTypes: [NSPasteboard.PasteboardType] {
+        super.writablePasteboardTypes + [EditorController.fragmentType]
+    }
+
+    override func writeSelection(to pboard: NSPasteboard, type: NSPasteboard.PasteboardType) -> Bool {
+        if type == EditorController.fragmentType, let data = controller?.clipping(of: selectedRange()).fragment {
+            return pboard.setData(data, forType: type)
+        }
+        return super.writeSelection(to: pboard, type: type)
+    }
+
+    override func dragOperation(for dragInfo: NSDraggingInfo, type: NSPasteboard.PasteboardType) -> NSDragOperation {
+        controller?.dropOperation(for: dragInfo) ?? super.dragOperation(for: dragInfo, type: type)
+    }
+
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         let point = convert(sender.draggingLocation, from: nil)
         let index = characterIndexForInsertion(at: point)
-        // Dragging text inside the note is AppKit's; files and pictures from elsewhere are the editor's.
+        // A picture dragged within the note is moved by the editor; text dragged within it is AppKit's; files and
+        // pictures from elsewhere are the editor's.
+        if controller?.dropObject(sender, at: index) == true { return true }
         if sender.draggingSource as? NSTextView !== self, controller?.paste(from: sender.draggingPasteboard, at: index) == true {
             return true
         }

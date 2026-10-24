@@ -669,7 +669,12 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         guard !urls.isEmpty, !urls.contains(where: { folder.path == $0.path || folder.path.hasPrefix($0.path + "/") }) else { return [] }
         if let node = folderNode(for: item) { outlineView.setDropItem(node, dropChildIndex: NSOutlineViewDropOnItemIndex) }
         let local = urls.allSatisfy { workspace.location(containing: $0) != nil }
-        return local && !NSEvent.modifierFlags.contains(.option) ? .move : .copy
+        return local && !isCopy(info) ? .move : .copy
+    }
+
+    /// Option-dragged, or a picture or file dragged out of a note, which keeps its own.
+    private func isCopy(_ info: NSDraggingInfo) -> Bool {
+        NSEvent.modifierFlags.contains(.option) || info.draggingSource is ObjectDrag
     }
 
     func outlineView(_ outlineView: NSOutlineView, acceptDrop info: NSDraggingInfo, item: Any?, childIndex index: Int) -> Bool {
@@ -677,7 +682,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         // Only a drop that adds locations is on the sidebar as a whole.
         if item == nil { return workspace.addLocations(urls) }
         guard let folder = dropFolder(for: item) else { return false }
-        workspace.drop(urls, into: folder, copying: NSEvent.modifierFlags.contains(.option))
+        workspace.drop(urls, into: folder, copying: isCopy(info))
         return true
     }
 

@@ -81,7 +81,12 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     public let scrollView = NSScrollView()
     /// The undo manager the text was last changed in: the window's, which keeps the changes to files too.
     weak var textUndoManager: UndoManager?
+    /// The picture being dragged with the mouse, until the drag is over.
+    var objectDrag: ObjectDrag?
     #endif
+    /// Counts the notes loaded, so pictures that finish loading late, or are dropped after another note was opened,
+    /// go only into the note they were meant for.
+    var loadCount = 0
 
     private(set) var document = MarkdownParser.parse("")
     private var lineSignatures: [Int] = []
@@ -156,8 +161,6 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     var pendingFocus: Focus?
     var requestedFocus: (Focus, Date)?
     var isMoving = false
-    /// Counts the notes loaded, so pictures that finish loading late go only into the note they were meant for.
-    var loadCount = 0
     /// The editor's own record of changes, for undo (`EditorUndo+UIKit`).
     let undoStack = EditorUndoManager()
     var openStep: UndoStep?
@@ -250,12 +253,12 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         storage.replaceCharacters(in: NSRange(location: 0, length: storage.length), with: text)
         storage.endEditing()
         setSelection(NSRange(location: 0, length: 0))
+        loadCount += 1
         #if os(iOS)
         undoStack.clear()
         openStep = nil
         previousSelection = NSRange(location: 0, length: 0)
         layoutManager.selectedRanges = []
-        loadCount += 1
         // Another note: the keyboard goes, unless this one asks for it below.
         pendingFocus = nil
         requestedFocus = nil

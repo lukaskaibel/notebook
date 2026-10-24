@@ -96,9 +96,11 @@ address. A PDF or any other file on a line of its own becomes a card with a prev
   <img alt="Further down the Kyoto note: a plan with a dashed link to the note Nara that doesn't exist yet, a web link with its pencil, a highlight, a Good to know callout, a table of days and areas, and a card for Flight tickets.pdf" src="Design/screenshots/objects-light.webp">
 </picture>
 
-Paste or drop a picture and it's saved next to the note, in a hidden `.assets` folder, as PNG or JPEG so that other
-apps can show it. Delete it from the note and the file goes to the Trash once you leave the note, unless another note
-in the folder still uses it. Move a note to another folder and its pictures move along.
+Paste or drop a picture, from the Finder, Photos or Safari, and it's saved next to the note, in a hidden `.assets`
+folder, as PNG or JPEG so that other apps can show it. Drag a picture or file card to another place in the note to move
+it, or into another note, a folder in the sidebar, the Finder or another app for a copy. Delete it from the note and the
+file goes to the Trash once you leave the note, unless another note in the folder still uses it. Move a note to another
+folder and its pictures move along.
 
 ### Drawings
 
@@ -388,8 +390,8 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   folds into a small "properties" pill. Styles turn on and off where the caret is, their marks come and go as a pair,
   and the text eases into each new look. With a keyboard the marks next to the caret unfold and fold away; on the touch
   keyboard they stay hidden.
-- **Pictures and files in notes.** Paste or drop them in; `![[embeds]]` of other notes show an excerpt, of files a
-  card with a preview.
+- **Pictures and files in notes.** Paste or drop them in, and drag them around the note or out of it;
+  `![[embeds]]` of other notes show an excerpt, of files a card with a preview.
 - **Drawings in notes,** with PencilKit: Apple Pencil, a finger, the mouse, the trackpad or a tablet. Each is a PNG
   that other apps show, with its strokes kept next to it so it stays a drawing in Notebook.
 - **PDFs, pictures, videos and other files** open in the window: PDFs and pictures as in Preview, videos as in
@@ -549,6 +551,7 @@ While writing:
 | Return on a heading | At its start: a line above it; on one without text: back to body text |
 | `[[` | Suggestions for a link; ↑↓ and Return or Tab to pick |
 | Space on a selected picture | Quick Look |
+| Drag a picture or file in a note | Move it to another line; ⌥ drops a copy. Into another note, the sidebar, the Finder or another app: a copy |
 | Double-click a drawing | Draw in it |
 | Esc, or start typing | Stop drawing; typing goes on below the drawing |
 | ↑ on the first line, ← or Delete at the very start | Into the title, at its end |

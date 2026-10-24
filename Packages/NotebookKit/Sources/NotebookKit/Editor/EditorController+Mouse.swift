@@ -97,8 +97,12 @@ extension EditorController {
     func handleMouseDown(_ event: NSEvent) -> Bool {
         guard event.type == .leftMouseDown else { return false }
         let point = textView.convert(event.locationInWindow, from: nil)
-        if !event.modifierFlags.intersection([.shift, .command, .option, .control]).isEmpty { return false }
+        let modifiers = event.modifierFlags.intersection([.shift, .command, .option, .control])
         guard let hit = hitTest(point) else { return false }
+        // Clicks with a modifier key are the text view's, but for Option-dragging a picture, which copies it.
+        var allowed: NSEvent.ModifierFlags = []
+        if case .picture = hit { allowed = .option }
+        if !modifiers.subtracting(allowed).isEmpty { return false }
         switch hit {
         case .checkbox(let line):
             toggleCheckbox(line: line)
@@ -108,6 +112,9 @@ extension EditorController {
             delegate?.editor(self, open: kind)
             return true
         case .picture(let range, let url):
+            // Pressed in text selected around it: the text view drags the selection, as it drags any selected text.
+            let selected = selection
+            if event.clickCount == 1, selected.length > range.length, NSIntersectionRange(selected, range) == range { return false }
             textView.window?.makeFirstResponder(textView)
             setSelection(range)
             // A double-click opens a drawing for drawing, and any other picture in Quick Look.
@@ -115,6 +122,8 @@ extension EditorController {
                 beginDrawing(in: drawing)
             } else if event.clickCount >= 2, let url {
                 delegate?.editor(self, quickLook: url)
+            } else {
+                dragObjectIfMoved(range, from: event)
             }
             return true
         case .editLink(let range):
