@@ -14,7 +14,7 @@
   <img alt="Platform: iOS and iPadOS 27 or later" src="https://img.shields.io/badge/iOS%20%26%20iPadOS-27%2B-34508F">
   <img alt="Apple silicon" src="https://img.shields.io/badge/Apple%20silicon-native-34508F">
   <img alt="Built with Swift, SwiftUI, AppKit and UIKit" src="https://img.shields.io/badge/Swift-SwiftUI%20%2B%20AppKit%20%2B%20UIKit-F05138">
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-34508F"></a>
+  <a href="#license"><img alt="License: GPLv3" src="https://img.shields.io/badge/license-GPLv3-34508F"></a>
   <a href="CHANGELOG.md"><img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-34508F"></a>
 </p>
 
@@ -708,4 +708,20 @@ Notebook is an independent project and is not affiliated with, endorsed by, or s
 
 ## License
 
-[MIT](LICENSE) © Lukas Kaibel
+Copyright © 2026 Lukas Kaibel
+
+Notebook is free software: you can redistribute it and modify it under the terms of the
+[GNU General Public License, version 3](LICENSE), as published by the Free Software Foundation. It comes with no
+warranty of any kind; the licence has the details.
+
+**Additional permission under GNU GPL version 3 section 7.** If you modify this program, or any covered work, by
+linking or combining it with [elk-swift](https://github.com/lukilabs/elk-swift) (or a modified version of that
+library), containing parts covered by the terms of the Eclipse Public License 2.0, the licensors of this program grant
+you additional permission to convey the resulting work. Corresponding Source for a non-source form of such a
+combination shall include the source code for the parts of elk-swift used as well as that of the covered work.
+
+Notebook was released under the [MIT License](https://github.com/lukaskaibel/notebook/blob/7194650/LICENSE) until
+24 October 2026. Copies from before then, up to commit `7194650`, can still be used under that licence.
+
+Contributions come with terms of their own, so that Notebook can be published on the App Store: see
+[CONTRIBUTING.md](CONTRIBUTING.md#licensing-your-contribution).
