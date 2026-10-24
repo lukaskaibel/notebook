@@ -250,7 +250,7 @@ def check_sandbox(archive)
 end
 
 # Uploads a build and waits until App Store Connect has processed it, which "What to Test" needs. The internal testers
-# get every build by themselves.
+# get every build by themselves, the external ones through send_to_external_testers.
 def upload_beta(platform, package)
   config = PLATFORMS.fetch(platform)
   upload_to_testflight(
@@ -261,6 +261,37 @@ def upload_beta(platform, package)
     localized_build_info: { "default" => { whats_new: what_to_test }, "en-US" => { whats_new: what_to_test } },
     distribute_external: false
   )
+  send_to_external_testers(platform)
+end
+
+# The TestFlight group of testers outside the team, such as family, who get every build once Apple's Beta App Review
+# has passed it, and what App Store Connect calls the platforms of its builds.
+EXTERNAL_GROUP = "Family and friends"
+CONNECT_PLATFORMS = { ios: "IOS", mac: "MAC_OS" }.freeze
+
+# Adds the build just uploaded to EXTERNAL_GROUP and submits it for Beta App Review; TestFlight offers it to the group
+# once Apple has passed it. The test information and the reviewer's contact are filled in on App Store Connect. pilot's
+# own distribute_external isn't used: a refused submission (say while another build still waits for review) would fail
+# an upload that went through, and its way around that expires the waiting build, which stops copies people installed.
+# Here the build then stays with the internal testers.
+def send_to_external_testers(platform)
+  api_key
+  build_name = "#{beta_version} (#{build_number})"
+  app = Spaceship::ConnectAPI::App.find(APP_ID)
+  group = app.get_beta_groups.find { |candidate| candidate.name == EXTERNAL_GROUP }
+  return UI.important("There's no TestFlight group \"#{EXTERNAL_GROUP}\"; only the team gets #{build_name}.") if group.nil?
+
+  build = Spaceship::ConnectAPI::Build.all(app_id: app.id, version: beta_version, build_number: build_number,
+                                           platform: CONNECT_PLATFORMS.fetch(platform)).first
+  return UI.important("App Store Connect doesn't list #{build_name} yet; only the team gets it.") if build.nil?
+
+  build.add_beta_groups(beta_groups: [group])
+  return UI.message("#{build_name} is already submitted for Beta App Review.") unless build.ready_for_beta_submission?
+
+  build.post_beta_app_review_submission
+  UI.success("Submitted #{build_name} for Beta App Review; \"#{EXTERNAL_GROUP}\" gets it once Apple has passed it.")
+rescue Spaceship::UnexpectedResponse, Spaceship::BasicPreferredInfoError => error
+  UI.important("\"#{EXTERNAL_GROUP}\" doesn't get #{build_name}: #{error.message}")
 end
 
 def upload_to_beta(platform)

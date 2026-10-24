@@ -709,6 +709,10 @@ build carries the version it's on its way to and the date and time in Germany: `
 17 October 2026 at 10:47, and once `v0.1.0` is tagged, the builds after it are `0.2.0`. Its "What to Test" names the
 commit.
 
+The team's own testers get every build straight away; the external testers in the TestFlight group "Family and
+friends" get it once Apple's Beta App Review has passed it. That group, its test information and the reviewer's contact
+are set up on App Store Connect.
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes.
 
 ## Versions
