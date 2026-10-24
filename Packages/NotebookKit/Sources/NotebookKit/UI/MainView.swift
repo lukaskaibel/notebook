@@ -344,6 +344,11 @@ struct WelcomeView: View {
                 .font(.system(size: 13))
                 .foregroundStyle(Color.theme(Theme.textSecondary))
                 .padding(.top, 14)
+            Button("Try Sample Notes…") { workspace.chooseSampleNotesFolder() }
+                .buttonStyle(.plain)
+                .font(.system(size: 13))
+                .foregroundStyle(Color.theme(Theme.textSecondary))
+                .padding(.top, 8)
             Spacer()
             Text("You can add more folders later with Add Location at the bottom of the sidebar. Notebook only sees the folders you choose.")
                 .font(.system(size: 12))

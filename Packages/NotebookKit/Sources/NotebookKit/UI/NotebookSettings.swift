@@ -145,11 +145,35 @@ public final class NotebookSettings {
     }
 
     #if os(iOS)
-    /// The tools in the bar above the keyboard, in their order.
+    /// The tools in the bar above the keyboard, in their order. Kept with the tools there were then, so that tools
+    /// that come with a later version join a bar you changed (`writingBar(_:known:standard:)`).
     var writingBarTools: [WritingTool] {
-        didSet { UserDefaults.standard.set(writingBarTools.map(\.rawValue), forKey: "writingBarTools") }
+        didSet { Self.keep(writingBarTools) }
+    }
+
+    private static func keep(_ tools: [WritingTool]) {
+        UserDefaults.standard.set(tools.map(\.rawValue), forKey: "writingBarTools")
+        UserDefaults.standard.set(WritingTool.allCases.map(\.rawValue), forKey: "writingBarKnownTools")
     }
     #endif
+
+    /// A writing bar you changed, with the standard tools that came since (those not in `known`) put in where they
+    /// stand in the standard bar: after the nearest tool before them there that it has. Tools you took out stay out.
+    nonisolated static func writingBar(_ saved: [String], known: [String], standard: [String]) -> [String] {
+        var bar = saved
+        for (index, tool) in standard.enumerated() where !known.contains(tool) && !bar.contains(tool) {
+            let before = standard[..<index].last { bar.contains($0) }
+            bar.insert(tool, at: before.flatMap(bar.firstIndex(of:)).map { $0 + 1 } ?? 0)
+        }
+        return bar
+    }
+
+    /// The tools of the first writing bar you could change, kept without what tools there were: Drawing and Remind Me
+    /// came after it.
+    nonisolated static let firstWritingTools = [
+        "format", "checklist", "attach", "link", "undo", "redo", "bold", "italic", "strikethrough", "highlight", "code",
+        "quote", "bulletedList", "numberedList", "outdent", "indent", "camera", "scanner", "photos", "files", "hideKeyboard",
+    ]
 
     private init() {
         let defaults = UserDefaults.standard
@@ -162,7 +186,14 @@ public final class NotebookSettings {
         deletesEmptyNewNotes = defaults.object(forKey: "deletesEmptyNewNotes") as? Bool ?? true
         showsTodos = defaults.object(forKey: "showsTodos") as? Bool ?? true
         #if os(iOS)
-        writingBarTools = defaults.stringArray(forKey: "writingBarTools")?.compactMap(WritingTool.init(rawValue:)) ?? WritingTool.standard
+        if let saved = defaults.stringArray(forKey: "writingBarTools") {
+            let known = defaults.stringArray(forKey: "writingBarKnownTools") ?? Self.firstWritingTools
+            let bar = Self.writingBar(saved, known: known, standard: WritingTool.standard.map(\.rawValue))
+            writingBarTools = bar.compactMap(WritingTool.init(rawValue:))
+            if bar != saved || known != WritingTool.allCases.map(\.rawValue) { Self.keep(writingBarTools) }
+        } else {
+            writingBarTools = WritingTool.standard
+        }
         #endif
         EditorStyle.apply(typography)
     }

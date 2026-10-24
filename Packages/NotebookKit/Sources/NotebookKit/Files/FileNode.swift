@@ -246,12 +246,12 @@ public final class FileNode: NSObject, Observable {
 
     /// Reads a folder: its files and folders in the sidebar's order, with `linked` among them. This can take a while
     /// (iCloud Drive may have to ask the server first), so apart from what you just did yourself it runs off the main
-    /// thread.
-    nonisolated static func list(_ folder: URL, linked: [LinkedFolder] = []) -> [Listing] {
+    /// thread. `delay` stands in for `-NotebookSlowFolders` in Debug builds.
+    nonisolated static func list(_ folder: URL, linked: [LinkedFolder] = [], delay: TimeInterval? = nil) -> [Listing] {
         #if DEBUG
         // A slow disk or a slow iCloud, for trying out that nothing waits for it. Reads on the main thread (what you
         // just did yourself) aren't slowed down but logged, to find any that shouldn't be there.
-        let delay = UserDefaults.standard.double(forKey: "NotebookSlowFolders")
+        let delay = delay ?? UserDefaults.standard.double(forKey: "NotebookSlowFolders")
         if Thread.isMainThread { mainThreadReads.withLock { $0 += 1 } }
         if delay > 0 {
             if Thread.isMainThread { NSLog("Notebook: read %@ on the main thread", folder.path) } else { Thread.sleep(forTimeInterval: delay) }

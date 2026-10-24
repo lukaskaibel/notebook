@@ -28,6 +28,9 @@ public struct NotebookScene: Scene {
         .windowToolbarStyle(.unified)
         .defaultSize(width: 1280, height: 820)
         .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About Notebook") { Acknowledgements.showAbout() }
+            }
             CommandGroup(replacing: .importExport) {
                 Menu {
                     Button { workspace.export(as: .pdf) } label: { Label("PDF…", systemImage: "doc.richtext") }

@@ -1,24 +1,30 @@
-# Builds Notebook for the App Store and uploads it to TestFlight, for the iPhone and iPad and for the Mac.
+# Releases Notebook to the App Store and TestFlight, for the Mac, iPhone and iPad.
 #
 # Every call to App Store Connect signs in with an App Store Connect API key (.p8), so there are no Apple ID or
 # two-factor prompts, and Xcode needs no account; store_signing below says how the builds are signed. Copy
 # fastlane/.env.secret.example to fastlane/.env.secret (it is gitignored) and fill it in, run `bundle install` once,
 # and then:
 #
-#   bundle exec fastlane ios beta     # build the iPhone and iPad app and upload it to TestFlight
-#   bundle exec fastlane mac beta     # build the Mac app and upload it to TestFlight
-#   bundle exec fastlane beta         # both
-#   bundle exec fastlane build        # build both for the App Store, signed, without uploading (or ios build, mac build)
+#   bundle exec fastlane screenshots   # take the App Store screenshots of the iPhone, iPad and Mac apps
+#   bundle exec fastlane metadata      # upload the texts, the age rating and the screenshots of both platforms
+#   bundle exec fastlane build         # build the Mac, iPhone and iPad apps for the App Store, without uploading
+#   bundle exec fastlane beta          # build the Mac, iPhone and iPad apps and upload them to TestFlight
+#   bundle exec fastlane submit        # submit the builds uploaded by `beta` for review, after testing them
+#   bundle exec fastlane release       # build them, upload everything and submit both platforms for review
+#
+# `bundle exec fastlane ios <lane>` and `bundle exec fastlane mac <lane>` do one platform. The texts are in
+# fastlane/metadata and the screenshots in Design/screenshots/app-store. Design/app-store.md lists what has to be set
+# once in App Store Connect itself.
 #
 # .github/workflows/testflight.yml runs `ios beta` and `mac beta` on GitHub for every change to the app on main.
-# TestFlight builds are numbered as beta_version and build_number below say: 0.2.0 (2026.1017.1047).
-#
-# The App Store listing (texts, screenshots, submitting for review) isn't here yet: that comes with the first release.
+# TestFlight builds are numbered as beta_version and build_number below say: 1.0.0 (2026.1017.1047).
+# So a release goes: set its version in Config/Shared.xcconfig, let `beta` build it, `submit`, and tag it after.
 
+require "fileutils"
 require "plist"
 require "shellwords"
 
-# The build settings are UTF-8, whatever the shell's locale is.
+# The texts and build settings are UTF-8 ("›", "•", "⌘"), whatever the shell's locale is.
 Encoding.default_external = Encoding::UTF_8
 ENV["LANG"] = "en_US.UTF-8" if ENV["LANG"].to_s.empty?
 ENV["LC_ALL"] = "en_US.UTF-8" if ENV["LC_ALL"].to_s.empty?
@@ -30,12 +36,17 @@ ROOT = File.expand_path("..", HERE)
 PROJECT = File.join(ROOT, "Notebook.xcodeproj")
 SCHEME = "Notebook"
 OUTPUT = File.join(ROOT, "build", "fastlane")
+METADATA = File.join(HERE, "metadata")
+SCREENSHOTS = File.join(ROOT, "Design", "screenshots", "app-store")
 
-# One app on two App Store platforms. Both build the AppStore configuration: only it has the sandbox on the Mac and
-# the entitlements for iCloud's key-value store and Time Sensitive notifications.
+# One app on two App Store platforms: how each is built and which screenshots belong to it. Both build the AppStore
+# configuration: only it has the sandbox on the Mac and the entitlements for iCloud's key-value store and Time
+# Sensitive notifications.
 PLATFORMS = {
-  ios: { name: "iPhone and iPad", sdk: "iphoneos", destination: "generic/platform=iOS", store: "ios", package: :ipa },
-  mac: { name: "Mac", sdk: "macosx", destination: "generic/platform=macOS", store: "osx", package: :pkg }
+  ios: { name: "iPhone and iPad", sdk: "iphoneos", destination: "generic/platform=iOS", store: "ios", package: :ipa,
+         screenshots: %w[iphone ipad], screenshot_tool: "app-store-screenshots.sh" },
+  mac: { name: "Mac", sdk: "macosx", destination: "generic/platform=macOS", store: "osx", package: :pkg,
+         screenshots: %w[mac], screenshot_tool: "mac-app-store-screenshots.sh" }
 }.freeze
 CONFIGURATION = "AppStore"
 
@@ -180,8 +191,8 @@ def git(*arguments)
 end
 
 # The version a TestFlight build is on its way to. Config/Shared.xcconfig holds the version of the latest release,
-# which gets a v tag when it ships, so once v0.1.0 is tagged, the builds after it are the next minor version, 0.2.0.
-# Before that they are 0.1.0 itself. (A version that is out is closed in App Store Connect: it takes no more builds.)
+# which gets a v tag when it ships, so once v1.0.0 is tagged, the builds after it are the next minor version, 1.1.0.
+# Before that they are 1.0.0 itself. (A version that is out is closed in App Store Connect: it takes no more builds.)
 def beta_version
   @beta_version ||= if git("tag", "--list", "v#{version}").empty?
                       version
@@ -250,7 +261,7 @@ def check_sandbox(archive)
 end
 
 # Uploads a build and waits until App Store Connect has processed it, which "What to Test" needs. The internal testers
-# get every build by themselves.
+# get every build by themselves, the external ones through send_to_external_testers.
 def upload_beta(platform, package)
   config = PLATFORMS.fetch(platform)
   upload_to_testflight(
@@ -261,10 +272,138 @@ def upload_beta(platform, package)
     localized_build_info: { "default" => { whats_new: what_to_test }, "en-US" => { whats_new: what_to_test } },
     distribute_external: false
   )
+  send_to_external_testers(platform)
+end
+
+# The TestFlight group of testers outside the team, such as family, who get every build once Apple's Beta App Review
+# has passed it, and what App Store Connect calls the platforms of its builds.
+EXTERNAL_GROUP = "Family and friends"
+CONNECT_PLATFORMS = { ios: "IOS", mac: "MAC_OS" }.freeze
+
+# Adds the build just uploaded to EXTERNAL_GROUP and submits it for Beta App Review; TestFlight offers it to the group
+# once Apple has passed it. The test information and the reviewer's contact are filled in on App Store Connect. pilot's
+# own distribute_external isn't used: a refused submission (say while another build still waits for review) would fail
+# an upload that went through, and its way around that expires the waiting build, which stops copies people installed.
+# Here the build then stays with the internal testers.
+def send_to_external_testers(platform)
+  api_key
+  build_name = "#{beta_version} (#{build_number})"
+  app = Spaceship::ConnectAPI::App.find(APP_ID)
+  group = app.get_beta_groups.find { |candidate| candidate.name == EXTERNAL_GROUP }
+  return UI.important("There's no TestFlight group \"#{EXTERNAL_GROUP}\"; only the team gets #{build_name}.") if group.nil?
+
+  build = Spaceship::ConnectAPI::Build.all(app_id: app.id, version: beta_version, build_number: build_number,
+                                           platform: CONNECT_PLATFORMS.fetch(platform)).first
+  return UI.important("App Store Connect doesn't list #{build_name} yet; only the team gets it.") if build.nil?
+
+  build.add_beta_groups(beta_groups: [group])
+  return UI.message("#{build_name} is already submitted for Beta App Review.") unless build.ready_for_beta_submission?
+
+  build.post_beta_app_review_submission
+  UI.success("Submitted #{build_name} for Beta App Review; \"#{EXTERNAL_GROUP}\" gets it once Apple has passed it.")
+rescue Spaceship::UnexpectedResponse, Spaceship::BasicPreferredInfoError => error
+  UI.important("\"#{EXTERNAL_GROUP}\" doesn't get #{build_name}: #{error.message}")
 end
 
 def upload_to_beta(platform)
   upload_beta(platform, archive_for_store(platform, marketing_version: beta_version))
+end
+
+def flag(value)
+  value == true || value.to_s == "true"
+end
+
+# deliver wants one folder per language and tells the devices apart by the size of each picture. The prefix keeps
+# iPhone and iPad apart and the numbers keep the order.
+def stage_screenshots(platform)
+  staged = File.join(OUTPUT, "screenshots", platform.to_s)
+  FileUtils.rm_rf(staged)
+  language = File.join(staged, "en-US")
+  FileUtils.mkdir_p(language)
+  PLATFORMS.fetch(platform)[:screenshots].each do |device|
+    pictures = Dir[File.join(SCREENSHOTS, device, "*.png")].sort
+    UI.user_error!("No screenshots in #{File.join(SCREENSHOTS, device)}; run `bundle exec fastlane screenshots`.") if pictures.empty?
+    pictures.each { |picture| FileUtils.cp(picture, File.join(language, "#{device}-#{File.basename(picture)}")) }
+  end
+  staged
+end
+
+# The contact for App Review comes from fastlane/.env.secret, since the repository is public. The notes are in
+# fastlane/metadata/review_information/notes.txt, which deliver adds by itself.
+def review_contact(required: false)
+  names = %w[REVIEW_FIRST_NAME REVIEW_LAST_NAME REVIEW_PHONE REVIEW_EMAIL]
+  names.each { |name| secret(name) } if required
+  {
+    first_name: ENV["REVIEW_FIRST_NAME"],
+    last_name: ENV["REVIEW_LAST_NAME"],
+    phone_number: ENV["REVIEW_PHONE"],
+    email_address: ENV["REVIEW_EMAIL"]
+  }.reject { |_, value| value.to_s.empty? }
+end
+
+# Makes sure the platform has this version in App Store Connect to fill in, as deliver would. While an earlier version
+# of either platform is in review or waits to be released, App Store Connect keeps the app's name, which both platforms
+# share, locked, so this stops with the reason instead of failing halfway through the upload.
+def prepare_store_version(platform)
+  api_key
+  app = Spaceship::ConnectAPI::App.find(APP_ID)
+  waiting = app.get_app_store_versions.find do |candidate|
+    candidate.version_string != version && %w[WAITING_FOR_REVIEW IN_REVIEW PENDING_DEVELOPER_RELEASE].include?(candidate.app_store_state)
+  end
+  if waiting
+    name = PLATFORMS.values.find { |config| Spaceship::ConnectAPI::Platform.map(config[:store]) == waiting.platform }&.fetch(:name)
+    UI.user_error!("#{name || waiting.platform} #{waiting.version_string} is #{waiting.app_store_state.downcase.tr('_', ' ')}. " \
+                   "Release it, or remove it from review, in App Store Connect before uploading #{version}.")
+  end
+  app.ensure_version!(version, platform: Spaceship::ConnectAPI::Platform.map(PLATFORMS.fetch(platform)[:store]))
+  app
+end
+
+# Texts, age rating, review notes and screenshots of one platform, with its new build when there is one.
+def store_upload(platform, package: nil, submit: false, automatic_release: false)
+  config = PLATFORMS.fetch(platform)
+  UI.header("#{config[:name]}: App Store #{version}")
+  prepare_store_version(platform)
+  options = {
+    api_key: api_key,
+    platform: config[:store],
+    app_version: version,
+    metadata_path: METADATA,
+    screenshots_path: stage_screenshots(platform),
+    overwrite_screenshots: true,
+    app_rating_config_path: File.join(HERE, "rating.json"),
+    app_review_information: review_contact(required: submit),
+    skip_binary_upload: package.nil?,
+    submit_for_review: submit,
+    automatic_release: automatic_release,
+    # No encryption of its own (ITSAppUsesNonExemptEncryption is NO). The app shows the user's own files, and the
+    # sample notes, pictures and drawing are made by the app itself.
+    submission_information: {
+      export_compliance_uses_encryption: false,
+      content_rights_contains_third_party_content: false
+    },
+    force: true,
+    run_precheck_before_submit: false,
+    precheck_include_in_app_purchases: false
+  }
+  options[config[:package]] = package if package
+  upload_to_app_store(options)
+end
+
+def release(platform, options)
+  package = archive_for_store(platform)
+  store_upload(platform, package: package, submit: options[:submit].nil? || flag(options[:submit]),
+                         automatic_release: flag(options[:automatic_release]))
+end
+
+desc "Takes the App Store screenshots of the iPhone, iPad and Mac apps on the sample notes"
+lane :screenshots do
+  PLATFORMS.each_value { |config| sh(File.join(ROOT, "Tools", config[:screenshot_tool])) }
+end
+
+desc "Uploads the texts, the age rating and the screenshots of the Mac, iPhone and iPad apps"
+lane :metadata do
+  PLATFORMS.each_key { |platform| store_upload(platform) }
 end
 
 desc "Builds the Mac, iPhone and iPad apps for the App Store, signed, without uploading them"
@@ -277,18 +416,54 @@ lane :beta do
   PLATFORMS.each_key { |platform| upload_to_beta(platform) }
 end
 
+desc "Submits the newest uploaded builds of the Mac, iPhone and iPad apps for review, with texts and screenshots"
+desc "Builds nothing: run it after `beta` once the TestFlight builds are tested. automatic_release:true as for release"
+lane :submit do |options|
+  PLATFORMS.each_key { |platform| store_upload(platform, submit: true, automatic_release: flag(options[:automatic_release])) }
+end
+
+desc "Builds the Mac, iPhone and iPad apps, uploads them with texts and screenshots and submits them for review"
+desc "submit:false stops before the submission, automatic_release:true releases them as soon as they are approved"
+lane :release do |options|
+  PLATFORMS.each_key { |platform| release(platform, options) }
+end
+
 platform :ios do
+  desc "Takes the iPhone and iPad screenshots"
+  lane(:screenshots) { sh(File.join(ROOT, "Tools", PLATFORMS[:ios][:screenshot_tool])) }
+
+  desc "Uploads the texts, the age rating and the screenshots of the iPhone and iPad app"
+  lane(:metadata) { store_upload(:ios) }
+
   desc "Builds the iPhone and iPad app for the App Store, signed, without uploading it"
   lane(:build) { archive_for_store(:ios) }
 
   desc "Builds the iPhone and iPad app and uploads it to TestFlight"
   lane(:beta) { upload_to_beta(:ios) }
+
+  desc "Submits the newest uploaded build of the iPhone and iPad app for review, with texts and screenshots"
+  lane(:submit) { |options| store_upload(:ios, submit: true, automatic_release: flag(options[:automatic_release])) }
+
+  desc "Builds the iPhone and iPad app, uploads it with texts and screenshots and submits it for review"
+  lane(:release) { |options| release(:ios, options) }
 end
 
 platform :mac do
+  desc "Takes the Mac screenshots"
+  lane(:screenshots) { sh(File.join(ROOT, "Tools", PLATFORMS[:mac][:screenshot_tool])) }
+
+  desc "Uploads the texts, the age rating and the screenshots of the Mac app"
+  lane(:metadata) { store_upload(:mac) }
+
   desc "Builds the Mac app for the App Store, signed, without uploading it"
   lane(:build) { archive_for_store(:mac) }
 
   desc "Builds the Mac app and uploads it to TestFlight"
   lane(:beta) { upload_to_beta(:mac) }
+
+  desc "Submits the newest uploaded build of the Mac app for review, with texts and screenshots"
+  lane(:submit) { |options| store_upload(:mac, submit: true, automatic_release: flag(options[:automatic_release])) }
+
+  desc "Builds the Mac app, uploads it with texts and screenshots and submits it for review"
+  lane(:release) { |options| release(:mac, options) }
 end

@@ -369,7 +369,7 @@ extension Workspace {
             guard let index = Todos.find(todo.source, near: todo.line, in: document, string: string),
                   let change = edit(string, document, index) else { return }
             let changed = string.replacingCharacters(in: change.range, with: change.replacement)
-            guard (try? Data(changed.utf8).write(to: url, options: .atomic)) != nil else { return }
+            guard FileOperations.write(Data(changed.utf8), to: url) else { return }
             let line = MarkdownParser.parse(changed).lines[index].range
             result = (index, (changed as NSString).substring(with: line))
         }

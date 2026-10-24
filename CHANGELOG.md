@@ -7,6 +7,21 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- Notes in Spotlight, on the Mac and in the search of iPhone and iPad: Spotlight finds every note in your locations by
+  its name or any word in it, with its first lines and its folder, and picking one opens it in Notebook. Spotlight
+  follows as you write, rename, move and delete notes; notes in hidden folders stay out, and so do the notes of a
+  location you remove. Search in App takes the words you typed in Spotlight to ⌘K. Notebook gives Spotlight what search
+  has already read, in the background, and after a launch only the notes that changed since.
+- Try Sample Notes… on the first screen, to look around before you add your own folders: made-up notes, a drawing,
+  pictures and PDFs in a new folder Sample Notes, in a folder you pick on the Mac and in Notebook's own folder on iPhone
+  and iPad. It shows in the sidebar like any location, and removing it leaves the files where they are.
+- Acknowledgements: Notebook's licence and those of BeautifulMermaid, SwiftMath and elk-swift, which it is built with,
+  with links to their source code, in Notebook › About Notebook on the Mac and Settings › Acknowledgements on iPhone and
+  iPad.
+- New Note in Shortcuts, Spotlight and Siri, on the Mac, iPhone and iPad: it opens Notebook with a new note in your
+  default folder and the caret in its title, ready to type, as ⌘N does with nothing open. It is there without setting
+  anything up ("New note in Notebook"), and on an iPhone with an Action button you can put it there under Settings ›
+  Action Button › Shortcut. In a shortcut of your own, New Note takes text for the note to start with.
 - Links follow notes, files and folders you move, as they follow a note you rename: drag a note onto another folder,
   choose Move To, or rename or move a folder, on the Mac, iPhone and iPad, and the `[[links]]`, embeds and Markdown
   links to them in your other notes still open the same note or file. A link changes only where it would find
@@ -225,6 +240,20 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- In the App Store build, a note opened from the Finder outside your locations couldn't be renamed or take pictures and
+  drawings, since the sandbox gives Notebook only the file. The first time it needs the note's folder, Notebook now
+  asks for it, and remembers it after that.
+- If you had changed the bar above the keyboard in Settings › Writing Bar, tools that came later, such as Drawing,
+  never joined it. They now come in where they stand in the standard bar, once; tools you took out stay out.
+- On iPhone and iPad, a location's name over its folders brought up no menu, though it should have: touching and
+  holding it did nothing. A tap on the name now brings up New Note, New Folder, Add to Favorites, Share, Show Hidden
+  Folders and Remove from Notebook.
+- On iPhone and iPad, opening a note could keep Notebook busy for seconds in a location with thousands of folders,
+  such as a whole iCloud Drive: the ⋯ menu made an item for every folder under Move To, each time. Move in the ⋯ menu
+  and in a file's touch-and-hold menu now asks where to in a sheet, as swiping a file does and as the Files app asks.
+- Saving a note took away its Finder tags, and whatever else other apps keep on the file, such as where it was
+  downloaded from; so did ticking a to-do off in To-dos and links changing after a rename or a move. They stay now, and
+  so does the date the note was made.
 - Editing a to-do in To-dos could stop by itself as soon as you moved the pointer after clicking it, so it took a
   second click. Now it goes on until you press Return or Escape or click outside the to-do, also beside the list, on a
   group's name or in the sidebar, which before didn't end it. A to-do given another date while you edit it stays in
@@ -300,7 +329,7 @@ versions follow [semantic versioning](https://semver.org).
   Return, and a new note went to the Trash with it. The name is now kept, and the next note's title no longer stays
   selected, ready to be typed over.
 
-## [0.1.0] – not released yet
+## [1.0.0] – not released yet
 
 The first version: a Mac app for Markdown notes in your own folders. While it was being built, it was called Folio.
 

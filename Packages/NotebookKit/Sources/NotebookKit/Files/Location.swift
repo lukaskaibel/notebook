@@ -3,6 +3,7 @@ import AppKit
 #else
 import UIKit
 #endif
+import CryptoKit
 import Synchronization
 
 /// A folder Notebook shows in the sidebar: iCloud Drive or any folder you add. In the sandboxed build the app can only
@@ -22,6 +23,15 @@ public struct Location: Identifiable, Codable, Equatable, Sendable {
         self.name = name
         self.path = path
         self.bookmark = bookmark
+    }
+
+    /// The same ID for the same folder at every launch, for a folder given on the command line, which isn't kept:
+    /// Spotlight finds its notes again by it. "/private/tmp/Notes" and "/tmp/Notes" are one folder, which the system
+    /// gives the first way until it exists.
+    static func id(for path: String) -> UUID {
+        let hex = SHA256.hash(data: Data(HiddenFolders.withoutPrivate(path).utf8)).prefix(16).map { String(format: "%02x", $0) }.joined()
+        let parts = [hex.prefix(8), hex.dropFirst(8).prefix(4), hex.dropFirst(12).prefix(4), hex.dropFirst(16).prefix(4), hex.dropFirst(20)]
+        return UUID(uuidString: parts.joined(separator: "-")) ?? UUID()
     }
 
     /// Standardized, as every address in the app is, so "/private/tmp" and "/tmp" compare equal.
@@ -193,13 +203,13 @@ enum LocationStore {
 
     #if os(macOS)
     /// Asks for a folder, starting in iCloud Drive or wherever `directory` says.
-    static func choose(startingIn directory: URL? = nil, message: String? = nil) -> URL? {
+    static func choose(startingIn directory: URL? = nil, message: String? = nil, prompt: String = "Open") -> URL? {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = true
-        panel.prompt = "Open"
+        panel.prompt = prompt
         panel.message = message ?? "Choose a folder with your notes. Notebook shows everything in it."
         panel.directoryURL = directory ?? URL(fileURLWithPath: Location.iCloudDrivePath, isDirectory: true)
         return panel.runModal() == .OK ? panel.url : nil

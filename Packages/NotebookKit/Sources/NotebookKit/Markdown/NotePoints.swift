@@ -45,6 +45,32 @@ enum NotePoints {
         return result
     }
 
+    /// The first lines of a note as plain text, in their order, as Spotlight shows them under its name: front matter,
+    /// pictures, code, tables and maths left out, and a first heading that only says the note's name. Only the start
+    /// of a long note is read.
+    static func beginning(of markdown: String, title: String, maximumLength: Int = 300) -> String {
+        let start = String(markdown.prefix(4 * maximumLength + 2000))
+        let document = MarkdownParser.parse(start)
+        let string = start as NSString
+        var lines: [String] = []
+        var length = 0
+        for line in document.lines {
+            switch line.kind {
+            case .paragraph, .quote, .listItem, .heading:
+                let text = plain(line, in: string)
+                guard !text.isEmpty else { continue }
+                if case .heading = line.kind, lines.isEmpty, SearchIndex.fold(text) == SearchIndex.fold(title) { continue }
+                lines.append(text)
+                length += text.count + 1
+            default:
+                continue
+            }
+            if length > maximumLength { break }
+        }
+        let text = lines.joined(separator: "\n")
+        return text.count > maximumLength ? String(text.prefix(maximumLength - 1)) + "…" : text
+    }
+
     /// The text you read on a line: its Markdown marks, pictures, embeds and a to-do's date and place left out, a
     /// link's words kept.
     static func plain(_ line: MarkdownLine, in string: NSString) -> String {
