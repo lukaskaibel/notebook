@@ -7,6 +7,7 @@ WRITE
 • Drawings in notes, with Apple Pencil, a finger, the mouse or the trackpad
 • [[Links]] between notes that keep working when you rename or move a note or its folder
 • Saves as you type, and never overwrites a change made on another device
+• New Note in Shortcuts, Spotlight and Siri, and on an iPhone's Action button: a new note, ready to type
 
 FIND
 • Search finds the names of notes, files and folders, headings, words in notes and PDFs, and the text in pictures, scanned pages and handwriting
