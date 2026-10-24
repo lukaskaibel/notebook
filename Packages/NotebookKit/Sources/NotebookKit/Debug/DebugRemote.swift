@@ -645,6 +645,9 @@ enum DebugRemote {
             // drop <file> > <folder>: what dragging a file onto a folder in the sidebar does (Option: dropcopy).
             let paths = argument.components(separatedBy: " > ")
             if paths.count == 2 { workspace?.drop([URL(fileURLWithPath: paths[0])], into: URL(fileURLWithPath: paths[1], isDirectory: true)) }
+        case "links":
+            // links: every link in the open note and the file a click on it opens.
+            log("links: " + (workspace?.debugLinks() ?? ""))
         case "mainthread":
             // mainthread: how many folders were read and files changed on the main thread so far (none should be).
             log("mainthread: \(FileNode.mainThreadReads.withLock { $0 }) folder reads, \(FileOperations.mainThreadWrites.withLock { $0 }) file changes")

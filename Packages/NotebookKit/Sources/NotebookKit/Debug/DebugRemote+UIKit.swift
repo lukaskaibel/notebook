@@ -182,7 +182,12 @@ enum DebugRemote {
         case "favorite":
             if let url = url(argument) ?? workspace.currentURL { workspace.toggleFavorite(url) }
         case "rename":
-            if let url = workspace.currentURL { workspace.rename(url, to: argument) }
+            // rename <name>: the open file; rename <file> > <name>: any file or folder.
+            let parts = argument.components(separatedBy: " > ")
+            if parts.count == 2, let url = url(parts[0]) { workspace.rename(url, to: parts[1]) } else if let url = workspace.currentURL { workspace.rename(url, to: argument) }
+        case "links":
+            // links: every link in the open note and the file a tap on it opens.
+            log("links: " + workspace.debugLinks())
         case "renamealert":
             workspace.renaming = url(argument) ?? workspace.currentURL
         case "makefolder":

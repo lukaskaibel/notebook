@@ -25,6 +25,45 @@ extension EditorController {
         return true
     }
 
+    /// Changes the addresses of links, each where it is, as one step of Undo of its own: a file they point at was
+    /// renamed or moved. The caret and the scroll position stay where they are. Nothing changes while the text isn't in.
+    @discardableResult
+    func changeLinks(_ changes: [(range: NSRange, replacement: String)], actionName: String) -> Bool {
+        guard !isWaitingForText, !changes.isEmpty, changes.allSatisfy({ $0.range.upperBound <= storage.length }) else { return false }
+        let manager = textView.undoManager
+        func breakTyping() {
+            #if os(macOS)
+            textView.breakUndoCoalescing()
+            #else
+            openStep = nil
+            #endif
+        }
+        breakTyping()
+        // Outside an event the undo manager would keep its group open until after the next, and take it in.
+        let opens = manager?.groupingLevel == 0
+        if opens { manager?.beginUndoGrouping() }
+        var selection = self.selection
+        preservingScroll {
+            // From the last back, so the ranges before stay where they are.
+            for change in changes.sorted(by: { $0.range.location > $1.range.location }) {
+                let delta = (change.replacement as NSString).length - change.range.length
+                if selection.location >= change.range.upperBound {
+                    selection.location += delta
+                } else if selection.location <= change.range.location, selection.upperBound >= change.range.upperBound {
+                    selection.length += delta
+                } else if selection.upperBound > change.range.location {
+                    selection = NSRange(location: change.range.location, length: 0)
+                }
+                replace(change.range, with: change.replacement)
+            }
+            setSelection(NSRange(location: min(selection.location, storage.length), length: min(selection.length, storage.length - min(selection.location, storage.length))))
+        }
+        manager?.setActionName(actionName)
+        if opens { manager?.endUndoGrouping() }
+        breakTyping()
+        return true
+    }
+
     func insert(_ string: String) {
         let selection = self.selection
         replace(selection, with: string, select: NSRange(location: selection.location + (string as NSString).length, length: 0))

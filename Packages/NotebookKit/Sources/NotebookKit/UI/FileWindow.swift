@@ -70,6 +70,11 @@ public final class FileWindows {
         return controller.editor
     }
 
+    /// The notes the windows show with their text in, which may not have been saved yet.
+    func notesShown() -> [(url: URL, text: String)] {
+        controllers.values.filter(\.isLoaded).map { ($0.url, $0.editor.text) }
+    }
+
     /// Writes the note a window shows, now.
     func save(showing url: URL) {
         controllers.values.first { FileNode.samePath($0.url, url) }?.save(quitting: false)
@@ -226,11 +231,17 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
         let (url, note, library) = (url, note, library)
         note.beginMove()
         Task {
-            let renamed = if let library {
-                // As from the sidebar, which says so itself when the name is taken.
-                await library.rename(url, to: name).value
+            var next: LinkTargets?
+            let renamed: URL?
+            if let library {
+                // As from the sidebar, which says so itself when the name is taken. Links to it follow there.
+                renamed = await library.rename(url, to: name).value
             } else {
-                await Task.detached(priority: .userInitiated) { FileOperations.rename(url, to: name, presenter: note) }.value
+                // The notes next to it, which are what its links and theirs find, as they are before it is renamed.
+                (renamed, next) = await Task.detached(priority: .userInitiated) {
+                    let targets = LinkTargets.reading(url.deletingLastPathComponent(), deep: false)
+                    return (FileOperations.rename(url, to: name, presenter: note), targets)
+                }.value
             }
             note.endMove(to: renamed)
             guard let renamed else {
@@ -239,6 +250,8 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
                 return
             }
             moved(to: renamed)
+            // Links to it in the notes next to it follow it.
+            if let next { Workspace.shared.followLinks(LinkUpdate.Move(from: url, to: renamed), from: Workspace.LinkSnapshot(targets: next)) }
         }
     }
 

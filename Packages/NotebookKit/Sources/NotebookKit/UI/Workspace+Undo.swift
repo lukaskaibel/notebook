@@ -23,8 +23,10 @@ final class FileChange {
     /// Where the file is with the change undone and done, kept up to date as each is written.
     var before: URL?
     var after: URL?
-    /// A note renamed: the links to it in other notes follow it back.
+    /// A rename whose links follow: not a new note getting its first name. Links always follow a move.
     var updatesLinks = false
+    /// The links the rename or move rewrote, which Undo puts back.
+    var links: LinkFollowing?
     /// What Notebook knew about a file it put in the Trash, for the file to come back with.
     var remembered: Remembered?
     /// The undo manager it is kept in.
@@ -206,7 +208,7 @@ extension Workspace {
             } else if let target, change.kind == (undoing ? .trash : .make) {
                 result = await putBackNow(source, to: target, remembered: change.remembered)
             } else if let target {
-                result = await relocateNow(source, to: target, updatingLinks: change.updatesLinks)
+                result = await relocateNow(source, to: target, change: change, undoing: undoing)
             }
             // Couldn't: what Undo or Redo would do with it next can't be done either.
             guard let result else { return dropFromUndo(change) }
@@ -249,13 +251,14 @@ extension Workspace {
         return result.url
     }
 
-    /// Takes a renamed or moved file back to its name and folder, or there again.
-    private func relocateNow(_ url: URL, to target: URL, updatingLinks: Bool) async -> URL? {
+    /// Takes a renamed or moved file back to its name and folder, with the links it rewrote, or there again, with the
+    /// links following it again.
+    private func relocateNow(_ url: URL, to target: URL, change: FileChange, undoing: Bool) async -> URL? {
         let folder = target.deletingLastPathComponent()
         if FileNode.samePath(url.deletingLastPathComponent(), folder) {
-            return await renameNow(url, to: target.lastPathComponent, fileName: true, updatingLinks: updatingLinks)
+            return await renameNow(url, to: target.lastPathComponent, fileName: true, updatingLinks: change.updatesLinks, change: change, undoing: undoing)
         }
-        return await moveNow(url, into: folder, fileName: target.lastPathComponent)
+        return await moveNow(url, into: folder, fileName: target.lastPathComponent, change: change, undoing: undoing)
     }
 
     // MARK: - What comes back from the Trash

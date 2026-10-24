@@ -184,51 +184,108 @@ enum FileOperations {
 
     // MARK: - Links
 
-    /// After a note was renamed, points every `[[Old]]` (and `[[Old|…]]`, `[[Old#…]]`, `![[Old]]`) in the notes
-    /// under `root` at the new name. Returns how many notes changed.
-    @discardableResult
-    static func updateLinks(from oldName: String, to newName: String, under root: URL, skipping: URL? = nil) -> Int {
-        guard oldName != newName, let expression = try? NSRegularExpression(
-            pattern: "(!?\\[\\[)" + NSRegularExpression.escapedPattern(for: oldName) + "(\\.md)?(?=(\\]\\]|\\||#))",
-            options: [.caseInsensitive]
-        ) else { return 0 }
-        var changed = 0
-        let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles, .skipsPackageDescendants])
-        while let url = enumerator?.nextObject() as? URL {
-            guard url.pathExtension.lowercased() == "md", url.standardizedFileURL != skipping?.standardizedFileURL,
-                  let text = NoteDocument.read(url), text.contains("[[") else { continue }
-            let range = NSRange(location: 0, length: (text as NSString).length)
-            let template = "$1" + NSRegularExpression.escapedTemplate(for: newName)
-            let updated = expression.stringByReplacingMatches(in: text, range: range, withTemplate: template)
-            guard updated != text else { continue }
-            NSFileCoordinator().coordinate(writingItemAt: url, options: .forReplacing, error: nil) { url in
-                try? Data(updated.utf8).write(to: url, options: .atomic)
-            }
-            changed += 1
+    /// Changes the links in a note's file after files were renamed or moved (`LinkUpdate`): `change` gives the new
+    /// text from what the file says, or nil. The text written and the links changed, or nil when nothing was written.
+    static func rewriteLinks(in url: URL, _ change: (String) -> (text: String, edits: [LinkEdit])?) -> (text: String, edits: [LinkEdit])? {
+        debugWait("rewrote the links in", url)
+        var edits: [LinkEdit] = []
+        let text = rewrite(url) { text in
+            guard let changed = change(text) else { return nil }
+            edits = changed.edits
+            return changed.text
         }
-        return changed
+        return text.map { ($0, edits) }
+    }
+
+    /// Changes a note's file: `change` gives the new text from what it says, or nil. Read and written in one go, so
+    /// nothing written there meanwhile is lost. The text written, or nil.
+    @discardableResult
+    static func rewrite(_ url: URL, _ change: (String) -> String?) -> String? {
+        var written: String?
+        var error: NSError?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: .forMerging, error: &error) { url in
+            guard let data = try? Data(contentsOf: url), let text = NoteDocument.decode(data), let changed = change(text) else { return }
+            if (try? Data(changed.utf8).write(to: url, options: .atomic)) != nil { written = changed }
+        }
+        return written
+    }
+
+    /// Reads a note, bringing it down from iCloud first, in a coordinated read `coordinator.cancel()` calls off.
+    static func read(_ url: URL, coordinator: NSFileCoordinator) -> String? {
+        var error: NSError?
+        var text: String?
+        coordinator.coordinate(readingItemAt: url, options: [], error: &error) { url in
+            text = (try? Data(contentsOf: url)).flatMap(NoteDocument.decode)
+        }
+        return error == nil ? text : nil
     }
 
     /// A note moved to another folder takes the pictures and files it uses along into that folder's `.assets`, from
-    /// the one of the folder it was in. Returns their names, for those no note left there uses to go to the Trash
-    /// (`cleanUpAssets`). Reading the note waits for it to come down when it is still in iCloud.
-    static func copyAssets(of note: URL, from folder: URL) -> Set<String> {
+    /// the one of the folder it was in. One whose name another file has there already comes under a name of its own,
+    /// which the note then says. Returns their names, for those no note left there uses to go to the Trash
+    /// (`cleanUpAssets`), and whether the note's text changed. One that came under another name stays where it was:
+    /// whatever the note says after an Undo, it finds its own picture there. So Undo, taking a note back (not
+    /// `renaming`), leaves a picture of the name there as it is. Reading the note waits for it to come down when it is
+    /// still in iCloud.
+    static func copyAssets(of note: URL, from folder: URL, renaming: Bool = true) -> (names: Set<String>, renamed: Bool) {
         #if DEBUG
         // With `-NotebookSlowFiles`, every note is still in iCloud, and comes down first.
         if let delay = FileLoading.debugDelay, !Thread.isMainThread { Thread.sleep(forTimeInterval: delay) }
         #endif
-        guard let text = NoteDocument.read(note) else { return [] }
+        guard let text = NoteDocument.read(note) else { return ([], false) }
         let assets = assetNames(in: text)
         let source = folder.appendingPathComponent(".assets")
         let target = note.deletingLastPathComponent().appendingPathComponent(".assets")
-        for name in withDrawingStrokes(assets) {
+        var renamed: [String: String] = [:]
+        func copy(_ name: String, as newName: String) {
             let from = source.appendingPathComponent(name)
-            let to = target.appendingPathComponent(name)
-            guard FileManager.default.fileExists(atPath: from.path), !FileManager.default.fileExists(atPath: to.path) else { continue }
+            let to = target.appendingPathComponent(newName)
+            guard FileManager.default.fileExists(atPath: from.path), !FileManager.default.fileExists(atPath: to.path) else { return }
             try? FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
             try? FileManager.default.copyItem(at: from, to: to)
         }
-        return assets
+        for name in assets {
+            let from = source.appendingPathComponent(name)
+            guard FileManager.default.fileExists(atPath: from.path) else { continue }
+            var newName = name
+            let there = target.appendingPathComponent(name)
+            // Another file of its name, not the same one another note there shows too.
+            if renaming, FileManager.default.fileExists(atPath: there.path), !FileManager.default.contentsEqual(atPath: from.path, andPath: there.path) {
+                newName = freeAssetName(for: name, in: target)
+                renamed[name] = newName
+            }
+            copy(name, as: newName)
+            if let strokes = strokesName(of: name), let newStrokes = strokesName(of: newName) { copy(strokes, as: newStrokes) }
+        }
+        guard !renamed.isEmpty, let expression = try? NSRegularExpression(pattern: "\\.assets/([^)\\s\\]|]+)") else { return (assets, false) }
+        let leaving = assets.subtracting(renamed.keys)
+        let changed = rewrite(note) { text in
+            let string = NSMutableString(string: text)
+            for match in expression.matches(in: text, range: NSRange(location: 0, length: string.length)).reversed() {
+                let raw = string.substring(with: match.range(at: 1))
+                if let new = renamed[raw.removingPercentEncoding ?? raw] { string.replaceCharacters(in: match.range(at: 1), with: LinkUpdate.encoded(new)) }
+            }
+            return string as String == text ? nil : string as String
+        }
+        return (leaving, changed != nil)
+    }
+
+    /// A name for a picture or file in an `.assets` folder that neither it nor, for a drawing, its strokes have there.
+    private static func freeAssetName(for name: String, in folder: URL) -> String {
+        let base = (name as NSString).deletingPathExtension
+        let ext = (name as NSString).pathExtension
+        var counter = 2
+        while true {
+            let candidate = ext.isEmpty ? "\(base) \(counter)" : "\(base) \(counter).\(ext)"
+            let taken = [candidate, strokesName(of: candidate)].compactMap { $0 }.contains { FileManager.default.fileExists(atPath: folder.appendingPathComponent($0).path) }
+            if !taken { return candidate }
+            counter += 1
+        }
+    }
+
+    /// The strokes file next to a drawing's picture.
+    private static func strokesName(of name: String) -> String? {
+        (name as NSString).pathExtension.lowercased() == "png" ? (name as NSString).deletingPathExtension + "." + DrawingFile.fileExtension : nil
     }
 
     /// Pictures and files in a folder's `.assets` that no note in the folder uses any more, among `candidates`,
