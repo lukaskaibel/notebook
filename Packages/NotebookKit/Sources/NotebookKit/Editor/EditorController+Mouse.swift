@@ -14,7 +14,7 @@ extension EditorController {
         case block(index: Int, caret: Int)
         case editLink(range: NSRange)
         case headingLevel(line: Int)
-        case todo(line: Int)
+        case todo(line: Int, part: TodoPart)
     }
 
     func hitTest(_ point: NSPoint) -> Hit? {
@@ -62,7 +62,7 @@ extension EditorController {
                 return .editLink(range: range)
             case .todoPill(let pill):
                 // With To-dos off, a date is only words.
-                return pill.isField || !NotebookSettings.shared.showsTodos ? nil : .todo(line: document.lineIndex(containing: index))
+                return pill.isField || !NotebookSettings.shared.showsTodos ? nil : .todo(line: document.lineIndex(containing: index), part: pill.isPlace ? .place : .date)
             case .chipLead, .chipTrail:
                 if let link = storage.attribute(.notebookLink, at: index, effectiveRange: nil) as? LinkTarget { return .link(link.kind) }
                 return nil
@@ -123,8 +123,8 @@ extension EditorController {
         case .headingLevel:
             showHeadingMenu(at: point)
             return true
-        case .todo(let line):
-            showTodoReminder(line: line)
+        case .todo(let line, let part):
+            showTodoReminder(line: line, part: part)
             return true
         case .block(_, let caret):
             openBlock(caret: caret, at: point)

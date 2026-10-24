@@ -114,6 +114,8 @@ struct TodoPill: Equatable {
     var tone: Tone
     /// Another of the Tasks plugin's fields, which only shows: a click on it is a click in the text.
     var isField = false
+    /// The to-do's place, not its date.
+    var isPlace = false
 
     init(_ mark: TodoMark.Kind, done: Bool, now: Date = .now) {
         switch mark {
@@ -128,6 +130,7 @@ struct TodoPill: Equatable {
             tone = done ? .done : due.isOverdue(at: now) ? .overdue : .normal
         case .place(let place):
             symbol = "location.fill"
+            isPlace = true
             // A long name would take a line of its own.
             let name = place.name.count > 26 ? place.name.prefix(24).trimmingCharacters(in: .whitespaces) + "…" : place.name
             label = place.leaving ? "Leaving " + name : name

@@ -9,6 +9,10 @@ import SwiftUI
 /// app can be tested end to end without a person at the keyboard. Results go to `<path>.log`.
 @MainActor
 enum DebugRemote {
+    /// The window `fakekey` made say it is key.
+    nonisolated(unsafe) private static weak var fakeKeyWindow: NSWindow?
+    /// A click the remote sends: what watches the app's clicks doesn't see it, as it goes straight to the window.
+    static let clicked = Notification.Name("DebugRemoteClicked")
     private static var processed = 0
     private static var timer: Timer?
     private static var activity: NSObjectProtocol?
@@ -120,6 +124,33 @@ enum DebugRemote {
             RunLoop.main.add(timer, forMode: .common)
         case "activate":
             window?.orderFront(nil)
+        case "fakekey":
+            // The window says it is key and main, as one clicked in the app in front does, while the app stays in the
+            // background: SwiftUI's focus then behaves as it does for you.
+            // Dropdowns too, so their glass is drawn as it is in the app in front.
+            guard let window, let windowClass = object_getClass(window) else { break }
+            fakeKeyWindow = window
+            for (patched, selector) in [(windowClass, #selector(getter: NSWindow.isKeyWindow)), (windowClass, #selector(getter: NSWindow.isMainWindow)),
+                                        (DropdownPanel.self, #selector(getter: NSWindow.isKeyWindow))] {
+                guard let method = class_getInstanceMethod(patched, selector) else { continue }
+                typealias Getter = @convention(c) (AnyObject, Selector) -> Bool
+                let original = unsafeBitCast(method_getImplementation(method), to: Getter.self)
+                let replacement: @convention(block) (AnyObject) -> Bool = { object in
+                    object === DebugRemote.fakeKeyWindow || object is DropdownPanel || original(object, selector)
+                }
+                class_replaceMethod(patched, selector, imp_implementationWithBlock(replacement), method_getTypeEncoding(method))
+            }
+            log("fakekey: key \(window.isKeyWindow), first responder \(window.firstResponder.map { String(describing: type(of: $0)) } ?? "none")")
+        case "resignfocus":
+            // The keyboard back to the window itself, as when SwiftUI loses a field it was asked to focus.
+            window?.makeFirstResponder(nil)
+            log("resignfocus: first responder \(window?.firstResponder.map { String(describing: type(of: $0)) } ?? "none")")
+        case "firstresponder":
+            log("firstresponder \(window?.firstResponder.map { String(describing: type(of: $0)) } ?? "none")")
+        case "makekey":
+            // The window key, as a click on it makes it, while the app stays in the background.
+            window?.makeKey()
+            log("makekey: key \(window?.isKeyWindow == true), first responder \(window?.firstResponder.map { String(describing: type(of: $0)) } ?? "none")")
         case "focus":
             if let editor { window?.makeFirstResponder(editor.textView) }
         case "focustitle":
@@ -203,6 +234,10 @@ enum DebugRemote {
                 editor.scrollView.contentView.scroll(to: NSPoint(x: 0, y: y))
                 editor.scrollView.reflectScrolledClipView(editor.scrollView.contentView)
             }
+        case "move":
+            // move <x> <y> [<x2> <y2>]: the pointer moving to a point, or from one to another, through the window, as
+            // SwiftUI's hover sees it (the real pointer stays put).
+            if numbers.count >= 2 { move(from: CGPoint(x: numbers[0], y: numbers[1]), to: numbers.count >= 4 ? CGPoint(x: numbers[2], y: numbers[3]) : nil) }
         case "hover":
             // hover <character index>: as if the pointer rested on that character (the real one stays put).
             if let editor, let index = numbers.first, let window, let content = window.contentView,
@@ -930,7 +965,10 @@ enum DebugRemote {
         let isAppKitView = sequence(first: target, next: { $0.superview }).contains { $0 is NSTextView || $0 is NSTableView }
         if !isAppKitView, end == nil, !right {
             for click in 1...count {
-                if let down = event(.leftMouseDown, location, clicks: click) { window.sendEvent(down) }
+                if let down = event(.leftMouseDown, location, clicks: click) {
+                    NotificationCenter.default.post(name: clicked, object: down)
+                    window.sendEvent(down)
+                }
                 if let up = event(.leftMouseUp, location, clicks: click) { window.sendEvent(up) }
             }
             log("click \(Int(point.x)),\(Int(point.y)) through the window on \(type(of: target))")
@@ -953,6 +991,26 @@ enum DebugRemote {
             while NSApp.nextEvent(matching: [.leftMouseUp, .leftMouseDragged], until: .distantPast, inMode: .default, dequeue: true) != nil {}
         }
         log("click \(Int(point.x)),\(Int(point.y))\(end.map { " to \(Int($0.x)),\(Int($0.y))" } ?? "") on \(type(of: target))")
+    }
+
+    /// Mouse moves through the window, in points from its top-left corner: to `start`, then on to `end` in steps.
+    private static func move(from start: CGPoint, to end: CGPoint?) {
+        guard let window, let content = window.contentView else { return }
+        var points = [start]
+        if let end {
+            points = (0...10).map { step -> CGPoint in
+                let t = CGFloat(step) / 10
+                return CGPoint(x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t)
+            }
+        }
+        for point in points {
+            let location = CGPoint(x: point.x, y: content.bounds.height - point.y)
+            if let event = NSEvent.mouseEvent(with: .mouseMoved, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                              windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 0, pressure: 0) {
+                window.sendEvent(event)
+            }
+        }
+        log("move to \(Int((end ?? start).x)),\(Int((end ?? start).y))")
     }
 
     /// Points every few pixels along a curve through `points`.

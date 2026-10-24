@@ -2,9 +2,10 @@ import Foundation
 
 /// Reads the time of a reminder typed in a few words, as Issues reads due dates: "thursday evening", "tomorrow at 9",
 /// "fri 3pm", "in 3 weeks", "in 2 hours", "next monday", "the 12th", "12.11. 14:30" or "nov 12". The last word may be
-/// cut short as you type ("thu eve", "next mo"). A day without a time is at nine in the morning, as Tomorrow is, and
-/// today in about three hours, as Later Today is; a time without a day is the next time it comes round. The words are
-/// English, as the app is; months are also read in the language of the calendar.
+/// cut short as you type ("thu eve", "next mo"), and a weekday in a week to come ("thursday in 3 weeks"). A day without a
+/// time is at nine in the morning, as Tomorrow is, and today in about three hours, as Later Today is, or for a to-do's
+/// date just that day; a time without a day is the next time it comes round. The words are English, as the app is;
+/// months are also read in the language of the calendar.
 enum ReminderTimeParser {
     struct Suggestion: Hashable {
         /// "Thursday Evening", "In 3 Weeks", "Thursday, 12 November".
@@ -13,13 +14,16 @@ enum ReminderTimeParser {
         var detail: String
         var symbol: String
         var date: Date
+        /// False for a day without a time, read for a to-do's date: `date` is the start of that day.
+        var hasTime = true
     }
 
     /// The hours of the times of day. Nine is also a day's time when none is typed.
     static let morning = 9, noon = 12, afternoon = 15, evening = 18, night = 21
 
     /// What the text could mean, best first, and only times still to come. Empty when it reads as no time at all.
-    static func suggestions(for query: String, now: Date, calendar: Calendar = .current, limit: Int = 6) -> [Suggestion] {
+    /// With `days`, as for a to-do's date, a day without a time stays a day, today included.
+    static func suggestions(for query: String, now: Date, calendar: Calendar = .current, limit: Int = 6, days: Bool = false) -> [Suggestion] {
         var words = fold(query)
             .replacingOccurrences(of: ",", with: " ")
             .split(whereSeparator: \.isWhitespace)
@@ -27,12 +31,13 @@ enum ReminderTimeParser {
         // "friday at", while the time is still to come.
         while let last = words.last, ["at", "@", "on"].contains(last) { words.removeLast() }
         guard !words.isEmpty else { return [] }
-        let reader = Reader(now: now, calendar: calendar)
+        let reader = Reader(now: now, calendar: calendar, keepsDays: days)
         var found = reader.countdowns(words)
-        // The whole text as a day or a time. A number is more likely a time ("9") than a day of the month.
-        let days = reader.days(words, isLast: true).compactMap { reader.suggestion($0, nil) }
+        // The whole text as a day or a time. A number is more likely a time ("9") than a day of the month, unless it
+        // is a day that is asked for.
+        let dayFound = reader.days(words, isLast: true).compactMap { reader.suggestion($0, nil) }
         let times = reader.times(words, isLast: true).compactMap { reader.suggestion(nil, $0) }.sorted { $0.date < $1.date }
-        found += words[0].first?.isNumber == true ? times + days : days + times
+        found += words[0].first?.isNumber == true && !days ? times + dayFound : dayFound + times
         // A day and a time, in either order: "thursday evening", "tomorrow at 9", "9am tomorrow".
         for split in words.indices.dropFirst() {
             let head = Array(words[..<split]), tail = Array(words[split...])
@@ -44,12 +49,21 @@ enum ReminderTimeParser {
                 found += reader.days(tail, isLast: true).filter { $0.title != nil }.compactMap { reader.suggestion($0, time) }
             }
         }
-        // A weekday alone at the end, as you type it, also in the afternoon and the evening.
-        found += reader.days(words, isLast: true).filter(\.isNamed).flatMap { day in
-            [Reader.afternoon, Reader.evening].compactMap { reader.suggestion(day, $0) }
+        // A weekday alone at the end, as you type it, also in the afternoon and the evening; for a day, the day is it.
+        if !days {
+            found += reader.days(words, isLast: true).filter(\.isNamed).flatMap { day in
+                [Reader.afternoon, Reader.evening].compactMap { reader.suggestion(day, $0) }
+            }
         }
         var seen = Set<Date>()
         return Array(found.filter { seen.insert($0.date).inserted }.prefix(limit))
+    }
+
+    /// The times of day the text could name, without a day: "9" is both 9:00 and 21:00, "evening" 18:00.
+    static func times(for query: String) -> [Time] {
+        let words = fold(query).split(whereSeparator: \.isWhitespace).map(String.init)
+        guard !words.isEmpty else { return [] }
+        return Reader(now: .now, calendar: .current).times(words, isLast: true)
     }
 
     /// Lower case and without accents.
@@ -79,6 +93,8 @@ enum ReminderTimeParser {
     struct Reader {
         var now: Date
         var calendar: Calendar
+        /// A day without a time stays a day, as a to-do's date can be.
+        var keepsDays = false
 
         static let morning = Time(hour: ReminderTimeParser.morning, words: "Morning")
         static let noon = Time(hour: ReminderTimeParser.noon, words: "at Noon")
@@ -98,7 +114,31 @@ enum ReminderTimeParser {
             guard !words.isEmpty else { return [] }
             let text = words.joined(separator: " ")
             return named(text, isLast: isLast) + counted(text, isLast: isLast)
-                + typedOut(text, isLast: isLast).map { Day(start: $0) }
+                + typedOut(text, isLast: isLast).map { Day(start: $0) } + weekdayInCount(words, isLast: isLast)
+        }
+
+        /// "thursday in 3 weeks", "in 3 weeks on thursday", "fri in 2w": that weekday in the week the count ends in.
+        private func weekdayInCount(_ words: [String], isLast: Bool) -> [Day] {
+            var found: [Day] = []
+            for split in words.indices.dropFirst() {
+                var head = Array(words[..<split]), tail = Array(words[split...])
+                // The weekday first, or the count first.
+                let weekdayFirst = tail.first == "in" || tail.first?.hasPrefix("+") == true
+                if !weekdayFirst, tail.first == "on" { tail.removeFirst() }
+                if weekdayFirst, head.first == "on" { head.removeFirst() }
+                let weekdayWords = weekdayFirst ? head : tail
+                let countWords = weekdayFirst ? tail : head
+                guard weekdayWords.count == 1, let weekday = Self.weekdayNames.firstIndex(where: {
+                    Self.matches($0, weekdayWords[0], isLast: isLast && !weekdayFirst) && weekdayWords[0].count >= 2
+                }) else { continue }
+                for counted in counted(countWords.joined(separator: " "), isLast: isLast && weekdayFirst) {
+                    guard let week = calendar.dateInterval(of: .weekOfYear, for: counted.start),
+                          let day = (0..<7).map({ self.day($0, from: week.start) }).first(where: { calendar.component(.weekday, from: $0) == weekday + 1 }),
+                          day >= today else { continue }
+                    found.append(Day(title: "\(weekdayName(day)) \(counted.title?.prefix(1).lowercased() ?? "")\(counted.title?.dropFirst() ?? "")", start: day, isNamed: true))
+                }
+            }
+            return found
         }
 
         private func named(_ text: String, isLast: Bool) -> [Day] {
@@ -183,8 +223,12 @@ enum ReminderTimeParser {
             return found + clock(text, isLast: isLast)
         }
 
-        /// "9", "9pm", "9 a", "9:30", "21:30", "21.30": both 9 and 21 for a 9 that could be either.
+        /// "9", "9pm", "9 a", "9:30", "21:30", "21.30", "930", "1430": both 9 and 21 for a 9 that could be either.
         private func clock(_ text: String, isLast: Bool) -> [Time] {
+            // The hour and the minutes without anything between them, as on a digital clock.
+            if let compact = text.wholeMatch(of: #/(\d{1,2})(\d{2})\s?(a|am|p|pm)?/#), let minute = Int(compact.output.2), minute < 60 {
+                return clock(compact.output.1 + ":" + compact.output.2 + (compact.output.3.map { String($0) } ?? ""), isLast: isLast)
+            }
             guard let match = text.wholeMatch(of: #/(\d{1,2})(?:(:|\.)(\d{0,2}))?\s?(a|am|a\.m\.?|p|pm|p\.m\.?)?/#),
                   let hour = Int(match.output.1) else { return [] }
             var minute = 0
@@ -368,6 +412,11 @@ enum ReminderTimeParser {
                 guard let found = at(time, on: start) else { return nil }
                 date = found
                 day = Day(title: isToday ? "Today" : "Tomorrow", start: start, isNamed: true)
+            } else if let day, keepsDays {
+                guard day.start >= today else { return nil }
+                // A date typed out already says its weekday: how far off it is.
+                let detail = day.title == nil ? distance(to: day.start) : relative(day.start)
+                return Suggestion(title: title(day, nil, day.start), detail: detail, symbol: daySymbol(day.start), date: day.start, hasTime: false)
             } else if let day {
                 if day.start == today {
                     // As Later Today: on the hour, about three hours on, or the next hour late in the day.
@@ -418,6 +467,29 @@ enum ReminderTimeParser {
             return date.formatted(sameYear ? dated : dated.year())
         }
 
+        /// A day as its row shows it beside its name: "Sat, Oct 24", with the year when it isn't this one.
+        func relative(_ day: Date) -> String {
+            let sameYear = calendar.isDate(day, equalTo: now, toGranularity: .year)
+            let dated = style.weekday(.abbreviated).day().month(.abbreviated)
+            return date(of: day, style: sameYear ? dated : dated.year())
+        }
+
+        private func date(of day: Date, style: Date.FormatStyle) -> String {
+            day.formatted(style)
+        }
+
+        /// "In 19 Days".
+        private func distance(to day: Date) -> String {
+            let days = calendar.dateComponents([.day], from: today, to: day).day ?? 0
+            return days == 0 ? "Today" : days == 1 ? "Tomorrow" : "In \(days) Days"
+        }
+
+        /// A star for today, the sunrise for tomorrow, a calendar for the days after, as To-dos shows them.
+        private func daySymbol(_ day: Date) -> String {
+            let days = calendar.dateComponents([.day], from: today, to: day).day ?? 0
+            return days == 0 ? "star" : days == 1 ? "sunrise" : "calendar"
+        }
+
         /// The sunrise in the morning, the sun by day, the moon in the evening, and a calendar for a day further
         /// than a week off.
         private func symbol(_ date: Date) -> String {
@@ -444,6 +516,9 @@ enum ReminderTimeParser {
         private func clock(_ date: Date) -> String {
             date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: calendar.locale ?? .current, calendar: calendar, timeZone: calendar.timeZone))
         }
+
+        /// "Thursday", as the start of a name.
+        private func weekdayName(_ date: Date) -> String { weekday(date) }
 
         /// "Friday", as a choice in a list.
         private func weekday(_ date: Date) -> String {

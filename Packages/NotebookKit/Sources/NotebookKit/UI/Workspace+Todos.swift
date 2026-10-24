@@ -5,6 +5,13 @@ import UIKit
 #endif
 import SwiftUI
 
+/// A to-do whose date or place to change, from its pill.
+struct TodoPickRequest: Identifiable {
+    let todo: TodoReference
+    let isPlace: Bool
+    var id: String { todo.id + (isPlace ? "\u{0}place" : "") }
+}
+
 /// To-dos: every open checkbox in the notes, in the To-dos list, with a date, a time and a place written after its words
 /// for those that should remind you. A to-do is changed in the editor that shows its note, where Undo takes it back, or
 /// else in its file, off the main thread, merged with what is there.
@@ -67,15 +74,22 @@ extension Workspace {
         return (parsed?.text ?? "", parsed?.due, parsed?.place)
     }
 
-    /// The pill or the bell of a to-do in an editor was clicked: Remind Me for it, from there.
-    func askForTodoReminder(in editor: EditorController, url: URL, line: Int) {
+    /// The pill or the bell of a to-do in an editor was clicked, or Remind Me… chosen: on the Mac the dropdown for its
+    /// date or its place, as To-dos has them, or Remind Me for both, from there.
+    func askForTodoReminder(in editor: EditorController, url: URL, line: Int, part: TodoPart = .reminder) {
         guard let current = editor.todo(onLine: line) else { return }
         let todo = TodoReference(url: url.standardizedFileURL, line: line, source: current.source)
         #if os(macOS)
-        let rect = editor.todoAnchor(line: line) ?? .zero
-        askForTodoReminder(todo, from: editor.textView, rect: rect)
+        let rect = editor.todoAnchor(line: line, part: part) ?? .zero
+        switch part {
+        case .reminder: askForTodoReminder(todo, from: editor.textView, rect: rect)
+        case .date, .place: showTodoDropdown(todo, part: part, from: editor.textView, rect: rect)
+        }
         #else
-        todoReminderRequest = todo
+        switch part {
+        case .reminder: todoReminderRequest = todo
+        case .date, .place: todoPickRequest = TodoPickRequest(todo: todo, isPlace: part == .place)
+        }
         #endif
     }
 
@@ -92,11 +106,39 @@ extension Workspace {
         popover.show(relativeTo: rect.insetBy(dx: -2, dy: -2), of: view, preferredEdge: .maxY)
         reminderPopover = popover
     }
+
+    /// A to-do's date or place in a dropdown under `rect` of `view`: typed or clicked, as To-dos' buttons have them.
+    func showTodoDropdown(_ todo: TodoReference, part: TodoPart, from view: NSView, rect: NSRect) {
+        guard view.window != nil else { return beep() }
+        reminderPopover?.close()
+        let schedule = schedule(of: todo)
+        Dropdown.show(below: rect.insetBy(dx: -2, dy: -2), in: view) { close in
+            if part == .place {
+                TodoPlaceDropdown(place: schedule.place, pick: { [weak self] place in self?.setTodo(todo, due: schedule.due, place: place) }, close: close)
+            } else {
+                TodoDatePicker(due: schedule.due, pick: { [weak self] due in self?.setTodo(todo, due: due, place: schedule.place) }, close: close)
+            }
+        }
+    }
     #else
     func askForTodoReminder(_ todo: TodoReference) {
         todoReminderRequest = todo
     }
     #endif
+
+    /// A to-do's date or place, picked in a sheet: typed or tapped, as To-dos has them.
+    @ViewBuilder
+    func todoPicker(for request: TodoPickRequest, close: @escaping () -> Void) -> some View {
+        let schedule = schedule(of: request.todo)
+        ScrollView {
+            if request.isPlace {
+                TodoPlaceDropdown(place: schedule.place, pick: { [weak self] place in self?.setTodo(request.todo, due: schedule.due, place: place) }, close: close)
+            } else {
+                TodoDatePicker(due: schedule.due, pick: { [weak self] due in self?.setTodo(request.todo, due: due, place: schedule.place) }, close: close)
+            }
+        }
+        .scrollBounceBehavior(.basedOnSize)
+    }
 
     // MARK: - Changing a to-do
 
@@ -327,7 +369,7 @@ extension Workspace {
             guard let index = Todos.find(todo.source, near: todo.line, in: document, string: string),
                   let change = edit(string, document, index) else { return }
             let changed = string.replacingCharacters(in: change.range, with: change.replacement)
-            guard (try? Data(changed.utf8).write(to: url, options: .atomic)) != nil else { return }
+            guard FileOperations.write(Data(changed.utf8), to: url) else { return }
             let line = MarkdownParser.parse(changed).lines[index].range
             result = (index, (changed as NSString).substring(with: line))
         }

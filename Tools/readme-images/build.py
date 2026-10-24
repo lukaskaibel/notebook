@@ -42,8 +42,8 @@ OBJECTS_BOX = (500, 150, 2140, 1400)
 DRAWING_BOX = (500, 104, 2140, 1640)
 # The sidebar and Customize Folder… next to it, down to the popover's bottom.
 CUSTOMIZE_BOX = (0, 0, 1480, 1400)
-# To-dos from Today down to the to-do being edited and the buttons under it.
-TODO_EDITING_BOX = (790, 560, 2290, 1450)
+# To-dos from Today: the to-do being edited, its buttons and the day's dropdown under them.
+TODO_EDITING_BOX = (790, 560, 2290, 1180)
 
 
 def typing_animation(theme):

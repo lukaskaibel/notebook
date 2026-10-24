@@ -205,9 +205,25 @@ enum FileOperations {
         var error: NSError?
         NSFileCoordinator().coordinate(writingItemAt: url, options: .forMerging, error: &error) { url in
             guard let data = try? Data(contentsOf: url), let text = NoteDocument.decode(data), let changed = change(text) else { return }
-            if (try? Data(changed.utf8).write(to: url, options: .atomic)) != nil { written = changed }
+            if write(Data(changed.utf8), to: url) { written = changed }
         }
         return written
+    }
+
+    /// Writes a note's new text, in a coordinated write. A file that is there already keeps what the Finder and other
+    /// apps keep on it, its tags, "Where from", other extended attributes and the date it was made, which
+    /// `Data.write(.atomic)` alone would drop with the old file. Still whole or not at all: the text is written next to
+    /// it first and then put in its place.
+    static func write(_ data: Data, to url: URL) -> Bool {
+        let manager = FileManager.default
+        if manager.fileExists(atPath: url.path),
+           let folder = try? manager.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: url, create: true) {
+            defer { try? manager.removeItem(at: folder) }
+            let new = folder.appendingPathComponent(url.lastPathComponent)
+            if (try? data.write(to: new)) != nil, (try? manager.replaceItemAt(url, withItemAt: new)) != nil { return true }
+        }
+        // A new file, or one where the text can't be put in place: written as before, as saving matters more.
+        return (try? data.write(to: url, options: .atomic)) != nil
     }
 
     /// Reads a note, bringing it down from iCloud first, in a coordinated read `coordinator.cancel()` calls off.

@@ -120,7 +120,9 @@ final class TodoListTests: XCTestCase {
         let call = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Call Dr. Weber" })
         let editing = TodoEditing(workspace: workspace, item: call)
         XCTAssertEqual(editing.title, "Call Dr. Weber", "the words without the time")
-        XCTAssertEqual(editing.lines.map(\.words), ["ask about the results"])
+        // A line for notes waits under the words, as the to-do has none.
+        XCTAssertEqual(editing.lines.map(\.words), ["", "ask about the results"])
+        XCTAssertEqual(editing.lines[0].kind, .text)
 
         // New words, a sub-to-do under them, and the point turned into one with "[ ] ".
         editing.title = "Call Dr. Weber's office"
@@ -128,8 +130,8 @@ final class TodoListTests: XCTestCase {
         let added = try XCTUnwrap(editing.lines.last)
         editing.lines[editing.lines.count - 1].words = "bring the letter"
         editing.typed(added.id)
-        editing.lines[0].words = "[ ] ask about the results"
-        editing.typed(editing.lines[0].id)
+        editing.lines[1].words = "[ ] ask about the results"
+        editing.typed(editing.lines[1].id)
         editing.commit()
         // The list shows it at once, before the note is read again.
         XCTAssertEqual(workspace.todos.items.first { $0.url == call.url }?.todo.notes, ["○ ask about the results", "○ bring the letter"])
@@ -138,11 +140,11 @@ final class TodoListTests: XCTestCase {
                        "# Doctor\n\n- [ ] Call Dr. Weber's office ⏰ 2026-10-24 14:00\n    - [ ] ask about the results\n    - [ ] bring the letter\n- [x] Book the taxi\n")
 
         // Return after a sub-to-do makes the next; Tab takes it in under the one above; an empty one goes again.
-        editing.lines[1].selection = TextSelection(insertionPoint: editing.lines[1].words.endIndex)
-        XCTAssertTrue(editing.split(editing.lines[1].id))
-        editing.lines[2].words = "the blue one"
-        editing.indent(editing.lines[2].id)
-        XCTAssertEqual(editing.lines[2].depth, 2)
+        editing.lines[2].selection = TextSelection(insertionPoint: editing.lines[2].words.endIndex)
+        XCTAssertTrue(editing.split(editing.lines[2].id))
+        editing.lines[3].words = "the blue one"
+        editing.indent(editing.lines[3].id)
+        XCTAssertEqual(editing.lines[3].depth, 2)
         editing.commit()
         await workspace.lastTodoWrite?.value
         XCTAssertTrue(try String(contentsOf: doctor, encoding: .utf8).contains("    - [ ] bring the letter\n      - [ ] the blue one\n- [x] Book the taxi"))
@@ -164,6 +166,37 @@ final class TodoListTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: doctor, encoding: .utf8), "# Doctor\n\n- [ ] Call Dr. Weber's office ⏰ 2026-10-24 14:00\n    - [ ] something else\n")
     }
 
+    func testNotesTypedUnderATodoAreALineUnderIt() async throws {
+        let workspace = try await makeWorkspace()
+        let call = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Call Dr. Weber" })
+        let editing = TodoEditing(workspace: workspace, item: call)
+        let original = try String(contentsOf: doctor, encoding: .utf8)
+        // Left empty, the line for notes is never written.
+        editing.title = "Call Dr. Weber"
+        editing.commit()
+        XCTAssertEqual(try String(contentsOf: doctor, encoding: .utf8), original)
+
+        // Typed in, it is the first line under the to-do, as far in as the others.
+        editing.lines[0].words = "Bring the referral"
+        editing.commit()
+        await workspace.lastTodoWrite?.value
+        XCTAssertEqual(try String(contentsOf: doctor, encoding: .utf8),
+                       "# Doctor\n\n- [ ] Call Dr. Weber ⏰ 2026-10-24 14:00\n    Bring the referral\n    - ask about the results\n- [x] Book the taxi\n")
+
+        // A to-do with notes gets no second line for them.
+        try await until { workspace.todos.items.first { $0.url == call.url }?.todo.lines.count == 2 }
+        let again = TodoEditing(workspace: workspace, item: try XCTUnwrap(workspace.todos.items.first { $0.url == call.url }))
+        XCTAssertEqual(again.lines.map(\.words), ["Bring the referral", "ask about the results"])
+
+        // One without lines under it gets one, and loses it again when editing ends with it empty.
+        let pack = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Pack the adapter" })
+        let packing = TodoEditing(workspace: workspace, item: pack)
+        XCTAssertEqual(packing.lines.map(\.words), [""])
+        packing.end()
+        XCTAssertTrue(packing.lines.isEmpty)
+        XCTAssertEqual(try String(contentsOf: trip, encoding: .utf8), "- [ ] Pack the adapter\n- [ ] Print the tickets 📅 2099-01-02\n")
+    }
+
     func testWhatIsTypedInATodoIsWrittenAsTheAppQuits() async throws {
         let workspace = try await makeWorkspace()
         let pack = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Pack the adapter" })
@@ -181,8 +214,10 @@ final class TodoListTests: XCTestCase {
         let call = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Call Dr. Weber" })
         let editing = TodoEditing(workspace: workspace, item: call)
         editing.addLineUnderTitle()
-        editing.lines[0].words = "the letter"
-        // Shift-Return on the words starts a line of the kind under them, a point here, before the others.
+        // Shift-Return on the words starts a line of the kind under them, a point here, before the others but after
+        // the line for notes, which isn't written while it is empty.
+        XCTAssertEqual(editing.lines.map(\.kind), [.text, .bullet, .bullet])
+        editing.lines[1].words = "the letter"
         editing.commit()
         XCTAssertEqual(workspace.editor.text, "# Doctor\n\n- [ ] Call Dr. Weber ⏰ 2026-10-24 14:00\n    - the letter\n    - ask about the results\n- [x] Book the taxi\n")
         // A date set from its buttons in between keeps what is typed after it.

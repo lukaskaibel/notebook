@@ -7,8 +7,9 @@ enum TodoFocus: Hashable {
 }
 
 /// A to-do being edited in To-dos, as Reminders edits a reminder in place: its words, and the lines indented under it,
-/// which are its sub-to-dos, points and notes. What you type is written to the note a moment after you stop, when you
-/// leave the to-do, and before its date or place changes; it is the note's Markdown, so the note says the same.
+/// which are its sub-to-dos, points and notes, with a line for notes waiting under its words when it has none. What you
+/// type is written to the note a moment after you stop, when you leave the to-do, and before its date or place changes;
+/// it is the note's Markdown, so the note says the same.
 @MainActor
 @Observable
 final class TodoEditing {
@@ -27,6 +28,9 @@ final class TodoEditing {
         /// Empty in the note when editing began: kept so. Any other line left empty goes when editing ends.
         var wasEmpty = false
 
+        /// Made while editing and still without words: written once it has some, and gone if it never gets any.
+        var isNewAndEmpty: Bool { kind == .text && !wasEmpty && words.trimmingCharacters(in: .whitespaces).isEmpty }
+
         static func == (a: Line, b: Line) -> Bool {
             a.id == b.id && a.kind == b.kind && a.indent == b.indent && a.marker == b.marker && a.words == b.words && a.depth == b.depth
         }
@@ -41,6 +45,10 @@ final class TodoEditing {
     let workspace: Workspace
     /// Who it is, while its line changes under it.
     let id = UUID()
+    /// The row it was edited from in To-dos: the row keeps being that one while its line changes, and while it closes.
+    let rowID: String
+    /// Its buttons and the line for notes show: they come in a moment after editing begins, and go before it ends.
+    var isExpanded = false
     /// The to-do as it was last written, and its lines as they were then, the to-do's first.
     private(set) var reference: TodoReference
     private var written: [String]
@@ -51,6 +59,22 @@ final class TodoEditing {
     var focus: TodoFocus? = .title
     /// Remind Me is open from its buttons: leaving the words doesn't end the editing then.
     var isChoosing = false
+
+    /// What a popover can change of it: its day, its time, its place.
+    enum Pick: Identifiable {
+        case day, time, place
+        var id: Self { self }
+    }
+
+    /// The popover open for its day, time or place (iPhone and iPad; the Mac's dropdowns keep their own).
+    var picking: Pick?
+
+    /// Opens the popover for its day, time or place, with what was typed written first.
+    func pick(_ kind: Pick) {
+        isChoosing = true
+        commit()
+        picking = kind
+    }
     /// Asks To-dos to put the keyboard where `focus` says.
     private(set) var focusRequest = 0
     /// The caret a field gets once it has the keyboard, in UTF-16 units: a field selects all its words as it gets it.
@@ -61,6 +85,7 @@ final class TodoEditing {
 
     init(workspace: Workspace, item: TodoList.Item) {
         self.workspace = workspace
+        rowID = item.id
         reference = item.reference
         written = [item.todo.source] + item.todo.lines.map(\.source)
         title = Todos.parts(of: item.todo.source)?.words ?? item.todo.text
@@ -68,14 +93,25 @@ final class TodoEditing {
             Line(kind: line.kind, indent: line.indent, marker: String(line.prefix.dropFirst(line.indent.count)), words: line.words,
                  depth: line.depth, wasEmpty: line.words.trimmingCharacters(in: .whitespaces).isEmpty)
         }
+        // Notes, as Reminders has them under a reminder's title: a line to type them in, right under the words.
+        if !lines.contains(where: { $0.kind == .text }) {
+            lines.insert(Line(kind: .text, indent: childIndent, marker: "", words: "", depth: 1), at: 0)
+        }
     }
 
     // MARK: - Which row
 
     /// Whether a row of To-dos is the to-do being edited: the same line, or what it became.
     func isEditing(_ item: TodoList.Item) -> Bool {
-        guard !isEnded, FileNode.samePath(item.url, reference.url) else { return false }
-        return item.todo.source == reference.source || workspace.current(item.reference).source == reference.source
+        !isEnded && shows(item)
+    }
+
+    /// Whether a row of To-dos is this to-do, edited or closing: its line as last written here, what Notebook made of
+    /// it since (a date set from the buttons), or a row still showing the line from before the words were written.
+    func shows(_ item: TodoList.Item) -> Bool {
+        guard FileNode.samePath(item.url, reference.url) else { return false }
+        return item.todo.source == reference.source || item.todo.source == current.source
+            || workspace.current(item.reference).source == reference.source
     }
 
     /// The to-do's line as Notebook last changed it: a date set from the buttons changes it apart from the words.
@@ -130,6 +166,9 @@ final class TodoEditing {
     /// A field moved its caret. While a caret is asked for, the field's own, all its words selected as it gets the
     /// keyboard, gives way to it.
     func fieldMoved(_ selection: TextSelection?, in field: TodoFocus) {
+        // A dropdown has the keyboard: the field letting go of it moves its caret to the start, which isn't where the
+        // caret goes back to.
+        guard !isChoosing else { return }
         if let request = caretRequest, request.field == field {
             DispatchQueue.main.async { [weak self] in self?.placeCaret(focused: field) }
             return
@@ -184,7 +223,8 @@ final class TodoEditing {
         let current = current
         var before = written
         before[0] = current.source
-        let after = [Todos.replacingWords(in: current.source, with: title)] + lines.map(\.markdown)
+        // A line for words that has none yet isn't written: a line of spaces in the note would be nothing to read.
+        let after = [Todos.replacingWords(in: current.source, with: title)] + lines.filter { !$0.isNewAndEmpty }.map(\.markdown)
         guard after != before else { return }
         workspace.changeTodoLines(current, from: before, to: after, actionName: "Edit To-do", now: now)
         reference = TodoReference(url: current.url, line: current.line, source: after[0])
@@ -249,13 +289,15 @@ final class TodoEditing {
         }
     }
 
-    /// A new line under the to-do's words, before the others: a sub-to-do, or the same as the first line under it.
+    /// A new line under the to-do's words, before the others but after the line for notes waiting there: a sub-to-do,
+    /// or the same as the first line under it.
     @discardableResult
     func addLineUnderTitle() -> UUID {
-        let first = lines.first { $0.depth == 1 && $0.isEditable }
+        let waiting = lines.first?.isNewAndEmpty == true ? 1 : 0
+        let first = lines.dropFirst(waiting).first { $0.depth == 1 && $0.isEditable }
         let kind: TodoLine.Kind = first?.kind == .bullet ? .bullet : .todo(.open)
         let line = Line(kind: kind, indent: childIndent, marker: marker(for: kind, like: first), words: "", depth: 1)
-        lines.insert(line, at: 0)
+        lines.insert(line, at: waiting)
         move(to: .line(line.id))
         changed()
         return line.id

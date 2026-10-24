@@ -42,11 +42,17 @@ public protocol EditorControllerDelegate: AnyObject {
     func editorDrawingDidChange(_ editor: EditorController)
     /// The reminder under the title, or the writing bar's bell, was tapped: to set, change or remove the note's reminder.
     func editorShowReminder(_ editor: EditorController)
-    /// A to-do's pill or bell was clicked: to set, change or remove its date and place.
-    func editor(_ editor: EditorController, showTodoReminderOnLine line: Int)
+    /// A to-do's pill or bell was clicked: to set, change or remove its date or place, or with `.reminder` both.
+    func editor(_ editor: EditorController, showTodoReminderOnLine line: Int, part: TodoPart)
     /// Whether pictures and drawings may go into the note's folder, which a note opened from the Finder in the
     /// sandboxed build has to be given first.
     func editor(_ editor: EditorController, mayWriteIn folder: URL) -> Bool
+}
+
+/// What of a to-do's reminder a click asks to change: its date (its date's pill, the bell), its place (its place's
+/// pill), or both at once (Remind Me…).
+public enum TodoPart: Sendable {
+    case reminder, date, place
 }
 
 public extension EditorControllerDelegate {
@@ -55,7 +61,7 @@ public extension EditorControllerDelegate {
     func editorEditingDidChange(_ editor: EditorController) {}
     func editorDrawingDidChange(_ editor: EditorController) {}
     func editorShowReminder(_ editor: EditorController) {}
-    func editor(_ editor: EditorController, showTodoReminderOnLine line: Int) {}
+    func editor(_ editor: EditorController, showTodoReminderOnLine line: Int, part: TodoPart) {}
     func editor(_ editor: EditorController, mayWriteIn folder: URL) -> Bool { true }
 }
 
