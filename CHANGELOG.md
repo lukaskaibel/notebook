@@ -7,6 +7,10 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- New Note in Shortcuts, Spotlight and Siri, on the Mac, iPhone and iPad: it opens Notebook with a new note in your
+  default folder and the caret in its title, ready to type, as ⌘N does with nothing open. It is there without setting
+  anything up ("New note in Notebook"), and on an iPhone with an Action button you can put it there under Settings ›
+  Action Button › Shortcut. In a shortcut of your own, New Note takes text for the note to start with.
 - Links follow notes, files and folders you move, as they follow a note you rename: drag a note onto another folder,
   choose Move To, or rename or move a folder, on the Mac, iPhone and iPad, and the `[[links]]`, embeds and Markdown
   links to them in your other notes still open the same note or file. A link changes only where it would find
