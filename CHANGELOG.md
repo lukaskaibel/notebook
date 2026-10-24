@@ -45,9 +45,12 @@ versions follow [semantic versioning](https://semver.org).
 - A to-do's date, time and place in a dropdown you can type in, as in Issues: on the Mac a glass dropdown under the
   button, on the iPad a popover, on the iPhone a sheet. Type "thursday in 3 weeks", "fri 9am", "the 12th" or "930" and
   pick what it could mean with the arrow keys and Return, or click Today, Tomorrow, This Weekend, Next Week or a day in
-  the month; a time of day or one typed; a place by its name in Apple Maps, where you are, or one you used before, and
-  whether it's for arriving or leaving. On iPhone and iPad the buttons above the keyboard open them, and so does a tap
-  on the date or place under a to-do being edited.
+  the month; a time of day or one typed; a place by its name in Apple Maps, where you are, Home or Work, or one you used
+  before, and whether it's for arriving or leaving. On iPhone and iPad the buttons above the keyboard open them, and so
+  does a tap on the date or place under a to-do being edited. Those buttons are a bar of glass across the screen, as in
+  a note: a grey symbol for what isn't set, and once it is, the day, the time or the place on a tint of the accent
+  colour, as the pills in a note show them (red once it's overdue), with the button that hides the keyboard on its own
+  at the right.
 - Settings › Sidebar › Show To-dos (on iPhone and iPad, in Settings) turns To-dos off, for when you keep your to-dos in
   another app: the list goes, and Notebook doesn't remind you of to-dos.
 - Obsidian's other checkboxes: `[/]` in progress shows a half-filled circle, `[-]` cancelled a grey one with the to-do
@@ -68,6 +71,10 @@ versions follow [semantic versioning](https://semver.org).
 - Reminders at a place: Remind Me… for a note or a to-do can take a place, found in Apple Maps or where you are now, for
   arriving or for leaving, shown on a little map. iPhone and iPad remind you there, once, when you let Notebook use your
   location while you use it; a Mac can set the place, and your iPhone reminds you.
+- Home and Work as a reminder's place, as in Reminders. Apps can't read the Home and Work Apple Maps shows, so the first
+  time you tap one you choose its address: on iPhone and iPad from your own card in Contacts, where Maps has them, or
+  where you are now, or by searching. Notebook sees only the address you tap and keeps it, through iCloud, for your other
+  devices too. Touch and hold it, or right-click it on the Mac, to change the address or forget it.
 - Notebook on iPhone and iPad, with the editor, search and files of the Mac. On the iPhone, one folder per screen as in
   the Files app, with search and a new note at the bottom as in Notes; on the iPad, the Mac's sidebar, the note and its
   outline.
@@ -141,8 +148,9 @@ versions follow [semantic versioning](https://semver.org).
 - Text eases into its new look while you type: bold thickens and thins, a heading grows, italics slant, and new marks
   fade in. Reduce Motion turns it off.
 - On iPhone and iPad, buttons for where the caret is come in on the left of the bar above the keyboard, each a circle
-  of glass: the style you are in, tinted (a tap takes it off), the checkbox of the line, moving a list item out or in,
-  and opening the link the caret is on.
+  of glass, two at most so the tools keep their room: opening the link the caret is on, a to-do's reminder, the style
+  you are in, tinted (a tap takes it off), and moving a list item in or out. A to-do is ticked on its own checkbox in
+  the note. On the right of the bar, always, a circle of its own hides the keyboard.
 - Marks unfold next to the caret and fold away behind it instead of popping in and out, and the text beside them slides
   along: the stars of bold as you arrow into it, the `##` of a heading, the stars you just closed as you type on.
 - Text typed right after `##` gets the space a heading needs, so `##Plan` becomes the heading Plan, and so does a line

@@ -26,13 +26,16 @@ collects nothing about you.
   notification when you arrive or leave; Notebook itself isn't told where you are and keeps no record of it. Current
   Location asks once where you are, to name the place, and keeps only the place you chose. A Mac doesn't watch places.
 - **The places you chose last**, to choose again at a tap, are kept in the app's preferences on that device.
+- **Home and Work**, once you choose them for reminders, are kept in the app's preferences and, in the App Store build,
+  in iCloud's key-value store, for your other devices: each an address and its coordinates. Choosing one from Contacts
+  opens Apple's own contact picker; Notebook sees only the address you tap and has no access to your contacts.
 - **The search index** of file names, note text and PDF text is kept in memory only, and built again at every launch.
 
 ## What is sent, and to whom
 
 - **Nothing of yours, with one exception you start:** searching for a place for a reminder asks Apple Maps, as the Maps
-  app does, with the words you type; Current Location asks it for the address of where you are, and the map in Remind
-  Me loads from it. Notebook has no other code that connects to the internet. Pictures in notes that point to a web
+  app does, with the words you type; Current Location asks it for the address of where you are, an address you pick
+  from Contacts for Home or Work asks it where that is, and the map in Remind Me loads from it. Notebook has no other code that connects to the internet. Pictures in notes that point to a web
   address are not downloaded; Notebook shows the address instead.
 - When you click a web link in a note, your browser opens it.
 - If your notes are in iCloud Drive, Apple syncs them as it syncs every other file there; Notebook asks the system to

@@ -119,14 +119,20 @@ struct TodosView: View {
         // In the bar once the page's own title has scrolled up under it, as a note's.
         .navigationTitle(workspace.isTitleScrolledAway ? "To-dos" : "")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            // Reminders' buttons above the keyboard: a date, a time, a place, and sub-to-dos.
-            ToolbarItemGroup(placement: .keyboard) {
-                // Not over the keyboard of a popover's field, which is in this view too.
-                if let editing, focus != nil {
-                    TodoKeyboardBar(workspace: workspace, editing: editing, focus: focus) { endEditing() }
+        // Reminders' buttons above the keyboard: a date, a time, a place, and sub-to-dos. They come as the editing
+        // begins, a moment before the keyboard, fading in as they rise with it; not over the keyboard of a popover's
+        // field, which is in this view too.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            let shows = editing.map { !$0.isEnded && $0.picking == nil } ?? false
+            ZStack {
+                if let editing, shows {
+                    TodoKeyboardBar(editing: editing, focus: focus) { endEditing() }
+                        .transition(.opacity)
                 }
             }
+            .animation(UIAccessibility.isReduceMotionEnabled ? nil : .easeOut(duration: 0.2), value: shows)
+        }
+        .toolbar {
             if isInSplitView {
                 ToolbarItemGroup(placement: .topBarLeading) {
                     Button { workspace.goBack() } label: { Label("Back", systemImage: "chevron.backward") }
@@ -220,8 +226,8 @@ struct TodosView: View {
     /// The to-do being edited above the keyboard and the bar over it, scrolled up only when they cover it.
     private func reveal(_ proxy: ScrollViewProxy) {
         guard let editing, let frame = editingFrame, let shown else { return }
-        // The bar above the keyboard floats over the list.
-        guard frame.maxY > shown.upperBound - 64 || frame.minY < shown.lowerBound else { return }
+        // What shows ends at the bar above the keyboard.
+        guard frame.maxY > shown.upperBound - 16 || frame.minY < shown.lowerBound else { return }
         withAnimation(Theme.spring) { proxy.scrollTo(editing.rowID, anchor: UnitPoint(x: 0.5, y: 0.25)) }
     }
     #endif

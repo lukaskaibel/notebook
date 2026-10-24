@@ -2,14 +2,17 @@ import CoreLocation
 import MapKit
 import SwiftUI
 
-/// Choosing where a reminder comes: a place found by searching Apple Maps, where you are now, or one of the places you
-/// chose last; then whether it is for arriving there or for leaving, on a little map with the circle you have to step
-/// into or out of.
+/// Choosing where a reminder comes: a place found by searching Apple Maps, where you are now, Home or Work, or one of the
+/// places you chose last; then whether it is for arriving there or for leaving, on a little map with the circle you
+/// have to step into or out of. Home and Work are chosen once, the first time they are tapped (`SavedPlaces`).
 struct PlacePicker: View {
     @Binding var place: TodoPlace?
     @State private var search = PlaceSearch()
     @State private var isLocating = false
     @State private var problem: String?
+    /// Home or Work, while its address is being chosen.
+    @State private var choosing: SavedPlaces.Kind?
+    private var saved: SavedPlaces { .shared }
 
     var body: some View {
         if let current = place {
@@ -57,25 +60,61 @@ struct PlacePicker: View {
 
     @ViewBuilder
     private var searching: some View {
-        TextField("Search for a Place", text: $search.query)
+        TextField(choosing.map { "Search for Your \($0.name) Address" } ?? "Search for a Place", text: $search.query)
             .textFieldStyle(.plain)
             #if os(iOS)
             .textInputAutocapitalization(.words)
             #endif
             .autocorrectionDisabled()
-        if search.query.isEmpty {
-            row("Current Location", detail: problem, symbol: "location.fill", busy: isLocating) { locate() }
-            ForEach(PlaceHistory.recent, id: \.self) { recent in
-                row(recent.name, symbol: "clock") { place = recent }
-            }
-        } else {
+        if !search.query.isEmpty {
             ForEach(search.results.prefix(6), id: \.self) { result in
                 row(result.title, detail: result.subtitle.isEmpty ? nil : result.subtitle, symbol: "mappin") {
                     Task {
-                        if let found = await search.place(for: result) { place = found }
+                        guard let located = await search.place(for: result) else { return }
+                        found(located, address: [result.title, result.subtitle].filter { !$0.isEmpty }.joined(separator: ", "))
                     }
                 }
             }
+        } else if let choosing {
+            row("Current Location", detail: problem, symbol: "location.fill", busy: isLocating) { locate() }
+            #if os(iOS)
+            row("Choose from Contacts…", detail: "Your own card has the \(choosing.name.lowercased()) address Maps knows", symbol: "person.crop.circle") {
+                fromContacts()
+            }
+            #endif
+            row("Cancel", symbol: "xmark") { self.choosing = nil }
+        } else {
+            row("Current Location", detail: problem, symbol: "location.fill", busy: isLocating) { locate() }
+            ForEach(SavedPlaces.Kind.allCases) { kind in
+                if let known = saved.saved[kind] {
+                    row(kind.name, detail: known.address, symbol: kind.symbol) { place = saved.place(kind) }
+                        .contextMenu {
+                            Button { choose(kind) } label: { Label("Change Address…", systemImage: "pencil") }
+                            Button(role: .destructive) { saved.set(kind, to: nil) } label: { Label("Forget " + kind.name, systemImage: "trash") }
+                        }
+                } else {
+                    row(kind.name, detail: "Choose Address…", symbol: kind.symbol) { choose(kind) }
+                }
+            }
+            ForEach(PlaceHistory.recent.filter { !saved.isSaved($0) }, id: \.self) { recent in
+                row(recent.name, symbol: "clock") { place = recent }
+            }
+        }
+    }
+
+    private func choose(_ kind: SavedPlaces.Kind) {
+        search.query = ""
+        problem = nil
+        choosing = kind
+    }
+
+    /// A place found or located: the reminder's, and Home's or Work's when that is being chosen.
+    private func found(_ found: TodoPlace, address: String) {
+        if let choosing {
+            self.choosing = nil
+            place = saved.set(choosing, to: found, address: address)
+        } else {
+            place = found
         }
     }
 
@@ -109,9 +148,24 @@ struct PlacePicker: View {
                 return
             }
             let name = await PlaceSearch.name(of: location) ?? "Current Location"
-            place = TodoPlace(name: name, latitude: location.coordinate.latitude, longitude: location.coordinate.longitude)
+            found(TodoPlace(name: name, latitude: location.coordinate.latitude, longitude: location.coordinate.longitude), address: name)
         }
     }
+
+    #if os(iOS)
+    /// An address tapped on a card in Contacts, found in Apple Maps.
+    private func fromContacts() {
+        problem = nil
+        Task {
+            guard let address = await ContactAddressPicker.shared.chooseAddress() else { return }
+            guard let located = await SavedPlaces.locate(address) else {
+                problem = "That address couldn’t be found in Maps."
+                return
+            }
+            found(located.place, address: located.address)
+        }
+    }
+    #endif
 }
 
 /// The place on a map, with the circle around it a reminder watches.

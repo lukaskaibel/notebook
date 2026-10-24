@@ -345,28 +345,101 @@ struct TodoChip: View {
 #endif
 
 #if os(iOS)
-/// Reminders' buttons above the keyboard while a to-do is edited: its day, its time and its place, each to type in or
-/// tap in a popover from the to-do's row (a sheet on iPhone), a sub-to-do, a line in or out, and done.
+/// Reminders' buttons above the keyboard while a to-do is edited, laid out as the bar in a note is: across the screen
+/// in a capsule of glass, its day, its time and its place, each a grey symbol until it is set and then what it is set
+/// to, in the accent colour as the note's pills show it; each opens a popover from the to-do's row to type in or tap
+/// (a sheet on iPhone). Then a sub-to-do, and in a line under the words, moving that line out or in. At the right end,
+/// on its own, the button that hides the keyboard, which is done.
 struct TodoKeyboardBar: View {
-    let workspace: Workspace
     let editing: TodoEditing
     let focus: TodoFocus?
     var done: () -> Void
 
+    /// What can show its value in words.
+    private enum Part {
+        case day, time, place
+    }
+
     var body: some View {
-        HStack {
-            Button { editing.pick(.day) } label: { Label("Date", systemImage: "calendar") }
-            Button { editing.pick(.time) } label: { Label("Time", systemImage: "clock") }
-            Button { editing.pick(.place) } label: { Label("Location", systemImage: "location") }
-            Button { editing.addTodo() } label: { Label("Add Sub-to-do", systemImage: "checklist") }
-            if case .line(let id) = focus {
-                Button { editing.outdent(id) } label: { Label("Move Out", systemImage: "decrease.indent") }
-                Button { editing.indent(id) } label: { Label("Move In", systemImage: "increase.indent") }
+        let schedule = editing.schedule
+        HStack(spacing: WritingBar.spacing) {
+            // The values in words while they fit; a place's name gives way first, then the day and the time.
+            ViewThatFits(in: .horizontal) {
+                buttons(due: schedule.due, place: schedule.place, words: [.day, .time, .place])
+                buttons(due: schedule.due, place: schedule.place, words: [.day, .time])
+                buttons(due: schedule.due, place: schedule.place, words: [])
             }
-            Spacer()
-            Button(action: done) { Label("Done", systemImage: "keyboard.chevron.compact.down") }
+            .padding(.horizontal, 6)
+            .frame(maxWidth: .infinity)
+            .frame(height: WritingBar.barHeight)
+            .glassEffect(.regular.interactive(), in: .capsule)
+            HideKeyboardButton(action: done)
         }
-        .labelStyle(.iconOnly)
+        .frame(maxWidth: WritingBar.barWidth(for: .infinity))
+        .padding(.horizontal, 12)
+        .padding(.top, WritingBar.topGap)
+        .padding(.bottom, WritingBar.keyboardGap)
+        .frame(maxWidth: .infinity)
+        .animation(UIAccessibility.isReduceMotionEnabled ? nil : Theme.spring, value: schedule.due)
+        .animation(UIAccessibility.isReduceMotionEnabled ? nil : Theme.spring, value: schedule.place)
+        .animation(UIAccessibility.isReduceMotionEnabled ? nil : Theme.spring, value: focus)
+    }
+
+    private func buttons(due: TodoDue?, place: TodoPlace?, words: Set<Part>) -> some View {
+        let tint = due?.isOverdue() == true ? Color.red : Color.theme(Theme.accent)
+        return HStack(spacing: 4) {
+            button("Date", symbol: "calendar", value: due.map { ReminderText.day($0.date()) }, inWords: words.contains(.day), tint: tint) {
+                editing.pick(.day)
+            }
+            button("Time", symbol: due?.hasTime == true ? "clock.fill" : "clock",
+                   value: due.flatMap { $0.hasTime ? $0.date().formatted(date: .omitted, time: .shortened) : nil }, inWords: words.contains(.time), tint: tint) {
+                editing.pick(.time)
+            }
+            button("Location", symbol: place == nil ? "location" : "location.fill",
+                   value: place.map { $0.leaving ? "Leaving " + $0.name : $0.name }, inWords: words.contains(.place)) {
+                editing.pick(.place)
+            }
+            button("Add Sub-to-do", symbol: "checklist") { editing.addTodo() }
+            if case .line(let id) = focus {
+                button("Move Out", symbol: "decrease.indent") { editing.outdent(id) }
+                button("Move In", symbol: "increase.indent") { editing.indent(id) }
+            }
+        }
+    }
+
+    /// A slot of the bar. A value set is on a tint of its colour, in words as long as it takes; the other buttons share
+    /// the room that is left.
+    private func button(_ name: String, symbol: String, value: String? = nil, inWords: Bool = false, tint: Color = .theme(Theme.accent),
+                        action: @escaping () -> Void) -> some View {
+        let words = inWords ? value : nil
+        return Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: symbol)
+                    .font(.system(size: value == nil ? 18 : words == nil ? 15 : 13, weight: value == nil ? .regular : .semibold))
+                if let words {
+                    // A place's long name, cut short.
+                    Text(words)
+                        .font(.system(size: 14, weight: .medium))
+                        .lineLimit(1)
+                        .frame(maxWidth: 130)
+                }
+            }
+            .foregroundStyle(value == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(tint))
+            .padding(.horizontal, words == nil ? 0 : 9)
+            .frame(minWidth: value != nil && words == nil ? 40 : nil)
+            .frame(height: value == nil ? WritingBar.barHeight : 32)
+            .background {
+                if value != nil { Capsule().fill(tint.opacity(0.13)) }
+            }
+            .frame(minWidth: WritingBar.barHeight, maxWidth: words == nil ? .infinity : nil, maxHeight: .infinity)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        // In words only when they fit, not squeezed by the buttons around it.
+        .fixedSize(horizontal: words != nil, vertical: false)
+        .accessibilityLabel(name)
+        .accessibilityValue(value ?? "")
+        .transition(.opacity)
     }
 }
 
