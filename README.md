@@ -723,8 +723,8 @@ library), containing parts covered by the terms of the Eclipse Public License 2.
 you additional permission to convey the resulting work. Corresponding Source for a non-source form of such a
 combination shall include the source code for the parts of elk-swift used as well as that of the covered work.
 
-Notebook was released under the [MIT License](https://github.com/lukaskaibel/notebook/blob/7194650/LICENSE) until
-24 October 2026. Copies from before then, up to commit `7194650`, can still be used under that licence.
+Notebook was released under the [MIT License](https://github.com/lukaskaibel/notebook/blob/e4b72a6/LICENSE) until
+24 October 2026. Copies from before then, up to commit `e4b72a6`, can still be used under that licence.
 
 Contributions come with terms of their own, so that Notebook can be published on the App Store: see
 [CONTRIBUTING.md](CONTRIBUTING.md#licensing-your-contribution).
