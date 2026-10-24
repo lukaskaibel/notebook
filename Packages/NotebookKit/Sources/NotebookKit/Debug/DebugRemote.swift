@@ -1,5 +1,6 @@
 #if DEBUG && os(macOS)
 import AppKit
+import MapKit
 import PDFKit
 import SwiftUI
 
@@ -34,6 +35,8 @@ enum DebugRemote {
     private static var waitUntil: Date?
     /// The menu `movetomenu more` opened.
     private static weak var trackedMenu: NSMenu?
+    /// The search `placesearch` runs, kept until it answers.
+    private static var placeSearch: PlaceSearch?
 
     private static func poll(_ path: String) {
         if let waitUntil, Date() < waitUntil { return }
@@ -370,6 +373,48 @@ enum DebugRemote {
             }
         case "openfile":
             FileWindows.shared.open(URL(fileURLWithPath: argument))
+        case "samplenotes":
+            // samplenotes <folder>: what Try Sample Notes… does once a folder is chosen.
+            workspace?.addSampleNotes(in: URL(fileURLWithPath: argument, isDirectory: true))
+        case "storeasset":
+            // storeasset <file>|picture: what pasting a file, or a picture, into the open note puts in its .assets.
+            guard let editor else { log("storeasset: no note open"); break }
+            let picture = NSImage(size: NSSize(width: 40, height: 40), flipped: false) { NSColor.systemRed.setFill(); $0.fill(); return true }
+            let path = argument == "picture" ? editor.storeAsset(image: picture) : editor.storeAsset(copying: URL(fileURLWithPath: argument))
+            log("storeasset: \(path ?? "failed") in \(editor.assetsFolder?.path ?? "no folder")")
+        case "trash":
+            // trash <path>: what Move to Trash does with a file or folder.
+            guard let workspace else { break }
+            Task { log("trash \(argument): \(await workspace.trash(URL(fileURLWithPath: argument)).value ? "done" : "failed")") }
+        case "placesearch":
+            // placesearch <words>: what typing a place in Remind Me finds in Apple Maps, and where the first one is.
+            let search = PlaceSearch()
+            placeSearch = search
+            search.query = argument
+            Task {
+                try? await Task.sleep(for: .seconds(4))
+                log("placesearch \(argument): \(search.results.count) found \(search.results.prefix(3).map(\.title))")
+                guard let first = search.results.first else { return }
+                let place = await search.place(for: first)
+                log("placesearch place: \(place.map { "\($0.name) \($0.latitude) \($0.longitude)" } ?? "none")")
+            }
+        case "mapsnapshot":
+            // mapsnapshot <latitude> <longitude> <out.png>: a map from the tiles Remind Me's map loads, to see they come.
+            let bits = argument.split(separator: " ", maxSplits: 2).map(String.init)
+            guard bits.count == 3, let latitude = Double(bits[0]), let longitude = Double(bits[1]) else { log("mapsnapshot <latitude> <longitude> <out.png>"); break }
+            let options = MKMapSnapshotter.Options()
+            options.region = MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: latitude, longitude: longitude), latitudinalMeters: 800, longitudinalMeters: 800)
+            options.size = CGSize(width: 300, height: 200)
+            MKMapSnapshotter(options: options).start { snapshot, error in
+                MainActor.assumeIsolated {
+                    guard let snapshot, let tiff = snapshot.image.tiffRepresentation,
+                          let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else {
+                        log("mapsnapshot: \(error?.localizedDescription ?? "no picture")"); return
+                    }
+                    try? png.write(to: URL(fileURLWithPath: bits[2]))
+                    log("mapsnapshot \(bits[2])")
+                }
+            }
         case "openurls":
             // openurls <path>: what File › Open and the Dock icon do with a file or folder.
             FileWindows.shared.open([URL(fileURLWithPath: argument)])
@@ -530,6 +575,9 @@ enum DebugRemote {
             // index: how the index was built and kept since launch, and what search has now.
             guard let index = workspace?.index else { break }
             log("index files=\(index.count) building=\(index.isBuilding) search=\(index.corpus.items.count) | " + index.history.joined(separator: " | "))
+        case "spotlight":
+            // spotlight […]: see `Workspace.spotlightCommand`.
+            if let workspace { log(workspace.spotlightCommand(argument)) }
         case "recognizer":
             // recognizer [file]: what reading text in pictures is doing, or what it read in a file.
             if argument.isEmpty {

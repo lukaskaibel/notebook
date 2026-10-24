@@ -73,10 +73,25 @@ enum DebugRemote {
             waitUntil = Date().addingTimeInterval(numbers.first ?? 0.5)
         case "open":
             if let url = url(argument) { workspace.open(url) }
+        case "timeopen":
+            // timeopen <path>: opens a note and logs how long the main thread was busy with it, until the screen had
+            // been made and the main thread was free again, as on the Mac.
+            guard let url = url(argument) else { return }
+            let start = CACurrentMediaTime()
+            workspace.open(url)
+            let opened = CACurrentMediaTime()
+            let timer = Timer(timeInterval: 0.001, repeats: false) { _ in
+                let done = CACurrentMediaTime()
+                MainActor.assumeIsolated { log(String(format: "timeopen %@: open %.1f ms, until free %.1f ms", url.lastPathComponent, (opened - start) * 1000, (done - start) * 1000)) }
+            }
+            RunLoop.main.add(timer, forMode: .common)
         case "close":
             workspace.closeFile()
         case "newnote":
             workspace.newNote(title: argument.isEmpty ? nil : argument)
+        case "samplenotes":
+            // samplenotes: what Try Sample Notes does on the first screen.
+            workspace.addSampleNotes(in: Workspace.onDeviceFolder)
         case "defaultfolder":
             // defaultfolder [<path>|inbox]: chooses Settings' default folder, then says which it is.
             if argument == "inbox" { workspace.chooseDefaultFolder(nil) } else if !argument.isEmpty, let url = url(argument) { workspace.chooseDefaultFolder(url) }
@@ -327,6 +342,9 @@ enum DebugRemote {
             // index: how the index was built and kept since launch, and what search has now.
             let index = workspace.index
             log("index files=\(index.count) building=\(index.isBuilding) search=\(index.corpus.items.count) | " + index.history.joined(separator: " | "))
+        case "spotlight":
+            // spotlight […]: see `Workspace.spotlightCommand`.
+            log(workspace.spotlightCommand(argument))
         case "resolve":
             log("resolve \(argument): \(workspace.index.resolve(argument, from: workspace.currentURL)?.path ?? "nothing") building \(workspace.index.isBuilding) entries \(workspace.index.count)")
         case "suggestions":

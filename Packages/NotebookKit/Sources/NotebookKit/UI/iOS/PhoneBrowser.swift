@@ -186,7 +186,6 @@ struct HomeScreen: View {
                         }
                     } header: {
                         LocationHeader(workspace: workspace, location: location) { newFolderIn = $0 }
-                            .contextMenu { FileActions(workspace: workspace, url: location.url) { newFolderIn = $0 } }
                     }
                 }
                 Section {
@@ -285,7 +284,6 @@ struct FolderScreen: View {
     @Binding var newFolderIn: URL?
     @State private var query = ""
     @State private var isSearching = false
-    @State private var moving: MovingFile?
     @Bindable private var settings = NotebookSettings.shared
 
     var body: some View {
@@ -303,7 +301,7 @@ struct FolderScreen: View {
                     .swipeActions(edge: .trailing) {
                         if !node.isLinked {
                             Button(role: .destructive) { workspace.moveToTrash(node.url) } label: { Label("Delete", systemImage: "trash") }
-                            Button { moving = MovingFile(url: node.url) } label: { Label("Move", systemImage: "folder") }
+                            Button { workspace.moving = MovingFile(url: node.url) } label: { Label("Move", systemImage: "folder") }
                                 .tint(.indigo)
                         }
                     }
@@ -347,12 +345,11 @@ struct FolderScreen: View {
             if let first = workspace.searchSession.sections.first?.items.first { open(first.result) }
         }
         .refreshable { await workspace.readAgain(page.url) }
-        .sheet(item: $moving) { file in MoveSheet(workspace: workspace, url: file.url) }
         #if DEBUG
         .onReceive(NotificationCenter.default.publisher(for: .notebookDebug)) { notification in
             guard notification.userInfo?["command"] as? String == "movesheet", let path = notification.userInfo?["argument"] as? String,
                   let root = workspace.locations.first?.url else { return }
-            moving = MovingFile(url: root.appendingPathComponent(path))
+            workspace.moving = MovingFile(url: root.appendingPathComponent(path))
         }
         #endif
         .onAppear { workspace.selectedFolder = page.url }

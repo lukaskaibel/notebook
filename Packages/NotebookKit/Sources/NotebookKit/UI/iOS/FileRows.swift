@@ -283,7 +283,7 @@ extension Workspace {
     }
 }
 
-/// A file to move, chosen with a swipe.
+/// A file to move, chosen with a swipe or from a menu.
 struct MovingFile: Identifiable {
     let url: URL
     var id: URL { url }
@@ -447,6 +447,7 @@ struct FileAlerts: ViewModifier {
                 FolderIconEditor(workspace: workspace, url: request.url) { workspace.folderIconRequest = nil }
                     .presentationDetents([.medium, .large])
             }
+            .sheet(item: $workspace.moving) { file in MoveSheet(workspace: workspace, url: file.url) }
             .alert(deleteTitle, isPresented: Binding(get: { workspace.deleting != nil }, set: { if !$0 { workspace.deleting = nil } })) {
                 Button("Cancel", role: .cancel) { workspace.deleting = nil }
                 Button("Delete", role: .destructive) {

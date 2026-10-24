@@ -22,6 +22,11 @@ final class FolderReader {
     /// The read ahead of time waiting for each folder, to read it next instead when the folder is opened.
     private var waiting: [String: (operation: Operation, request: Request, done: ([Result]) -> Void)] = [:]
     private var count = 0
+    #if DEBUG
+    /// How long each read takes, for a test: in place of `-NotebookSlowFolders`, which every test run on the Mac at the
+    /// time shares (they all have the defaults of xctest), so that another one could change it in the middle.
+    var delay: TimeInterval?
+    #endif
 
     private static func queue(_ name: String, width: Int) -> OperationQueue {
         let queue = OperationQueue()
@@ -48,13 +53,18 @@ final class FolderReader {
             waiting[request.url.path] = nil
         }
         if ahead, requests.count == 1 { waiting[requests[0].url.path] = (operation, requests[0], done) }
+        #if DEBUG
+        let delay = delay
+        #else
+        let delay: TimeInterval? = nil
+        #endif
         operation.addExecutionBlock {
             let results = requests.map { request -> Result in
                 var isDirectory: ObjCBool = false
                 guard FileManager.default.fileExists(atPath: request.url.path, isDirectory: &isDirectory), isDirectory.boolValue else {
                     return (request.url.path, nil)
                 }
-                return (request.url.path, FileNode.list(request.url, linked: request.linked))
+                return (request.url.path, FileNode.list(request.url, linked: request.linked, delay: delay))
             }
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {

@@ -39,6 +39,10 @@ public final class Workspace: NSObject {
     private(set) var reminders = Reminders(defaults: nil, cloud: nil)
     /// Every open to-do in the notes, read from what search knows.
     let todos = TodoList()
+    /// The notes in Spotlight, fed from what search knows; nil when Spotlight doesn't get them (`startSpotlight`).
+    @ObservationIgnored var spotlight: SpotlightIndex?
+    /// Words to search for in ⌘K as it opens: Spotlight's Search in App.
+    var paletteStart: (query: String, id: UUID)?
     /// Counts the reminders whose time came, so what shows them turns red then, without anything else changing.
     var remindersDue = 0
     @ObservationIgnored var dueTimer: Timer?
@@ -147,6 +151,8 @@ public final class Workspace: NSObject {
     var todoPickRequest: TodoPickRequest?
     /// A folder to customize, in a sheet.
     var folderIconRequest: FolderIconRequest?
+    /// A file or folder to move, in the sheet that asks where to.
+    var moving: MovingFile?
     /// What each note looked like when you went on from it, shown while the screen of the note you go on to slides
     /// over it, and while you swipe back to it. There is only one editor, and it is on the screen in front.
     @ObservationIgnored var pageSnapshots: [URL: UIView] = [:]
@@ -208,9 +214,13 @@ public final class Workspace: NSObject {
             // Notes moved in the Finder can be found by their names now.
             self?.scheduleReminders()
             self?.indexChanged()
+            self?.spotlight?.setNeedsUpdate()
         }
         index.onFoldersChanged = { [weak self] in self?.prepareMoveFolders() }
-        index.onChanged = { [weak self] in self?.indexChanged() }
+        index.onChanged = { [weak self] in
+            self?.indexChanged()
+            self?.spotlight?.setNeedsUpdate()
+        }
         todos.onChange = { [weak self] in self?.todosChanged() }
         index.onRefreshed = { [weak self] in self?.refreshLinks() }
         index.onIndexed = { [weak self] entries in self?.recognizer.consider(entries) }
@@ -257,7 +267,7 @@ public final class Workspace: NSObject {
             #if DEBUG
             if UserDefaults.standard.bool(forKey: "NotebookDemo") { DemoLibrary.create(at: url) }
             #endif
-            locations = [Location(id: UUID(), name: UserDefaults.standard.string(forKey: "NotebookLibraryName") ?? url.lastPathComponent, path: url.path, bookmark: nil)]
+            locations = [Location(id: Location.id(for: url.path), name: UserDefaults.standard.string(forKey: "NotebookLibraryName") ?? url.lastPathComponent, path: url.path, bookmark: nil)]
             favorites = []
             recents = []
             chosenDefaultFolder = nil
@@ -277,6 +287,7 @@ public final class Workspace: NSObject {
         // The index kept from the last run is read while the locations are looked up, for search to have it all at once.
         index.storeURL = SearchIndex.storeURL(library: temporaryLocations ? locations.first?.url.path : nil)
         index.loadKept(for: locations)
+        startSpotlight()
         hidden.onChange = { [weak self] in self?.hiddenFoldersChanged() }
         reminders.onChange = { [weak self] in self?.remindersChanged() }
         readTextInPictures(NotebookSettings.shared.readsTextInPictures)
@@ -435,7 +446,25 @@ public final class Workspace: NSObject {
         guard let url = LocationStore.choose(startingIn: start, message: iCloud ? "Click Open to show iCloud Drive in Notebook." : nil) else { return }
         addLocation(url)
     }
+
+    /// Asks where to put the sample notes, since the sandbox writes only where you chose, and makes them there.
+    func chooseSampleNotesFolder() {
+        guard let url = LocationStore.choose(startingIn: FileManager.default.homeDirectoryForCurrentUser,
+                                             message: "Choose where to put the sample notes. Notebook makes a folder Sample Notes there.",
+                                             prompt: "Make Sample Notes") else { return }
+        addSampleNotes(in: url)
+    }
     #endif
+
+    /// Try Sample Notes: made-up notes, pictures, a drawing and PDFs in a new folder Sample Notes in `folder`, which
+    /// becomes a location of its own. They are written off the main thread and show once they are there.
+    func addSampleNotes(in folder: URL) {
+        let url = folder.appendingPathComponent("Sample Notes", isDirectory: true)
+        Task {
+            await Task.detached(priority: .userInitiated) { DemoLibrary.create(at: url) }.value
+            addLocation(url)
+        }
+    }
 
     /// A folder from File › Open or the Dock icon: shown where it is in the sidebar, or added as a location of its own
     /// (iCloud Drive, say) when no location has it yet.

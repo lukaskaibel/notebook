@@ -16,7 +16,7 @@
   <img alt="Apple silicon" src="https://img.shields.io/badge/Apple%20silicon-native-34508F">
   <img alt="Built with Swift, SwiftUI, AppKit and UIKit" src="https://img.shields.io/badge/Swift-SwiftUI%20%2B%20AppKit%20%2B%20UIKit-F05138">
   <a href="#license"><img alt="License: GPLv3" src="https://img.shields.io/badge/license-GPLv3-34508F"></a>
-  <a href="CHANGELOG.md"><img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-34508F"></a>
+  <a href="CHANGELOG.md"><img alt="Version 1.0.0" src="https://img.shields.io/badge/version-1.0.0-34508F"></a>
 </p>
 
 <p align="center">
@@ -35,9 +35,9 @@
   <img alt="Notebook showing the note Kyoto trip: links to Budget and Flight tickets.pdf, a picture of a torii gate and a packing checklist; the folders of iCloud Drive in the sidebar and the note's outline on the right" src="Design/screenshots/hero-light.webp">
 </picture>
 
-> **Status: early.** Version 0.1.0 runs on the Mac, iPhone and iPad, and you build it from source (five minutes, see
-> below). It already covers writing, organising and finding notes day to day. A widget, controls and a share extension
-> for quick capture, and the App Store, come later; see [Not there yet](#not-there-yet).
+> **Status: on its way to the App Store.** Version 1.0.0 runs on the Mac, iPhone and iPad; until it is in the App Store,
+> you build it from source (five minutes, see below). It covers writing, organising and finding notes day to day. A
+> widget, controls and a share extension for quick capture come later; see [Not there yet](#not-there-yet).
 
 ## Why
 
@@ -159,6 +159,10 @@ finds everything the moment it opens, and then reads only the notes and PDFs tha
 while it is still reading your files, it finds what it has read so far. Pictures, scans and drawings are read on your
 Mac, iPhone or iPad with Apple's own text recognition, in the background and once each; Settings › General › Search
 turns it off.
+
+Your notes are in Spotlight too, on the Mac and on iPhone and iPad: it finds a note by its name or any word in it, with
+its first lines and its folder, and picking it opens it in Notebook. Search in App takes the words to ⌘K. Notes in
+hidden folders stay out of Spotlight, and it follows as you write, rename, move and delete notes.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/search-dark.webp">
@@ -384,6 +388,8 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   QuickTime Player, the rest in Quick Look. Double-click one in the sidebar to open it in its own app, such as Preview.
 - **Search** for the names of notes, files and folders, headings, words in notes and PDFs, and the text in pictures,
   scans and handwriting, in the background as you type. ⌘K finds the same and runs commands.
+- **Spotlight** finds your notes by their names and words too, on the Mac, iPhone and iPad, and opens them in
+  Notebook. It gets what search has already read, in the background, and after a launch only what changed.
 - **Saves as you type,** and never overwrites a change made somewhere else (see below).
 - **Export** a note as a PDF or a PNG image, or print it (on iPhone and iPad: as a PDF to share, or print).
 - **Notes in windows of their own.** Double-click a note in the sidebar, or open any Markdown file from the Finder or
@@ -399,6 +405,7 @@ What isn't part of a note or a folder, such as the folders you hide and the remi
 app's settings and iCloud's key-value store, not in your folders. A to-do's date and place are part of the
 to-do, so they are in the note. What search knows, the text of your notes and
 PDFs and the words read in pictures, is kept in the app's caches on each device, from where it can always be read again.
+The list of the notes Spotlight has is kept in the app's own folder on each device.
 
 | What | In the file | In Notebook |
 | --- | --- | --- |
@@ -479,10 +486,14 @@ On iPhone and iPad, **Choose a Folder** opens the Files app's picker: pick iClou
 write on the Mac, or any folder in it or on the device. **Keep Notes on This iPhone** (or iPad) uses Notebook's own
 folder, which the Files app shows under On My iPhone › Notebook. Add more in Settings, from the ⋯ menu.
 
-To look around without your own notes, run a Debug build with the arguments `-NotebookLibrary /tmp/NotebookSample
--NotebookDemo YES` (Product › Scheme › Edit Scheme › Arguments). It writes a few sample notes, pictures and PDFs to that
-folder and shows only them, for that run. In the Simulator, use `-NotebookLibrary ~/Documents/Sample`, which is in the
-app's own folder there.
+To look around without your own notes, choose **Try Sample Notes…** on the first screen. It writes made-up notes, a
+drawing, pictures and PDFs to a new folder Sample Notes, in the folder you pick on the Mac and in Notebook's own folder
+on iPhone and iPad, and adds it as a location. Remove it in Settings when you're done; the files stay where they are.
+
+For development, a Debug build run with the arguments `-NotebookLibrary /tmp/NotebookSample -NotebookDemo YES`
+(Product › Scheme › Edit Scheme › Arguments) writes the same notes to that folder and shows only them, for that run,
+with a hidden folder and a reminder. In the Simulator, use `-NotebookLibrary ~/Documents/Sample`, which is in the app's
+own folder there.
 
 ## Using it
 
@@ -566,6 +577,7 @@ on the Mac. On iPhone and iPad:
 | Swipe from the left edge | Back to the folder or the note you came from (iPhone) |
 | Swipe a file to the left or right | Move or delete it, add it to your favourites, or hide a folder |
 | Touch and hold a file or folder | Set a reminder, rename, move, duplicate, copy a link, customize or hide a folder, share and more |
+| Tap a location's name | New note or folder at its top, add to favourites, share, show hidden folders, remove from Notebook |
 | Pull a list down | Read the folder again |
 | Tap a checkbox, a link or a picture | Tick it, follow it, or look at it in Quick Look |
 | Tap a to-do's pill | Its date or its place, to type or tap, as in To-dos |
@@ -587,7 +599,6 @@ Planned, and not built yet:
 
 - **More quick capture:** a widget, a control in Control Center and on the Lock Screen, and a share extension, all
   adding a note to the default folder as New Note in Shortcuts does.
-- **Spotlight:** notes don't turn up in Spotlight yet, only in Notebook's own search.
 - **Reminders when a calendar event starts,** and on the iPhone a Live Activity that keeps the note on the Lock Screen.
   A reminder set on another device reaches an iPhone or iPad the next time Notebook runs there or gets time in the
   background. Reminders don't repeat, and a Mac doesn't remind you at places. A to-do with the Tasks plugin's
@@ -614,23 +625,25 @@ Packages/NotebookKit/
     Render/                  Tables, maths, diagrams and code highlighting
     Drawing/                 Drawings: the strokes file and its picture, and drawing them in notes
     Files/                   Locations, the file tree read in the background, file operations, saving, watching, the
-                             three-way merge, the hidden folders and reminders kept in iCloud's key-value store, and
-                             folders' symbols and colours kept where the Finder keeps them
+                             three-way merge, the hidden folders and reminders kept in iCloud's key-value store,
+                             folders' symbols and colours kept where the Finder keeps them, and the sample notes
     Index/                   Search: the index of every file and how it is kept between launches, the corpus a
                              search goes through on every core, the text read in pictures, scans and drawings, and
-                             how [[links]] resolve and follow files renamed or moved; the to-dos of every note
+                             how [[links]] resolve and follow files renamed or moved; the to-dos of every note, and
+                             what Spotlight gets of each note
     Platform/                The few names and calls that differ between AppKit and UIKit
     UI/                      The Mac's window, sidebar, inspector, search field, Settings and file windows; PDFs,
                              pictures, videos and Quick Look; what both share, such as the outline and search results
     UI/iOS/                  The iPhone's and iPad's screens: folders, the sidebar, the note, search and Settings
-    Debug/                   The debug remotes and the sample notes (Debug builds only)
-  Tests/                     Parser, editor, merge, smoothness, search index, link, drawing, reminder, to-do, folder
-                             look and app icon tests
+    Debug/                   The debug remotes (Debug builds only)
+  Tests/                     Parser, editor, merge, smoothness, search index, Spotlight, link, drawing, reminder,
+                             to-do, folder look and app icon tests
 Config/                      Build settings, Info.plist and entitlements
-Design/                      The icon, the README pictures and the social preview
+Design/                      The icon, the README pictures, the social preview, and the App Store screenshots and
+                             what is set in App Store Connect (app-store.md)
 Website/                     The website, published to GitHub Pages by .github/workflows/website.yml
-Tools/                       The app icon and the README pictures
-fastlane/                    Building for the App Store and uploading to TestFlight
+Tools/                       The app icon, the README pictures and the App Store screenshots
+fastlane/                    Building for the App Store, TestFlight, and the App Store listing's texts
 PLAN.md                      The plan: decisions, file format, architecture and milestones (in German)
 ```
 
@@ -694,9 +707,10 @@ nothing waits for it, `-NotebookSlowFiles 2` does the same for every note, PDF, 
 `-NotebookSlowWrites 2` for every change to files: a new note or folder, a rename, a move, a copy, the Trash. On the
 Mac, `mainthread` logs how many folders were read and files changed on the main thread, which should be none, and
 `fakekey` makes the test window say it is key, as the window you click in is, while the app stays in the background.
-`timeopen <note>` logs how long opening a note keeps the window busy, `search <text>` how long search takes, and
-`index` when after launch the kept index was read, search had every file and the files were checked, and how many
-notes that read. macOS shows notifications only from an app in a lasting place, not from one in `/tmp`.
+`timeopen <note>` logs how long opening a note keeps the window busy (on iPhone and iPad too), `search <text>` how
+long search takes, and `index` when after launch the kept index was read, search had every file and the files were
+checked, and how many notes that read. macOS shows notifications only from an app in a lasting place, not from one in
+`/tmp`.
 
 Builds for TestFlight are made and uploaded with [fastlane](https://fastlane.tools), signed in with an App Store
 Connect API key, so Xcode needs no account. Copy `fastlane/.env.secret.example` to `fastlane/.env.secret` (it stays out
@@ -707,12 +721,18 @@ app or both:
 bundle exec fastlane ios beta
 ```
 
+The App Store listing is kept here too: its texts in `fastlane/metadata`, the age rating in `fastlane/rating.json` and
+the screenshots in `Design/screenshots/app-store`, taken on the sample notes by `bundle exec fastlane screenshots`.
+`bundle exec fastlane metadata` uploads them, `submit` sends the builds TestFlight has for review, and `release`
+builds, uploads and submits in one go. [Design/app-store.md](Design/app-store.md) lists what is set once in App Store
+Connect, and why the answers are what they are.
+
 Every change to the app on `main` also goes to TestFlight by itself, for the iPhone and iPad and for the Mac:
 [`.github/workflows/testflight.yml`](.github/workflows/testflight.yml) runs `ios beta` and `mac beta` on GitHub side by
 side, signed with certificates made for it (the workflow lists the secrets it needs). There the Mac app is signed for
 the App Store from the start, so the Macs GitHub runs it on don't have to be registered with the team. A TestFlight
-build carries the version it's on its way to and the date and time in Germany: `0.1.0 (2026.1017.1047)` is the build of
-17 October 2026 at 10:47, and once `v0.1.0` is tagged, the builds after it are `0.2.0`. Its "What to Test" names the
+build carries the version it's on its way to and the date and time in Germany: `1.0.0 (2026.1017.1047)` is the build of
+17 October 2026 at 10:47, and once `v1.0.0` is tagged, the builds after it are `1.1.0`. Its "What to Test" names the
 commit.
 
 The team's own testers get every build straight away; the external testers in the TestFlight group "Family and
@@ -723,7 +743,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes.
 
 ## Versions
 
-The project follows [semantic versioning](https://semver.org). Every release is tagged (`v0.1.0`) and described in
+The project follows [semantic versioning](https://semver.org). Every release is tagged (`v1.0.0`) and described in
 the [changelog](CHANGELOG.md). Until 1.0, minor versions may change behaviour.
 
 ## Acknowledgements

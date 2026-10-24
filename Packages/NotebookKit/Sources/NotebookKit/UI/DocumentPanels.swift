@@ -6,34 +6,23 @@ import UIKit
 import PDFKit
 import SwiftUI
 
-/// Move To, as in Notes: every folder, indented under its location.
+/// Move To, as in Notes: every folder, indented under its location. A whole iCloud Drive has thousands, and an item
+/// for each made here would be made again every time a note opens: on the Mac they go in when the menu opens
+/// (`MoveToSubmenu`), on iPhone and iPad they are listed in a sheet, as Files and Notes ask where to move.
 struct MoveToMenu: View {
     let workspace: Workspace
     let url: URL
 
     var body: some View {
+        #if os(macOS)
         Menu {
-            #if os(macOS)
-            // The folders go in when the menu opens (`MoveToSubmenu`). Made here, an item for each of them would be
-            // made again every time a note opens.
             Text("Folders")
-            #else
-            ForEach(workspace.moveTargets(for: url), id: \.location.id) { target in
-                Section(target.location.name) {
-                    ForEach(target.folders, id: \.url) { folder in
-                        Button {
-                            workspace.move(url, into: folder.url)
-                        } label: {
-                            Label(String(repeating: "    ", count: max(0, folder.depth)) + (folder.depth < 0 ? "Top Level" : folder.name), systemImage: "folder")
-                        }
-                        .disabled(folder.url.standardizedFileURL == url.deletingLastPathComponent().standardizedFileURL)
-                    }
-                }
-            }
-            #endif
         } label: {
             Label("Move To", systemImage: "folder")
         }
+        #else
+        Button { workspace.moving = MovingFile(url: url) } label: { Label("Move", systemImage: "folder") }
+        #endif
     }
 }
 

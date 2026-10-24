@@ -23,6 +23,7 @@ public struct NotebookScene: Scene {
                     #endif
                 }
                 .onOpenURL { url in workspace.openFromOutside(url) }
+                .continuesSpotlight(workspace)
         }
         .commands { TouchCommands(workspace: workspace) }
         // Reminders set on another device: iOS doesn't wake the app for them, but gives it time now and then.
@@ -185,6 +186,8 @@ struct TouchWelcomeView: View {
                     workspace.addLocation(Workspace.onDeviceFolder)
                 }
                 .font(.subheadline)
+                Button("Try Sample Notes") { workspace.addSampleNotes(in: Workspace.onDeviceFolder) }
+                    .font(.subheadline)
                 Text("Pick iCloud Drive to have the notes you write on your Mac here too.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -278,6 +281,7 @@ struct TouchSettings: View {
                 }
                 Section {
                     LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
+                    NavigationLink("Acknowledgements") { AcknowledgementsView() }
                 }
             }
             .navigationTitle("Settings")
