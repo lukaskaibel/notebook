@@ -5,6 +5,11 @@ versions follow [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [1.0.0] – not released yet
+
+The first version: notes as Markdown files in your own folders, on the Mac, iPhone and iPad. While it was being built,
+it was called Folio. What is under Changed and Fixed is against the earlier builds on TestFlight.
+
 ### Added
 
 - Drag pictures, drawings and files around a note on the Mac, as on iPhone and iPad: press one and move the mouse, and
@@ -193,6 +198,30 @@ versions follow [semantic versioning](https://semver.org).
   to keep such notes.
 - Double-click a note in the sidebar on the Mac to open it in a window of its own, as a note opened from the Finder;
   more of them join it as tabs. Open in New Window in its menu does the same.
+- Locations: iCloud Drive or any folder in the sidebar, with favourites, read in place and watched for changes.
+- iCloud Drive as the Finder shows it, with Desktop, Documents and the folders of apps such as Pages or Obsidian.
+- A live-preview editor: Markdown marks show only next to the caret, and heading levels in the margin.
+- Headings, bold, italic, strikethrough, highlights, inline code, links, checklists, lists, quotes, callouts, tables,
+  code with highlighting, LaTeX maths, Mermaid diagrams, footnotes and folded front matter.
+- A copy button in the corner of the code block under the pointer, and Copy Code when you right-click one.
+- Pictures, `[[links]]` and `![[embeds]]` as objects; pictures and files pasted or dropped in go to `.assets`.
+- The title is the file name; renaming a note updates the links to it.
+- Search with ⌘F across file names, note text and PDF text.
+- Back and forward with ⌘[ and ⌘], or with a swipe as in Safari.
+- PDFs, pictures and videos in the window as in Preview and QuickTime Player, there at once: PDFs back where you
+  left them, pictures to zoom in on with a pinch or a double click. Quick Look for every other file.
+  The inspector shows a file's details.
+- The outline of a note in the inspector, with a word count.
+- Saving as you type, with a three-way merge when a note changed somewhere else, and a choice when both changed the
+  same lines.
+- Export as PDF or PNG, and printing.
+- Markdown files opened from the Finder or with ⌘O in windows of their own; folders opened either way go to the
+  sidebar.
+- Settings for the typeface, size, line spacing and line width, and for what the sidebar shows.
+- A leather notebook as the app icon. Make it your own in Settings › App Icon: the leather, the elastic band, the
+  ribbon and the background, shown in the Dock while Notebook is open. A tip in the sidebar points there.
+- Ink blue as Notebook's accent colour, for links, the caret and folders, when the accent in System Settings is set
+  to Multicolour.
 
 ### Changed
 
@@ -339,34 +368,3 @@ versions follow [semantic versioning](https://semver.org).
 - On the Mac, a name typed in a note's title was lost when you pressed ⌘N or went back or forward before pressing
   Return, and a new note went to the Trash with it. The name is now kept, and the next note's title no longer stays
   selected, ready to be typed over.
-
-## [1.0.0] – not released yet
-
-The first version: a Mac app for Markdown notes in your own folders. While it was being built, it was called Folio.
-
-### Added
-
-- Locations: iCloud Drive or any folder in the sidebar, with favourites, read in place and watched for changes.
-- iCloud Drive as the Finder shows it, with Desktop, Documents and the folders of apps such as Pages or Obsidian.
-- A live-preview editor: Markdown marks show only next to the caret, and heading levels in the margin.
-- Headings, bold, italic, strikethrough, highlights, inline code, links, checklists, lists, quotes, callouts, tables,
-  code with highlighting, LaTeX maths, Mermaid diagrams, footnotes and folded front matter.
-- A copy button in the corner of the code block under the pointer, and Copy Code when you right-click one.
-- Pictures, `[[links]]` and `![[embeds]]` as objects; pictures and files pasted or dropped in go to `.assets`.
-- The title is the file name; renaming a note updates the links to it.
-- Search with ⌘F across file names, note text and PDF text.
-- Back and forward with ⌘[ and ⌘], or with a swipe as in Safari.
-- PDFs, pictures and videos in the window as in Preview and QuickTime Player, there at once: PDFs back where you
-  left them, pictures to zoom in on with a pinch or a double click. Quick Look for every other file.
-  The inspector shows a file's details.
-- The outline of a note in the inspector, with a word count.
-- Saving as you type, with a three-way merge when a note changed somewhere else, and a choice when both changed the
-  same lines.
-- Export as PDF or PNG, and printing.
-- Markdown files opened from the Finder or with ⌘O in windows of their own; folders opened either way go to the
-  sidebar.
-- Settings for the typeface, size, line spacing and line width, and for what the sidebar shows.
-- A leather notebook as the app icon. Make it your own in Settings › App Icon: the leather, the elastic band, the
-  ribbon and the background, shown in the Dock while Notebook is open. A tip in the sidebar points there.
-- Ink blue as Notebook's accent colour, for links, the caret and folders, when the accent in System Settings is set
-  to Multicolour.

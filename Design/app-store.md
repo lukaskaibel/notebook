@@ -31,8 +31,11 @@ fastlane can't do these; they are set by hand.
 
 ## Why the answers are what they are
 
-- **Name and subtitle** name no other app or company. The description says the app works with the folders other
-  Markdown apps keep, without naming them, and the keywords have no other app's name (Guideline 2.3.7).
+- **The texts** follow the positioning settled on 2026-10-24: the tagline "The ease of Notes. The freedom of files."
+  first, then one paragraph each for your files, no vault, and an Apple app. Markdown is the proof, not the headline,
+  so it stays in the name for search and goes into the second line everywhere else.
+- **Name, subtitle and keywords** name no other app or company (Guideline 2.3.7). The description names Obsidian once,
+  as an app that reads the same files: compatibility, not a comparison.
 - **Export compliance:** `ITSAppUsesNonExemptEncryption` is `NO` in the Info.plist; Notebook has no encryption of its
   own.
 - **Content rights:** no third-party content. The app shows the user's own files, and the sample notes, their pictures

@@ -111,13 +111,14 @@ shot() {
     echo "$name came out ${size% }px, not $((width * 2)) x $((height * 2)): is the window on a Retina display?" >&2
     exit 1
   fi
-  python3 Tools/store-frame.py "$work/$name.png" "$out/$name.png" "$theme"
+  python3 Tools/store-frame.py "$work/$name.png" "$work/framed/$name.png" "$theme"
   echo "$out/$name.png"
 }
 
 echo "Taking screenshots…"
-mkdir -p "$out"
-rm -f "$out"/*.png
+# Framed in the work folder and moved over the old pictures only once every one is taken, so a run that stops (a
+# locked screen, say) leaves the old ones.
+mkdir -p "$work/framed"
 # The order is the store's: the note first, then what it holds, finding, to-dos, drawing and folders.
 shot 1-note light "open Travel/Kyoto trip.md"
 shot 2-blocks dark "open Projects/Notebook roadmap.md"
@@ -131,4 +132,7 @@ say "customize close"
 # ⌘K finding a word in notes and PDFs, in the middle of the window (the search field's menu reaches past its edge).
 shot 6-search light "open Personal/Weekend.md" "wait 1" "palette" "wait 0.6" "type kyoto" "wait 1.5"
 say "key escape"
+mkdir -p "$out"
+rm -f "$out"/*.png
+mv "$work/framed"/*.png "$out"/
 echo "Done: $out. Look at every picture before committing them."

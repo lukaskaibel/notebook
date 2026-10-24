@@ -12,5 +12,8 @@ Permissions, each asked for only when first needed:
 • Notifications: when the user sets the first reminder of a note or a to-do with Remind Me…, for instance on a to-do in Inbox › Errands of the sample notes. Reminders are local notifications scheduled on the device; to-dos with a time remind only once notifications are allowed.
 • Location (While Using only): when the user gives a reminder a place, or chooses Current Location. On iPhone and iPad the place is handed to the system as a region to watch; the app keeps no record of where the user is.
 • Camera (iPhone and iPad): when the user takes a photo or scans a document into a note from the bar above the keyboard.
+• Contacts: none. Home and Work, as a reminder's place, can be picked from the user's own card with the system's contact picker, which gives the app only the address tapped.
+
+Spotlight: the notes in the user's folders are indexed on the device with Core Spotlight, so system search finds them; notes in hidden folders are left out.
 
 On iPhone and iPad, background refresh lets reminders set on another device be scheduled while the app is closed.
