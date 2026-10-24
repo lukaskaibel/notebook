@@ -614,10 +614,11 @@ Packages/NotebookKit/
   Tests/                     Parser, editor, merge, smoothness, search index, link, drawing, reminder, to-do, folder
                              look and app icon tests
 Config/                      Build settings, Info.plist and entitlements
-Design/                      The icon, the README pictures and the social preview
+Design/                      The icon, the README pictures, the social preview, and the App Store screenshots and
+                             what is set in App Store Connect (app-store.md)
 Website/                     The website, published to GitHub Pages by .github/workflows/website.yml
-Tools/                       The app icon and the README pictures
-fastlane/                    Building for the App Store and uploading to TestFlight
+Tools/                       The app icon, the README pictures and the App Store screenshots
+fastlane/                    Building for the App Store, TestFlight, and the App Store listing's texts
 PLAN.md                      The plan: decisions, file format, architecture and milestones (in German)
 ```
 
@@ -691,6 +692,12 @@ app or both:
 ```bash
 bundle exec fastlane ios beta
 ```
+
+The App Store listing is kept here too: its texts in `fastlane/metadata`, the age rating in `fastlane/rating.json` and
+the screenshots in `Design/screenshots/app-store`, taken on the sample notes by `bundle exec fastlane screenshots`.
+`bundle exec fastlane metadata` uploads them, `submit` sends the builds TestFlight has for review, and `release`
+builds, uploads and submits in one go. [Design/app-store.md](Design/app-store.md) lists what is set once in App Store
+Connect, and why the answers are what they are.
 
 Every change to the app on `main` also goes to TestFlight by itself, for the iPhone and iPad and for the Mac:
 [`.github/workflows/testflight.yml`](.github/workflows/testflight.yml) runs `ios beta` and `mac beta` on GitHub side by
