@@ -12,6 +12,10 @@ versions follow [semantic versioning](https://semver.org).
   follows as you write, rename, move and delete notes; notes in hidden folders stay out, and so do the notes of a
   location you remove. Search in App takes the words you typed in Spotlight to ⌘K. Notebook gives Spotlight what search
   has already read, in the background, and after a launch only the notes that changed since.
+- New Note in Shortcuts, Spotlight and Siri, on the Mac, iPhone and iPad: it opens Notebook with a new note in your
+  default folder and the caret in its title, ready to type, as ⌘N does with nothing open. It is there without setting
+  anything up ("New note in Notebook"), and on an iPhone with an Action button you can put it there under Settings ›
+  Action Button › Shortcut. In a shortcut of your own, New Note takes text for the note to start with.
 - Links follow notes, files and folders you move, as they follow a note you rename: drag a note onto another folder,
   choose Move To, or rename or move a folder, on the Mac, iPhone and iPad, and the `[[links]]`, embeds and Markdown
   links to them in your other notes still open the same note or file. A link changes only where it would find
@@ -222,6 +226,17 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- If you had changed the bar above the keyboard in Settings › Writing Bar, tools that came later, such as Drawing,
+  never joined it. They now come in where they stand in the standard bar, once; tools you took out stay out.
+- On iPhone and iPad, a location's name over its folders brought up no menu, though it should have: touching and
+  holding it did nothing. A tap on the name now brings up New Note, New Folder, Add to Favorites, Share, Show Hidden
+  Folders and Remove from Notebook.
+- On iPhone and iPad, opening a note could keep Notebook busy for seconds in a location with thousands of folders,
+  such as a whole iCloud Drive: the ⋯ menu made an item for every folder under Move To, each time. Move in the ⋯ menu
+  and in a file's touch-and-hold menu now asks where to in a sheet, as swiping a file does and as the Files app asks.
+- Saving a note took away its Finder tags, and whatever else other apps keep on the file, such as where it was
+  downloaded from; so did ticking a to-do off in To-dos and links changing after a rename or a move. They stay now, and
+  so does the date the note was made.
 - Editing a to-do in To-dos could stop by itself as soon as you moved the pointer after clicking it, so it took a
   second click. Now it goes on until you press Return or Escape or click outside the to-do, also beside the list, on a
   group's name or in the sidebar, which before didn't end it. A to-do given another date while you edit it stays in

@@ -56,7 +56,8 @@ struct ShowHiddenFoldersMenu: View {
 }
 
 /// A location's name over its files and folders, and, as on the Mac, an eye to show its hidden folders, in the accent
-/// colour while they show, and a folder with a plus for a new folder at its top: both under the pointer.
+/// colour while they show, and a folder with a plus for a new folder at its top: both under the pointer. A tap on the
+/// name brings up what can be done with the location.
 struct LocationHeader: View {
     let workspace: Workspace
     let location: Location
@@ -67,7 +68,14 @@ struct LocationHeader: View {
     var body: some View {
         let shows = workspace.showsHiddenFolders(in: location)
         HStack {
-            Text(location.name)
+            // A menu of its own, opened with a tap: a list's context menus come only from its rows, and its long press
+            // never reaches a section's header, not even a menu's.
+            Menu {
+                FileActions(workspace: workspace, url: location.url, newFolder: newFolder)
+            } label: {
+                Text(location.name)
+            }
+            .buttonStyle(.plain)
             Spacer(minLength: 8)
             if shows || isHovered, workspace.hasHiddenFolders(in: location) {
                 let title = shows ? "Hide Hidden Folders" : "Show Hidden Folders"
