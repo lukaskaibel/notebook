@@ -147,6 +147,8 @@ public final class Workspace: NSObject {
     var todoPickRequest: TodoPickRequest?
     /// A folder to customize, in a sheet.
     var folderIconRequest: FolderIconRequest?
+    /// A file or folder to move, in the sheet that asks where to.
+    var moving: MovingFile?
     /// What each note looked like when you went on from it, shown while the screen of the note you go on to slides
     /// over it, and while you swipe back to it. There is only one editor, and it is on the screen in front.
     @ObservationIgnored var pageSnapshots: [URL: UIView] = [:]

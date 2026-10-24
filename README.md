@@ -687,9 +687,10 @@ nothing waits for it, `-NotebookSlowFiles 2` does the same for every note, PDF, 
 `-NotebookSlowWrites 2` for every change to files: a new note or folder, a rename, a move, a copy, the Trash. On the
 Mac, `mainthread` logs how many folders were read and files changed on the main thread, which should be none, and
 `fakekey` makes the test window say it is key, as the window you click in is, while the app stays in the background.
-`timeopen <note>` logs how long opening a note keeps the window busy, `search <text>` how long search takes, and
-`index` when after launch the kept index was read, search had every file and the files were checked, and how many
-notes that read. macOS shows notifications only from an app in a lasting place, not from one in `/tmp`.
+`timeopen <note>` logs how long opening a note keeps the window busy (on iPhone and iPad too), `search <text>` how
+long search takes, and `index` when after launch the kept index was read, search had every file and the files were
+checked, and how many notes that read. macOS shows notifications only from an app in a lasting place, not from one in
+`/tmp`.
 
 Builds for TestFlight are made and uploaded with [fastlane](https://fastlane.tools), signed in with an App Store
 Connect API key, so Xcode needs no account. Copy `fastlane/.env.secret.example` to `fastlane/.env.secret` (it stays out

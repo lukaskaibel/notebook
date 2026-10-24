@@ -217,6 +217,9 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- On iPhone and iPad, opening a note could keep Notebook busy for seconds in a location with thousands of folders,
+  such as a whole iCloud Drive: the ⋯ menu made an item for every folder under Move To, each time. Move in the ⋯ menu
+  and in a file's touch-and-hold menu now asks where to in a sheet, as swiping a file does and as the Files app asks.
 - Saving a note took away its Finder tags, and whatever else other apps keep on the file, such as where it was
   downloaded from; so did ticking a to-do off in To-dos and links changing after a rename or a move. They stay now, and
   so does the date the note was made.
