@@ -114,8 +114,9 @@ struct TodoTimePicker: View {
     }
 }
 
-/// A to-do's place: found by typing its name in Apple Maps, where you are now, or one chosen before; and whether it is
-/// for arriving there or for leaving.
+/// A to-do's place: found by typing its name in Apple Maps, where you are now, Home or Work, or one chosen before; and
+/// whether it is for arriving there or for leaving. Home and Work are chosen once, the first time they are tapped: an
+/// address on your card in Contacts, where you are, or one searched for (`SavedPlaces`).
 struct TodoPlaceDropdown: View {
     let place: TodoPlace?
     var pick: (TodoPlace?) -> Void
@@ -124,8 +125,12 @@ struct TodoPlaceDropdown: View {
     @State private var search = PlaceSearch()
     /// The row whose place is being looked up or located.
     @State private var busy: String?
-    @State private var problem: String?
+    /// Why a row found nothing: the row, and what to say under it.
+    @State private var problem: (row: String, text: String)?
     @State private var leaving: Bool
+    /// Home or Work, while its address is being chosen.
+    @State private var choosing: SavedPlaces.Kind?
+    private var saved: SavedPlaces { .shared }
 
     init(place: TodoPlace?, pick: @escaping (TodoPlace?) -> Void, close: @escaping () -> Void) {
         self.place = place
@@ -135,9 +140,10 @@ struct TodoPlaceDropdown: View {
     }
 
     var body: some View {
-        TypedPicker(placeholder: "Search for a place", query: $query, rows: rows, hint: "No places found.", close: close) {
+        TypedPicker(placeholder: choosing.map { "Search for your \($0.name.lowercased()) address" } ?? "Search for a place", query: $query,
+                    rows: rows, hint: "No places found.", close: close) {
             VStack(alignment: .leading, spacing: 8) {
-                if query.isEmpty, let place, place.hasCoordinates {
+                if choosing == nil, query.isEmpty, let place, place.hasCoordinates {
                     // Arriving or leaving the place it has, at a click.
                     Picker("When", selection: Binding(get: { leaving }, set: { new in
                         leaving = new
@@ -151,10 +157,11 @@ struct TodoPlaceDropdown: View {
                     .pickerStyle(.segmented)
                     .labelsHidden()
                 }
+                if let choosing {
+                    note("Notebook keeps \(choosing.name) for your reminders, on your other devices too.")
+                }
                 #if os(macOS)
-                Text("Your iPhone or iPad reminds you there.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.theme(Theme.menuTextTertiary))
+                note("Your iPhone or iPad reminds you there.")
                 #endif
             }
             .padding(.horizontal, TypedPicker<EmptyView>.inset + 4)
@@ -166,29 +173,36 @@ struct TodoPlaceDropdown: View {
         #endif
     }
 
+    private func note(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: TypedPicker<EmptyView>.rowHeight > 40 ? 13 : 11))
+            .foregroundStyle(Color.theme(Theme.menuTextTertiary))
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
     private var rows: [PickRow] {
+        if let choosing { return addressRows(for: choosing) }
         guard query.isEmpty else {
-            return search.results.prefix(6).map { result in
-                let id = result.title + "\u{0}" + result.subtitle
-                return PickRow(id: id, title: result.title, detail: result.subtitle, symbol: "mappin", isBusy: busy == id, detailBelow: true) {
-                    busy = id
-                    Task {
-                        let found = await search.place(for: result)
-                        busy = nil
-                        if var found {
-                            found.leaving = leaving
-                            choose(found)
-                        }
-                    }
-                }
+            // Home or Work by name, before what Apple Maps finds.
+            let typed = query.lowercased()
+            let named = SavedPlaces.Kind.allCases.filter { $0.name.lowercased().hasPrefix(typed) }.map(savedRow)
+            return named + searchRows { found, _ in
+                var chosen = found
+                chosen.leaving = leaving
+                choose(chosen)
             }
         }
         var rows: [PickRow] = []
-        if let place {
+        if let place, !SavedPlaces.Kind.allCases.contains(where: { saved.isPlace(place, $0) }) {
             rows.append(PickRow(id: "current", title: place.name, symbol: "mappin.and.ellipse", isChecked: true) { close() })
         }
-        rows.append(PickRow(id: "here", title: "Current Location", detail: problem ?? "", symbol: "location.fill", isBusy: busy == "here", detailBelow: true) { locate() })
-        for recent in PlaceHistory.recent where recent.name != place?.name {
+        rows.append(hereRow { found, _ in
+            var chosen = found
+            chosen.leaving = leaving
+            choose(chosen)
+        })
+        rows += SavedPlaces.Kind.allCases.map(savedRow)
+        for recent in PlaceHistory.recent where recent.name != place?.name && !saved.isSaved(recent) {
             rows.append(PickRow(id: "recent" + recent.name, title: recent.name, symbol: "clock") {
                 var chosen = recent
                 chosen.leaving = leaving
@@ -201,21 +215,101 @@ struct TodoPlaceDropdown: View {
         return rows
     }
 
-    /// Current Location: where you are, named by its address.
-    private func locate() {
-        guard busy == nil else { return }
-        busy = "here"
-        problem = nil
-        Task {
-            defer { busy = nil }
-            guard let location = await PlaceAccess.shared.currentLocation() else {
-                problem = PlaceAccess.shared.isDenied ? "Location access is turned off for Notebook." : "Your location couldn’t be found."
-                return
+    /// Home or Work: its place at a tap once it is known, and until then a tap to choose its address.
+    private func savedRow(_ kind: SavedPlaces.Kind) -> PickRow {
+        guard let known = saved.saved[kind] else {
+            return PickRow(id: kind.rawValue, title: kind.name, detail: "Choose Address…", symbol: kind.symbol, detailBelow: true) {
+                query = ""
+                problem = nil
+                choosing = kind
             }
-            let name = await PlaceSearch.name(of: location) ?? "Current Location"
-            choose(TodoPlace(name: name, latitude: location.coordinate.latitude, longitude: location.coordinate.longitude, leaving: leaving))
+        }
+        let isChecked = saved.isPlace(place, kind)
+        var row = PickRow(id: kind.rawValue, title: kind.name, detail: known.address, symbol: kind.symbol, isChecked: isChecked, detailBelow: true) {
+            if isChecked { return close() }
+            if let chosen = saved.place(kind, leaving: leaving) { choose(chosen) }
+        }
+        row.menu = [
+            PickRow.Item(title: "Change Address…", symbol: "pencil") {
+                query = ""
+                problem = nil
+                choosing = kind
+            },
+            PickRow.Item(title: "Forget " + kind.name, symbol: "trash", isDestructive: true) { saved.set(kind, to: nil) },
+        ]
+        return row
+    }
+
+    /// Choosing Home's or Work's address: where you are, one on your card in Contacts, or one typed.
+    private func addressRows(for kind: SavedPlaces.Kind) -> [PickRow] {
+        guard query.isEmpty else {
+            return searchRows { found, address in keep(found, address: address, as: kind) }
+        }
+        var rows = [hereRow { found, address in keep(found, address: address, as: kind) }]
+        #if os(iOS)
+        rows.append(PickRow(id: "card", title: "Choose from Contacts…", detail: problem?.row == "card" ? problem?.text ?? "" : "Your own card has the \(kind.name.lowercased()) address Maps knows",
+                            symbol: "person.crop.circle", isBusy: busy == "card", detailBelow: true) { fromContacts(as: kind) })
+        #endif
+        return rows
+    }
+
+    private func keep(_ found: TodoPlace, address: String, as kind: SavedPlaces.Kind) {
+        guard var chosen = saved.set(kind, to: found, address: address) else { return }
+        chosen.leaving = leaving
+        choose(chosen)
+    }
+
+    /// What Apple Maps finds for what is typed.
+    private func searchRows(_ found: @escaping (TodoPlace, String) -> Void) -> [PickRow] {
+        search.results.prefix(6).map { result in
+            let id = result.title + "\u{0}" + result.subtitle
+            return PickRow(id: id, title: result.title, detail: result.subtitle, symbol: "mappin", isBusy: busy == id, detailBelow: true) {
+                busy = id
+                Task {
+                    let place = await search.place(for: result)
+                    busy = nil
+                    if let place { found(place, [result.title, result.subtitle].filter { !$0.isEmpty }.joined(separator: ", ")) }
+                }
+            }
         }
     }
+
+    /// Current Location: where you are, named by its address.
+    private func hereRow(_ found: @escaping (TodoPlace, String) -> Void) -> PickRow {
+        PickRow(id: "here", title: "Current Location", detail: problem?.row == "here" ? problem?.text ?? "" : "", symbol: "location.fill",
+                isBusy: busy == "here", detailBelow: true) {
+            guard busy == nil else { return }
+            busy = "here"
+            problem = nil
+            Task {
+                defer { busy = nil }
+                guard let location = await PlaceAccess.shared.currentLocation() else {
+                    problem = ("here", PlaceAccess.shared.isDenied ? "Location access is turned off for Notebook." : "Your location couldn’t be found.")
+                    return
+                }
+                let name = await PlaceSearch.name(of: location) ?? "Current Location"
+                found(TodoPlace(name: name, latitude: location.coordinate.latitude, longitude: location.coordinate.longitude), name)
+            }
+        }
+    }
+
+    #if os(iOS)
+    /// An address tapped on a card in Contacts, found in Apple Maps.
+    private func fromContacts(as kind: SavedPlaces.Kind) {
+        guard busy == nil else { return }
+        problem = nil
+        Task {
+            guard let address = await ContactAddressPicker.shared.chooseAddress() else { return }
+            busy = "card"
+            defer { busy = nil }
+            guard let found = await SavedPlaces.locate(address) else {
+                problem = ("card", "That address couldn’t be found in Maps.")
+                return
+            }
+            keep(found.place, address: found.address, as: kind)
+        }
+    }
+    #endif
 
     private func choose(_ new: TodoPlace?) {
         close()
@@ -236,6 +330,16 @@ struct PickRow: Identifiable {
     /// The detail under the title, as a place's address, rather than at the end.
     var detailBelow = false
     var action: () -> Void
+    /// What touching and holding it, or a right click, offers.
+    var menu: [Item] = []
+
+    struct Item: Identifiable {
+        let title: String
+        let symbol: String
+        var isDestructive = false
+        let action: () -> Void
+        var id: String { title }
+    }
 }
 
 /// A field on top that has the keyboard as it opens, the choices under it, and below them whatever else the picker
@@ -292,6 +396,9 @@ struct TypedPicker<Below: View>: View {
         // The choice it has lit, so Return keeps it; once something is typed, the first that reads.
         .onAppear { lit = rows.firstIndex(where: \.isChecked) ?? 0 }
         .onChange(of: query) { lit = 0 }
+        // Another set of choices, such as Home's address to choose: the first is lit.
+        .onChange(of: placeholder) { lit = 0 }
+        .onChange(of: rows.count) { _, count in if lit >= count { lit = 0 } }
         #if DEBUG
         .onReceive(NotificationCenter.default.publisher(for: DebugTodos.pickerKey)) { note in
             switch note.object as? String {
@@ -333,7 +440,21 @@ struct TypedPicker<Below: View>: View {
         .padding([.horizontal, .top], Self.inset)
     }
 
+    @ViewBuilder
     private func rowView(_ row: PickRow, isLit: Bool) -> some View {
+        if row.menu.isEmpty {
+            rowButton(row, isLit: isLit)
+        } else {
+            rowButton(row, isLit: isLit)
+                .contextMenu {
+                    ForEach(row.menu) { item in
+                        Button(role: item.isDestructive ? .destructive : nil, action: item.action) { Label(item.title, systemImage: item.symbol) }
+                    }
+                }
+        }
+    }
+
+    private func rowButton(_ row: PickRow, isLit: Bool) -> some View {
         Button(action: row.action) {
             HStack(spacing: 10) {
                 Image(systemName: row.symbol)

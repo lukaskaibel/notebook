@@ -198,15 +198,24 @@ set, then the value in the accent colour with an × that takes it away; and one 
 as in Issues, that you can type in at once: "thursday in 3 weeks", "fri 9am", "the 12th" or "12.11." for a day, "930" or
 "evening" for a time, a name for a place in Apple Maps. It shows what that could mean, Return or a click takes the one
 that is lit, and the arrow keys go through the others; without typing, pick Today, Tomorrow, This Weekend, Next Week or
-a day in the month, a time of day, Current Location or a place you used before, and whether it's for arriving or
-leaving. On iPhone and iPad the same buttons are above the keyboard, with a line in and out, and open the same in a
-popover (a sheet on the iPhone); a tap on the date or place under the to-do does too.
+a day in the month, a time of day, Current Location, Home, Work or a place you used before, and whether it's for
+arriving or leaving. On iPhone and iPad the same buttons are in a bar of glass above the keyboard, across the screen
+as the bar in a note is: a grey symbol until it is set, then the value on a tint of the accent colour, as the pills in a
+note show it; a line in and out while you're in one; and on its own at the right, the button that hides the keyboard
+and is done. They open the same in a popover (a sheet on the iPhone); a tap on the date or place under the to-do does
+too.
+
+Home and Work are there as in Reminders. Apps can't read the Home and Work that Apple Maps shows, so the first time you
+tap one you choose its address: on iPhone and iPad from your own card in Contacts, which is where Maps has them, or
+where you are now, or by searching. Notebook sees only the address you tap, keeps it for your other devices through
+iCloud, and names the place Home or Work in the to-do. Touch and hold it, or right-click it on the Mac, to change the
+address or forget it.
 
 In a note, a to-do gets a date, a time and a place as a reminder in Reminders does: point at it and click the bell after
 its words for the date's dropdown, or right-click it and choose Remind Me… for all of them at once; on iPhone and iPad
 tap the bell above the keyboard while you're in it. Remind Me offers Later Today, This Evening or Tomorrow, or turn on
-Date, Time and Location: search Apple Maps for a place, or take Current Location, and say whether it's for arriving or
-leaving. The day, the time and the place then show as small pills after the to-do's words, red once the time has
+Date, Time and Location: search Apple Maps for a place, or take Current Location, Home or Work, and say whether it's for
+arriving or leaving. The day, the time and the place then show as small pills after the to-do's words, red once the time has
 passed; a click or a tap on one opens its date or its place to type or pick, as in To-dos. At that time, or when you get there,
 a notification brings the to-do and its notes, with Remind Me in 1 Hour and Done. A day without a time reminds you at
 9 in the morning, and a place once, the first time you get there.
@@ -312,9 +321,10 @@ The same notes in the same editor, laid out the way each device works. On the iP
 as in the Files app, and a note opens on a screen of its own; swipe from the edge to go back. The first screen has your
 favourites, what you opened last and the folders of each location. New Folder, search and a new note sit at the bottom,
 as in Notes, and search finds everything it finds on the Mac. While you write, a bar floats above the keyboard with
-Aa, a checklist, attachments, a link, undo and the formatting, a page of tools at a time. On its left, buttons for
-where the caret is come and go: the style you are in, tinted, to take it off with a tap, the line's checkbox, moving a
-list item in or out, and opening the link you are on. Which tools and in what order is yours to choose: touch and hold
+Aa, a checklist, attachments, a link, undo and the formatting, a page of tools at a time. On its left, up to two
+buttons for where the caret is come and go: opening the link you are on, a to-do's bell, the style you are in, tinted,
+to take it off with a tap, and moving a list item in or out; you tick a to-do on its own checkbox. On its right, always,
+a circle of its own hides the keyboard. Which tools and in what order is yours to choose: touch and hold
 the bar, or tap the sliders after its last tool, or go to Settings › Writing Bar. Aa brings up the Format panel in the
 keyboard's place, as in Notes: the text styles, bold, italic and the rest, lists, indenting and quotes. Pictures come
 from the camera, the document scanner, your photos or the Files app. The pencil, at the bottom of the screen or in the
@@ -399,8 +409,8 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
 Everything is plain Markdown, so other apps keep reading your notes. Notebook adds no files of its own besides the
 `.assets` folders for pictures and files you add to notes, and in them, next to each drawing's picture, a `.drawing`
 file with its strokes. A folder's symbol and colour are kept on the folder, as the Finder keeps them, not in a file.
-What isn't part of a note or a folder, such as the folders you hide and the reminders of notes you set, is kept in the
-app's settings and iCloud's key-value store, not in your folders. A to-do's date and place are part of the
+What isn't part of a note or a folder, such as the folders you hide, the reminders of notes you set and your Home and
+Work, is kept in the app's settings and iCloud's key-value store, not in your folders. A to-do's date and place are part of the
 to-do, so they are in the note. What search knows, the text of your notes and
 PDFs and the words read in pictures, is kept in the app's caches on each device, from where it can always be read again.
 The list of the notes Spotlight has is kept in the app's own folder on each device.

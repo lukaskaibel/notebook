@@ -10,7 +10,6 @@ enum WritingTool: String, CaseIterable, Identifiable {
     case bulletedList, numberedList, outdent, indent
     case camera, scanner, photos, files
     case reminder
-    case hideKeyboard
 
     var id: Self { self }
 
@@ -58,8 +57,7 @@ enum WritingTool: String, CaseIterable, Identifiable {
         case .drawing: return "Drawing"
         case .undo: return "Undo"
         case .redo: return "Redo"
-        case .reminder: return "Remind Me"
-        default: return "Hide Keyboard"
+        default: return "Remind Me"
         }
     }
 
@@ -72,8 +70,7 @@ enum WritingTool: String, CaseIterable, Identifiable {
         case .drawing: return "pencil.tip.crop.circle"
         case .undo: return "arrow.uturn.backward"
         case .redo: return "arrow.uturn.forward"
-        case .reminder: return "bell"
-        default: return "keyboard.chevron.compact.down"
+        default: return "bell"
         }
     }
 
@@ -82,10 +79,10 @@ enum WritingTool: String, CaseIterable, Identifiable {
 }
 
 /// A button on the left of the bar for where the caret is: a style it is in (on, its glass tinted; a tap takes it
-/// off), the checkbox of its line and the to-do's reminder, moving its list item out or in, and opening the link it is
-/// on. As in Issues.
+/// off), the to-do's reminder, moving its list item out or in, and opening the link it is on. As in Issues. A to-do is
+/// ticked on its own checkbox, in the note.
 enum CaretTool: CaseIterable, Identifiable {
-    case bold, italic, strikethrough, highlight, code, checkbox, remind, outdent, indent, openLink
+    case bold, italic, strikethrough, highlight, code, remind, outdent, indent, openLink
 
     var id: Self { self }
 
@@ -107,7 +104,6 @@ enum CaretTool: CaseIterable, Identifiable {
         case .strikethrough: "Strikethrough"
         case .highlight: "Highlight"
         case .code: "Code"
-        case .checkbox: "Checkbox"
         case .remind: "Remind Me"
         case .outdent: "Outdent"
         case .indent: "Indent"
@@ -115,14 +111,13 @@ enum CaretTool: CaseIterable, Identifiable {
         }
     }
 
-    func symbol(checked: Bool) -> String {
+    var symbol: String {
         switch self {
         case .bold: "bold"
         case .italic: "italic"
         case .strikethrough: "strikethrough"
         case .highlight: "highlighter"
         case .code: "chevron.left.forwardslash.chevron.right"
-        case .checkbox: checked ? "checkmark" : "circle"
         case .remind: "bell"
         case .outdent: "decrease.indent"
         case .indent: "increase.indent"
@@ -130,22 +125,28 @@ enum CaretTool: CaseIterable, Identifiable {
         }
     }
 
-    /// The buttons for a place in the text, in the order they stand in.
+    /// No more than two, so the bar keeps room for its tools.
+    static let limit = 2
+
+    /// The buttons for a place in the text, in the order they stand in. When more would come, the link to open and the
+    /// to-do's reminder go first, then the styles the caret is in, then moving the line in before moving it out.
     @MainActor
     static func tools(for caret: CaretContext) -> [CaretTool] {
         let context = caret.context
-        var tools = allCases.filter { $0.style.map(context.styles.contains) ?? false }
-        if context.isChecklist { tools.append(contentsOf: NotebookSettings.shared.showsTodos ? [.checkbox, .remind] : [.checkbox]) }
-        if context.canOutdent { tools.append(.outdent) }
-        if context.canIndent { tools.append(.indent) }
-        if caret.link != nil { tools.append(.openLink) }
-        return tools
+        var wanted: [CaretTool] = []
+        if caret.link != nil { wanted.append(.openLink) }
+        if context.isChecklist, NotebookSettings.shared.showsTodos { wanted.append(.remind) }
+        wanted += allCases.filter { $0.style.map(context.styles.contains) ?? false }
+        if context.canIndent { wanted.append(.indent) }
+        if context.canOutdent { wanted.append(.outdent) }
+        let chosen = wanted.prefix(limit)
+        return allCases.filter(chosen.contains)
     }
 }
 
 /// The bar above the keyboard while you write, as in Notes: the tools float over the note in a capsule of glass, a
 /// little above the keyboard, and the ones that don't fit wait on the next page. On the left, buttons for where the
-/// caret is come and go, each a circle of glass of its own.
+/// caret is come and go, each a circle of glass of its own; on the right, always, the button that hides the keyboard.
 @MainActor
 final class WritingBar: UIView {
     /// Room above the capsule, the capsule, and the gap between it and the keyboard.
@@ -159,7 +160,7 @@ final class WritingBar: UIView {
     /// Between the buttons for where the caret is, close enough for their glass to flow together.
     static let caretSpacing: CGFloat = 6
 
-    /// The capsule spans the screen on an iPhone, less its margins; on a wider screen it stops at about ten tools.
+    /// The bar spans the screen on an iPhone, less its margins; on a wider screen it stops at about ten tools.
     static func barWidth(for available: CGFloat) -> CGFloat {
         max(toolWidth, min(available - 24, 620))
     }
@@ -233,7 +234,8 @@ struct WritingBarView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let full = WritingBar.barWidth(for: proxy.size.width)
+            // Less the button that hides the keyboard.
+            let full = WritingBar.barWidth(for: proxy.size.width) - WritingBar.barHeight - WritingBar.spacing
             let caret = editor.caretContext
             // As many as leave the tools room for two of theirs.
             let room = Int((full - 2 * WritingBar.toolWidth - WritingBar.spacing + WritingBar.caretSpacing) / (WritingBar.barHeight + WritingBar.caretSpacing))
@@ -248,7 +250,7 @@ struct WritingBarView: View {
                     GlassEffectContainer(spacing: WritingBar.caretSpacing) {
                         HStack(spacing: WritingBar.caretSpacing) {
                             ForEach(caretTools) { tool in
-                                caretButton(tool, checked: caret.context.isChecked)
+                                caretButton(tool)
                                     .transition(.scale(scale: 0.4).combined(with: .opacity))
                             }
                         }
@@ -257,6 +259,7 @@ struct WritingBarView: View {
                     .transition(.scale(scale: 0.4, anchor: .leading).combined(with: .opacity))
                 }
                 tools(pages: pages, perPage: perPage, width: width)
+                HideKeyboardButton { editor.endEditing() }
             }
             .frame(maxWidth: .infinity)
             .padding(.top, WritingBar.topGap)
@@ -300,12 +303,12 @@ struct WritingBarView: View {
         .glassEffect(.regular.interactive(), in: .capsule)
     }
 
-    /// A button for where the caret is, a circle of glass. A style the caret is in, or a ticked checkbox, is on: the
-    /// whole button is tinted, as Done is.
-    private func caretButton(_ tool: CaretTool, checked: Bool) -> some View {
-        let isOn = tool.style != nil || (tool == .checkbox && checked)
+    /// A button for where the caret is, a circle of glass. A style the caret is in is on: the whole button is tinted,
+    /// as Done is.
+    private func caretButton(_ tool: CaretTool) -> some View {
+        let isOn = tool.style != nil
         return Button { perform(tool) } label: {
-            Image(systemName: tool == .remind && editor.caretContext.hasReminder ? "bell.fill" : tool.symbol(checked: checked))
+            Image(systemName: tool == .remind && editor.caretContext.hasReminder ? "bell.fill" : tool.symbol)
                 .font(.system(size: 17, weight: isOn ? .semibold : .medium))
                 .foregroundStyle(isOn ? Color.white : Color.primary)
                 .frame(width: WritingBar.barHeight, height: WritingBar.barHeight)
@@ -314,14 +317,12 @@ struct WritingBarView: View {
         .buttonStyle(.plain)
         .glassEffect(isOn ? .regular.tint(Color(Theme.accent)).interactive() : .regular.interactive(), in: .circle)
         .accessibilityLabel(tool.name)
-        .accessibilityAddTraits(tool.style != nil ? .isSelected : [])
-        .accessibilityValue(tool == .checkbox ? (checked ? "Checked" : "Unchecked") : "")
+        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 
     private func perform(_ tool: CaretTool) {
         if let style = tool.style { return editor.toggle(style) }
         switch tool {
-        case .checkbox: editor.toggleChecked()
         case .remind: editor.showTodoReminder(line: editor.document.lineIndex(containing: editor.selection.location))
         case .outdent: editor.indent(by: -1)
         case .indent: editor.indent(by: 1)
@@ -398,8 +399,27 @@ struct WritingBarView: View {
         case .undo: editor.textView.undoManager?.undo()
         case .redo: editor.textView.undoManager?.redo()
         case .reminder: editor.delegate?.editorShowReminder(editor)
-        default: editor.endEditing()
+        default: break
         }
+    }
+}
+
+/// Hides the keyboard: a circle of glass of its own at the right end of a bar above the keyboard, there whatever else
+/// the bar holds. In a note and in To-dos.
+struct HideKeyboardButton: View {
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "keyboard.chevron.compact.down")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(Color.primary)
+                .frame(width: WritingBar.barHeight, height: WritingBar.barHeight)
+                .contentShape(.circle)
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: .circle)
+        .accessibilityLabel("Hide Keyboard")
     }
 }
 #endif
