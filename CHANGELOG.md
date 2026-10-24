@@ -7,6 +7,12 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- Try Sample Notes… on the first screen, to look around before you add your own folders: made-up notes, a drawing,
+  pictures and PDFs in a new folder Sample Notes, in a folder you pick on the Mac and in Notebook's own folder on iPhone
+  and iPad. It shows in the sidebar like any location, and removing it leaves the files where they are.
+- Acknowledgements: Notebook's licence and those of BeautifulMermaid, SwiftMath and elk-swift, which it is built with,
+  with links to their source code, in Notebook › About Notebook on the Mac and Settings › Acknowledgements on iPhone and
+  iPad.
 - New Note in Shortcuts, Spotlight and Siri, on the Mac, iPhone and iPad: it opens Notebook with a new note in your
   default folder and the caret in its title, ready to type, as ⌘N does with nothing open. It is there without setting
   anything up ("New note in Notebook"), and on an iPhone with an Action button you can put it there under Settings ›
@@ -221,6 +227,9 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- In the App Store build, a note opened from the Finder outside your locations couldn't be renamed or take pictures and
+  drawings, since the sandbox gives Notebook only the file. The first time it needs the note's folder, Notebook now
+  asks for it, and remembers it after that.
 - If you had changed the bar above the keyboard in Settings › Writing Bar, tools that came later, such as Drawing,
   never joined it. They now come in where they stand in the standard bar, once; tools you took out stay out.
 - On iPhone and iPad, a location's name over its folders brought up no menu, though it should have: touching and
@@ -307,7 +316,7 @@ versions follow [semantic versioning](https://semver.org).
   Return, and a new note went to the Trash with it. The name is now kept, and the next note's title no longer stays
   selected, ready to be typed over.
 
-## [0.1.0] – not released yet
+## [1.0.0] – not released yet
 
 The first version: a Mac app for Markdown notes in your own folders. While it was being built, it was called Folio.
 

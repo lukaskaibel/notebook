@@ -70,7 +70,7 @@ open an issue that describes the change instead.
   alerts, Quick Look) rather than custom chrome, and system colours rather than new ones.
 - **Show what changed.** A change people will notice gets a line in `CHANGELOG.md` under "Unreleased", and the README
   follows: the tour, "What it does", the shortcut tables, "Not there yet", and the pictures (`Tools/readme-images.sh`).
-  A feature worth a picture gets something in the sample notes (`Debug/DemoLibrary.swift`) to show it with.
+  A feature worth a picture gets something in the sample notes (`Files/DemoLibrary.swift`) to show it with.
 - Match the style of the code around you. Comments explain why, not what.
 
 ## Releases

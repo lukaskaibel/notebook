@@ -16,7 +16,7 @@
   <img alt="Apple silicon" src="https://img.shields.io/badge/Apple%20silicon-native-34508F">
   <img alt="Built with Swift, SwiftUI, AppKit and UIKit" src="https://img.shields.io/badge/Swift-SwiftUI%20%2B%20AppKit%20%2B%20UIKit-F05138">
   <a href="#license"><img alt="License: GPLv3" src="https://img.shields.io/badge/license-GPLv3-34508F"></a>
-  <a href="CHANGELOG.md"><img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-34508F"></a>
+  <a href="CHANGELOG.md"><img alt="Version 1.0.0" src="https://img.shields.io/badge/version-1.0.0-34508F"></a>
 </p>
 
 <p align="center">
@@ -35,9 +35,9 @@
   <img alt="Notebook showing the note Kyoto trip: links to Budget and Flight tickets.pdf, a picture of a torii gate and a packing checklist; the folders of iCloud Drive in the sidebar and the note's outline on the right" src="Design/screenshots/hero-light.webp">
 </picture>
 
-> **Status: early.** Version 0.1.0 runs on the Mac, iPhone and iPad, and you build it from source (five minutes, see
-> below). It already covers writing, organising and finding notes day to day. A widget, controls and a share extension
-> for quick capture, and the App Store, come later; see [Not there yet](#not-there-yet).
+> **Status: on its way to the App Store.** Version 1.0.0 runs on the Mac, iPhone and iPad; until it is in the App Store,
+> you build it from source (five minutes, see below). It covers writing, organising and finding notes day to day. A
+> widget, controls and a share extension for quick capture come later; see [Not there yet](#not-there-yet).
 
 ## Why
 
@@ -477,10 +477,14 @@ On iPhone and iPad, **Choose a Folder** opens the Files app's picker: pick iClou
 write on the Mac, or any folder in it or on the device. **Keep Notes on This iPhone** (or iPad) uses Notebook's own
 folder, which the Files app shows under On My iPhone › Notebook. Add more in Settings, from the ⋯ menu.
 
-To look around without your own notes, run a Debug build with the arguments `-NotebookLibrary /tmp/NotebookSample
--NotebookDemo YES` (Product › Scheme › Edit Scheme › Arguments). It writes a few sample notes, pictures and PDFs to that
-folder and shows only them, for that run. In the Simulator, use `-NotebookLibrary ~/Documents/Sample`, which is in the
-app's own folder there.
+To look around without your own notes, choose **Try Sample Notes…** on the first screen. It writes made-up notes, a
+drawing, pictures and PDFs to a new folder Sample Notes, in the folder you pick on the Mac and in Notebook's own folder
+on iPhone and iPad, and adds it as a location. Remove it in Settings when you're done; the files stay where they are.
+
+For development, a Debug build run with the arguments `-NotebookLibrary /tmp/NotebookSample -NotebookDemo YES`
+(Product › Scheme › Edit Scheme › Arguments) writes the same notes to that folder and shows only them, for that run,
+with a hidden folder and a reminder. In the Simulator, use `-NotebookLibrary ~/Documents/Sample`, which is in the app's
+own folder there.
 
 ## Using it
 
@@ -612,8 +616,8 @@ Packages/NotebookKit/
     Render/                  Tables, maths, diagrams and code highlighting
     Drawing/                 Drawings: the strokes file and its picture, and drawing them in notes
     Files/                   Locations, the file tree read in the background, file operations, saving, watching, the
-                             three-way merge, the hidden folders and reminders kept in iCloud's key-value store, and
-                             folders' symbols and colours kept where the Finder keeps them
+                             three-way merge, the hidden folders and reminders kept in iCloud's key-value store,
+                             folders' symbols and colours kept where the Finder keeps them, and the sample notes
     Index/                   Search: the index of every file and how it is kept between launches, the corpus a
                              search goes through on every core, the text read in pictures, scans and drawings, and
                              how [[links]] resolve and follow files renamed or moved; the to-dos of every note
@@ -621,14 +625,15 @@ Packages/NotebookKit/
     UI/                      The Mac's window, sidebar, inspector, search field, Settings and file windows; PDFs,
                              pictures, videos and Quick Look; what both share, such as the outline and search results
     UI/iOS/                  The iPhone's and iPad's screens: folders, the sidebar, the note, search and Settings
-    Debug/                   The debug remotes and the sample notes (Debug builds only)
+    Debug/                   The debug remotes (Debug builds only)
   Tests/                     Parser, editor, merge, smoothness, search index, link, drawing, reminder, to-do, folder
                              look and app icon tests
 Config/                      Build settings, Info.plist and entitlements
-Design/                      The icon, the README pictures and the social preview
+Design/                      The icon, the README pictures, the social preview, and the App Store screenshots and
+                             what is set in App Store Connect (app-store.md)
 Website/                     The website, published to GitHub Pages by .github/workflows/website.yml
-Tools/                       The app icon and the README pictures
-fastlane/                    Building for the App Store and uploading to TestFlight
+Tools/                       The app icon, the README pictures and the App Store screenshots
+fastlane/                    Building for the App Store, TestFlight, and the App Store listing's texts
 PLAN.md                      The plan: decisions, file format, architecture and milestones (in German)
 ```
 
@@ -706,12 +711,18 @@ app or both:
 bundle exec fastlane ios beta
 ```
 
+The App Store listing is kept here too: its texts in `fastlane/metadata`, the age rating in `fastlane/rating.json` and
+the screenshots in `Design/screenshots/app-store`, taken on the sample notes by `bundle exec fastlane screenshots`.
+`bundle exec fastlane metadata` uploads them, `submit` sends the builds TestFlight has for review, and `release`
+builds, uploads and submits in one go. [Design/app-store.md](Design/app-store.md) lists what is set once in App Store
+Connect, and why the answers are what they are.
+
 Every change to the app on `main` also goes to TestFlight by itself, for the iPhone and iPad and for the Mac:
 [`.github/workflows/testflight.yml`](.github/workflows/testflight.yml) runs `ios beta` and `mac beta` on GitHub side by
 side, signed with certificates made for it (the workflow lists the secrets it needs). There the Mac app is signed for
 the App Store from the start, so the Macs GitHub runs it on don't have to be registered with the team. A TestFlight
-build carries the version it's on its way to and the date and time in Germany: `0.1.0 (2026.1017.1047)` is the build of
-17 October 2026 at 10:47, and once `v0.1.0` is tagged, the builds after it are `0.2.0`. Its "What to Test" names the
+build carries the version it's on its way to and the date and time in Germany: `1.0.0 (2026.1017.1047)` is the build of
+17 October 2026 at 10:47, and once `v1.0.0` is tagged, the builds after it are `1.1.0`. Its "What to Test" names the
 commit.
 
 The team's own testers get every build straight away; the external testers in the TestFlight group "Family and
@@ -722,7 +733,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes.
 
 ## Versions
 
-The project follows [semantic versioning](https://semver.org). Every release is tagged (`v0.1.0`) and described in
+The project follows [semantic versioning](https://semver.org). Every release is tagged (`v1.0.0`) and described in
 the [changelog](CHANGELOG.md). Until 1.0, minor versions may change behaviour.
 
 ## Acknowledgements
