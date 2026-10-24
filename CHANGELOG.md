@@ -7,6 +7,9 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- Acknowledgements: Notebook's licence and those of BeautifulMermaid, SwiftMath and elk-swift, which it is built with,
+  with links to their source code, in Notebook › About Notebook on the Mac and Settings › Acknowledgements on iPhone and
+  iPad.
 - Links follow notes, files and folders you move, as they follow a note you rename: drag a note onto another folder,
   choose Move To, or rename or move a folder, on the Mac, iPhone and iPad, and the `[[links]]`, embeds and Markdown
   links to them in your other notes still open the same note or file. A link changes only where it would find

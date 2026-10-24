@@ -278,6 +278,7 @@ struct TouchSettings: View {
                 }
                 Section {
                     LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
+                    NavigationLink("Acknowledgements") { AcknowledgementsView() }
                 }
             }
             .navigationTitle("Settings")
