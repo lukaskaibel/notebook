@@ -158,7 +158,6 @@ struct PadSidebar: View {
                         } header: {
                             LocationHeader(workspace: workspace, location: location) { newFolderIn = $0 }
                                 .fileDragAndDrop(location.url, isFolder: true, workspace: workspace, canDrag: false)
-                                .contextMenu { FileActions(workspace: workspace, url: location.url) { newFolderIn = $0 } }
                         }
                     }
                 }

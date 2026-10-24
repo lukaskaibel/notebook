@@ -221,6 +221,17 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- If you had changed the bar above the keyboard in Settings › Writing Bar, tools that came later, such as Drawing,
+  never joined it. They now come in where they stand in the standard bar, once; tools you took out stay out.
+- On iPhone and iPad, a location's name over its folders brought up no menu, though it should have: touching and
+  holding it did nothing. A tap on the name now brings up New Note, New Folder, Add to Favorites, Share, Show Hidden
+  Folders and Remove from Notebook.
+- On iPhone and iPad, opening a note could keep Notebook busy for seconds in a location with thousands of folders,
+  such as a whole iCloud Drive: the ⋯ menu made an item for every folder under Move To, each time. Move in the ⋯ menu
+  and in a file's touch-and-hold menu now asks where to in a sheet, as swiping a file does and as the Files app asks.
+- Saving a note took away its Finder tags, and whatever else other apps keep on the file, such as where it was
+  downloaded from; so did ticking a to-do off in To-dos and links changing after a rename or a move. They stay now, and
+  so does the date the note was made.
 - Editing a to-do in To-dos could stop by itself as soon as you moved the pointer after clicking it, so it took a
   second click. Now it goes on until you press Return or Escape or click outside the to-do, also beside the list, on a
   group's name or in the sidebar, which before didn't end it. A to-do given another date while you edit it stays in

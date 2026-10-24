@@ -300,16 +300,18 @@ final class LocationTests: XCTestCase {
 
     /// A folder you open is read next, before the ones read ahead of time that were waiting already.
     func testAnOpenedFolderIsReadBeforeTheOnesReadAhead() async throws {
-        UserDefaults.standard.set(0.3, forKey: "NotebookSlowFolders")
         let folders = (1...6).map { drive.appendingPathComponent("Folder \($0)") }
         try folders.forEach(make)
         let reader = FolderReader()
+        // Each read takes this long, whatever another test run on the Mac sets `-NotebookSlowFolders` to meanwhile.
+        reader.delay = 0.3
         var order: [String] = []
         for folder in folders {
             reader.read([.init(url: folder)], ahead: true) { results in order += results.map { URL(fileURLWithPath: $0.path).lastPathComponent } }
         }
         reader.hurry(folders[5])
-        for _ in 0..<100 where order.count < 6 { try await Task.sleep(for: .milliseconds(20)) }
+        for _ in 0..<500 where order.count < 6 { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertEqual(order.count, 6, "\(order)")
         XCTAssertLessThan(order.firstIndex(of: "Folder 6") ?? 6, order.firstIndex(of: "Folder 5") ?? -1, "\(order)")
     }
 

@@ -200,7 +200,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         var error: NSError?
         var written = false
         NSFileCoordinator(filePresenter: self).coordinate(writingItemAt: url, options: .forReplacing, error: &error) { url in
-            written = (try? data.write(to: url, options: .atomic)) != nil
+            written = FileOperations.write(data, to: url)
         }
         if written {
             savedText = text
