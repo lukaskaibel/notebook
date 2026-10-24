@@ -15,7 +15,7 @@
   <img alt="Apple silicon" src="https://img.shields.io/badge/Apple%20silicon-native-34508F">
   <img alt="Built with Swift, SwiftUI, AppKit and UIKit" src="https://img.shields.io/badge/Swift-SwiftUI%20%2B%20AppKit%20%2B%20UIKit-F05138">
   <a href="#license"><img alt="License: GPLv3" src="https://img.shields.io/badge/license-GPLv3-34508F"></a>
-  <a href="CHANGELOG.md"><img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-34508F"></a>
+  <a href="CHANGELOG.md"><img alt="Version 1.0.0" src="https://img.shields.io/badge/version-1.0.0-34508F"></a>
 </p>
 
 <p align="center">
@@ -34,9 +34,9 @@
   <img alt="Notebook showing the note Kyoto trip: links to Budget and Flight tickets.pdf, a picture of a torii gate and a packing checklist; the folders of iCloud Drive in the sidebar and the note's outline on the right" src="Design/screenshots/hero-light.webp">
 </picture>
 
-> **Status: early.** Version 0.1.0 runs on the Mac, iPhone and iPad, and you build it from source (five minutes, see
-> below). It already covers writing, organising and finding notes day to day. Quick capture and the App Store come
-> later; see [Not there yet](#not-there-yet).
+> **Status: on its way to the App Store.** Version 1.0.0 runs on the Mac, iPhone and iPad; until it is in the App Store,
+> you build it from source (five minutes, see below). It covers writing, organising and finding notes day to day. What
+> comes after it is in [Not there yet](#not-there-yet).
 
 ## Why
 
@@ -696,15 +696,15 @@ Every change to the app on `main` also goes to TestFlight by itself, for the iPh
 [`.github/workflows/testflight.yml`](.github/workflows/testflight.yml) runs `ios beta` and `mac beta` on GitHub side by
 side, signed with certificates made for it (the workflow lists the secrets it needs). There the Mac app is signed for
 the App Store from the start, so the Macs GitHub runs it on don't have to be registered with the team. A TestFlight
-build carries the version it's on its way to and the date and time in Germany: `0.1.0 (2026.1017.1047)` is the build of
-17 October 2026 at 10:47, and once `v0.1.0` is tagged, the builds after it are `0.2.0`. Its "What to Test" names the
+build carries the version it's on its way to and the date and time in Germany: `1.0.0 (2026.1017.1047)` is the build of
+17 October 2026 at 10:47, and once `v1.0.0` is tagged, the builds after it are `1.1.0`. Its "What to Test" names the
 commit.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes.
 
 ## Versions
 
-The project follows [semantic versioning](https://semver.org). Every release is tagged (`v0.1.0`) and described in
+The project follows [semantic versioning](https://semver.org). Every release is tagged (`v1.0.0`) and described in
 the [changelog](CHANGELOG.md). Until 1.0, minor versions may change behaviour.
 
 ## Acknowledgements

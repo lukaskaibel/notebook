@@ -11,7 +11,7 @@
 #   bundle exec fastlane build        # build both for the App Store, signed, without uploading (or ios build, mac build)
 #
 # .github/workflows/testflight.yml runs `ios beta` and `mac beta` on GitHub for every change to the app on main.
-# TestFlight builds are numbered as beta_version and build_number below say: 0.2.0 (2026.1017.1047).
+# TestFlight builds are numbered as beta_version and build_number below say: 1.0.0 (2026.1017.1047).
 #
 # The App Store listing (texts, screenshots, submitting for review) isn't here yet: that comes with the first release.
 
@@ -180,8 +180,8 @@ def git(*arguments)
 end
 
 # The version a TestFlight build is on its way to. Config/Shared.xcconfig holds the version of the latest release,
-# which gets a v tag when it ships, so once v0.1.0 is tagged, the builds after it are the next minor version, 0.2.0.
-# Before that they are 0.1.0 itself. (A version that is out is closed in App Store Connect: it takes no more builds.)
+# which gets a v tag when it ships, so once v1.0.0 is tagged, the builds after it are the next minor version, 1.1.0.
+# Before that they are 1.0.0 itself. (A version that is out is closed in App Store Connect: it takes no more builds.)
 def beta_version
   @beta_version ||= if git("tag", "--list", "v#{version}").empty?
                       version

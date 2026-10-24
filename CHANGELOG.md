@@ -283,7 +283,7 @@ versions follow [semantic versioning](https://semver.org).
   Return, and a new note went to the Trash with it. The name is now kept, and the next note's title no longer stays
   selected, ready to be typed over.
 
-## [0.1.0] – not released yet
+## [1.0.0] – not released yet
 
 The first version: a Mac app for Markdown notes in your own folders. While it was being built, it was called Folio.
 
