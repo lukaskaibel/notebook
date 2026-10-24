@@ -342,6 +342,19 @@ def review_contact(required: false)
   }.reject { |_, value| value.to_s.empty? }
 end
 
+# App Store Connect changes the notes for App Review only together with a whole contact. Without one in
+# fastlane/.env.secret, the notes already there stay as they are and the other texts go up.
+def metadata_for(contact)
+  return METADATA if contact.size == 4
+
+  UI.important("No App Review contact in fastlane/.env.secret (REVIEW_*): the review notes in App Store Connect stay as they are.")
+  staged = File.join(OUTPUT, "metadata")
+  FileUtils.rm_rf(staged)
+  FileUtils.cp_r(METADATA, staged)
+  FileUtils.rm_rf(File.join(staged, "review_information"))
+  staged
+end
+
 # Makes sure the platform has this version in App Store Connect to fill in, as deliver would. While an earlier version
 # of either platform is in review or waits to be released, App Store Connect keeps the app's name, which both platforms
 # share, locked, so this stops with the reason instead of failing halfway through the upload.
@@ -366,14 +379,15 @@ def store_upload(platform, package: nil, submit: false, automatic_release: false
   config = PLATFORMS.fetch(platform)
   UI.header("#{config[:name]}: App Store #{version}")
   prepare_store_version(platform)
+  contact = review_contact(required: submit)
   options = {
     api_key: api_key,
     platform: config[:store],
     app_version: version,
-    metadata_path: METADATA,
+    metadata_path: metadata_for(contact),
     skip_screenshots: !screenshots,
     app_rating_config_path: File.join(HERE, "rating.json"),
-    app_review_information: review_contact(required: submit),
+    app_review_information: contact,
     skip_binary_upload: package.nil?,
     submit_for_review: submit,
     automatic_release: automatic_release,
