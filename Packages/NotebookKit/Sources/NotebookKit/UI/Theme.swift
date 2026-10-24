@@ -61,6 +61,20 @@ public enum Theme {
     static let searchMark = NSColor(hex: 0xF0B429, alpha: 0.38)
 
 
+    // Dropdowns on glass, as Issues draws them: neutral greys, which the glass's own colour shows through, a field a
+    // shade darker than the glass, and the lit row a tint of the accent.
+    static let menuText = NSColor(light: 0x1D1D1F, dark: 0xF2F2F4)
+    static let menuTextSecondary = NSColor(light: 0x5E5E63, dark: 0xAEAEB4)
+    static let menuTextTertiary = NSColor(light: 0x6E6E73, dark: 0x8E8E95)
+    static let menuField = NSColor.dynamic { isDark in isDark ? NSColor.white.withAlphaComponent(0.08) : NSColor.black.withAlphaComponent(0.05) }
+    static let menuHighlight = NSColor.dynamic { isDark in accent.withAlphaComponent(isDark ? 0.24 : 0.14) }
+
+    // The capsules under a to-do being edited, as Reminders draws them: barely darker than the page, darker under the
+    // pointer and while their dropdown is open.
+    static let chip = NSColor.dynamic { isDark in isDark ? NSColor.white.withAlphaComponent(0.075) : NSColor.black.withAlphaComponent(0.035) }
+    static let chipHover = NSColor.dynamic { isDark in isDark ? NSColor.white.withAlphaComponent(0.11) : NSColor.black.withAlphaComponent(0.06) }
+    static let chipOpen = NSColor.dynamic { isDark in isDark ? NSColor.white.withAlphaComponent(0.15) : NSColor.black.withAlphaComponent(0.09) }
+
     static let spring = Animation.spring(response: 0.3, dampingFraction: 0.82)
     static let quick = Animation.easeOut(duration: 0.14)
     /// Text easing into a new look while you type: bold thickening, a heading growing, marks fading.
@@ -83,6 +97,15 @@ extension NSColor {
         self.init { traits in
             UIColor(hex: traits.userInterfaceStyle == .dark ? dark : light)
         }
+        #endif
+    }
+
+    /// A colour made for the appearance it is drawn in, dark or not.
+    static func dynamic(_ color: @escaping @Sendable (_ isDark: Bool) -> NSColor) -> NSColor {
+        #if os(macOS)
+        NSColor(name: nil) { appearance in color(appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua) }
+        #else
+        UIColor { traits in color(traits.userInterfaceStyle == .dark) }
         #endif
     }
 

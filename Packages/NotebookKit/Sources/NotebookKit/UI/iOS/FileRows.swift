@@ -438,6 +438,11 @@ struct FileAlerts: ViewModifier {
                 TodoReminderPicker(workspace: workspace, todo: todo) { workspace.todoReminderRequest = nil }
                     .presentationDetents([.medium, .large])
             }
+            .sheet(item: $workspace.todoPickRequest) { request in
+                workspace.todoPicker(for: request) { workspace.todoPickRequest = nil }
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
             .sheet(item: $workspace.folderIconRequest) { request in
                 FolderIconEditor(workspace: workspace, url: request.url) { workspace.folderIconRequest = nil }
                     .presentationDetents([.medium, .large])

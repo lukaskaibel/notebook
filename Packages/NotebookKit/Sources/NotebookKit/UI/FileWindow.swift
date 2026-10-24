@@ -210,8 +210,8 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
         }
     }
 
-    func editor(_ editor: EditorController, showTodoReminderOnLine line: Int) {
-        Workspace.shared.askForTodoReminder(in: editor, url: url, line: line)
+    func editor(_ editor: EditorController, showTodoReminderOnLine line: Int, part: TodoPart) {
+        Workspace.shared.askForTodoReminder(in: editor, url: url, line: line, part: part)
     }
 
     func editor(_ editor: EditorController, quickLook url: URL) {

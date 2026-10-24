@@ -1,15 +1,14 @@
 import SwiftUI
 
-/// A to-do being edited in To-dos, as Reminders edits a reminder in place: its words, the lines under it, and on the
-/// Mac buttons for its date, time and place under them (on iPhone and iPad they are above the keyboard).
+/// A to-do being edited in To-dos, as Reminders edits a reminder in place: its words, a line for notes under them, and
+/// the lines under it; the buttons for its date, time and place are under them on the Mac (`TodoEditBar`, in the row)
+/// and above the keyboard on iPhone and iPad.
 ///
 /// Return is done; Shift-Return starts a line under the words. In a line under them Return starts the next one of
 /// the same kind, and on an empty one is done; Tab and Shift-Tab move a line in and out, and `[ ] ` or `- ` typed at
 /// the start of words make a sub-to-do or a point, as in a note.
 struct TodoEditor: View {
-    let workspace: Workspace
     @Bindable var editing: TodoEditing
-    let item: TodoList.Item
     var focus: FocusState<TodoFocus?>.Binding
     var end: () -> Void
 
@@ -20,6 +19,11 @@ struct TodoEditor: View {
                 .font(.system(size: TodosView.titleSize))
                 .foregroundStyle(Color.theme(Theme.text))
                 .focused(focus, equals: .title)
+                #if os(macOS)
+                // In the window you click in, SwiftUI can leave the keyboard with the window as the field appears; it
+                // noticed at the next redraw, such as a move of the pointer, and the editing ended.
+                .focusOnAppear(editing.focus == .title && !editing.isEnded)
+                #endif
                 .onChange(of: editing.title) { _, title in
                     // Return on the touch keyboard: done.
                     if title.contains("\n") {
@@ -36,34 +40,21 @@ struct TodoEditor: View {
                 #endif
                 .accessibilityLabel("To-do")
             ForEach(editing.lines) { line in
-                if line.kind != .blank {
+                // The line for notes comes with the buttons, and goes with them.
+                if line.kind != .blank, editing.isExpanded || !line.isNewAndEmpty {
                     lineEditor(line)
+                        .transition(TodoRowView.extra)
                 }
             }
-            #if os(macOS)
-            TodoEditBar(workspace: workspace, editing: editing, noteName: item.note) { open() }
-                .padding(.top, 5)
-            #else
-            // Its date and place change from the bar above the keyboard.
-            let schedule = editing.schedule
-            HStack(spacing: 10) {
-                if let due = schedule.due {
-                    Label(ReminderText.text(due.date(), time: due.hasTime), systemImage: due.hasTime ? "bell.fill" : "calendar")
-                        .foregroundStyle(due.isOverdue() ? Color.red : Color.theme(Theme.textSecondary))
-                }
-                if let place = schedule.place {
-                    Label(place.leaving ? "Leaving " + place.name : place.name, systemImage: "location.fill")
-                }
-                TodoNoteLink(name: item.note) { open() }
-            }
-            .labelStyle(TodoMetaLabelStyle())
-            .font(.system(size: TodosView.metaSize))
-            .foregroundStyle(Color.theme(Theme.textTertiary))
-            .padding(.top, 2)
-            #endif
         }
-        // Shown, or made again in another group after its date changed: the keyboard comes back.
-        .onAppear { editing.refocus() }
+        // Closing: what was typed is written, and the row is about to show it.
+        .allowsHitTesting(!editing.isEnded)
+        // Shown, or made again in another group after its date changed: the keyboard comes back, and the buttons.
+        .onAppear {
+            guard !editing.isEnded else { return }
+            editing.refocus()
+            if !editing.isExpanded { withAnimation(Theme.spring) { editing.isExpanded = true } }
+        }
     }
 
     private func lineEditor(_ value: TodoEditing.Line) -> some View {
@@ -121,11 +112,6 @@ struct TodoEditor: View {
         case .todo(let mark): mark.isClosed ? Color.theme(Theme.textTertiary) : Color.theme(Theme.text)
         default: Color.theme(Theme.textSecondary)
         }
-    }
-
-    private func open() {
-        end()
-        workspace.openTodo(item.reference)
     }
 
     // MARK: - Keys
@@ -207,69 +193,160 @@ extension TextSelection {
     }
 }
 
+/// What the buttons for a to-do's date, time and place set, with what was typed written first, keeping the rest.
+extension TodoEditing {
+    func setDue(_ due: TodoDue?) {
+        workspace.setTodo(beforeChanging(), due: due, place: schedule.place)
+        refocus()
+    }
+
+    func setPlace(_ place: TodoPlace?) {
+        workspace.setTodo(beforeChanging(), due: schedule.due, place: place)
+        refocus()
+    }
+}
+
 #if os(macOS)
-/// Reminders' buttons under a to-do being edited: its day, its time and its place, each with a few to choose from at a
-/// click and Custom… for Remind Me; a sub-to-do; and the note it is in.
+/// Reminders' buttons under a to-do being edited, capsules as Reminders draws them: its day, its time and its place, in
+/// the accent colour with an × to take them away once they are set and a grey symbol until then, each a dropdown to
+/// type in or click, as Issues has them; a sub-to-do; and the note it is in.
 struct TodoEditBar: View {
     let workspace: Workspace
     let editing: TodoEditing
     let noteName: String
     var open: () -> Void
-    @State private var isPicking = false
+    @State private var picking: Picking?
+
+    enum Picking {
+        case day, time, place
+    }
 
     var body: some View {
         let schedule = editing.schedule
         HStack(spacing: 6) {
-            Menu {
-                TodoDayChoices(workspace: workspace, editing: editing) { pick() }
-            } label: {
-                Label(schedule.due.map { ReminderText.day($0.date()) } ?? "Add Date", systemImage: "calendar")
-                    .foregroundStyle(schedule.due?.isOverdue() == true ? Color.red : Color.primary)
+            chip(.day, "Date", value: schedule.due.map { ReminderText.day($0.date()) }, symbol: "calendar",
+                 tint: schedule.due?.isOverdue() == true ? .red : .accentColor) {
+                editing.setDue(nil)
+            } content: {
+                TodoDatePicker(due: schedule.due, pick: editing.setDue) { picking = nil }
             }
-            if let due = schedule.due {
-                Menu {
-                    TodoTimeChoices(workspace: workspace, editing: editing) { pick() }
-                } label: {
-                    Label(due.hasTime ? due.date().formatted(date: .omitted, time: .shortened) : "Add Time", systemImage: "clock")
-                }
+            chip(.time, "Time", value: schedule.due.flatMap { $0.hasTime ? $0.date().formatted(date: .omitted, time: .shortened) : nil },
+                 symbol: "clock.fill", tint: schedule.due?.isOverdue() == true ? .red : .accentColor) {
+                editing.setDue(schedule.due?.at(hour: nil, minute: nil))
+            } content: {
+                TodoTimePicker(due: schedule.due, pick: editing.setDue) { picking = nil }
             }
-            Menu {
-                TodoPlaceChoices(workspace: workspace, editing: editing) { pick() }
-            } label: {
-                Label(schedule.place.map { $0.leaving ? "Leaving " + $0.name : $0.name } ?? "Add Location", systemImage: "location")
-                    .lineLimit(1)
+            chip(.place, "Location", value: schedule.place.map { $0.leaving ? "Leaving " + $0.name : $0.name }, symbol: "location.fill") {
+                editing.setPlace(nil)
+            } content: {
+                TodoPlaceDropdown(place: schedule.place, pick: editing.setPlace) { picking = nil }
             }
-            Button { editing.addTodo() } label: { Label("Add Sub-to-do", systemImage: "checklist") }
+            TodoChip(symbol: "checklist", title: "Add Sub-to-do") { editing.addTodo() }
             Spacer(minLength: 8)
             TodoNoteLink(name: noteName, action: open)
                 .font(.system(size: TodosView.metaSize))
                 .layoutPriority(-1)
         }
-        .menuStyle(.button)
-        .menuIndicator(.hidden)
-        .buttonStyle(.bordered)
-        .controlSize(.small)
         .fixedSize(horizontal: false, vertical: true)
-        .popover(isPresented: $isPicking, arrowEdge: .bottom) {
-            TodoReminderPicker(workspace: workspace, todo: editing.current) { isPicking = false }
+        .onChange(of: picking) { _, new in
+            // What was typed is written before a dropdown takes the keyboard; it comes back after.
+            if new != nil { editing.commit() }
+            editing.isChoosing = new != nil
+            if new == nil { editing.refocus() }
         }
-        .onChange(of: isPicking) { _, picking in
-            editing.isChoosing = picking
-            if !picking { editing.refocus() }
+        #if DEBUG
+        .onReceive(NotificationCenter.default.publisher(for: DebugTodos.pick)) { note in
+            editing.isChoosing = true
+            picking = switch note.object as? String {
+            case "date": .day
+            case "time": .time
+            case "place": .place
+            default: nil
+            }
         }
+        #endif
     }
 
-    /// Custom…: Remind Me, with what was typed written first.
-    private func pick() {
-        editing.commit()
-        isPicking = true
+    private func chip<Content: View>(_ kind: Picking, _ name: String, value: String?, symbol: String, tint: Color = .accentColor,
+                                     clear: @escaping () -> Void, @ViewBuilder content: @escaping () -> Content) -> some View {
+        TodoChip(symbol: symbol, title: (value == nil ? "Add " : "Change ") + name, value: value, tint: tint, isOpen: picking == kind,
+                 clearTitle: "Remove " + name, clear: clear) {
+            // Before the dropdown takes the keyboard.
+            if picking == nil { editing.isChoosing = true }
+            picking = picking == kind ? nil : kind
+        }
+        .dropdown(isPresented: Binding(get: { picking == kind }, set: { if !$0, picking == kind { picking = nil } })) { _ in
+            content()
+        }
+    }
+}
+
+/// A capsule in the bar under a to-do, as Reminders has them: a grey symbol while there is nothing set, and once there
+/// is, the symbol and the value in the accent colour, with an × that takes it away. Drawn by SwiftUI, so it fades with
+/// the bar.
+struct TodoChip: View {
+    let symbol: String
+    /// What a click does, for the pointer resting on it and for VoiceOver: "Add Date", "Change Date".
+    let title: String
+    var value: String?
+    var tint: Color = .accentColor
+    var isOpen = false
+    var clearTitle = ""
+    var clear: (() -> Void)?
+    var action: () -> Void
+    @State private var isHovered = false
+
+    static let height: CGFloat = 26
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Button(action: action) {
+                HStack(spacing: 5) {
+                    Image(systemName: symbol)
+                        .font(.system(size: 12, weight: .medium))
+                    if let value {
+                        // A shade heavier than the words around it, so the ink of the accent reads as a colour.
+                        Text(value)
+                            .fontWeight(.medium)
+                            .lineLimit(1)
+                            .transition(.opacity)
+                    }
+                }
+                // Neutral greys, as Reminders has them, not the page's bluish ones.
+                .foregroundStyle(value == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(tint))
+                .frame(minWidth: 20, minHeight: Self.height)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .help(title)
+            .accessibilityLabel(value.map { title + ", " + $0 } ?? title)
+            if value != nil, let clear {
+                Button(action: clear) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9.5, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 12, height: Self.height)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .help(clearTitle)
+                .accessibilityLabel(clearTitle)
+                .transition(.opacity.combined(with: .scale(scale: 0.6)))
+            }
+        }
+        .font(.system(size: 12.5))
+        .padding(.horizontal, value == nil ? 7 : 10)
+        .background(Capsule().fill(Color.theme(isOpen ? Theme.chipOpen : isHovered ? Theme.chipHover : Theme.chip)))
+        .contentShape(.capsule)
+        .onHover { hovering in withAnimation(Theme.quick) { isHovered = hovering } }
+        .animation(Theme.spring, value: value)
     }
 }
 #endif
 
 #if os(iOS)
-/// Reminders' buttons above the keyboard while a to-do is edited: its day, its time, its place, a sub-to-do, a line in
-/// or out, and done.
+/// Reminders' buttons above the keyboard while a to-do is edited: its day, its time and its place, each to type in or
+/// tap in a popover from the to-do's row (a sheet on iPhone), a sub-to-do, a line in or out, and done.
 struct TodoKeyboardBar: View {
     let workspace: Workspace
     let editing: TodoEditing
@@ -278,21 +355,9 @@ struct TodoKeyboardBar: View {
 
     var body: some View {
         HStack {
-            Menu {
-                TodoDayChoices(workspace: workspace, editing: editing) { custom() }
-            } label: {
-                Label("Date", systemImage: "calendar")
-            }
-            Menu {
-                TodoTimeChoices(workspace: workspace, editing: editing) { custom() }
-            } label: {
-                Label("Time", systemImage: "clock")
-            }
-            Menu {
-                TodoPlaceChoices(workspace: workspace, editing: editing) { custom() }
-            } label: {
-                Label("Location", systemImage: "location")
-            }
+            Button { editing.pick(.day) } label: { Label("Date", systemImage: "calendar") }
+            Button { editing.pick(.time) } label: { Label("Time", systemImage: "clock") }
+            Button { editing.pick(.place) } label: { Label("Location", systemImage: "location") }
             Button { editing.addTodo() } label: { Label("Add Sub-to-do", systemImage: "checklist") }
             if case .line(let id) = focus {
                 Button { editing.outdent(id) } label: { Label("Move Out", systemImage: "decrease.indent") }
@@ -303,105 +368,47 @@ struct TodoKeyboardBar: View {
         }
         .labelStyle(.iconOnly)
     }
+}
 
-    /// Custom…: Remind Me as a sheet, which takes the keyboard, so editing is done first.
-    private func custom() {
-        let todo = editing.beforeChanging()
-        done()
-        workspace.askForTodoReminder(todo)
+/// The popover for a to-do's day, time or place, from its row while it is edited: it outlives the bar above the
+/// keyboard, which goes as soon as the popover's field takes the keyboard. On iPhone a sheet.
+struct TodoPickPopover: ViewModifier {
+    let editing: TodoEditing?
+
+    func body(content: Content) -> some View {
+        content
+            .popover(item: Binding(get: { editing?.picking }, set: { editing?.picking = $0 })) { kind in
+                if let editing {
+                    let schedule = editing.schedule
+                    ScrollView {
+                        switch kind {
+                        case .day: TodoDatePicker(due: schedule.due, pick: editing.setDue) { editing.picking = nil }
+                        case .time: TodoTimePicker(due: schedule.due, pick: editing.setDue) { editing.picking = nil }
+                        case .place: TodoPlaceDropdown(place: schedule.place, pick: editing.setPlace) { editing.picking = nil }
+                        }
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                }
+            }
+            .onChange(of: editing?.picking) { _, new in
+                // The keyboard goes back to the to-do once the popover is closed.
+                guard let editing, new == nil else { return }
+                editing.isChoosing = false
+                editing.refocus()
+            }
+            #if DEBUG
+            .onReceive(NotificationCenter.default.publisher(for: DebugTodos.pick)) { note in
+                guard let editing, !editing.isEnded else { return }
+                switch note.object as? String {
+                case "date": editing.pick(.day)
+                case "time": editing.pick(.time)
+                case "place": editing.pick(.place)
+                default: editing.picking = nil
+                }
+            }
+            #endif
     }
 }
 #endif
-
-/// The days a to-do can get at a click, as in its menu in To-dos.
-struct TodoDayChoices: View {
-    let workspace: Workspace
-    let editing: TodoEditing
-    var custom: () -> Void
-
-    var body: some View {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: .now)
-        Button { set(today) } label: { Label("Today", systemImage: "star") }
-        Button { set(calendar.date(byAdding: .day, value: 1, to: today)) } label: { Label("Tomorrow", systemImage: "sunrise") }
-        if let weekend = calendar.nextWeekend(startingAfter: today)?.start {
-            Button { set(weekend) } label: { Label("This Weekend", systemImage: "sofa") }
-        }
-        if let monday = calendar.nextDate(after: today, matching: DateComponents(weekday: 2), matchingPolicy: .nextTime) {
-            Button { set(monday) } label: { Label("Next Week", systemImage: "calendar") }
-        }
-        Divider()
-        Button { custom() } label: { Label("Custom…", systemImage: "calendar.badge.clock") }
-        if editing.schedule.due != nil {
-            Button { set(nil) } label: { Label("Remove Date", systemImage: "calendar.badge.minus") }
-        }
-    }
-
-    /// The day, keeping the time and the place.
-    private func set(_ day: Date?) {
-        workspace.moveTodo(editing.beforeChanging(), to: day)
-        editing.refocus()
-    }
-}
-
-/// The times a to-do can get at a click, the words Remind Me reads too: in the morning, at noon, in the afternoon,
-/// evening and night.
-struct TodoTimeChoices: View {
-    let workspace: Workspace
-    let editing: TodoEditing
-    var custom: () -> Void
-
-    static let times: [(name: String, hour: Int)] = [("Morning", 9), ("Noon", 12), ("Afternoon", 15), ("Evening", 18), ("Night", 21)]
-
-    var body: some View {
-        ForEach(Self.times, id: \.hour) { time in
-            Button { set(time.hour) } label: {
-                Text(time.name)
-                Text(Calendar.current.date(bySettingHour: time.hour, minute: 0, second: 0, of: .now)?.formatted(date: .omitted, time: .shortened) ?? "")
-            }
-        }
-        Divider()
-        Button { custom() } label: { Label("Custom…", systemImage: "clock") }
-        if editing.schedule.due?.hasTime == true {
-            Button { set(nil) } label: { Label("Remove Time", systemImage: "clock.badge.xmark") }
-        }
-    }
-
-    /// The time on the to-do's day; without one, today if the time is still to come, else tomorrow.
-    private func set(_ hour: Int?) {
-        let todo = editing.beforeChanging()
-        let schedule = editing.schedule
-        var day = schedule.due ?? TodoDue(.now, time: false)
-        if schedule.due == nil, let hour, Calendar.current.component(.hour, from: .now) >= hour,
-           let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: .now) {
-            day = TodoDue(tomorrow, time: false)
-        }
-        workspace.setTodo(todo, due: day.at(hour: hour, minute: hour == nil ? nil : 0), place: schedule.place)
-        editing.refocus()
-    }
-}
-
-/// The places a to-do can get at a click: the last ones chosen, for arriving there.
-struct TodoPlaceChoices: View {
-    let workspace: Workspace
-    let editing: TodoEditing
-    var custom: () -> Void
-
-    var body: some View {
-        let recent = PlaceHistory.recent
-        ForEach(recent, id: \.self) { place in
-            Button { set(place) } label: { Label(place.name, systemImage: "mappin") }
-        }
-        if !recent.isEmpty { Divider() }
-        Button { custom() } label: { Label("Custom…", systemImage: "location") }
-        if editing.schedule.place != nil {
-            Button { set(nil) } label: { Label("Remove Location", systemImage: "location.slash") }
-        }
-    }
-
-    private func set(_ place: TodoPlace?) {
-        let todo = editing.beforeChanging()
-        workspace.setTodo(todo, due: editing.schedule.due, place: place)
-        editing.refocus()
-    }
-}

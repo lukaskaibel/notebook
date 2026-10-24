@@ -406,8 +406,8 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
             openBlock(caret: caret, at: point)
         case .headingLevel:
             break
-        case .todo(let line):
-            showTodoReminder(line: line)
+        case .todo(let line, let part):
+            showTodoReminder(line: line, part: part)
         }
     }
 

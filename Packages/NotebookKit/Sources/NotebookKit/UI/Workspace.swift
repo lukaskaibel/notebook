@@ -141,6 +141,8 @@ public final class Workspace: NSObject {
     var reminderRequest: ReminderRequest?
     /// A to-do to set a reminder for, in a sheet.
     var todoReminderRequest: TodoReference?
+    /// A to-do whose date or place to change, in a sheet, as from its pill in a note.
+    var todoPickRequest: TodoPickRequest?
     /// A folder to customize, in a sheet.
     var folderIconRequest: FolderIconRequest?
     /// What each note looked like when you went on from it, shown while the screen of the note you go on to slides
@@ -1810,8 +1812,8 @@ extension Workspace: EditorControllerDelegate {
         askForReminder(currentURL)
     }
 
-    public func editor(_ editor: EditorController, showTodoReminderOnLine line: Int) {
+    public func editor(_ editor: EditorController, showTodoReminderOnLine line: Int, part: TodoPart) {
         guard let currentURL, note != nil else { return }
-        askForTodoReminder(in: editor, url: currentURL, line: line)
+        askForTodoReminder(in: editor, url: currentURL, line: line, part: part)
     }
 }

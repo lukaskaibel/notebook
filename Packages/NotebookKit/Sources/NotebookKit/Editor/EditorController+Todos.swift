@@ -81,12 +81,17 @@ extension EditorController {
         toggleCheckbox(line: index)
     }
 
-    /// Where Remind Me points for the to-do on a line: its first pill, or the end of its words.
-    func todoAnchor(line index: Int) -> NSRect? {
+    /// Where Remind Me points for the to-do on a line: its first pill, or for its date or place that one's pill, or the
+    /// end of its words.
+    func todoAnchor(line index: Int, part: TodoPart = .reminder) -> NSRect? {
         guard let line = document.lines[safe: index] else { return nil }
         let origin = textOrigin
         for span in line.spans {
-            guard case .todoMark = span.kind, let rect = layoutManager.rect(forObjectAt: span.range.location, origin: origin) else { continue }
+            guard case .todoMark(let kind) = span.kind, let rect = layoutManager.rect(forObjectAt: span.range.location, origin: origin) else { continue }
+            switch (part, kind) {
+            case (.reminder, _), (.date, .due), (.place, .place): break
+            default: continue
+            }
             return NSRect(x: rect.minX + TodoPill.gap, y: rect.minY, width: rect.width - TodoPill.gap, height: rect.height)
         }
         return todoEnd(line: index).map { NSRect(x: $0.x, y: $0.y - 9, width: 1, height: 18) }
@@ -121,8 +126,8 @@ extension EditorController {
         return index
     }
 
-    func showTodoReminder(line: Int) {
-        delegate?.editor(self, showTodoReminderOnLine: line)
+    func showTodoReminder(line: Int, part: TodoPart = .reminder) {
+        delegate?.editor(self, showTodoReminderOnLine: line, part: part)
     }
 
     #if os(macOS)
@@ -168,8 +173,12 @@ extension EditorController {
 #if os(macOS)
 extension MarkdownTextView {
     @objc func remindOfTodo(_ sender: Any?) {
-        guard let line = (sender as? NSMenuItem)?.representedObject as? Int ?? todoBell.line else { return }
-        controller?.showTodoReminder(line: line)
+        // Remind Me… in the menu: the date and the place; the bell: a date.
+        if let line = (sender as? NSMenuItem)?.representedObject as? Int {
+            controller?.showTodoReminder(line: line)
+        } else if let line = todoBell.line {
+            controller?.showTodoReminder(line: line, part: .date)
+        }
     }
 }
 

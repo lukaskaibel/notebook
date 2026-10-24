@@ -16,17 +16,28 @@ import SwiftUI
 ///     placetodo <name> <latitude> <longitude> <words>  gives it a place to arrive at
 ///     movetodo <today|tomorrow|week|later|none> <words>  as dragging it into that group
 ///     opentodo <words>                           opens its note at it
-///     remindtodo <words>                         Remind Me for it: the popover from its pill, or the sheet
+///     remindtodo [date|place] <words>            Remind Me for it (the popover or the sheet), or on the Mac the
+///                                                dropdown for its date or place, as its pills open them
 ///     firetodo <words>                           its notification in a second, as at its time
 ///     todojobs                                   what the to-dos' notifications are made from
 ///     edittodo <offset|end> <words>              edits it in To-dos, as a click on its words that many letters in
 ///     todoediting                                the to-do being edited: its words, its lines and where the keyboard is
 ///     todolines <words>                          the lines under it, as To-dos reads them
 ///     showstodos 0|1                             To-dos on or off, as in Settings
+///     todopick date|time|place|none              opens the to-do being edited's dropdown for that, or closes it
+///     todopicktype <text>                        types in the open dropdown's field
+///     todopickkey down|up|return|escape|focus    a key in the open dropdown, or the keyboard into its field
+///     todopicker                                 what the open dropdown shows
 @MainActor
 enum DebugTodos {
     /// Asks To-dos to edit a to-do: `item` and `offset` in its user info.
     static let edit = Notification.Name("DebugTodosEdit")
+    /// Asks the to-do being edited to open a dropdown: "date", "time", "place" or "none" as the object.
+    static let pick = Notification.Name("DebugTodosPick")
+    /// Types in the open dropdown: the text as the object.
+    static let pickerType = Notification.Name("DebugTodosPickerType")
+    /// A key in the open dropdown: "down", "up", "return" or "escape" as the object.
+    static let pickerKey = Notification.Name("DebugTodosPickerKey")
     /// The to-do To-dos is editing, and where its keyboard is.
     static weak var session: TodoEditing?
     static var focus: TodoFocus?
@@ -91,9 +102,12 @@ enum DebugTodos {
             workspace.openTodo(item.reference)
             log("opentodo \(item.todo.text): open \(workspace.currentURL?.lastPathComponent ?? "nothing")")
         case "remindtodo":
-            guard let item = find(argument) else { log("remindtodo: no to-do “\(argument)”"); break }
+            // remindtodo [date|place] <words>: Remind Me, or the dropdown for its date or place, as its pills open them.
+            let part: TodoPart = split.first == "date" ? .date : split.first == "place" ? .place : .reminder
+            let words = part == .reminder ? argument : split.count > 1 ? split[1] : ""
+            guard let item = find(words) else { log("remindtodo: no to-do “\(words)”"); break }
             if let editor = workspace.editorShowing(item.url), let line = editor.todoLine(item.todo.source, near: item.todo.line) {
-                workspace.askForTodoReminder(in: editor, url: item.url, line: line)
+                workspace.askForTodoReminder(in: editor, url: item.url, line: line, part: part)
             } else {
                 #if os(iOS)
                 workspace.askForTodoReminder(item.reference)
@@ -129,6 +143,20 @@ enum DebugTodos {
             guard let item = find(argument) else { log("todolines: no to-do “\(argument)”"); break }
             log("todolines \(item.todo.text) [\(item.todo.mark.character)] fields \(item.todo.fields.map { $0.label() }):\n"
                 + item.todo.lines.map { "  [\($0.depth)] \($0.kind) \($0.text.debugDescription) | \($0.source.debugDescription)" }.joined(separator: "\n"))
+        case "todopick":
+            NotificationCenter.default.post(name: pick, object: argument)
+            log("todopick \(argument)")
+        case "todopicktype":
+            NotificationCenter.default.post(name: pickerType, object: argument)
+            log("todopicktype \(argument)")
+        case "todopickkey":
+            NotificationCenter.default.post(name: pickerKey, object: argument)
+            log("todopickkey \(argument)")
+        #if os(macOS)
+        case "todopicker":
+            guard let panel = Dropdown.debugPanel else { log("todopicker: none open"); break }
+            log("todopicker at \(panel.frame.integral) under \(panel.anchor.integral), key \(panel.isKeyWindow), first responder \(panel.firstResponder.map { String(describing: type(of: $0)) } ?? "none")")
+        #endif
         case "showstodos":
             NotebookSettings.shared.showsTodos = argument == "1"
             log("showstodos \(NotebookSettings.shared.showsTodos), showing \(workspace.showsTodos)")
