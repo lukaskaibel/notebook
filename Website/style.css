@@ -172,6 +172,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; }
   max-width: 38ch;
   color: var(--text-2);
   font-size: 16px;
+  text-wrap: pretty;
 }
 
 .actions {
