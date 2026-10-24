@@ -18,11 +18,12 @@ WRITE
 FIND
 • Search finds the names of notes, files and folders, headings, words in notes and PDFs, and the text in pictures, scanned pages and handwriting
 • ⌘K finds the same and runs any command
+• Every note in Spotlight on the Mac and in search on iPhone and iPad: pick one and it opens in Notebook
 
 TO-DOS AND REMINDERS
 • Every open checkbox of every note in one list, grouped by when it's due, as in Reminders. Tick to-dos off, edit them in place or drag them to another day
 • Give a to-do a date, a time or a place: it is written into the note, where other Markdown apps read it too
-• Remind Me brings a note back at a time you type in a few words ("friday evening", "in 3 weeks"), or when you arrive at or leave a place
+• Remind Me brings a note back at a time you type in a few words ("friday evening", "in 3 weeks"), or when you arrive at or leave a place, such as Home or Work
 
 YOUR FOLDERS, AS THEY ARE
 • iCloud Drive shows what the Finder shows: Desktop and Documents, and the folders of other apps
@@ -33,6 +34,7 @@ YOUR FOLDERS, AS THEY ARE
 ON THE MAC
 • A window built like Notes and Mail: the sidebar, the note and its outline, and swipe back and forward as in Safari
 • PDFs, pictures and videos open in the window, everything else in Quick Look
+• Drag pictures and files around a note, into another note, or out to the Finder and other apps
 • Export a note as a PDF or a picture, or print it
 
 ON IPHONE AND IPAD
