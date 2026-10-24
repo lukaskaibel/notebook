@@ -323,7 +323,8 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
 ## What it does
 
 - **Notes are files.** The title is the file name: rename a note by editing its title, and links to it in other notes
-  follow. New notes go into the folder you're in, and one you leave empty goes away again.
+  follow. New notes go into the folder you're in; made anywhere else, they go to the default folder you choose in
+  Settings, an Inbox at the top of your first location until you do. One you leave empty goes away again.
 - **Folders as they are.** Add iCloud Drive or any folder as a location with Add Location at the bottom of the
   sidebar, or drop the folder from the Finder below the sidebar's sections. iCloud Drive shows what the Finder shows
   in it: Desktop and Documents when they are kept in iCloud, and the folders of apps such as Pages or Obsidian.
@@ -469,7 +470,7 @@ app's own folder there.
 
 | Shortcut | Action |
 | --- | --- |
-| ⌘N | New note in the current folder |
+| ⌘N | New note in the current folder, or with none, in the default folder |
 | ⇧⌘N | New folder in the current folder, named in place |
 | ⌘Z, ⇧⌘Z | Undo and redo: typing, and changes to files (the Trash, a rename, a move, a new note or folder), newest first |
 | ⌘F | Search |
@@ -564,7 +565,7 @@ on the Mac. On iPhone and iPad:
 Planned, and not built yet:
 
 - **Quick capture:** a widget, a control in Control Center and on the Lock Screen, the Action button and a share
-  extension, all adding a note to an Inbox folder.
+  extension, all adding a note to the default folder.
 - **Spotlight:** notes don't turn up in Spotlight yet, only in Notebook's own search.
 - **Reminders when a calendar event starts,** and on the iPhone a Live Activity that keeps the note on the Lock Screen.
   A reminder set on another device reaches an iPhone or iPad the next time Notebook runs there or gets time in the
@@ -585,7 +586,7 @@ The full plan, with what is deliberately left out (tags, backlinks, a database, 
 
 ```
 Notebook/                    The app target (Mac, iPhone and iPad): the entry point and the icon
-NotebookUITests/             UI tests on an iPad simulator, for what only a real keyboard or touch reaches
+NotebookUITests/             UI tests on iPhone and iPad simulators, for what only a real keyboard or touch reaches
 Packages/NotebookKit/
   Sources/NotebookKit/
     Editor/                  The live-preview editor on TextKit 1: styling, hidden marks, objects, typing, export;
@@ -630,11 +631,13 @@ Run the tests (they use off-screen windows and temporary folders, and touch none
 cd Packages/NotebookKit && swift test
 ```
 
-The UI tests start the app on fresh sample notes in the simulator's own folders. Run them on an iPad simulator of
-your own, here one called Notebook iPad:
+The UI tests start the app on fresh sample notes in the simulator's own folders. Each is for an iPad or an iPhone and
+is skipped on the other, so run them on a simulator of each of your own, here ones called Notebook iPad and Notebook
+iPhone:
 
 ```bash
 xcodebuild test -project Notebook.xcodeproj -scheme NotebookUITests -destination "platform=iOS Simulator,name=Notebook iPad"
+xcodebuild test -project Notebook.xcodeproj -scheme NotebookUITests -destination "platform=iOS Simulator,name=Notebook iPhone"
 ```
 
 The pictures in this README are made by a script. It builds the app, runs it in the background on the sample notes,

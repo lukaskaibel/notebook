@@ -7,6 +7,11 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- Choose where new notes go when they aren't made in a folder: Settings › General › Default folder on the Mac, Settings
+  › Default Folder on iPhone and iPad. That is ⌘N with no note open and no folder selected, and New Note on the
+  iPhone's first screen. Every folder of your locations is there, indented as in Move To; until you choose one, it is
+  the Inbox at the top of your first location, as before. Rename or move the folder in Notebook and it stays the
+  default; throw it away and new notes go to the Inbox again.
 - Customize Folder…: right-click a folder in the sidebar, or touch and hold it on iPhone and iPad, and give it a colour
   and a symbol or an emoji in place of the folder. Over 300 symbols and the emoji come in groups, with a few suggested
   for the folder's name, and a search finds them by name or by what they are for. Notebook keeps them where the
