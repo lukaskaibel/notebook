@@ -217,6 +217,9 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- On iPhone and iPad, opening a note could keep Notebook busy for seconds in a location with thousands of folders,
+  such as a whole iCloud Drive: the ⋯ menu made an item for every folder under Move To, each time. Move in the ⋯ menu
+  and in a file's touch-and-hold menu now asks where to in a sheet, as swiping a file does and as the Files app asks.
 - Saving a note could stop Notebook for a moment while iCloud or another app was busy with the file. Notes are now
   saved in the background, on the Mac, iPhone and iPad: what you type meanwhile is saved right after, a change made
   elsewhere in the meantime is still merged in, and quitting waits until everything is written. Pictures a note no
