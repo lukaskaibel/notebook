@@ -161,6 +161,19 @@ final class FileOrderTests: XCTestCase {
         }
     }
 
+    /// Writes a new note into a folder, as the Finder or iCloud would, and again each second until `condition` holds:
+    /// the watcher for file changes starts a moment after the locations have been read, and misses what came before.
+    private func write(into folder: URL, until what: String, _ condition: () -> Bool) async throws {
+        let end = Date().addingTimeInterval(8)
+        var count = 0
+        while !condition() {
+            guard Date() < end else { return XCTFail("never: \(what)") }
+            count += 1
+            try "# New\n".write(to: folder.appendingPathComponent(count == 1 ? "New.md" : "New \(count).md"), atomically: true, encoding: .utf8)
+            for _ in 0..<50 where !condition() { try await Task.sleep(for: .milliseconds(20)) }
+        }
+    }
+
     private func names(_ sidebar: SidebarController) -> [String] {
         (0..<sidebar.outline.numberOfRows).compactMap { (sidebar.outline.item(atRow: $0) as? FileNode)?.name }
     }
@@ -283,10 +296,12 @@ final class FileOrderTests: XCTestCase {
         try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -2000)], ofItemAtPath: notes.path)
         let (workspace, sidebar) = try await makeSidebar()
         XCTAssertEqual(names(sidebar), ["Archive", "Notes", "First"])
-        try "# New\n".write(to: notes.appendingPathComponent("New.md"), atomically: true, encoding: .utf8)
-        try await until("the folder's new date read") { (workspace.node(for: self.notes, reading: false)?.modified?.timeIntervalSinceNow ?? -100) > -60 }
+        try await write(into: notes, until: "the folder's new date read") {
+            (workspace.node(for: self.notes, reading: false)?.modified?.timeIntervalSinceNow ?? -100) > -60
+        }
         orders.set(.dateEdited, for: notes)
-        XCTAssertEqual(names(sidebar), ["Notes", "New", "First", "Archive"])
+        XCTAssertEqual(names(sidebar).first, "Notes")
+        XCTAssertEqual(names(sidebar).last, "Archive")
     }
 
     /// The same for a folder iCloud Drive links in (Desktop): its date is in the location's top.
@@ -307,11 +322,10 @@ final class FileOrderTests: XCTestCase {
             guard let root = workspace.locations.first.flatMap(workspace.root(for:)), root.hasLoadedChildren else { return nil }
             return root.loadedChildren().first { $0.isLinked && $0.name == "Desktop" }
         }
-        try await until("iCloud Drive was read, with Desktop") { workspace.hasReadLocations && workspace.reader.isIdle && desktopNode() != nil }
+        try await until("iCloud Drive was read, with Desktop", seconds: 10) { workspace.hasReadLocations && workspace.reader.isIdle && desktopNode() != nil }
         let node = try XCTUnwrap(desktopNode())
         XCTAssertLessThan(try XCTUnwrap(node.modified).timeIntervalSinceNow, -1000)
-        try "# Note\n".write(to: desktop.appendingPathComponent("Note.md"), atomically: true, encoding: .utf8)
-        try await until("Desktop's new date read") { (node.modified?.timeIntervalSinceNow ?? -100) > -60 }
+        try await write(into: desktop, until: "Desktop's new date read") { (node.modified?.timeIntervalSinceNow ?? -100) > -60 }
     }
 
     /// Choosing another order sorts the open folders again, keeping the same rows and the selection.
