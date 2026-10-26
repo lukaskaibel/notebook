@@ -227,6 +227,29 @@ final class ReminderNotifications: NSObject, UNUserNotificationCenterDelegate {
         try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: identifier, content: content, trigger: Self.trigger(at: date)))
     }
 
+    /// Done, from a to-do's notification: its notifications go and it is ticked. One that repeats has the next one's
+    /// notification in when this returns, since from the Lock Screen the app has only this moment.
+    func finishTodo(_ todo: TodoReference, identifier: String, workspace: Workspace) async {
+        withdrawTodo(identifier)
+        await workspace.setTodoDone(todo, true, fromNotification: true)?.value
+    }
+
+    /// A to-do's notifications put in now, as the to-dos' own scheduling makes them a moment later: for the next one of
+    /// a to-do that repeats, ticked while the app may have only a moment.
+    func scheduleTodo(_ job: TodoJob) async {
+        guard isActive else { return }
+        let center = UNUserNotificationCenter.current()
+        if let date = job.date, date > .now {
+            try? await center.add(UNNotificationRequest(identifier: job.identifier, content: Self.content(for: job, place: false), trigger: Self.trigger(at: date)))
+        }
+        #if os(iOS)
+        if Self.watchesPlaces, let place = job.place, let trigger = Self.trigger(at: place, identifier: job.identifier + ".place") {
+            try? await center.add(UNNotificationRequest(identifier: job.identifier + ".place", content: Self.content(for: job, place: true), trigger: trigger))
+            await Self.armPlaces(prefix: Self.todoPrefix, center: center, keepingFired: nil)
+        }
+        #endif
+    }
+
     /// A to-do was done or changed: its notifications go at once, before the list of to-dos has caught up.
     func withdrawTodo(_ identifier: String) {
         guard isActive else { return }
@@ -354,8 +377,7 @@ final class ReminderNotifications: NSObject, UNUserNotificationCenterDelegate {
                             // The notification for the new time goes in now, as the to-dos' own scheduling will make it.
                             await Self.shared.remindAgain(later.identifier, todo: later.todo, at: date, like: again.value)
                         case Self.doneAction:
-                            Self.shared.withdrawTodo(identifier)
-                            await workspace.setTodoDone(todo, true)?.value
+                            await Self.shared.finishTodo(todo, identifier: identifier, workspace: workspace)
                         default: break
                         }
                         done.value()
