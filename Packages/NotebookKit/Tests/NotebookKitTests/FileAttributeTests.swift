@@ -46,6 +46,7 @@ final class FileAttributeTests: XCTestCase {
         let document = NoteDocument(url: note)
         document.update(text: document.text + "More.\n")
         document.saveNow()
+        await document.saved()
         document.close()
         XCTAssertTrue(try String(contentsOf: note, encoding: .utf8).hasSuffix("More.\n"))
         assertKept("saving")

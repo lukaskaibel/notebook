@@ -177,12 +177,14 @@ final class VersionCopyTests: XCTestCase {
         XCTAssertEqual(kept, ["as opened\n"])
         XCTAssertEqual(note.openedText, "as opened\n")
         note.close()
+        await note.saved()
     }
 
     func testStoppingKeepsWhatWasWritten() async throws {
         let note = try open("one\n")
         note.update(text: "one\ntwo\n")
         note.close()
+        await note.saved()
         let kept = await versions()
         XCTAssertEqual(kept, ["one\ntwo\n", "one\n"])
     }
@@ -191,6 +193,7 @@ final class VersionCopyTests: XCTestCase {
         let note = try open("one\n")
         note.keepCopyOfChanges()
         note.close()
+        await note.saved()
         let kept = await versions()
         XCTAssertEqual(kept, [])
     }
@@ -200,14 +203,17 @@ final class VersionCopyTests: XCTestCase {
         note.copyInterval = 0.3
         note.update(text: "one\ntwo\n")
         note.saveNow()
+        await note.saved()
         let soon = await versions()
         XCTAssertEqual(soon, ["one\n"], "not yet")
         try await Task.sleep(for: .milliseconds(400))
         note.update(text: "one\ntwo\nthree\n")
         note.saveNow()
+        await note.saved()
         let later = await versions()
         XCTAssertEqual(later, ["one\ntwo\nthree\n", "one\n"])
         note.close()
+        await note.saved()
         let closed = await versions()
         XCTAssertEqual(closed.count, 2, "nothing changed since")
     }
@@ -216,12 +222,15 @@ final class VersionCopyTests: XCTestCase {
         let note = try open("one\n")
         note.update(text: "one\nmine\n")
         note.saveNow()
+        await note.saved()
         try "one\nmine\ntheirs\n".write(to: url, atomically: true, encoding: .utf8)
         note.presentedItemDidChange()
+        await note.saved()
         XCTAssertEqual(note.text, "one\nmine\ntheirs\n")
         let kept = await versions()
         XCTAssertEqual(kept, ["one\nmine\n", "one\nmine\ntheirs\n", "one\n"], "yours newest, then theirs")
         note.close()
+        await note.saved()
         let closed = await versions()
         XCTAssertEqual(closed.count, 3, "theirs is kept already")
     }
@@ -230,8 +239,10 @@ final class VersionCopyTests: XCTestCase {
         let note = try open("one\n")
         try "one\ntheirs\n".write(to: url, atomically: true, encoding: .utf8)
         note.presentedItemDidChange()
+        await note.saved()
         XCTAssertEqual(note.text, "one\ntheirs\n")
         note.close()
+        await note.saved()
         let kept = await versions()
         XCTAssertEqual(kept, [])
     }
@@ -241,10 +252,12 @@ final class VersionCopyTests: XCTestCase {
         note.update(text: "one, mine\ntwo\nthree\n")
         try "one\ntwo\nthree, theirs\n".write(to: url, atomically: true, encoding: .utf8)
         note.presentedItemDidChange()
+        await note.saved()
         XCTAssertEqual(note.text, "one, mine\ntwo\nthree, theirs\n")
         let kept = await versions()
         XCTAssertEqual(kept, ["one, mine\ntwo\nthree\n", "one\ntwo\nthree, theirs\n", "one\ntwo\nthree\n"])
         note.close()
+        await note.saved()
         let closed = await versions()
         XCTAssertEqual(closed.first, "one, mine\ntwo\nthree, theirs\n", "and what they made")
     }
@@ -254,11 +267,29 @@ final class VersionCopyTests: XCTestCase {
         note.update(text: "one mine\ntwo\n")
         try "one theirs\ntwo\n".write(to: url, atomically: true, encoding: .utf8)
         note.saveNow()
+        await note.saved()
         XCTAssertNotNil(note.conflict)
         XCTAssertEqual(note.resolve(.takeOther), "one theirs\ntwo\n")
         let kept = await versions()
         XCTAssertEqual(kept, ["one mine\ntwo\n", "one theirs\ntwo\n", "one\ntwo\n"])
         note.close()
+        await note.saved()
+    }
+
+    func testLeavingANoteInAConflictKeepsWhatYouWroteAsAVersion() async throws {
+        let note = try open("one\ntwo\n")
+        note.update(text: "one mine\ntwo\n")
+        try "one theirs\ntwo\n".write(to: url, atomically: true, encoding: .utf8)
+        note.saveNow()
+        await note.saved()
+        XCTAssertNotNil(note.conflict)
+        // No one left to ask: a copy of the note is written next to it (#137), and the version is kept too.
+        note.close()
+        await note.saved()
+        await NoteDocument.allWritten()
+        let kept = await versions()
+        XCTAssertEqual(kept.first, "one mine\ntwo\n")
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "one theirs\ntwo\n")
     }
 
     func testOpeningANoteAnotherAppChangedKeepsIt() async throws {
@@ -268,11 +299,13 @@ final class VersionCopyTests: XCTestCase {
         let kept = await versions()
         XCTAssertEqual(kept, ["as another app left it\n", "as Notebook left it\n"])
         note.close()
+        await note.saved()
         // Opening it again as it is keeps nothing new.
         let again = NoteDocument(url: url, history: history)
         let same = await versions()
         XCTAssertEqual(same.count, 2)
         again.close()
+        await again.saved()
     }
 
     func testCopiesWaitForARenameAndGoWhereTheNoteWent() async throws {
@@ -284,6 +317,7 @@ final class VersionCopyTests: XCTestCase {
         history.follow(from: url, to: renamed)
         note.endMove(to: renamed)
         note.close()
+        await note.saved()
         let old = await versions()
         XCTAssertEqual(old, [])
         let kept = await versions(of: renamed)
