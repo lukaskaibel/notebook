@@ -150,6 +150,7 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
         editor.saveDrawingsNow(waiting: quitting)
         note.update(text: editor.text)
         note.saveNow()
+        note.keepCopyOfChanges()
     }
 
     /// The main window's workspace, for a note in one of its locations: links reach every note there, and a new title

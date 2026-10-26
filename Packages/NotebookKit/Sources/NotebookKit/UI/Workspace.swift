@@ -1751,9 +1751,15 @@ public final class Workspace: NSObject {
         #endif
         // Not as the app quits, which wouldn't wait for it: the next launch reads what changed.
         if !quitting { index.keepChanges() }
+        defer {
+            // Versions are written in the background; the app waits for them a moment at most as it quits.
+            if quitting { NoteHistory.shared.waitUntilWritten(timeout: 1) }
+        }
         guard let note else { return }
         note.update(text: editor.text)
         note.saveNow()
+        // You stopped writing for now: what you wrote is kept as a version.
+        note.keepCopyOfChanges()
         #if os(macOS)
         if quitting { trashAsQuitting(note) }
         #endif

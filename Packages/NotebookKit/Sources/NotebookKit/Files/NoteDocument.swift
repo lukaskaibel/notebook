@@ -33,6 +33,10 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     @ObservationIgnored var onLoad: ((String) -> Void)?
     /// Called after the text was written to the file.
     @ObservationIgnored var onSave: (() -> Void)?
+    /// Where earlier versions of the note are kept, as you write (`keepCopy`).
+    @ObservationIgnored let history: NoteHistory?
+    /// The text when the note was opened: File › Revert To › Last Opened.
+    public private(set) var openedText: String?
 
     @ObservationIgnored private var saveTimer: Timer?
     static let saveDelay: TimeInterval = 0.6
@@ -44,6 +48,14 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     /// Notebook is renaming or moving the file (or its folder) off the main thread: saving waits until it is done, as a
     /// save meanwhile would write the note again where it was.
     @ObservationIgnored private var moves = 0
+    /// Copies of the text are kept at most this often while you write: every ten minutes.
+    @ObservationIgnored var copyInterval: TimeInterval = 600
+    @ObservationIgnored private var lastCopy: Date?
+    /// The text was changed here since the last copy: typed, or merged with a change from elsewhere.
+    @ObservationIgnored private var changedSinceCopy = false
+    @ObservationIgnored private var hasBeenTypedIn = false
+    /// Copies asked for while the file is being renamed or moved, kept under its new name once that is done.
+    @ObservationIgnored private var heldCopies: [(text: String, date: Date)] = []
     /// Where notes are read in the background. The coordinated read waits for iCloud without holding a thread.
     private nonisolated static let readQueue: OperationQueue = {
         let queue = OperationQueue()
@@ -69,8 +81,9 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         var date: Date?
     }
 
-    init(url: URL) {
+    init(url: URL, history: NoteHistory? = .shared) {
         self.url = url
+        self.history = history
         presentedURL = Mutex(url)
         let pending = Self.wait(for: url)
         let loaded = pending == nil ? Self.read(url) ?? "" : ""
@@ -80,7 +93,12 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         modified = Self.modificationDate(url)
         super.init()
         NSFileCoordinator.addFilePresenter(self)
-        if isLoaded { checkForConflictVersions() } else { readInBackground() }
+        if isLoaded {
+            opened()
+            checkForConflictVersions()
+        } else {
+            readInBackground()
+        }
     }
 
     func close() {
@@ -89,6 +107,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         reader = nil
         saveNow()
         saveTimer?.invalidate()
+        keepCopyOfChanges()
         NSFileCoordinator.removeFilePresenter(self)
     }
 
@@ -158,6 +177,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         savedText = loaded
         if let modified { self.modified = modified }
         pending = nil
+        opened()
         onLoad?(loaded)
         checkForConflictVersions()
         // It changed while it was being read: take in what it is now.
@@ -170,7 +190,13 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     /// Takes in what is typed and saves it a moment later. Nothing is, before the note's own text is in.
     func update(text newText: String) {
         guard isLoaded, newText != text else { return }
+        // The note as it was before you started changing it, once each time it is opened.
+        if !hasBeenTypedIn {
+            hasBeenTypedIn = true
+            keepCopy(text)
+        }
         text = newText
+        changedSinceCopy = true
         saveTimer?.invalidate()
         saveTimer = Timer.scheduledTimer(withTimeInterval: Self.saveDelay, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.saveNow() }
@@ -191,8 +217,11 @@ public final class NoteDocument: NSObject, NSFilePresenter {
                 conflict = Conflict(otherText: disk, source: "another device", date: Self.modificationDate(url))
                 return
             }
+            // Both texts, before they become one.
+            keepBoth(theirs: disk)
             savedText = disk
             text = merged
+            changedSinceCopy = true
             onExternalChange?(merged)
             guard merged != disk else { return }
         }
@@ -206,6 +235,8 @@ public final class NoteDocument: NSObject, NSFilePresenter {
             savedText = text
             modified = Self.modificationDate(url)
             onSave?()
+            // While you write, now and then.
+            if changedSinceCopy, let lastCopy, Date().timeIntervalSince(lastCopy) >= copyInterval { keepCopy(text) }
         }
     }
 
@@ -229,7 +260,51 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     func endMove(to newURL: URL?) {
         moves = max(moves - 1, 0)
         if let newURL { moved(to: newURL) }
-        if moves == 0, hasUnsavedChanges { saveNow() }
+        guard moves == 0 else { return }
+        for copy in heldCopies { history?.keep(copy.text, of: url, at: copy.date) }
+        heldCopies = []
+        if hasUnsavedChanges { saveNow() }
+    }
+
+    // MARK: - Version history
+
+    /// The note's text is in: one changed by another app while Notebook was closed differs from its newest copy, and
+    /// is kept as it is now.
+    private func opened() {
+        openedText = text
+        history?.keep(text, of: url, onlyIfChanged: true)
+    }
+
+    /// Hands a copy of the text to the history, which writes it in the background unless the newest copy says the same.
+    /// While the file is being renamed or moved, it waits to go where the file went.
+    private func keepCopy(_ copy: String) {
+        guard let history else { return }
+        lastCopy = Date()
+        if copy == text { changedSinceCopy = false }
+        if moves > 0 {
+            heldCopies.append((copy, Date()))
+        } else {
+            history.keep(copy, of: url)
+        }
+    }
+
+    /// Keeps the other text, then this one, before a change from elsewhere is merged in or a conflict is settled: what
+    /// you had is the newest version, and either can be brought back.
+    private func keepBoth(theirs: String) {
+        keepCopy(theirs)
+        keepCopy(text)
+    }
+
+    /// Keeps a copy of what changed since the last one: as you stop, the note closing or the app going away.
+    func keepCopyOfChanges() {
+        guard isLoaded, changedSinceCopy else { return }
+        keepCopy(text)
+    }
+
+    /// Keeps the text there is now, before a version is restored over it.
+    func keepCopyBeforeRestoring() {
+        guard isLoaded else { return }
+        keepCopy(text)
     }
 
     // MARK: - Conflicts
@@ -256,6 +331,8 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     /// Settles a conflict; returns the text to show.
     func resolve(_ resolution: Resolution) -> String {
         guard let conflict else { return text }
+        // Use Other, or Keep This, can be taken back from the versions, even after a relaunch.
+        keepBoth(theirs: conflict.otherText)
         switch resolution {
         case .keepThis:
             break
@@ -331,13 +408,19 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         guard let disk = Self.read(url), disk != savedText else { return }
         modified = Self.modificationDate(url)
         if text == savedText {
+            // What you wrote here since the last copy is kept with what replaces it. A change from elsewhere alone is
+            // that device's or app's to keep; another app's is kept when the note opens next (`opened`).
+            if changedSinceCopy { keepBoth(theirs: disk) }
             text = disk
             savedText = disk
+            changedSinceCopy = false
             onExternalChange?(disk)
         } else if let merged = Diff3.merge(base: savedText, mine: text, theirs: disk) {
             // Edits here and there touched different lines: keep both.
+            keepBoth(theirs: disk)
             savedText = disk
             text = merged
+            changedSinceCopy = true
             onExternalChange?(merged)
             if merged != disk { saveNow() }
         } else {

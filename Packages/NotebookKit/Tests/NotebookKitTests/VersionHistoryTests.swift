@@ -134,3 +134,159 @@ final class VersionHistoryTests: XCTestCase {
         XCTAssertEqual(own.count, 1)
     }
 }
+
+/// When a note's text is kept as a version (#119): as it was when you start changing it, now and then while you
+/// write, when you stop, and both texts before a change from elsewhere is merged in or a conflict is settled.
+@MainActor
+final class VersionCopyTests: XCTestCase {
+    private var folder: URL!
+    private var history: NoteHistory!
+    private var url: URL { folder.appendingPathComponent("Notes/Note.md") }
+
+    override func setUp() {
+        folder = FileManager.default.temporaryDirectory.appendingPathComponent("notebook-copies-\(UUID().uuidString)", isDirectory: true).standardizedFileURL
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        history = NoteHistory(local: folder.appendingPathComponent("History.noindex", isDirectory: true), iCloudDrive: folder.path)
+    }
+
+    override func tearDown() {
+        try? FileManager.default.removeItem(at: folder)
+    }
+
+    private func open(_ text: String, at url: URL? = nil) throws -> NoteDocument {
+        let url = url ?? self.url
+        try text.write(to: url, atomically: true, encoding: .utf8)
+        let note = NoteDocument(url: url, history: history)
+        return note
+    }
+
+    /// The texts of the note's versions, newest first.
+    private func versions(of url: URL? = nil) async -> [String] {
+        var texts: [String] = []
+        for version in await history.versions(of: url ?? self.url) { texts.append(await history.text(of: version) ?? "?") }
+        return texts
+    }
+
+    func testTheFirstChangeKeepsTheNoteAsItWasOnce() async throws {
+        let note = try open("as opened\n")
+        let none = await versions()
+        XCTAssertEqual(none, [], "opening alone keeps nothing")
+        note.update(text: "as opened\nmore\n")
+        note.update(text: "as opened\nmore and more\n")
+        let kept = await versions()
+        XCTAssertEqual(kept, ["as opened\n"])
+        XCTAssertEqual(note.openedText, "as opened\n")
+        note.close()
+    }
+
+    func testStoppingKeepsWhatWasWritten() async throws {
+        let note = try open("one\n")
+        note.update(text: "one\ntwo\n")
+        note.close()
+        let kept = await versions()
+        XCTAssertEqual(kept, ["one\ntwo\n", "one\n"])
+    }
+
+    func testStoppingWithoutWritingKeepsNothing() async throws {
+        let note = try open("one\n")
+        note.keepCopyOfChanges()
+        note.close()
+        let kept = await versions()
+        XCTAssertEqual(kept, [])
+    }
+
+    func testWritingKeepsACopyNowAndThen() async throws {
+        let note = try open("one\n")
+        note.copyInterval = 0.3
+        note.update(text: "one\ntwo\n")
+        note.saveNow()
+        let soon = await versions()
+        XCTAssertEqual(soon, ["one\n"], "not yet")
+        try await Task.sleep(for: .milliseconds(400))
+        note.update(text: "one\ntwo\nthree\n")
+        note.saveNow()
+        let later = await versions()
+        XCTAssertEqual(later, ["one\ntwo\nthree\n", "one\n"])
+        note.close()
+        let closed = await versions()
+        XCTAssertEqual(closed.count, 2, "nothing changed since")
+    }
+
+    func testAChangeFromElsewhereKeepsWhatYouWroteAndIt() async throws {
+        let note = try open("one\n")
+        note.update(text: "one\nmine\n")
+        note.saveNow()
+        try "one\nmine\ntheirs\n".write(to: url, atomically: true, encoding: .utf8)
+        note.presentedItemDidChange()
+        XCTAssertEqual(note.text, "one\nmine\ntheirs\n")
+        let kept = await versions()
+        XCTAssertEqual(kept, ["one\nmine\n", "one\nmine\ntheirs\n", "one\n"], "yours newest, then theirs")
+        note.close()
+        let closed = await versions()
+        XCTAssertEqual(closed.count, 3, "theirs is kept already")
+    }
+
+    func testAChangeFromElsewhereAloneIsLeftToItsDevice() async throws {
+        let note = try open("one\n")
+        try "one\ntheirs\n".write(to: url, atomically: true, encoding: .utf8)
+        note.presentedItemDidChange()
+        XCTAssertEqual(note.text, "one\ntheirs\n")
+        note.close()
+        let kept = await versions()
+        XCTAssertEqual(kept, [])
+    }
+
+    func testAMergeKeepsBothTexts() async throws {
+        let note = try open("one\ntwo\nthree\n")
+        note.update(text: "one, mine\ntwo\nthree\n")
+        try "one\ntwo\nthree, theirs\n".write(to: url, atomically: true, encoding: .utf8)
+        note.presentedItemDidChange()
+        XCTAssertEqual(note.text, "one, mine\ntwo\nthree, theirs\n")
+        let kept = await versions()
+        XCTAssertEqual(kept, ["one, mine\ntwo\nthree\n", "one\ntwo\nthree, theirs\n", "one\ntwo\nthree\n"])
+        note.close()
+        let closed = await versions()
+        XCTAssertEqual(closed.first, "one, mine\ntwo\nthree, theirs\n", "and what they made")
+    }
+
+    func testUseOtherCanBeTakenBack() async throws {
+        let note = try open("one\ntwo\n")
+        note.update(text: "one mine\ntwo\n")
+        try "one theirs\ntwo\n".write(to: url, atomically: true, encoding: .utf8)
+        note.saveNow()
+        XCTAssertNotNil(note.conflict)
+        XCTAssertEqual(note.resolve(.takeOther), "one theirs\ntwo\n")
+        let kept = await versions()
+        XCTAssertEqual(kept, ["one mine\ntwo\n", "one theirs\ntwo\n", "one\ntwo\n"])
+        note.close()
+    }
+
+    func testOpeningANoteAnotherAppChangedKeepsIt() async throws {
+        history.keep("as Notebook left it\n", of: url, at: Date() - 60)
+        await history.written()
+        let note = try open("as another app left it\n")
+        let kept = await versions()
+        XCTAssertEqual(kept, ["as another app left it\n", "as Notebook left it\n"])
+        note.close()
+        // Opening it again as it is keeps nothing new.
+        let again = NoteDocument(url: url, history: history)
+        let same = await versions()
+        XCTAssertEqual(same.count, 2)
+        again.close()
+    }
+
+    func testCopiesWaitForARenameAndGoWhereTheNoteWent() async throws {
+        let note = try open("one\n")
+        note.beginMove()
+        note.update(text: "one\ntwo\n")
+        let renamed = folder.appendingPathComponent("Notes/Renamed.md")
+        try FileManager.default.moveItem(at: url, to: renamed)
+        history.follow(from: url, to: renamed)
+        note.endMove(to: renamed)
+        note.close()
+        let old = await versions()
+        XCTAssertEqual(old, [])
+        let kept = await versions(of: renamed)
+        XCTAssertEqual(kept, ["one\ntwo\n", "one\n"])
+    }
+}

@@ -107,11 +107,13 @@ final class NoteHistory: @unchecked Sendable {
     // MARK: - Keeping copies
 
     /// Keeps a copy of a note's text, unless it is the same as the newest copy there is. Written in the background.
+    /// `onlyIfChanged`: only when the note has copies, and the newest one, on this device, says something else. A note
+    /// opening checks with it that no other app changed it meanwhile.
     @MainActor
-    func keep(_ text: String, of note: URL, at date: Date = Date(), device: String? = nil) {
+    func keep(_ text: String, of note: URL, at date: Date = Date(), device: String? = nil, onlyIfChanged: Bool = false) {
         let device = device ?? Self.thisDevice
         let note = note.standardizedFileURL
-        queue.async { [self] in write(text, of: note, at: date, device: device) }
+        queue.async { [self] in write(text, of: note, at: date, device: device, onlyIfChanged: onlyIfChanged) }
     }
 
     /// What this device is called in the names of its copies.
@@ -137,13 +139,15 @@ final class NoteHistory: @unchecked Sendable {
         await withCheckedContinuation { continuation in queue.async { continuation.resume() } }
     }
 
-    private func write(_ text: String, of note: URL, at date: Date, device: String) {
+    private func write(_ text: String, of note: URL, at date: Date, device: String, onlyIfChanged: Bool) {
         // An empty note has nothing to bring back: a new one, before you typed.
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let folder = folders(for: note).write
         var copies = Self.copies(in: folder)
         let digest = SHA256.hash(data: Data(text.utf8))
-        if let latest = copies.max(by: { $0.date < $1.date }), isSame(latest, in: folder, as: text, digest: digest) { return }
+        let latest = copies.max { $0.date < $1.date }
+        if onlyIfChanged, latest.map({ !Self.isDownloaded($0.url) }) ?? true { return }
+        if let latest, isSame(latest, in: folder, as: text, digest: digest) { return }
         // Two copies in one second (both sides of a merge): the second gets the next second, so they stay in order.
         var when = date
         var name = Self.name(for: when, device: device)
