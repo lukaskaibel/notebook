@@ -147,6 +147,7 @@ struct HomeScreen: View {
     @State private var isSearching = false
     @State private var showsSettings = false
     @State private var addsLocation = false
+    @Bindable private var settings = NotebookSettings.shared
 
     var body: some View {
         List {
@@ -209,6 +210,11 @@ struct HomeScreen: View {
                         Button { workspace.appleNotesImportFolder = folder } label: {
                             Label("Import from Apple Notes", systemImage: "square.and.arrow.down.on.square")
                         }
+                    }
+                    // The files at the top of each location below are sorted too.
+                    Section {
+                        SortByPicker(folder: nil)
+                        Toggle(isOn: $settings.foldersFirst) { Label("Keep Folders on Top", systemImage: "folder") }
                     }
                     ShowHiddenFoldersMenu(workspace: workspace)
                     Button { showsSettings = true } label: { Label("Settings", systemImage: "gearshape") }
@@ -369,8 +375,9 @@ struct FolderScreen: View {
                         }
                     }
                     Section {
-                        Toggle(isOn: $settings.showsOnlyNotes) { Label("Show Only Notes", systemImage: "doc.text") }
+                        SortByPicker(folder: page.url)
                         Toggle(isOn: $settings.foldersFirst) { Label("Keep Folders on Top", systemImage: "folder") }
+                        Toggle(isOn: $settings.showsOnlyNotes) { Label("Show Only Notes", systemImage: "doc.text") }
                         if let location = workspace.location(containing: page.url), workspace.hasHiddenFolders(in: location) {
                             ShowHiddenFoldersToggle(workspace: workspace, location: location)
                         }

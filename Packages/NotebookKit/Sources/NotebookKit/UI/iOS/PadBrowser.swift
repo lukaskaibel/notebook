@@ -12,6 +12,7 @@ struct PadBrowser: View {
     @FocusState private var isSearchFocused: Bool
     /// Wide enough for the sidebar next to the page: an iPad in landscape, or a large window.
     @State private var isWide = true
+    @Bindable private var settings = NotebookSettings.shared
 
     var body: some View {
         Group {
@@ -91,7 +92,10 @@ struct PadBrowser: View {
                                     Label("Import from Apple Notes", systemImage: "square.and.arrow.down.on.square")
                                 }
                             }
-                            Divider()
+                            Section {
+                                SortByPicker(folder: workspace.folderInView)
+                                Toggle(isOn: $settings.foldersFirst) { Label("Keep Folders on Top", systemImage: "folder") }
+                            }
                             ShowHiddenFoldersMenu(workspace: workspace)
                             Button { showsSettings = true } label: { Label("Settings", systemImage: "gearshape") }
                         } label: {
