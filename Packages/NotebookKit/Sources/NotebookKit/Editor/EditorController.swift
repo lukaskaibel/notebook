@@ -44,6 +44,8 @@ public protocol EditorControllerDelegate: AnyObject {
     func editorShowReminder(_ editor: EditorController)
     /// A to-do's pill or bell was clicked: to set, change or remove its date or place, or with `.reminder` both.
     func editor(_ editor: EditorController, showTodoReminderOnLine line: Int, part: TodoPart)
+    /// A to-do that repeats was ticked: what its line said on `line`, and the next one's line, now on that line.
+    func editor(_ editor: EditorController, tickedRepeatingTodo source: String, line: Int, next: String)
     /// Whether pictures and drawings may go into the note's folder, which a note opened from the Finder in the
     /// sandboxed build has to be given first.
     func editor(_ editor: EditorController, mayWriteIn folder: URL) -> Bool
@@ -62,6 +64,7 @@ public extension EditorControllerDelegate {
     func editorDrawingDidChange(_ editor: EditorController) {}
     func editorShowReminder(_ editor: EditorController) {}
     func editor(_ editor: EditorController, showTodoReminderOnLine line: Int, part: TodoPart) {}
+    func editor(_ editor: EditorController, tickedRepeatingTodo source: String, line: Int, next: String) {}
     func editor(_ editor: EditorController, mayWriteIn folder: URL) -> Bool { true }
 }
 
@@ -164,6 +167,8 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     /// The editor's own record of changes, for undo (`EditorUndo+UIKit`).
     let undoStack = EditorUndoManager()
     var openStep: UndoStep?
+    /// The last tap on a checkbox: a second one right after it, at the same place, is a double tap, not an untick.
+    var lastCheckboxTap: (time: Date, point: CGPoint)?
     var isReplayingUndo = false
     /// The text as it was before the last change, which tells what a change removed.
     var shadowText = NSMutableString()
@@ -767,7 +772,9 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
 
     /// Runs a change that may make lines taller or shorter and scrolls so that the caret (or the top line, when the
     /// caret is off screen) stays exactly where it was on screen.
-    func preservingScroll(anchor: Int? = nil, _ change: () -> Void) {
+    /// Keeps what is at `anchor` (or the caret, or the first line in view) where it is on the screen through `change`;
+    /// with `movedTo`, where that is once the change is made.
+    func preservingScroll(anchor: Int? = nil, movedTo: Int? = nil, _ change: () -> Void) {
         guard isInWindow, storage.length > 0 else { change(); return }
         let visible = visibleRect
         var index = anchor ?? selection.location
@@ -781,6 +788,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         }
         let before = y - visible.minY
         change()
+        if anchor != nil, let movedTo { index = movedTo }
         layoutManager.ensureLayout(forCharacterRange: NSRange(location: 0, length: min(storage.length, index + 1)))
         let after = yPosition(of: index) - visible.minY
         let delta = after - before

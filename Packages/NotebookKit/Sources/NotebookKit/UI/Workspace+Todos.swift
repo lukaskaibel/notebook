@@ -192,13 +192,17 @@ extension Workspace {
                 self?.setTodoMark(changed, before)
             })
         }
-        // To-dos shows the next one in its place at once, unless it lists it already: then it was there before, ticked
-        // and unticked, and isn't written again.
-        let listed = todos.items.contains { FileNode.samePath($0.url, todo.url) && $0.todo.source == next }
+        // To-dos shows the next one in its place at once, unless it lists it already next to it: then it was there
+        // before, ticked and unticked, and isn't written again.
+        let listed = todos.items.contains { FileNode.samePath($0.url, todo.url) && $0.todo.source == next && abs($0.todo.line - todo.line) == 1 }
         let tick = TodoTick(done: TodoReference(url: todo.url, line: todo.line + 1, source: after.line), original: todo.source, next: next, showsNext: !listed)
         let written = tick.written
         let inEditor = editorShowing(todo.url) != nil
-        let task = changeTodo(todo, to: after.line, line: tick.done.line, shows: listed ? nil : (todo, next, []), actionName: name, edit: { text, document, index in
+        let notified = todoJobIdentifiers(of: todo)
+        // The next one can say what it said (no date, or `when done` on its day): then the line it said that on is the
+        // next one's, not the done one's.
+        let task = changeTodo(todo, to: after.line, line: tick.done.line, shows: listed ? nil : (todo, next, []), rewrites: next != todo.source,
+                              actionName: name, edit: { text, document, index in
             let change = edit(text, document, index)
             if let change { written.set(change.replacement.contains("\n")) }
             return change
@@ -206,11 +210,52 @@ extension Workspace {
             self?.takeBackTick(tick)
         })
         // In the editor the change is made by now, or not at all; in the file it is on its way.
-        if !inEditor || written.value != nil {
-            if todoTicks.count > 200 { todoTicks.removeAll() }
-            todoTicks[Self.rewriteKey(tick.done)] = tick
+        guard !inEditor || written.value != nil else { return task }
+        if todoTicks.count > 200 { todoTicks.removeAll() }
+        todoTicks = todoTicks.filter { !(FileNode.samePath($0.value.done.url, todo.url) && $0.value.original == todo.source) }
+        todoTicks[Self.rewriteKey(tick.done)] = tick
+        let reminding = remindOfNext(TodoReference(url: todo.url, line: todo.line, source: next), withdrawing: notified)
+        return Task {
+            await task?.value
+            await reminding?.value
         }
-        return task
+    }
+
+    /// A to-do that repeats was ticked: the notifications that came or wait for it go at once, and the next one's go
+    /// in at once, as the to-dos' own scheduling would make them a moment later, since the app may have only this
+    /// moment (Done from the Lock Screen). The next one may have the same name, when it says the same: what goes goes
+    /// first, and a place it reminded of reminds again.
+    @discardableResult
+    func remindOfNext(_ next: TodoReference, withdrawing identifiers: [String]) -> Task<Void, Never>? {
+        identifiers.forEach(ReminderNotifications.shared.withdrawTodo)
+        guard ReminderNotifications.shared.isActive, isStarted, NotebookSettings.shared.showsTodos, let job = todoJob(for: next) else { return nil }
+        #if DEBUG
+        if temporaryLocations, UserDefaults.standard.bool(forKey: "NotebookDemo") { return nil }
+        #endif
+        return Task { await ReminderNotifications.shared.scheduleTodo(job) }
+    }
+
+    /// The names of the notifications of a to-do To-dos lists.
+    func todoJobIdentifiers(of todo: TodoReference) -> [String] {
+        todoJobs().filter { FileNode.samePath(URL(fileURLWithPath: $0.path), todo.url) && $0.source == todo.source }
+            .min { abs($0.line - todo.line) < abs($1.line - todo.line) }.map { [$0.identifier] } ?? []
+    }
+
+    /// The notification of a to-do with a reminder, as the to-dos' scheduling makes it, also before To-dos lists it.
+    func todoJob(for todo: TodoReference) -> ReminderNotifications.TodoJob? {
+        if let job = todoJobs().filter({ FileNode.samePath(URL(fileURLWithPath: $0.path), todo.url) && $0.source == todo.source })
+            .min(by: { abs($0.line - todo.line) < abs($1.line - todo.line) }) { return job }
+        guard let parsed = Todos.line(todo.source), !parsed.done, parsed.due != nil || parsed.place != nil else { return nil }
+        let note = todo.url.deletingPathExtension().lastPathComponent
+        return ReminderNotifications.TodoJob(identifier: Self.todoIdentifier(path: todo.url.path, source: todo.source, notes: ""), date: parsed.due?.alertDate(),
+                                             place: parsed.place, title: parsed.text.isEmpty ? note : parsed.text, noteName: note, body: "",
+                                             path: todo.url.path, line: todo.line, source: todo.source)
+    }
+
+    /// A to-do that repeats was ticked in an editor: as when it is ticked in To-dos, its notifications go and the next
+    /// one's come.
+    func repeatingTodoTicked(in url: URL, line: Int, source: String, next: String) {
+        remindOfNext(TodoReference(url: url.standardizedFileURL, line: line, source: next), withdrawing: todoJobIdentifiers(of: TodoReference(url: url.standardizedFileURL, line: line, source: source)))
     }
 
     /// Unticks a to-do just ticked in To-dos, back to the mark it had. One that repeats is as it was before: the next
@@ -218,7 +263,11 @@ extension Workspace {
     @discardableResult
     func untickTodo(_ todo: TodoReference, to mark: TaskMark) -> Task<Void, Never>? {
         var done = current(todo)
-        if let tick = todoTicks[Self.rewriteKey(done)] { return takeBackTick(tick) }
+        // By the line it was ticked to, or, when the next one says what it said, by that.
+        if let tick = todoTicks[Self.rewriteKey(done)]
+            ?? todoTicks.values.first(where: { FileNode.samePath($0.done.url, todo.url) && $0.original == todo.source && $0.next == todo.source }) {
+            return takeBackTick(tick)
+        }
         // Not ticked here, or long ago: its line as ticking makes it.
         if done.source == todo.source { done.source = Todos.ticked(todo.source) }
         return setTodoMark(done, mark)
@@ -233,7 +282,7 @@ extension Workspace {
         let written = tick.written, next = tick.next, original = tick.original
         let above = TodoReference(url: done.url, line: max(0, done.line - 1), source: next)
         return changeTodo(done, to: original, line: tick.showsNext ? above.line : done.line, shows: tick.showsNext ? (above, original, nil) : nil,
-                          actionName: "Uncheck", edit: { text, document, index in
+                          rewrites: next != original, actionName: "Uncheck", edit: { text, document, index in
             // Known by now: the change it takes back was made first.
             Todos.takingBack(in: text, document: document, line: index, to: original, next: written.value == true ? next : nil)
         }, under: nil, undo: { [weak self] changed in
@@ -323,7 +372,8 @@ extension Workspace {
             guard index + before.count <= document.lines.count else { return nil }
             for (offset, line) in before.enumerated() where text.substring(with: document.lines[index + offset].range) != line { return nil }
             let start = document.lines[index].range.location
-            return (NSRange(location: start, length: document.lines[index + before.count - 1].range.upperBound - start), after.joined(separator: "\n"))
+            let ending = Todos.lineEnding(in: text, line: document.lines[index])
+            return (NSRange(location: start, length: document.lines[index + before.count - 1].range.upperBound - start), after.joined(separator: ending))
         }, under: Array(after.dropFirst()), now: now, undo: { [weak self] changed in
             self?.changeTodoLines(changed, from: after, to: before, actionName: actionName)
         })
@@ -336,9 +386,10 @@ extension Workspace {
     /// after it, and `under` the lines under it when they change too. To-dos shows the change at once. With `now`, as the
     /// app quits, the file is written before this returns.
     /// `line` is where the to-do's line is after the change, when lines go in or out above it, and `shows` what To-dos
-    /// shows in place of a to-do it lists, when not the to-do's line after the change.
+    /// shows in place of a to-do it lists, when not the to-do's line after the change. Without `rewrites`, what the
+    /// to-do's line said stays the to-do's (`current(_:)`): a line that says the same is there again.
     private func changeTodo(_ todo: TodoReference, to source: String, line: Int? = nil, shows: (todo: TodoReference, source: String, under: [String]?)? = nil,
-                            actionName: String, edit: @escaping TodoLinesEdit, under: [String]?,
+                            rewrites: Bool = true, actionName: String, edit: @escaping TodoLinesEdit, under: [String]?,
                             now: Bool = false, undo: @escaping (TodoReference) -> Void) -> Task<Void, Never>? {
         let changed = TodoReference(url: todo.url, line: line ?? todo.line, source: source)
         let shown = shows ?? (todo, source, under)
@@ -352,13 +403,13 @@ extension Workspace {
                 if under != nil { beep() }
                 return nil
             }
-            rewrote(todo, to: changed)
+            if rewrites { rewrote(todo, to: changed) }
             todos.patch(shown.todo, to: shown.source, under: shown.under)
             // From a notification the app may only have a moment: the note is written now, not after a pause.
             saveNote(showing: todo.url)
             return nil
         }
-        rewrote(todo, to: changed)
+        if rewrites { rewrote(todo, to: changed) }
         todos.patch(shown.todo, to: shown.source, under: shown.under)
         let manager = fileUndoManager
         let target = TodoUndoTarget()

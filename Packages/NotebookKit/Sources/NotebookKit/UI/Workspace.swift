@@ -1931,4 +1931,9 @@ extension Workspace: EditorControllerDelegate {
         guard let currentURL, note != nil else { return }
         askForTodoReminder(in: editor, url: currentURL, line: line, part: part)
     }
+
+    public func editor(_ editor: EditorController, tickedRepeatingTodo source: String, line: Int, next: String) {
+        guard let currentURL, note != nil else { return }
+        repeatingTodoTicked(in: currentURL, line: line, source: source, next: next)
+    }
 }

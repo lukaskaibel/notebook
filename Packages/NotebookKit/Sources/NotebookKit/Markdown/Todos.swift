@@ -20,7 +20,7 @@ public struct TodoDue: Hashable, Sendable, Codable {
 
     /// The day of `date`, with its time to the minute when `time` is set.
     public init(_ date: Date, time: Bool, calendar: Calendar = .current) {
-        let parts = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        let parts = calendar.gregorian.dateComponents([.year, .month, .day, .hour, .minute], from: date)
         self.init(year: parts.year ?? 2000, month: parts.month ?? 1, day: parts.day ?? 1,
                   hour: time ? parts.hour ?? 0 : nil, minute: time ? parts.minute ?? 0 : nil)
     }
@@ -30,7 +30,7 @@ public struct TodoDue: Hashable, Sendable, Codable {
     /// The start of its day, or its time.
     public func date(in calendar: Calendar = .current) -> Date {
         let parts = DateComponents(year: year, month: month, day: day, hour: hour ?? 0, minute: minute ?? 0)
-        return calendar.date(from: parts) ?? .distantFuture
+        return calendar.gregorian.date(from: parts) ?? .distantFuture
     }
 
     /// The hour a to-do due on a day without a time reminds you, as Reminders does with its all-day reminders.
@@ -65,6 +65,18 @@ public struct TodoDue: Hashable, Sendable, Codable {
         case .reminder: return "(@" + day + (time.map { " " + $0 } ?? "") + ")"
         case .kanban: return "@{" + day + "}" + (time.map { " @@{" + $0 + "}" } ?? "")
         }
+    }
+}
+
+extension Calendar {
+    /// The Gregorian calendar in this one's time zone: the dates written in notes are in it, as ISO 8601 has them,
+    /// whichever calendar your settings show (with the Japanese one, 2026 would be written 0008).
+    var gregorian: Calendar {
+        guard identifier != .gregorian else { return self }
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.timeZone = timeZone
+        gregorian.locale = locale
+        return gregorian
     }
 }
 
@@ -588,6 +600,12 @@ public enum Todos {
     /// open, its dates moved on, which goes above it. A to-do loses the day it was done when it isn't done any more,
     /// and the day it was cancelled likewise. Nil when its brackets hold that mark already.
     public static func marking(_ source: String, as mark: TaskMark, today: TodoDay) -> (line: String, next: String?)? {
+        guard let marked = markingEdits(source, as: mark, today: today) else { return nil }
+        return (applying(marked.edits, to: source as NSString), marked.next)
+    }
+
+    /// The edits `marking` makes to a to-do's line, in it as written, and the line of the next one.
+    private static func markingEdits(_ source: String, as mark: TaskMark, today: TodoDay) -> (edits: [(range: NSRange, text: String)], next: String?)? {
         let (indent, document, string) = alone(source)
         guard let line = document.lines.first, case .listItem(let item) = line.kind, let box = item.checkbox, item.mark != mark else { return nil }
         let marks = TodoMarks.find(in: string, range: line.content)
@@ -607,21 +625,43 @@ public enum Todos {
         // The day it was done goes unless it is done, and the day it was cancelled unless it is cancelled.
         edits += marks.filter { ($0.field?.kind == .done && mark != .done) || ($0.field?.kind == .cancelled && mark != .cancelled) }
             .map { removal(in: string, of: $0.range) }
-        return (indent + applying(edits, to: string), next)
+        let shift = (indent as NSString).length
+        let changes = edits.filter { $0.range.length > 0 || !$0.text.isEmpty }
+        return (changes.map { (NSRange(location: $0.range.location + shift, length: $0.range.length), $0.text) }, next)
     }
 
-    /// The change `marking` makes to the to-do on line `index`, in the note: its line, and the next one above it when
-    /// it repeats, unless that is next to it already (ticked before and unticked: no second one).
-    public static func marking(in text: NSString, document: MarkdownDocument, line index: Int, as mark: TaskMark, today: TodoDay) -> (range: NSRange, replacement: String)? {
-        guard let line = document.lines[safe: index], case .listItem(let item) = line.kind, item.isTask else { return nil }
-        let source = text.substring(with: line.range)
-        guard let marked = marking(source, as: mark, today: today) else { return nil }
-        var replacement = marked.line
-        if let next = marked.next {
-            let neighbours = [index - 1, index + 1].compactMap { document.lines[safe: $0] }.map { text.substring(with: $0.range) }
-            if !neighbours.contains(next) { replacement = next + "\n" + replacement }
+    /// The changes `marking` makes to the to-do on line `index` of a note, each where it is: in its line, and when it
+    /// repeats the next one going in above it, with the note's own line ending, unless that is next to it already
+    /// (ticked before and unticked: no second one). With how long what goes in above it is, and the next one's line.
+    public static func markingChanges(in text: NSString, document: MarkdownDocument, line index: Int, as mark: TaskMark, today: TodoDay)
+        -> (changes: [(range: NSRange, replacement: String)], above: Int, next: String?)? {
+        guard let line = document.lines[safe: index], case .listItem(let item) = line.kind, item.isTask,
+              let marked = markingEdits(text.substring(with: line.range), as: mark, today: today) else { return nil }
+        var changes = marked.edits.map { (range: $0.range.shifted(by: line.range.location), replacement: $0.text) }
+        var above = 0
+        if let next = marked.next, ![index - 1, index + 1].compactMap({ document.lines[safe: $0] }).contains(where: { text.substring(with: $0.range) == next }) {
+            let inserted = next + lineEnding(in: text, line: line)
+            changes.append((NSRange(location: line.range.location, length: 0), inserted))
+            above = (inserted as NSString).length
         }
-        return smallestChange(from: source, to: replacement, at: line.range.location)
+        return (changes, above, marked.next)
+    }
+
+    /// The same as one change: only what differs.
+    public static func marking(in text: NSString, document: MarkdownDocument, line index: Int, as mark: TaskMark, today: TodoDay) -> (range: NSRange, replacement: String)? {
+        guard let line = document.lines[safe: index], let marked = markingChanges(in: text, document: document, line: index, as: mark, today: today) else { return nil }
+        let source = text.substring(with: line.range)
+        let edits = marked.changes.map { (range: $0.range.shifted(by: -line.range.location), text: $0.replacement) }
+        return smallestChange(from: source, to: applying(edits, to: source as NSString), at: line.range.location)
+    }
+
+    /// The line ending a note uses at a line: what ends it, else what ends the line before it; a line feed when there
+    /// is neither.
+    static func lineEnding(in text: NSString, line: MarkdownLine) -> String {
+        let end = line.range.upperBound
+        if end < text.length { return text.character(at: end) == 13 ? "\r\n" : "\n" }
+        let start = line.range.location
+        return start >= 2 && text.character(at: start - 2) == 13 && text.character(at: start - 1) == 10 ? "\r\n" : "\n"
     }
 
     /// Takes back ticking the to-do on line `index`: it says `original` again, and `next`, the line written above it

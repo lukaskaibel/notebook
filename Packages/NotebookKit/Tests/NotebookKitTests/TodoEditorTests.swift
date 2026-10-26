@@ -104,7 +104,7 @@ final class TodoEditorTests: XCTestCase {
         h.caret(h.range(of: "plants").location)
         h.click(at: h.point(of: h.range(of: "[ ]").location))
         XCTAssertEqual(h.text, next + "\n" + done + "\n- [ ] Call mum", "the next one above the done one, as the Tasks plugin writes it")
-        XCTAssertEqual(h.selection.location, h.range(of: "plants").location, "the caret stays in the words")
+        XCTAssertEqual(h.selection.location, (h.text as NSString).range(of: "plants", options: .backwards).location, "the caret stays in the words, of the done one")
 
         h.settle(0.05)
         h.textView.undoManager?.undo()
@@ -120,6 +120,27 @@ final class TodoEditorTests: XCTestCase {
         h.settle(0.05)
         h.editor.toggleCheckbox(line: 1)
         XCTAssertEqual(h.text, next + "\n" + done + "\n- [ ] Call mum")
+    }
+
+    func testTheClickedLineStaysUnderThePointer() {
+        let filler = (1...60).map { "Line \($0)" }.joined(separator: "\n")
+        let h = EditorHarness(filler + "\n- [ ] Water the plants 🔁 every week 📅 2099-01-05\n" + filler, height: 500)
+        let box = h.range(of: "[ ] Water").location
+        h.editor.setScrollTop(h.point(of: box).y - 200)
+        h.settle()
+        let before = h.point(of: box).y - h.textView.visibleRect.minY
+        h.click(at: h.point(of: box))
+        let done = h.range(of: "[x] Water").location
+        XCTAssertGreaterThan(done, box, "the next one went in above")
+        XCTAssertEqual(h.point(of: done).y - h.textView.visibleRect.minY, before, accuracy: 1, "the ticked line is where it was clicked")
+    }
+
+    func testADoubleClickTicksOnce() {
+        let h = EditorHarness("- [ ] Water the plants 🔁 every week 📅 2099-01-05\n- [ ] Call mum")
+        let point = h.point(of: h.range(of: "[ ]").location)
+        h.click(at: point)
+        h.click(at: point, count: 2)
+        XCTAssertEqual(h.text, "- [ ] Water the plants 🔁 every week 📅 2099-01-12\n- [x] Water the plants 🔁 every week 📅 2099-01-05 ✅ \(TodoDay.today)\n- [ ] Call mum")
     }
 
     func testABellShowsAtTheEndOfATodoWithoutAReminder() throws {

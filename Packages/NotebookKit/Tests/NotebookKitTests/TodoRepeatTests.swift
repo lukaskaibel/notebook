@@ -114,6 +114,29 @@ final class TodoRepeatTests: XCTestCase {
         XCTAssertEqual(next("every day", from: nil, done: "2026-10-26"), "2026-10-27", "without a date, from today")
     }
 
+    func testHugeIntervalsAreNoRule() {
+        for text in ["every 9223372036854775807 days", "every 9000000000000000000 weeks", "every 100000000000000000 years",
+                     "every 99999999999999999999 days", "every 10000 months"] {
+            XCTAssertNil(TodoRepeat(text), "“\(text)”")
+        }
+        XCTAssertEqual(next("every 9999 years", from: "2026-10-26"), "12025-10-26", "the longest a rule goes by")
+        XCTAssertEqual(next("every 9999 days", from: "2026-10-26"), day("2026-10-26").adding(days: 9999).description)
+    }
+
+    func testDatesAreWrittenInTheGregorianCalendar() throws {
+        let tokyo = try XCTUnwrap(TimeZone(identifier: "Asia/Tokyo"))
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.timeZone = tokyo
+        let noon = try XCTUnwrap(gregorian.date(from: DateComponents(year: 2026, month: 10, day: 26, hour: 12)))
+        for identifier in [Calendar.Identifier.japanese, .buddhist, .persian] {
+            var calendar = Calendar(identifier: identifier)
+            calendar.timeZone = tokyo
+            XCTAssertEqual(TodoDay(noon, calendar: calendar), day("2026-10-26"), "\(identifier)")
+            XCTAssertEqual(TodoDue(noon, time: true, calendar: calendar), TodoDue(year: 2026, month: 10, day: 26, hour: 12, minute: 0), "\(identifier)")
+            XCTAssertEqual(TodoDue(year: 2026, month: 10, day: 26, hour: 12, minute: 0).date(in: calendar), noon, "\(identifier)")
+        }
+    }
+
     func testWhatIsNoRule() {
         for text in ["", "weekly", "every", "every 2", "every other week", "every two weeks", "every hour", "every 30 minutes",
                      "every week until December", "every year on week 10", "every 3rd", "every day 📅"] {
@@ -185,6 +208,13 @@ final class TodoRepeatTests: XCTestCase {
                        ["- [ ] Water (repeat:: every week) (scheduled:: 2026-11-02)", "- [x] Water (repeat:: every week) (scheduled:: 2026-10-26) (completion:: 2026-10-26)"])
     }
 
+    func testTheNextOneCanSayTheSame() {
+        // Without a date, and `when done` ticked a week early: the next one's line is the one ticked, as Tasks writes it.
+        XCTAssertEqual(ticked("- [ ] Stretch 🔁 every day"), ["- [ ] Stretch 🔁 every day", "- [x] Stretch 🔁 every day ✅ 2026-10-26"])
+        XCTAssertEqual(ticked("- [ ] Back up 🔁 every week when done 📅 2026-11-02", on: "2026-10-26"),
+                       ["- [ ] Back up 🔁 every week when done 📅 2026-11-02", "- [x] Back up 🔁 every week when done 📅 2026-11-02 ✅ 2026-10-26"])
+    }
+
     func testARuleTasksDoesntReadOnlyTicks() {
         XCTAssertEqual(ticked("- [ ] Water 🔁 every other week 📅 2026-10-26"), ["- [x] Water 🔁 every other week 📅 2026-10-26 ✅ 2026-10-26"])
         XCTAssertEqual(ticked("- [ ] Water 🔁 every month 📅 2026-02-30"), ["- [x] Water 🔁 every month 📅 2026-02-30 ✅ 2026-10-26"], "a date that doesn't exist")
@@ -222,6 +252,34 @@ final class TodoRepeatTests: XCTestCase {
         // In Obsidian with the next one below, set in Tasks' settings.
         let below = "- [ ] Water 🔁 every week 📅 2026-10-26\n- [ ] Water 🔁 every week 📅 2026-11-02"
         XCTAssertEqual(apply(below, line: 0, .done), "- [x] Water 🔁 every week 📅 2026-10-26 ✅ 2026-10-26\n- [ ] Water 🔁 every week 📅 2026-11-02")
+    }
+
+    func testTheNotesLineEndingIsKept() {
+        XCTAssertEqual(apply("- [ ] Water 🔁 every day 📅 2026-10-26\r\n- [ ] Call mum\r\n", line: 0, .done),
+                       "- [ ] Water 🔁 every day 📅 2026-10-27\r\n- [x] Water 🔁 every day 📅 2026-10-26 ✅ 2026-10-26\r\n- [ ] Call mum\r\n")
+        XCTAssertEqual(apply("# Home\r\n- [ ] Water 🔁 every day 📅 2026-10-26", line: 1, .done),
+                       "# Home\r\n- [ ] Water 🔁 every day 📅 2026-10-27\r\n- [x] Water 🔁 every day 📅 2026-10-26 ✅ 2026-10-26", "on the last line, as the line before it ends")
+        XCTAssertEqual(apply("- [ ] Water 🔁 every day 📅 2026-10-26", line: 0, .done),
+                       "- [ ] Water 🔁 every day 📅 2026-10-27\n- [x] Water 🔁 every day 📅 2026-10-26 ✅ 2026-10-26", "a line feed when there is none")
+    }
+
+    func testTheChangesAreEachWhereTheyAre() throws {
+        // As the editor makes them: the clicked line ticked where it is, and the next one going in above it.
+        let text = "# Home\n  - [ ] Water 🔁 every week 📅 2026-10-26 ❌ 2026-10-01\n" as NSString
+        let marked = try XCTUnwrap(Todos.markingChanges(in: text, document: MarkdownParser.parse(text), line: 1, as: .done, today: day("2026-10-26")))
+        let line = ("# Home\n" as NSString).length
+        let next = "  - [ ] Water 🔁 every week 📅 2026-11-02\n"
+        XCTAssertEqual(marked.next, "  - [ ] Water 🔁 every week 📅 2026-11-02")
+        XCTAssertEqual(marked.above, (next as NSString).length)
+        let changes = marked.changes.sorted { $0.range.location < $1.range.location }
+        XCTAssertEqual(changes.map(\.replacement), [next, "[x]", "", " ✅ 2026-10-26"])
+        XCTAssertEqual(changes[0].range, NSRange(location: line, length: 0))
+        XCTAssertEqual(changes[1].range, NSRange(location: line + 4, length: 3), "the box, after the indent")
+        var result = text as String
+        for change in marked.changes.sorted(by: { $0.range.location > $1.range.location }) {
+            result = (result as NSString).replacingCharacters(in: change.range, with: change.replacement)
+        }
+        XCTAssertEqual(result, "# Home\n" + next + "  - [x] Water 🔁 every week 📅 2026-10-26 ✅ 2026-10-26\n")
     }
 
     func testTheChangeIsSmall() throws {

@@ -16,9 +16,9 @@ public struct TodoDay: Hashable, Comparable, Sendable, CustomStringConvertible {
         self.init(year: due.year, month: due.month, day: due.day)
     }
 
-    /// The day `date` is on, by the clock of your settings.
+    /// The day `date` is on, by the clock of your settings and the Gregorian calendar the dates in notes are in.
     public init(_ date: Date, calendar: Calendar = .current) {
-        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        let parts = calendar.gregorian.dateComponents([.year, .month, .day], from: date)
         self.init(year: parts.year ?? 2000, month: parts.month ?? 1, day: parts.day ?? 1)
     }
 
@@ -92,6 +92,9 @@ public struct TodoRepeat: Hashable, Sendable {
     var months: [Int] = []
     /// `when done`: from the day it is done, not from its date.
     var whenDone = false
+
+    /// The most days, weeks, months or years a rule goes on by.
+    static let longestInterval = 9999
 
     /// The rule written after `🔁`; nil when Tasks wouldn't read one there, or Notebook can't follow it (by the hour,
     /// by week numbers, until a day).
@@ -339,7 +342,11 @@ private struct RuleParser {
     /// `every [n] …`
     private mutating func rules() throws {
         try expect(.every)
-        if let n = acceptNumber() { rule.interval = n }
+        if let n = accept(.number) {
+            // rrule takes any number; past this nothing would come in a lifetime, and the days would overflow.
+            guard let interval = Int(n.text), interval <= TodoRepeat.longestInterval else { throw Invalid() }
+            rule.interval = interval
+        }
         if isDone { throw Invalid() }
         switch symbol {
         case .days:
