@@ -39,6 +39,13 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     @ObservationIgnored var onLoad: ((String) -> Void)?
     /// Called after the text was written to the file, also once the note was left.
     @ObservationIgnored var onSave: (() -> Void)?
+    /// Where earlier versions of the note are kept, as you write (`keepCopy`).
+    @ObservationIgnored let history: NoteHistory?
+    /// The text when the note was opened: File › Revert To › Last Opened.
+    public private(set) var openedText: String?
+    /// The text is no longer what it was when the note was opened. Set only when that changes, so the menu that asks
+    /// isn't made again with every letter typed.
+    public private(set) var isChangedSinceOpening = false
 
     @ObservationIgnored private var saveTimer: Timer?
     static let saveDelay: TimeInterval = 0.6
@@ -50,6 +57,14 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     /// Notebook is renaming or moving the file (or its folder) off the main thread: saving waits until it is done, as a
     /// save meanwhile would write the note again where it was.
     @ObservationIgnored private var moves = 0
+    /// Copies of the text are kept at most this often while you write: every ten minutes.
+    @ObservationIgnored var copyInterval: TimeInterval = 600
+    @ObservationIgnored private var lastCopy: Date?
+    /// The text was changed here since the last copy: typed, or merged with a change from elsewhere.
+    @ObservationIgnored private var changedSinceCopy = false
+    @ObservationIgnored private var hasBeenTypedIn = false
+    /// Copies asked for while the file is being renamed or moved, kept under its new name once that is done.
+    @ObservationIgnored private var heldCopies: [(text: String, date: Date)] = []
     /// A save, a read of what changed elsewhere, or a conflict being settled, under way off the main thread. One at a
     /// time: what is asked for meanwhile (`wantsSave`, `wantsRead`, `settling`) comes after it, and so does whatever
     /// waits for the note to be written (`whenIdle`).
@@ -92,8 +107,9 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         var date: Date?
     }
 
-    init(url: URL) {
+    init(url: URL, history: NoteHistory? = .shared) {
         self.url = url
+        self.history = history
         presentedURL = Mutex(url)
         // A note on this device is read at once, unless a note open on it, or just left, is writing it: that read would
         // wait for the write.
@@ -106,13 +122,20 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         super.init()
         NSFileCoordinator.addFilePresenter(self)
         Self.all.add(self)
-        if isLoaded { checkForConflictVersions() } else { readInBackground() }
+        if isLoaded {
+            opened()
+            checkForConflictVersions()
+        } else {
+            readInBackground()
+        }
     }
 
     /// The note is left: what was typed is saved, and the note is kept until it is written. A conflict no one can be
     /// asked about any more keeps both (`keepBoth`).
     func close() {
         guard !isClosed else { return }
+        // What was typed is kept as a version as you stop.
+        keepCopyOfChanges()
         isClosed = true
         reader?.cancel()
         reader = nil
@@ -193,6 +216,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         savedText = loaded
         if let modified { self.modified = modified }
         pending = nil
+        opened()
         onLoad?(loaded)
         checkForConflictVersions()
         // It changed while it was being read: take in what it is now.
@@ -205,7 +229,14 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     /// Takes in what is typed and saves it a moment later. Nothing is, before the note's own text is in.
     func update(text newText: String) {
         guard isLoaded, !isClosed, newText != text else { return }
+        // The note as it was before you started changing it, once each time it is opened.
+        if !hasBeenTypedIn {
+            hasBeenTypedIn = true
+            keepCopy(text)
+        }
         text = newText
+        changedSinceCopy = true
+        noteWhetherChangedSinceOpening()
         // Held during a move, it is written once the move is done, and quitting waits for that.
         if moves > 0 { updateWriting() }
         saveTimer?.invalidate()
@@ -256,8 +287,60 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     func endMove(to newURL: URL?) {
         moves = max(moves - 1, 0)
         if let newURL { moved(to: newURL) }
+        if moves == 0 {
+            for copy in heldCopies { history?.keep(copy.text, of: url, at: copy.date) }
+            heldCopies = []
+        }
         if moves == 0, hasUnsavedChanges { saveNow() }
         updateWriting()
+    }
+
+    // MARK: - Version history
+
+    /// The note's text is in: one changed by another app while Notebook was closed differs from its newest copy, and
+    /// is kept as it is now.
+    private func opened() {
+        openedText = text
+        noteWhetherChangedSinceOpening()
+        history?.keep(text, of: url, onlyIfChanged: true)
+    }
+
+    /// As you type: lengths that differ say it at once, and a long note's text takes a while to compare.
+    private func noteWhetherChangedSinceOpening() {
+        let changed = openedText.map { $0.utf16.count != text.utf16.count || $0 != text } ?? false
+        if changed != isChangedSinceOpening { isChangedSinceOpening = changed }
+    }
+
+    /// Hands a copy of the text to the history, which writes it in the background unless the newest copy says the same.
+    /// While the file is being renamed or moved, it waits to go where the file went.
+    private func keepCopy(_ copy: String) {
+        guard let history else { return }
+        lastCopy = Date()
+        if copy == text { changedSinceCopy = false }
+        if moves > 0 {
+            heldCopies.append((copy, Date()))
+        } else {
+            history.keep(copy, of: url)
+        }
+    }
+
+    /// Keeps the other text, then this one, before a change from elsewhere is merged in or a conflict is settled: what
+    /// you had is the newest version, and either can be brought back.
+    private func keepVersions(theirs: String) {
+        keepCopy(theirs)
+        keepCopy(text)
+    }
+
+    /// Keeps a copy of what changed since the last one: as you stop, the note closing or the app going away.
+    func keepCopyOfChanges() {
+        guard isLoaded, changedSinceCopy else { return }
+        keepCopy(text)
+    }
+
+    /// Keeps the text there is now, before a version is restored over it.
+    func keepCopyBeforeRestoring() {
+        guard isLoaded else { return }
+        keepCopy(text)
     }
 
     // MARK: - Off the main thread
@@ -338,6 +421,8 @@ public final class NoteDocument: NSObject, NSFilePresenter {
             savedText = written
             if let modified { self.modified = modified }
             onSave?()
+            // While you write, now and then: the text as it was written.
+            if changedSinceCopy, let lastCopy, Date().timeIntervalSince(lastCopy) >= copyInterval { keepCopy(written) }
         case .changed(let disk, let modified):
             takeIn(disk, modified: modified)
         case .read(let disk, let modified):
@@ -365,6 +450,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         case .keptBoth(let disk):
             text = disk
             savedText = disk
+            noteWhetherChangedSinceOpening()
         case .failed:
             break
         }
@@ -443,13 +529,21 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         if disk == text {
             savedText = disk
         } else if text == savedText {
+            // What you wrote here since the last copy is kept with what replaces it. A change from elsewhere alone is
+            // that device's or app's to keep; another app's is kept when the note opens next (`opened`).
+            if changedSinceCopy { keepVersions(theirs: disk) }
             text = disk
             savedText = disk
+            changedSinceCopy = false
+            noteWhetherChangedSinceOpening()
             if !isClosed { onExternalChange?(disk) }
         } else if let merged = Diff3.merge(base: savedText, mine: text, theirs: disk) {
-            // Edits here and there touched different lines: keep both.
+            // Edits here and there touched different lines: keep both, and the two texts as versions first.
+            keepVersions(theirs: disk)
             savedText = disk
             text = merged
+            changedSinceCopy = true
+            noteWhetherChangedSinceOpening()
             if !isClosed { onExternalChange?(merged) }
             if merged != disk { wantsSave = true }
         } else if isClosed {
@@ -544,7 +638,12 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     /// note's text is saved over what is on disk.
     func resolve(_ resolution: Resolution) -> String {
         guard let conflict else { return text }
-        if resolution == .takeOther { text = conflict.otherText }
+        // Use the Other, or Keep This, can be taken back from the versions, even after a relaunch.
+        keepVersions(theirs: conflict.otherText)
+        if resolution == .takeOther {
+            text = conflict.otherText
+            noteWhetherChangedSinceOpening()
+        }
         self.conflict = nil
         settling = .resolved(copying: resolution == .keepBoth ? conflict : nil)
         next()
@@ -579,10 +678,14 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         all.allObjects.filter { (!$0.isClosed || writing.contains($0)) && FileNode.isSameOrInside($0.url, url) }
     }
 
-    /// What was typed in the notes at `url` or in it is written: before it goes to the Trash, so it goes along.
+    /// What was typed in the notes at `url` or in it is written, and kept as a version: before it goes to the Trash, so
+    /// both go along. A note open in a window of its own there closes once it is gone, with nothing left to keep.
     static func save(atOrInside url: URL) async {
         let documents = documents(atOrInside: url)
-        for document in documents { document.saveNow() }
+        for document in documents {
+            document.keepCopyOfChanges()
+            document.saveNow()
+        }
         for document in documents { await document.saved() }
     }
 

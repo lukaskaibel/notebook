@@ -31,6 +31,9 @@ ENV["LANG"] = "en_US.UTF-8" if ENV["LANG"].to_s.empty?
 ENV["LC_ALL"] = "en_US.UTF-8" if ENV["LC_ALL"].to_s.empty?
 
 APP_ID = "com.lukaskbl.Notebook"
+# Notebook's own iCloud folder, where version history keeps the copies of notes in iCloud (the entitlements say
+# iCloud.$(CFBundleIdentifier)).
+ICLOUD_CONTAINER = "iCloud.#{APP_ID}"
 # The app and the extensions inside it, by the names of their targets. Each has a bundle identifier of its own, which
 # starts with the app's, and profiles of its own.
 BUNDLES = {
@@ -138,6 +141,7 @@ def store_signing(platform)
     lane_context.delete(SharedValues::CERT_CERTIFICATE_ID)
     get_provisioning_profile(api_key: api_key, app_identifier: identifier, platform: platform == :mac ? "macos" : "ios",
                              output_path: folder)
+    check_icloud_container(lane_context[SharedValues::SIGH_PROFILE_PATH]) if identifier == APP_ID
     [identifier, lane_context[SharedValues::SIGH_NAME]]
   end
   if platform == :mac && !signs_for_store_from_start?(platform)
@@ -176,11 +180,13 @@ def register_extensions
   end
 end
 
-# The entitlements ask for iCloud's key-value store (hidden folders and reminders go to your other devices through it)
-# and Time Sensitive notifications (reminders get through a Focus), which the App ID must offer before a profile can
-# carry them. Xcode turns them on by itself, but only while archiving, after the App Store profile was fetched, so the
-# export would fail once. Turning them on here first makes the old profiles invalid, and get_provisioning_profile then
-# makes new ones. Key-value storage needs no containers.
+# The entitlements ask for iCloud's key-value store (hidden folders and reminders go to your other devices through it),
+# iCloud Documents in Notebook's own container (the earlier versions of notes) and Time Sensitive notifications
+# (reminders get through a Focus), which the App ID must offer before a profile can carry them. Xcode turns them on by
+# itself, but only while archiving, after the App Store profile was fetched, so the export would fail once. Turning
+# them on here first makes the old profiles invalid, and get_provisioning_profile then makes new ones. iCloud is on
+# with CloudKit support (XCODE_6), which is what lets the App ID have containers; the container itself is made and
+# given to the App ID once on the developer website (check_icloud_container).
 def turn_on_capabilities
   api_key
   bundle = Spaceship::ConnectAPI::BundleId.find(APP_ID)
@@ -195,6 +201,18 @@ def turn_on_capabilities
     UI.message("Turning on Time Sensitive notifications for #{APP_ID}")
     bundle.create_capability(types::USERNOTIFICATIONS_TIMESENSITIVE)
   end
+end
+
+# The App Store Connect API can neither make an iCloud container nor give it to an App ID, so that is done by hand,
+# once (Design/app-store.md). A profile made before lacks the container, and the export would fail with an error that
+# doesn't say why.
+def check_icloud_container(profile_path)
+  profile = Plist.parse_xml(sh(["security", "cms", "-D", "-i", profile_path].shelljoin, log: false))
+  containers = profile&.dig("Entitlements", "com.apple.developer.icloud-container-identifiers") || []
+  return if containers.include?(ICLOUD_CONTAINER)
+
+  UI.user_error!("The profile for #{APP_ID} has no iCloud container #{ICLOUD_CONTAINER}, which version history needs. " \
+                 "Make it and give it to the App ID on developer.apple.com, as Design/app-store.md says, then run this again.")
 end
 
 # The Mac's development profile, which the archive is signed with first, has to list this Mac. Building for "My Mac"

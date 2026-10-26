@@ -177,6 +177,8 @@ struct DocumentScreen: View {
                     if !isInSplitView {
                         Button { showsOutline = true } label: { Label("Outline", systemImage: "list.bullet.indent") }
                     }
+                    Button { workspace.browseVersions() } label: { Label("Version History", systemImage: "clock.arrow.circlepath") }
+                        .disabled(!isLoaded)
                 }
                 Section {
                     let favorite = workspace.isFavorite(url)

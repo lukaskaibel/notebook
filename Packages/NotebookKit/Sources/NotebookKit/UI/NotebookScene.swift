@@ -74,6 +74,16 @@ public struct NotebookScene: Scene {
                 if let url = workspace.currentURL {
                     MoveToMenu(workspace: workspace, url: url)
                 }
+                if workspace.revertNote != nil {
+                    Menu {
+                        Button("Last Opened") { workspace.revertToLastOpened() }
+                            .disabled(!workspace.canRevertToLastOpened)
+                        Divider()
+                        Button("Browse All Versions…") { workspace.browseVersions() }
+                    } label: {
+                        Label("Revert To", systemImage: "clock.arrow.circlepath")
+                    }
+                }
                 Divider()
                 Button { workspace.chooseLocation(iCloud: false) } label: { Label("Add Location…", systemImage: "plus.rectangle.on.folder") }
             }
