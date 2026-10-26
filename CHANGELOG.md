@@ -11,6 +11,10 @@ versions follow [semantic versioning](https://semver.org).
   Mac's desktop, the control in Control Center, on the Lock Screen and on the iPhone's Action button. A tap opens
   Notebook with a new note in your default folder and the caret in its title, as New Note in Shortcuts does. The
   widget shows Notebook's icon and the pencil in its ink; on the Lock Screen it is the pencil alone, or with its name.
+- Share to Notebook, on the Mac, iPhone and iPad: text, links, pictures and PDFs from any app's share sheet become a
+  new note in your default folder, named after the page or the first line, or go at the end of the note you opened
+  last. Pictures and files go into the note's `.assets` folder, as when you add them in a note. Notebook writes them
+  into your notes as soon as it's open; when that note is open in Notebook, they go in as one step of Undo.
 
 ## [1.0.0] – not released yet
 

@@ -28,6 +28,7 @@ fastlane can't do these; they are set by hand.
 | Business › Digital Services Act | The account's trader status, which App Store Connect asks for before an app is offered in the EU. Set once for all apps of the account. |
 | Certificates, Identifiers & Profiles › Identifiers › `com.lukaskbl.Notebook` | **iCloud** (key-value storage only, no containers) and **Time Sensitive Notifications**. fastlane turns them on before it fetches the App Store profiles, if they are off. |
 | Certificates, Identifiers & Profiles › Identifiers › `com.lukaskbl.Notebook.Widgets` | The widgets' extension, for iOS and macOS, with no capabilities. fastlane registers it the first time it builds the app, and makes its App Store profiles with the app's. |
+| Certificates, Identifiers & Profiles › Identifiers › App Groups | **`group.com.lukaskbl.Notebook`**, in which the share extension leaves what is shared for the app. Registered here, and given to `com.lukaskbl.Notebook` and `com.lukaskbl.Notebook.Share` under App Groups › Configure on each. fastlane turns App Groups on and registers the Share identifier, but the API key can't make the group or give it to them; without it fastlane stops before building and says so. |
 | Users and Access › Integrations | The App Store Connect API key fastlane uses (App Manager or Admin, with access to certificates, identifiers and profiles). |
 
 ## Why the answers are what they are

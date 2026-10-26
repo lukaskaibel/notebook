@@ -36,8 +36,7 @@
 </picture>
 
 > **Status: on its way to the App Store.** Version 1.0.0 runs on the Mac, iPhone and iPad; until it is in the App Store,
-> you build it from source (five minutes, see below). It covers writing, organising and finding notes day to day. A
-> share extension for quick capture comes later; see [Not there yet](#not-there-yet).
+> you build it from source (five minutes, see below). It covers writing, organising and finding notes day to day.
 
 ## Why
 
@@ -355,6 +354,10 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   Home Screen, the Lock Screen and the Mac's desktop, and a control for Control Center, the Lock Screen and the iPhone's
   Action button: Notebook opens with a new note in the default folder, the caret in its title. In a shortcut of your
   own it takes text for the note to start with.
+- **Share to Notebook.** Text, links, pictures and PDFs from any app's share sheet become a new note in the default
+  folder, named after the page or the first line, or go at the end of the note you opened last. Pictures and files go
+  into `.assets` next to the note. The share sheet hands them to Notebook, which writes them as soon as it's open, with
+  the same care as everything else it saves.
 - **Folders as they are.** Add iCloud Drive or any folder as a location with Add Location at the bottom of the
   sidebar, or drop the folder from the Finder below the sidebar's sections. iCloud Drive shows what the Finder shows
   in it: Desktop and Documents when they are kept in iCloud, and the folders of apps such as Pages or Obsidian.
@@ -482,9 +485,11 @@ Choose the **Notebook** scheme, then **My Mac** or an iPhone or iPad simulator a
 build needs no Apple developer account: without a team, Xcode signs it to run on your Mac and in the Simulator. To run
 it on your own iPhone or iPad, or to sign with your own team, create `Config/Local.xcconfig` with `DEVELOPMENT_TEAM =
 <your team ID>`; it isn't checked in. With a team of your own, give the app an identifier of yours there too,
-`NOTEBOOK_BUNDLE_IDENTIFIER = com.example.Notebook`; the widgets' extension takes it with `.Widgets` after it. A local build keeps hidden folders and reminders on the device; only the App
-Store build, signed with a team, has the iCloud entitlement that takes them to your other devices, and the one for Time
-Sensitive notifications.
+`NOTEBOOK_BUNDLE_IDENTIFIER = com.example.Notebook`; the extensions take it with `.Widgets` and `.Share` after it. A
+local build keeps hidden folders and reminders on the device; only the App Store build, signed with a team, has the
+iCloud entitlement that takes them to your other devices, and the one for Time Sensitive notifications. The share
+extension hands what you share to the app through an App Group, which only the App Store build and the Simulator
+have; in other builds it says it can't keep anything.
 
 ### Adding your notes
 
@@ -609,8 +614,6 @@ on the Mac. On iPhone and iPad:
 
 Planned, and not built yet:
 
-- **A share extension:** text, links, pictures and PDFs from the share sheet, as a new note in the default folder or
-  at the end of the note opened last.
 - **Reminders when a calendar event starts,** and on the iPhone a Live Activity that keeps the note on the Lock Screen.
   A reminder set on another device reaches an iPhone or iPad the next time Notebook runs there or gets time in the
   background. Reminders don't repeat, and a Mac doesn't remind you at places. A to-do with the Tasks plugin's
@@ -629,9 +632,10 @@ The full plan, with what is deliberately left out (tags, backlinks, a database, 
 ```
 Notebook/                    The app target (Mac, iPhone and iPad): the entry point, the icon and the App Shortcuts
 NotebookWidgets/             The widgets' extension: the New Note widget and control
+NotebookShare/               The share extension: the sheet, and what it leaves for the app to write
 NotebookUITests/             UI tests on iPhone and iPad simulators, for what only a real keyboard or touch reaches
 Packages/NotebookKit/
-  Sources/NotebookCapture/   The New Note intent, apart from the rest so the widgets' extension can have it too
+  Sources/NotebookCapture/   What the extensions share with the app: the New Note intent and the notes shared to it
   Sources/NotebookKit/
     Editor/                  The live-preview editor on TextKit 1: styling, hidden marks, objects, typing, export;
                              the Mac's text view, and iPhone's and iPad's in the "+UIKit" files

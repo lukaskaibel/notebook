@@ -42,6 +42,39 @@ enum FileOperations {
         return candidate
     }
 
+    /// A name in `.assets` that no file there has, nor a drawing's strokes: "Photo.jpg", "Photo 2.jpg", …
+    static func uniqueAssetURL(named name: String, in assets: URL) -> URL {
+        let base = (name as NSString).deletingPathExtension
+        let ext = (name as NSString).pathExtension
+        var candidate = assets.appendingPathComponent(name)
+        var counter = 2
+        while FileManager.default.fileExists(atPath: candidate.path) || FileManager.default.fileExists(atPath: DrawingFile.strokesURL(for: candidate).path) {
+            candidate = assets.appendingPathComponent(ext.isEmpty ? "\(base) \(counter)" : "\(base) \(counter).\(ext)")
+            counter += 1
+        }
+        return candidate
+    }
+
+    /// A path in `.assets` for Markdown: spaces and brackets encoded so the link holds together everywhere.
+    static func markdownPath(_ name: String) -> String {
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
+        return ".assets/" + (name.addingPercentEncoding(withAllowedCharacters: allowed) ?? name)
+    }
+
+    /// Copies a file into a folder's `.assets`, under a name not taken there, in a coordinated write. Its Markdown
+    /// path, or nil when it couldn't be copied.
+    static func storeAsset(copying url: URL, in folder: URL) -> String? {
+        let assets = folder.appendingPathComponent(".assets", isDirectory: true)
+        try? FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
+        let destination = uniqueAssetURL(named: url.lastPathComponent, in: assets)
+        var copied = false
+        NSFileCoordinator().coordinate(readingItemAt: url, options: [], writingItemAt: destination, options: .forReplacing, error: nil) { from, to in
+            copied = (try? FileManager.default.copyItem(at: from, to: to)) != nil
+        }
+        return copied ? markdownPath(destination.lastPathComponent) : nil
+    }
+
     /// A file name from a title: the characters files can't have become dashes.
     static func fileName(from title: String) -> String {
         var name = title.trimmingCharacters(in: .whitespacesAndNewlines)
