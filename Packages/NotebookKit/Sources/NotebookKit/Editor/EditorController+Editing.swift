@@ -520,10 +520,16 @@ extension EditorController {
 
     // MARK: - Checkboxes
 
+    /// Ticks a task or unticks it, as the Tasks plugin does: a to-do that repeats gets the day it was done, and the
+    /// next one is written above it, in one change Undo takes back.
     func toggleCheckbox(line index: Int) {
-        guard let line = document.lines[safe: index], case .listItem(let item) = line.kind, let box = item.checkbox else { return }
-        let selection = self.selection
-        replace(box, with: item.checked ? "[ ]" : "[x]", select: selection, actionName: item.checked ? "Uncheck" : "Check")
+        guard let line = document.lines[safe: index], case .listItem(let item) = line.kind, item.isTask else { return }
+        let mark: TaskMark = item.checked ? .open : .done
+        let today = TodoDay.today
+        // The line clicked stays under the pointer as the next one goes in above it.
+        editTodoLines(line: index, actionName: item.checked ? "Uncheck" : "Check", anchor: line.range.location) { text, document, index in
+            Todos.marking(in: text, document: document, line: index, as: mark, today: today)
+        }
     }
 
     // MARK: - Formatting

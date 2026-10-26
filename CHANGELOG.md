@@ -5,6 +5,16 @@ versions follow [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- To-dos that repeat, as with Obsidian's Tasks plugin: tick off a to-do with `🔁 every week` (or `every weekday`,
+  `every 2 weeks on Friday`, `every month on the last`, `every year`, `… when done` and the other rules Tasks reads), in
+  the note, in To-dos or in its notification, and the next one is written above it with its dates moved on, while the
+  one you ticked gets the day it was done, `✅ 2026-10-26`, as Tasks writes them. Its due date, time, scheduled and
+  start dates keep their distances, a month's end stays a month's end, and its reminder moves to the next one. One Undo
+  takes both back, and unticking it in To-dos while it still shows ticked does too; unticking it in the note doesn't
+  make another.
+
 ## [1.0.0] – not released yet
 
 The first version: notes as Markdown files in your own folders, on the Mac, iPhone and iPad. While it was being built,

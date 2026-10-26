@@ -95,6 +95,33 @@ final class TodoEditorTests: XCTestCase {
         XCTAssertEqual(tone("⏰", after: "Soon"), .normal)
     }
 
+    func testTickingARepeatingTodoWritesTheNextOneInOneUndo() {
+        let line = "- [ ] Water the plants 🔁 every week 📅 2099-01-05"
+        let h = EditorHarness(line + "\n- [ ] Call mum")
+        let today = TodoDay.today
+        let next = "- [ ] Water the plants 🔁 every week 📅 2099-01-12"
+        let done = "- [x] Water the plants 🔁 every week 📅 2099-01-05 ✅ \(today)"
+        h.caret(h.range(of: "plants").location)
+        h.click(at: h.point(of: h.range(of: "[ ]").location))
+        XCTAssertEqual(h.text, next + "\n" + done + "\n- [ ] Call mum", "the next one above the done one, as the Tasks plugin writes it")
+        XCTAssertEqual(h.selection.location, h.range(of: "plants").location, "the caret stays in the words")
+
+        h.settle(0.05)
+        h.textView.undoManager?.undo()
+        h.settle(0)
+        XCTAssertEqual(h.text, line + "\n- [ ] Call mum", "one Undo takes back both")
+        h.textView.undoManager?.redo()
+        h.settle(0.05)
+        XCTAssertEqual(h.text, next + "\n" + done + "\n- [ ] Call mum")
+
+        // Unticking the done one makes no other, and ticking it again doesn't either.
+        h.click(at: h.point(of: h.range(of: "[x]").location))
+        XCTAssertEqual(h.text, next + "\n" + line + "\n- [ ] Call mum")
+        h.settle(0.05)
+        h.editor.toggleCheckbox(line: 1)
+        XCTAssertEqual(h.text, next + "\n" + done + "\n- [ ] Call mum")
+    }
+
     func testABellShowsAtTheEndOfATodoWithoutAReminder() throws {
         let h = EditorHarness("- [ ] Buy milk\n- [ ] Pay rent 📅 2026-11-01\nPlain line")
         let milk = h.point(of: h.range(of: "milk").location)

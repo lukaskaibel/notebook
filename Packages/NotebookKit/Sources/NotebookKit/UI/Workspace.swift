@@ -53,6 +53,8 @@ public final class Workspace: NSObject {
     /// The to-do being edited in To-dos, whose words are written with the notes when the app goes away.
     @ObservationIgnored weak var todoEditing: TodoEditing?
     @ObservationIgnored var todoRewrites: [String: TodoReference] = [:]
+    /// To-dos that repeat, ticked in To-dos or from a notification, by the line they were ticked to (`takeBackTick`).
+    @ObservationIgnored var todoTicks: [String: TodoTick] = [:]
     #if DEBUG
     /// The sample notes' reminders, shown but never scheduled: a run on the sample notes leaves no notification behind.
     @ObservationIgnored var unscheduledReminders = Set<UUID>()

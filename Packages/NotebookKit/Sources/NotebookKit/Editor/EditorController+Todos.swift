@@ -47,9 +47,9 @@ extension EditorController {
     }
 
     /// Changes a to-do and the lines under it as `edit` says, given the text, its lines and the to-do's line, as an
-    /// edit Undo takes back.
+    /// edit Undo takes back. What is at `anchor` stays where it is on the screen, else the caret.
     @discardableResult
-    func editTodoLines(line index: Int, actionName: String, edit: (NSString, MarkdownDocument, Int) -> (range: NSRange, replacement: String)?) -> Bool {
+    func editTodoLines(line index: Int, actionName: String, anchor: Int? = nil, edit: (NSString, MarkdownDocument, Int) -> (range: NSRange, replacement: String)?) -> Bool {
         guard !isWaitingForText, document.lines.indices.contains(index), let change = edit(nsText, document, index) else { return false }
         let selection = self.selection
         var caret = selection
@@ -60,7 +60,7 @@ extension EditorController {
             caret = NSRange(location: min(selection.location, change.range.location), length: 0)
         }
         var done = false
-        preservingScroll {
+        preservingScroll(anchor: anchor) {
             done = replace(change.range, with: change.replacement, select: caret, actionName: actionName)
         }
         return done

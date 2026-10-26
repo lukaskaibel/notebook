@@ -227,7 +227,8 @@ public struct TodoMark: Equatable, Sendable {
     /// How a due date is written.
     public var style: DueStyle = .tasks
 
-    public var isField: Bool { if case .field = kind { true } else { false } }
+    public var isField: Bool { field != nil }
+    public var field: TodoField? { if case .field(let field) = kind { field } else { nil } }
 }
 
 /// Reads and writes the marks after a to-do's text.
@@ -417,16 +418,7 @@ public enum TodoMarks {
         for mark in [day, due?.markdown(style), place?.markdown].compactMap({ $0 }) {
             wanted += (wanted.isEmpty ? "" : " ") + mark
         }
-        let new = wanted as NSString
-        guard !new.isEqual(to: current as String) else { return nil }
-        // Only what differs, so the caret and an undo touch as little as they can.
-        var prefix = 0
-        while prefix < min(current.length, new.length), current.character(at: prefix) == new.character(at: prefix) { prefix += 1 }
-        var suffix = 0
-        while suffix < min(current.length, new.length) - prefix,
-              current.character(at: current.length - 1 - suffix) == new.character(at: new.length - 1 - suffix) { suffix += 1 }
-        let range = NSRange(location: content.location + prefix, length: current.length - prefix - suffix)
-        return (range, new.substring(with: NSRange(location: prefix, length: new.length - prefix - suffix)))
+        return Todos.smallestChange(from: current as String, to: wanted, at: content.location)
     }
 
     /// A to-do's words without its marks, as Markdown, and its marks as written, in order: what the words are edited
@@ -589,6 +581,150 @@ public enum Todos {
         } ?? source
     }
 
+    // MARK: - Ticking, as the Tasks plugin ticks
+
+    /// A to-do's line with another mark in its brackets, changed as the Tasks plugin changes it. Ticked, a to-do that
+    /// repeats (`🔁 every week`) gets the day it was done, `✅ 2026-10-26`, and comes with the line of the next one:
+    /// open, its dates moved on, which goes above it. A to-do loses the day it was done when it isn't done any more,
+    /// and the day it was cancelled likewise. Nil when its brackets hold that mark already.
+    public static func marking(_ source: String, as mark: TaskMark, today: TodoDay) -> (line: String, next: String?)? {
+        let (indent, document, string) = alone(source)
+        guard let line = document.lines.first, case .listItem(let item) = line.kind, let box = item.checkbox, item.mark != mark else { return nil }
+        let marks = TodoMarks.find(in: string, range: line.content)
+        var edits = [(range: box, text: "[" + String(mark.character) + "]")]
+        var next: String?
+        if mark == .done, !item.mark.isClosed, let repeats = marks.first(where: { $0.field?.kind == .repeats }) {
+            next = nextLine(string, box: box, marks: marks, rule: TodoRepeat(repeats.field!.value), today: today).map { indent + $0 }
+            if let done = marks.first(where: { $0.field?.kind == .done }) {
+                edits.append(dateEdit(in: string, mark: done, day: today))
+            } else {
+                // Dataview's way when the rule is written its way.
+                let written = string.substring(with: repeats.range)
+                let field = written.hasPrefix("[") ? "[completion:: \(today)]" : written.hasPrefix("(") ? "(completion:: \(today))" : "✅ \(today)"
+                edits.append((NSRange(location: endOfFields(string), length: 0), " " + field))
+            }
+        }
+        // The day it was done goes unless it is done, and the day it was cancelled unless it is cancelled.
+        edits += marks.filter { ($0.field?.kind == .done && mark != .done) || ($0.field?.kind == .cancelled && mark != .cancelled) }
+            .map { removal(in: string, of: $0.range) }
+        return (indent + applying(edits, to: string), next)
+    }
+
+    /// The change `marking` makes to the to-do on line `index`, in the note: its line, and the next one above it when
+    /// it repeats, unless that is next to it already (ticked before and unticked: no second one).
+    public static func marking(in text: NSString, document: MarkdownDocument, line index: Int, as mark: TaskMark, today: TodoDay) -> (range: NSRange, replacement: String)? {
+        guard let line = document.lines[safe: index], case .listItem(let item) = line.kind, item.isTask else { return nil }
+        let source = text.substring(with: line.range)
+        guard let marked = marking(source, as: mark, today: today) else { return nil }
+        var replacement = marked.line
+        if let next = marked.next {
+            let neighbours = [index - 1, index + 1].compactMap { document.lines[safe: $0] }.map { text.substring(with: $0.range) }
+            if !neighbours.contains(next) { replacement = next + "\n" + replacement }
+        }
+        return smallestChange(from: source, to: replacement, at: line.range.location)
+    }
+
+    /// Takes back ticking the to-do on line `index`: it says `original` again, and `next`, the line written above it
+    /// for it, goes when it is still there as it was written.
+    public static func takingBack(in text: NSString, document: MarkdownDocument, line index: Int, to original: String, next: String?) -> (range: NSRange, replacement: String)? {
+        guard let line = document.lines[safe: index] else { return nil }
+        var range = line.range
+        if let next, let above = document.lines[safe: index - 1], text.substring(with: above.range) == next {
+            range = NSRange(location: above.range.location, length: line.range.upperBound - above.range.location)
+        }
+        return smallestChange(from: text.substring(with: range), to: original, at: range.location)
+    }
+
+    /// The line of the next one of a to-do that repeats, as Tasks writes it: open, its due, scheduled and start dates
+    /// moved on as far from the next day as they were from the first of them, and without the day it was done or
+    /// cancelled, its name, what it waited for and its block link. Nil when the rule has no next day.
+    private static func nextLine(_ string: NSString, box: NSRange, marks: [TodoMark], rule: TodoRepeat?, today: TodoDay) -> String? {
+        guard let rule else { return nil }
+        func day(of mark: TodoMark) -> TodoDay? {
+            switch mark.kind {
+            case .due(let due): TodoDay(due)
+            case .field(let field) where [.scheduled, .start].contains(field.kind): field.day.map(TodoDay.init)
+            default: nil
+            }
+        }
+        // The date the others go by: when it is due (Tasks' 📅 first, a time Notebook writes with ⏰ is one too), when
+        // it is scheduled, when it starts.
+        let dues = marks.filter { if case .due = $0.kind { true } else { false } }
+        let due = dues.first { if case .due(let due) = $0.kind { $0.style == .tasks && !due.hasTime } else { false } } ?? dues.first
+        let reference = [due, marks.first { $0.field?.kind == .scheduled }, marks.first { $0.field?.kind == .start }]
+            .lazy.compactMap { $0.flatMap(day(of:)) }.first
+        guard let next = rule.next(after: reference, doneOn: today) else { return nil }
+        var edits = [(range: box, text: "[ ]")]
+        for mark in marks {
+            if let reference, let old = day(of: mark) {
+                edits.append(dateEdit(in: string, mark: mark, day: next.adding(days: old.number - reference.number)))
+                continue
+            }
+            switch mark.field?.kind {
+            case .created: edits.append(dateEdit(in: string, mark: mark, day: today))
+            case .done, .cancelled, .id, .dependsOn: edits.append(removal(in: string, of: mark.range))
+            default: break
+            }
+        }
+        if let link = blockLink(in: string) { edits.append((link, "")) }
+        return applying(edits, to: string)
+    }
+
+    /// A mark with another day in place of the one written in it, the rest as it is.
+    private static func dateEdit(in string: NSString, mark: TodoMark, day: TodoDay) -> (range: NSRange, text: String) {
+        let found = string.range(of: "\\d{4}-\\d{2}-\\d{2}", options: .regularExpression, range: mark.range)
+        return (found.location == NSNotFound ? NSRange(location: mark.range.upperBound, length: 0) : found, found.location == NSNotFound ? "" : day.description)
+    }
+
+    /// A mark taken out, with the spaces in front of it.
+    private static func removal(in string: NSString, of range: NSRange) -> (range: NSRange, text: String) {
+        var start = range.location
+        while start > 0, [32, 9].contains(string.character(at: start - 1)) { start -= 1 }
+        return (NSRange(location: start, length: range.upperBound - start), "")
+    }
+
+    /// A block link at the end of a line, ` ^name`, with the spaces in front of it.
+    private static func blockLink(in string: NSString) -> NSRange? {
+        let found = string.range(of: "[ \\t]+\\^[A-Za-z0-9-]+[ \\t]*$", options: .regularExpression)
+        return found.location == NSNotFound ? nil : found
+    }
+
+    /// Where a field written last goes, as Tasks writes the day it was done last: at the end, before a block link and
+    /// the spaces of a line break.
+    private static func endOfFields(_ string: NSString) -> Int {
+        var end = blockLink(in: string)?.location ?? string.length
+        while end > 0, [32, 9].contains(string.character(at: end - 1)) { end -= 1 }
+        return end
+    }
+
+    /// Edits that don't overlap, made from the last.
+    private static func applying(_ edits: [(range: NSRange, text: String)], to string: NSString) -> String {
+        let result = NSMutableString(string: string)
+        var limit = Int.max
+        for edit in edits.sorted(by: { $0.range.location > $1.range.location }) where edit.range.upperBound <= limit {
+            result.replaceCharacters(in: edit.range, with: edit.text)
+            limit = edit.range.location
+        }
+        return result as String
+    }
+
+    /// The part of `old`, at `location` in the text, that has to change to make it `new`, and what goes there: only
+    /// what differs, so the caret and an undo touch as little as they can. Nil when they are the same.
+    static func smallestChange(from old: String, to new: String, at location: Int) -> (range: NSRange, replacement: String)? {
+        let old = old as NSString, new = new as NSString
+        guard !old.isEqual(to: new as String) else { return nil }
+        var prefix = 0
+        while prefix < min(old.length, new.length), old.character(at: prefix) == new.character(at: prefix) { prefix += 1 }
+        // Not between the two halves of an emoji.
+        if prefix > 0, UTF16.isLeadSurrogate(old.character(at: prefix - 1)) { prefix -= 1 }
+        var suffix = 0
+        while suffix < min(old.length, new.length) - prefix,
+              old.character(at: old.length - 1 - suffix) == new.character(at: new.length - 1 - suffix) { suffix += 1 }
+        if suffix > 0, UTF16.isTrailSurrogate(old.character(at: old.length - suffix)) { suffix -= 1 }
+        return (NSRange(location: location + prefix, length: old.length - prefix - suffix),
+                new.substring(with: NSRange(location: prefix, length: new.length - prefix - suffix)))
+    }
+
     /// The lines indented under the to-do on line `index`, up to the first that isn't; blank lines between them count.
     public static func noteLines(under index: Int, in document: MarkdownDocument, string: NSString) -> Range<Int> {
         guard case .listItem(let item) = document.lines[index].kind else { return (index + 1)..<(index + 1) }
@@ -706,7 +842,7 @@ public enum Todos {
     }
 
     /// A line parsed on its own, without its indent, which on its own would make it code.
-    private static func alone(_ source: String) -> (indent: String, document: MarkdownDocument, string: NSString) {
+    static func alone(_ source: String) -> (indent: String, document: MarkdownDocument, string: NSString) {
         let indent = String(source.prefix { $0 == " " || $0 == "\t" })
         let string = String(source.dropFirst(indent.count)) as NSString
         return (indent, MarkdownParser.parse(string), string)
