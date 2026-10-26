@@ -7,6 +7,10 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- New Note as a widget and a control: the widget on the Home Screen and the Lock Screen of iPhone and iPad and on the
+  Mac's desktop, the control in Control Center, on the Lock Screen and on the iPhone's Action button. A tap opens
+  Notebook with a new note in your default folder and the caret in its title, as New Note in Shortcuts does. The
+  widget shows Notebook's icon and the pencil in its ink; on the Lock Screen it is the pencil alone, or with its name.
 - To-dos that repeat, as with Obsidian's Tasks plugin: tick off a to-do with `🔁 every week` (or `every weekday`,
   `every 2 weeks on Friday`, `every month on the last`, `every year`, `… when done` and the other rules Tasks reads), in
   the note, in To-dos or in its notification, and the next one is written above it with its dates moved on, while the

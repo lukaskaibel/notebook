@@ -14,6 +14,8 @@ Permissions, each asked for only when first needed:
 • Camera (iPhone and iPad): when the user takes a photo or scans a document into a note from the bar above the keyboard.
 • Contacts: none. Home and Work, as a reminder's place, can be picked from the user's own card with the system's contact picker, which gives the app only the address tapped.
 
+Widgets and controls: New Note is a widget (Home Screen, Lock Screen, the Mac's desktop) and a control (Control Center, Lock Screen, Action button). Each only opens Notebook with a new note in the default folder; the widgets show nothing of the user's notes.
+
 Spotlight: the notes in the user's folders are indexed on the device with Core Spotlight, so system search finds them; notes in hidden folders are left out.
 
 On iPhone and iPad, background refresh lets reminders set on another device be scheduled while the app is closed.
