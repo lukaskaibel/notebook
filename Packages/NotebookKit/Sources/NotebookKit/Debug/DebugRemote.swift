@@ -376,6 +376,21 @@ enum DebugRemote {
         case "samplenotes":
             // samplenotes <folder>: what Try Sample Notes… does once a folder is chosen.
             workspace?.addSampleNotes(in: URL(fileURLWithPath: argument, isDirectory: true))
+        case "importnotes":
+            // importnotes <path>[|<path>…]: what Import from Apple Notes… does once Notes' export is chosen.
+            guard let workspace, let folder = workspace.folderForNewNote else { log("importnotes: nowhere to import to"); break }
+            workspace.importFromAppleNotes(argument.split(separator: "|").map { URL(fileURLWithPath: String($0)) }, into: folder)
+            log("importnotes into \(folder.path)")
+        case "panel":
+            // panel <folder>|cancel: in the open panel over the window, chooses that folder as Open does, or cancels.
+            guard let panel = window?.attachedSheet as? NSOpenPanel else { log("panel: no open panel"); break }
+            if argument == "cancel" {
+                panel.cancel(nil)
+            } else {
+                panel.directoryURL = URL(fileURLWithPath: argument, isDirectory: true)
+                panel.ok(nil)
+            }
+            log("panel \(argument)")
         case "storeasset":
             // storeasset <file>|picture: what pasting a file, or a picture, into the open note puts in its .assets.
             guard let editor else { log("storeasset: no note open"); break }

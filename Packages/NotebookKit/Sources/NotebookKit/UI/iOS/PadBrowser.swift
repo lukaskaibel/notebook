@@ -34,6 +34,7 @@ struct PadBrowser: View {
             ), top: 80)
         }
         .modifier(FileAlerts(workspace: workspace, newFolderIn: $newFolderIn))
+        .modifier(AppleNotesImporter(workspace: workspace))
         .sheet(isPresented: $showsSettings) { TouchSettings(workspace: workspace) }
         .folderImporter(isPresented: $addsLocation, workspace: workspace)
         #if DEBUG
@@ -85,6 +86,11 @@ struct PadBrowser: View {
                                 Label("New Folder", systemImage: "folder.badge.plus")
                             }
                             Button { addsLocation = true } label: { Label("Add Location", systemImage: "plus.rectangle.on.folder") }
+                            if let folder = workspace.selectedFolder ?? workspace.folderForNewNote {
+                                Button { workspace.appleNotesImportFolder = folder } label: {
+                                    Label("Import from Apple Notes", systemImage: "square.and.arrow.down.on.square")
+                                }
+                            }
                             Divider()
                             ShowHiddenFoldersMenu(workspace: workspace)
                             Button { showsSettings = true } label: { Label("Settings", systemImage: "gearshape") }

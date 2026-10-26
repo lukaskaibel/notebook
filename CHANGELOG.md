@@ -5,6 +5,16 @@ versions follow [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- Import from Apple Notes, on the Mac, iPhone and iPad. Export notes from Notes as Markdown first: on the Mac, select
+  the notes of a folder and choose File › Export as › Markdown; on iPhone and iPad, Share › Export as Markdown, one note
+  at a time. Then choose File › Import from Apple Notes… in Notebook, or Import from Apple Notes in the ⋯ menu, and pick
+  the folder Notes made. Its notes come into the folder you're in, each with its pictures and files in the `.assets`
+  folder next to it, so they move with it, as Notebook's own do. Files Notes wrote without an extension get one, links
+  between the notes you exported become `[[links]]`, the title Notes repeats as the first line goes, and the folders
+  you put the exports in come along. Notes' export itself is only read, and one Undo takes the whole import back.
+
 ## [1.0.0] – not released yet
 
 The first version: notes as Markdown files in your own folders, on the Mac, iPhone and iPad. While it was being built,

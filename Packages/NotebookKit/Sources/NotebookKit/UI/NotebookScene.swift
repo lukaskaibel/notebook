@@ -32,6 +32,8 @@ public struct NotebookScene: Scene {
                 Button("About Notebook") { Acknowledgements.showAbout() }
             }
             CommandGroup(replacing: .importExport) {
+                Button { workspace.chooseAppleNotesExport() } label: { Label("Import from Apple Notes…", systemImage: "square.and.arrow.down.on.square") }
+                    .disabled(workspace.locations.isEmpty)
                 Menu {
                     Button { workspace.export(as: .pdf) } label: { Label("PDF…", systemImage: "doc.richtext") }
                         .keyboardShortcut("e", modifiers: [.command, .option])

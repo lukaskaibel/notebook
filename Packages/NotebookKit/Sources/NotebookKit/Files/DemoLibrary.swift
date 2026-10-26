@@ -231,6 +231,102 @@ enum DemoLibrary {
         ])
     }
 
+    /// A made-up export of Apple Notes, for trying Import from Apple Notes with and taking its pictures: two Notes
+    /// folders exported with File › Export as › Markdown, each saved into From Notes under its name, as the README says
+    /// to. As Notes writes them, each note starts with its title, and the pictures and files of all of an export's
+    /// notes are in its Attachments folder, the pictures without an extension. In Debug builds,
+    /// `-NotebookDemoExport YES` with `-NotebookLibrary` writes it next to the library, `-NotebookDemoExport <path>`
+    /// there.
+    static func createAppleNotesExport(at root: URL) {
+        let fm = FileManager.default
+        if fm.fileExists(atPath: root.path) { return }
+        let recipes = root.appendingPathComponent("Recipes", isDirectory: true)
+        let trips = root.appendingPathComponent("Trips", isDirectory: true)
+        try? fm.createDirectory(at: recipes, withIntermediateDirectories: true)
+        try? fm.createDirectory(at: trips.appendingPathComponent("Attachments"), withIntermediateDirectories: true)
+        func write(_ folder: URL, _ name: String, _ text: String, written: String) {
+            let url = folder.appendingPathComponent(name)
+            try? Data(text.utf8).write(to: url)
+            let date = ISO8601DateFormatter().date(from: written + "T09:30:00Z")
+            try? fm.setAttributes([.creationDate: date as Any, .modificationDate: date as Any], ofItemAtPath: url.path)
+        }
+
+        write(recipes, "Lemon pasta.md", """
+        # Lemon pasta
+
+        Serves two, quick on a weeknight.
+
+        ## Ingredients
+        - 200 g spaghetti
+        - 1 lemon, zest and juice
+        - 40 g butter
+        - Parmesan
+
+        ## Steps
+        1. Cook the pasta in salted water.
+        2. Melt the butter with the zest, add the juice and a ladle of pasta water.
+        3. Toss with the pasta and the cheese.
+
+        What to buy is in [Weekly shopping](Weekly%20shopping.md).
+
+        """, written: "2026-02-02")
+        write(recipes, "Weekly shopping.md", """
+        Weekly shopping
+
+        - [x] Spaghetti
+        - [ ] Lemons
+        - [ ] Butter
+        - [x] Parmesan
+        - [ ] Olive oil
+
+        """, written: "2026-02-03")
+        write(trips, "Osaka weekend.md", """
+        Osaka weekend
+
+        Friday to Sunday in March. The train from Tokyo leaves at 7:40.
+
+        | Day | Plan |
+        | --- | --- |
+        | Friday | Dotonbori, dinner in Shinsekai |
+        | Saturday | Osaka Castle, then the aquarium |
+        | Sunday | Day trip to Nara, back by 18:10 |
+
+        ![](Attachments/IMG_2050)
+
+        [Hotel booking.pdf](Attachments/Hotel%20booking.pdf)
+
+        What to take is in [Packing list](Packing%20list.md), the shrines in [Shrines to see](Shrines%20to%20see.md).
+
+        """, written: "2026-03-14")
+        write(trips, "Shrines to see.md", """
+        Shrines to see
+
+        - Sumiyoshi Taisha, early in the morning
+        - Kasuga Taisha in Nara, with its lanterns
+
+        ![](Attachments/IMG_2041)
+
+        """, written: "2026-03-10")
+        write(trips, "Packing list.md", """
+        Packing list
+
+        - [x] Passport
+        - [ ] Charger
+        - [ ] Rain jacket
+        - [ ] Sunglasses
+
+        """, written: "2026-03-12")
+        drawReceipt(to: trips.appendingPathComponent("Attachments/IMG_2050.jpg"))
+        drawTorii(to: trips.appendingPathComponent("Attachments/IMG_2041.png"))
+        for name in ["IMG_2050.jpg", "IMG_2041.png"] {
+            let url = trips.appendingPathComponent("Attachments/\(name)")
+            try? fm.moveItem(at: url, to: url.deletingPathExtension())
+        }
+        makeScan(at: trips.appendingPathComponent("Attachments/Hotel booking.pdf"), lines: [
+            "HOTEL NAMBA", "Reservation confirmed", "2 nights, 13 to 15 March, two guests", "Check-in from 15:00",
+        ])
+    }
+
     private static func drawTorii(to url: URL, jpeg: Bool = false) {
         let width = 1400, height = 620
         guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,

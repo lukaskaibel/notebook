@@ -140,6 +140,8 @@ public final class Workspace: NSObject {
     /// Counts the times ⌘K asked for Settings and for Add Location, which the screens show.
     var settingsRequest = 0
     var locationRequest = 0
+    /// The folder Import from Apple Notes puts the notes in, while the Files app's picker asks for them.
+    var appleNotesImportFolder: URL?
     #endif
     /// A file to delete for good, once you said so, where there is no Recently Deleted to put it in.
     var deleting: URL?
@@ -266,6 +268,12 @@ public final class Workspace: NSObject {
             let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true).standardizedFileURL
             #if DEBUG
             if UserDefaults.standard.bool(forKey: "NotebookDemo") { DemoLibrary.create(at: url) }
+            // YES: next to the library; a path: there, such as On My iPhone for the UI tests.
+            if let export = UserDefaults.standard.string(forKey: "NotebookDemoExport"), export != "NO" {
+                let path = (export as NSString).expandingTildeInPath
+                DemoLibrary.createAppleNotesExport(at: path.hasPrefix("/") ? URL(fileURLWithPath: path, isDirectory: true)
+                                                   : url.deletingLastPathComponent().appendingPathComponent("From Notes", isDirectory: true))
+            }
             #endif
             locations = [Location(id: Location.id(for: url.path), name: UserDefaults.standard.string(forKey: "NotebookLibraryName") ?? url.lastPathComponent, path: url.path, bookmark: nil)]
             favorites = []
