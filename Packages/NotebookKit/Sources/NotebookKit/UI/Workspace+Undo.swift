@@ -168,11 +168,15 @@ extension Workspace {
     /// too), else to the changes to files.
     func undo() {
         if UIApplication.shared.sendAction(Selector(("undo:")), to: nil, from: nil, for: nil) { return }
+        // With the keyboard away, the open note's own Undo, which weighs its changes against those to files, newest
+        // first: a version restored from Version History is taken back too.
+        if note != nil, let manager = editor.textView.undoManager, manager.canUndo { return manager.undo() }
         if fileUndoManager.canUndo { fileUndoManager.undo() }
     }
 
     func redo() {
         if UIApplication.shared.sendAction(Selector(("redo:")), to: nil, from: nil, for: nil) { return }
+        if note != nil, let manager = editor.textView.undoManager, manager.canRedo { return manager.redo() }
         if fileUndoManager.canRedo { fileUndoManager.redo() }
     }
     #endif

@@ -310,14 +310,15 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
             let color: NSColor = mark.kind == .added ? .systemGreen : .systemRed
             if mark.isLine {
                 guard let line = blockRect(mark.range, container: container, origin: origin) else { continue }
-                let box = line.insetBy(dx: -6, dy: -1)
+                // Into the margin where there is one; an iPhone has little, and the sign needs it more.
+                let box = line.insetBy(dx: -min(6, max(0, line.minX - 14)), dy: -1)
                 color.withAlphaComponent(isDark ? 0.17 : 0.11).setFill()
                 NSBezierPath(roundedRect: box, xRadius: 5, yRadius: 5).fill()
                 let font = NSFont.monospacedSystemFont(ofSize: 13, weight: .semibold)
                 let sign = NSAttributedString(string: mark.kind == .added ? "+" : "−", attributes: [.font: font, .foregroundColor: color])
                 let glyph = glyphIndexForCharacter(at: mark.range.location)
                 let baseline = glyph < numberOfGlyphs ? self.baseline(forGlyphAt: glyph, origin: origin) : box.minY + font.ascender
-                sign.draw(at: CGPoint(x: box.minX - 16, y: baseline - font.ascender))
+                sign.draw(at: CGPoint(x: max(2, box.minX - 16), y: baseline - font.ascender))
             } else {
                 enumerateRects(mark.range, container: container) { rect in
                     let box = NSRect(x: rect.minX - 1.5, y: rect.minY, width: rect.width + 3, height: rect.height).offsetBy(dx: origin.x, dy: origin.y)

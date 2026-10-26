@@ -32,8 +32,8 @@ extension Workspace {
 
     /// Whether Revert To › Last Opened would change the note: something was changed since it was opened.
     var canRevertToLastOpened: Bool {
-        guard let note, note.isLoaded, let opened = note.openedText else { return false }
-        return opened != note.text
+        guard let note, note.isLoaded else { return false }
+        return note.isChangedSinceOpening
     }
 
     /// The note as it was when it was opened, as one change Undo takes back.

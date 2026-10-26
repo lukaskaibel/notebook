@@ -9,7 +9,7 @@ import UIKit
 ///
 ///     versions                the open note's versions as listed: when, on what, and how each begins
 ///     browseversions          Browse All Versions… on the Mac, Version History on iPhone and iPad
-///     pickversion <n>         picks the nth version in the list, 0 the newest
+///     pickversion <n>         picks the nth version in the list, 0 the newest; the iPhone opens it
 ///     showchanges 1|0         Show Changes on or off
 ///     versionstate            what the versions show: the version picked, whether its text is in, the changes
 ///     restoreversion          Restore, as its button
@@ -36,6 +36,7 @@ enum DebugVersions {
         case "pickversion":
             guard let browser, let index = Int(argument), let versions = browser.versions, versions.indices.contains(index) else { log("pickversion: none"); break }
             browser.selection = versions[index].url
+            browser.path = [versions[index].url]
         case "showchanges":
             browser?.showsChanges = argument == "1"
         case "versionstate":

@@ -37,6 +37,9 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     @ObservationIgnored let history: NoteHistory?
     /// The text when the note was opened: File › Revert To › Last Opened.
     public private(set) var openedText: String?
+    /// The text is no longer what it was when the note was opened. Set only when that changes, so the menu that asks
+    /// isn't made again with every letter typed.
+    public private(set) var isChangedSinceOpening = false
 
     @ObservationIgnored private var saveTimer: Timer?
     static let saveDelay: TimeInterval = 0.6
@@ -197,6 +200,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         }
         text = newText
         changedSinceCopy = true
+        noteWhetherChangedSinceOpening()
         saveTimer?.invalidate()
         saveTimer = Timer.scheduledTimer(withTimeInterval: Self.saveDelay, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.saveNow() }
@@ -221,6 +225,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
             keepBoth(theirs: disk)
             savedText = disk
             text = merged
+            noteWhetherChangedSinceOpening()
             changedSinceCopy = true
             onExternalChange?(merged)
             guard merged != disk else { return }
@@ -272,7 +277,13 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     /// is kept as it is now.
     private func opened() {
         openedText = text
+        noteWhetherChangedSinceOpening()
         history?.keep(text, of: url, onlyIfChanged: true)
+    }
+
+    private func noteWhetherChangedSinceOpening() {
+        let changed = openedText.map { $0 != text } ?? false
+        if changed != isChangedSinceOpening { isChangedSinceOpening = changed }
     }
 
     /// Hands a copy of the text to the history, which writes it in the background unless the newest copy says the same.
@@ -338,6 +349,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
             break
         case .takeOther:
             text = conflict.otherText
+            noteWhetherChangedSinceOpening()
         case .keepBoth:
             let base = url.deletingPathExtension().lastPathComponent
             let copy = FileOperations.uniqueURL(in: url.deletingLastPathComponent(), name: "\(base) (\(conflict.source))", extension: "md")
@@ -412,6 +424,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
             // that device's or app's to keep; another app's is kept when the note opens next (`opened`).
             if changedSinceCopy { keepBoth(theirs: disk) }
             text = disk
+            noteWhetherChangedSinceOpening()
             savedText = disk
             changedSinceCopy = false
             onExternalChange?(disk)
@@ -420,6 +433,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
             keepBoth(theirs: disk)
             savedText = disk
             text = merged
+            noteWhetherChangedSinceOpening()
             changedSinceCopy = true
             onExternalChange?(merged)
             if merged != disk { saveNow() }

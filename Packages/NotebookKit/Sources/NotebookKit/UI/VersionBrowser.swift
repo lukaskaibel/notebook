@@ -22,6 +22,10 @@ final class VersionBrowser: Identifiable {
     var selection: URL? {
         didSet { if selection != oldValue { read() } }
     }
+    /// The iPhone's: the version opened from the list, which picks it.
+    var path: [URL] = [] {
+        didSet { if let url = path.last { selection = url } }
+    }
     /// The picked version's text, once read.
     private(set) var text: String?
     private(set) var isUnreadable = false

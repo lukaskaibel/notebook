@@ -94,16 +94,23 @@ struct VersionPreview: View {
     }
 }
 
-/// What Show Changes found, in a few words: "3 lines added, 1 taken out".
+/// What Show Changes found, in a few words: "3 lines added, 1 taken out", or where there is little room "+3 −1".
 struct VersionChangeSummary: View {
     let changes: VersionChanges?
+    var isShort = false
 
     var body: some View {
         if let changes {
-            Text(summary(changes))
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            Group {
+                if isShort, !changes.isEmpty {
+                    Text("+\(changes.addedLines)").foregroundStyle(.green) + Text("  −\(changes.removedLines)").foregroundStyle(.red)
+                } else {
+                    Text(summary(changes)).foregroundStyle(.secondary)
+                }
+            }
+            .font(.callout.monospacedDigit())
+            .lineLimit(1)
+            .accessibilityLabel(summary(changes))
         }
     }
 
@@ -236,8 +243,6 @@ struct VersionHistorySheet: View {
     @State private var reader: VersionReader
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dismiss) private var dismiss
-    /// The iPhone's list, before a version is opened.
-    @State private var path: [URL] = []
 
     init(browser: VersionBrowser, source: EditorController) {
         self.browser = browser
@@ -250,21 +255,20 @@ struct VersionHistorySheet: View {
                 NavigationSplitView {
                     list(selecting: true)
                         .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 340)
+                        // The versions always show next to the one picked.
+                        .toolbar(removing: .sidebarToggle)
                 } detail: {
                     detail
                 }
                 .navigationSplitViewStyle(.balanced)
             } else {
-                NavigationStack(path: $path) {
+                NavigationStack(path: $browser.path) {
                     list(selecting: false)
                         .navigationDestination(for: URL.self) { _ in detail }
                 }
             }
         }
         .task { await browser.load() }
-        .onChange(of: path) { _, path in
-            if let url = path.last { browser.selection = url }
-        }
     }
 
     private func list(selecting: Bool) -> some View {
@@ -310,8 +314,9 @@ struct VersionHistorySheet: View {
                 }
                 ToolbarSpacer(.flexible, placement: .bottomBar)
                 ToolbarItem(placement: .bottomBar) {
-                    VersionChangeSummary(changes: browser.changes)
+                    VersionChangeSummary(changes: browser.changes, isShort: sizeClass != .regular)
                 }
+                .sharedBackgroundVisibility(.hidden)
                 ToolbarSpacer(.flexible, placement: .bottomBar)
                 ToolbarItem(placement: .bottomBar) {
                     Button("Restore") {
