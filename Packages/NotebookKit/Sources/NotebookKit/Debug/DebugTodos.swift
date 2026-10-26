@@ -5,6 +5,7 @@ import AppKit
 import UIKit
 #endif
 import SwiftUI
+import UserNotifications
 
 /// The debug remote's commands for to-dos, the same on the Mac and on iPhone and iPad. A to-do is named by some of
 /// its words.
@@ -19,6 +20,7 @@ import SwiftUI
 ///     remindtodo [date|place] <words>            Remind Me for it (the popover or the sheet), or on the Mac the
 ///                                                dropdown for its date or place, as its pills open them
 ///     firetodo <words>                           its notification in a second, as at its time
+///     donetodo <words>                           Done in its notification, then the notifications waiting
 ///     todojobs                                   what the to-dos' notifications are made from
 ///     edittodo <offset|end> <words>              edits it in To-dos, as a click on its words that many letters in
 ///     todoediting                                the to-do being edited: its words, its lines and where the keyboard is
@@ -122,6 +124,19 @@ enum DebugTodos {
             }
             ReminderNotifications.shared.fireSoon(job)
             log("firetodo \(job.identifier): \(job.title) | \(job.subtitle(forPlace: job.date == nil)) | \(job.body.replacingOccurrences(of: "\n", with: " / "))")
+        case "donetodo":
+            // As Done in its notification does; what is waiting is listed once that is over, as the app may then stop.
+            guard let item = find(argument), let job = workspace.todoJobs().first(where: { $0.source == item.todo.source && $0.path == item.url.path }) else {
+                log("donetodo: no to-do with a reminder “\(argument)”"); break
+            }
+            Task {
+                await ReminderNotifications.shared.finishTodo(item.reference, identifier: job.identifier, workspace: workspace)
+                let pending = await UNUserNotificationCenter.current().pendingNotificationRequests().filter { $0.identifier.hasPrefix(ReminderNotifications.todoPrefix) }
+                log("donetodo \(item.todo.text), waiting:\n" + pending.map { request in
+                    let date = (request.trigger as? UNCalendarNotificationTrigger)?.nextTriggerDate().map { "\($0)" } ?? "place"
+                    return "  \(request.identifier) at \(date): \(request.content.title) | \(request.content.userInfo["source"] ?? "")"
+                }.joined(separator: "\n"))
+            }
         case "edittodo":
             guard split.count == 2, let item = find(split[1]) else { log("edittodo: <offset|end> <words>"); break }
             NotificationCenter.default.post(name: edit, object: nil, userInfo: ["item": item, "offset": Int(split[0]) as Any])

@@ -162,6 +162,18 @@ final class ReminderTimeParserTests: XCTestCase {
         try XCTUnwrap(ReminderTimeParser.suggestions(for: text, now: now, calendar: calendar, days: true).first, "nothing for “\(text)”", file: file, line: line)
     }
 
+    func testTypedDatesAreGregorianWhicheverCalendarShows() throws {
+        for identifier in [Calendar.Identifier.japanese, .buddhist] {
+            var shown = Calendar(identifier: identifier)
+            shown.timeZone = calendar.timeZone
+            shown.locale = calendar.locale
+            for text in ["1 November 2026", "1.11.2026", "1 nov"] {
+                let found = try XCTUnwrap(ReminderTimeParser.suggestions(for: text, now: now, calendar: shown, days: true).first, "\(identifier) “\(text)”")
+                XCTAssertEqual(found.date, at(1, 11, 0), "\(identifier) “\(text)”")
+            }
+        }
+    }
+
     func testDaysForToDos() throws {
         XCTAssertEqual(try day("friday").date, at(23, 10, 0))
         XCTAssertFalse(try day("friday").hasTime)

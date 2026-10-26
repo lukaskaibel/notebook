@@ -15,6 +15,13 @@ versions follow [semantic versioning](https://semver.org).
   new note in your default folder, named after the page or the first line, or go at the end of the note you opened
   last. Pictures and files go into the note's `.assets` folder, as when you add them in a note. Notebook writes them
   into your notes as soon as it's open; when that note is open in Notebook, they go in as one step of Undo.
+- To-dos that repeat, as with Obsidian's Tasks plugin: tick off a to-do with `🔁 every week` (or `every weekday`,
+  `every 2 weeks on Friday`, `every month on the last`, `every year`, `… when done` and the other rules Tasks reads), in
+  the note, in To-dos or in its notification, and the next one is written above it with its dates moved on, while the
+  one you ticked gets the day it was done, `✅ 2026-10-26`, as Tasks writes them. Its due date, time, scheduled and
+  start dates keep their distances, a day the next month doesn't have becomes its last day (31 January, every month,
+  is next due on 28 February), and its reminder moves to the next one. One Undo takes both back, and unticking it in
+  To-dos while it still shows ticked does too; unticking it in the note doesn't make another.
 
 ## [1.0.0] – not released yet
 

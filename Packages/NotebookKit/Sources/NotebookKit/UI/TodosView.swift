@@ -422,7 +422,7 @@ struct TodosView: View {
         if ticked[row.id] != nil {
             ticked[row.id] = nil
             // Back to the mark it had: in progress stays in progress.
-            if case .todo(let item) = row { workspace.setTodoMark(Self.done(item.reference), item.todo.mark) }
+            if case .todo(let item) = row { workspace.untickTodo(item.reference, to: item.todo.mark) }
             return
         }
         withAnimation(Theme.quick) { ticked[row.id] = (row, section) }
@@ -444,13 +444,6 @@ struct TodosView: View {
 
     /// How long a row ticked off stays, ticked, before it goes: time to see it done, or to untick it.
     static let tickedFor: Double = 3
-
-    /// The reference of a to-do once ticked: its line then says `[x]`.
-    private static func done(_ todo: TodoReference) -> TodoReference {
-        var done = todo
-        done.source = Todos.ticked(todo.source)
-        return done
-    }
 
     // MARK: - Dragging
 
@@ -517,12 +510,14 @@ extension Workspace {
         }
     }
 
-    /// Ticks a line under a to-do in To-dos, or unticks it.
+    /// Ticks a line under a to-do in To-dos, or unticks it. One that repeats gets the next one above it, as in a note.
     func toggle(_ line: Int, under item: TodoList.Item) {
         guard item.todo.lines.indices.contains(line), case .todo(let mark) = item.todo.lines[line].kind else { return }
         let before = [item.todo.source] + item.todo.lines.map(\.source)
         var after = before
-        after[line + 1] = Todos.marked(before[line + 1], mark.isClosed ? .open : .done)
+        guard let marked = Todos.marking(before[line + 1], as: mark.isClosed ? .open : .done, today: .today) else { return }
+        after[line + 1] = marked.line
+        if let next = marked.next, before[line] != next, before[safe: line + 2] != next { after.insert(next, at: line + 1) }
         changeTodoLines(item.reference, from: before, to: after, actionName: mark.isClosed ? "Uncheck" : "Check")
     }
 }
