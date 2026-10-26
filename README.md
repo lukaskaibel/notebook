@@ -368,8 +368,9 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   Action button: Notebook opens with a new note in the default folder, the caret in its title. In a shortcut of your
   own it takes text for the note to start with.
 - **Widgets for the day.** Today shows the to-dos for today and the overdue ones, as Reminders does, and ticks them
-  off from the Home Screen; Note shows a note of your choice, styled as in the note, on the Home Screen, the Lock
-  Screen or the Mac's desktop. Notebook keeps what they show up to date; a tap opens To-dos or the note.
+  off from the Home Screen, writing the tick into the note the next time Notebook opens; Note shows a note of your
+  choice, styled as in the note, on the Home Screen, the Lock Screen or the Mac's desktop. Notebook keeps what they
+  show up to date; a tap opens To-dos or the note. Notes in folders you hid stay out of them.
 - **Share to Notebook.** Text, links, pictures and PDFs from any app's share sheet become a new note in the default
   folder, named after the page or the first line, or go at the end of the note you opened last. Pictures and files go
   into `.assets` next to the note. The share sheet hands them to Notebook, which writes them as soon as it's open, with

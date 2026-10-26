@@ -36,7 +36,9 @@ advertising, and it collects nothing about you.
   last are kept there too.
 - **What the widgets show:** the to-dos due today, overdue or in the coming week, with the names of their notes, and
   the text of the notes you chose to show in a Note widget, kept by Notebook in a folder it shares with its widgets on
-  your device, and a list of up to 500 of your notes' names and folders to choose from. It never leaves the device.
+  your device, and a list of up to 500 of your notes' names and folders to choose from, none from folders you hid.
+  A to-do you tick in the widget waits there, with the reminders it took back, until Notebook has written the tick
+  into its note. It never leaves the device.
 - **The search index** of file names, the text of notes and PDFs, and the words Notebook reads in pictures, scanned
   pages and handwriting is kept in the app's caches on each device, so search is ready the moment the app opens. Each
   device builds its own from your files, and it never leaves the device.
