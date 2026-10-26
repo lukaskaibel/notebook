@@ -25,19 +25,41 @@ extension EditorController {
         return true
     }
 
+    /// Puts other text in the note's place, an earlier version's, as one step of Undo of its own. Only the part that
+    /// differs is replaced, so the caret and the scroll position stay where they can. Nothing changes while the text
+    /// isn't in.
+    @discardableResult
+    func restore(text: String, actionName: String) -> Bool {
+        guard !isWaitingForText, !isReadOnly else { return false }
+        guard let change = change(to: text) else { return true }
+        let manager = textView.undoManager
+        breakTyping()
+        let opens = manager?.groupingLevel == 0
+        if opens { manager?.beginUndoGrouping() }
+        preservingScroll {
+            replace(change.range, with: change.replacement, select: change.caret)
+        }
+        manager?.setActionName(actionName)
+        if opens { manager?.endUndoGrouping() }
+        breakTyping()
+        return true
+    }
+
+    /// What is typed next is a step of Undo of its own, apart from what was typed before.
+    private func breakTyping() {
+        #if os(macOS)
+        textView.breakUndoCoalescing()
+        #else
+        openStep = nil
+        #endif
+    }
+
     /// Changes the addresses of links, each where it is, as one step of Undo of its own: a file they point at was
     /// renamed or moved. The caret and the scroll position stay where they are. Nothing changes while the text isn't in.
     @discardableResult
     func changeLinks(_ changes: [(range: NSRange, replacement: String)], actionName: String) -> Bool {
         guard !isWaitingForText, !changes.isEmpty, changes.allSatisfy({ $0.range.upperBound <= storage.length }) else { return false }
         let manager = textView.undoManager
-        func breakTyping() {
-            #if os(macOS)
-            textView.breakUndoCoalescing()
-            #else
-            openStep = nil
-            #endif
-        }
         breakTyping()
         // Outside an event the undo manager would keep its group open until after the next, and take it in.
         let opens = manager?.groupingLevel == 0

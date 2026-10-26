@@ -153,6 +153,8 @@ public final class Workspace: NSObject {
     var folderIconRequest: FolderIconRequest?
     /// A file or folder to move, in the sheet that asks where to.
     var moving: MovingFile?
+    /// The open note's earlier versions, in the Version History sheet.
+    var versionBrowser: VersionBrowser?
     /// What each note looked like when you went on from it, shown while the screen of the note you go on to slides
     /// over it, and while you swipe back to it. There is only one editor, and it is on the screen in front.
     @ObservationIgnored var pageSnapshots: [URL: UIView] = [:]
@@ -269,7 +271,11 @@ public final class Workspace: NSObject {
                 NoteHistory.shared.keepOnDevice(in: store.appendingPathComponent("History.noindex", isDirectory: true))
             }
             #if DEBUG
-            if UserDefaults.standard.bool(forKey: "NotebookDemo") { DemoLibrary.create(at: url) }
+            if UserDefaults.standard.bool(forKey: "NotebookDemo"), DemoLibrary.create(at: url) {
+                // Versions of earlier sample notes at the same place go with them.
+                NoteHistory.shared.forget(url)
+                DemoLibrary.keepVersions(at: url)
+            }
             #endif
             locations = [Location(id: Location.id(for: url.path), name: UserDefaults.standard.string(forKey: "NotebookLibraryName") ?? url.lastPathComponent, path: url.path, bookmark: nil)]
             favorites = []
@@ -467,7 +473,8 @@ public final class Workspace: NSObject {
     func addSampleNotes(in folder: URL) {
         let url = folder.appendingPathComponent("Sample Notes", isDirectory: true)
         Task {
-            await Task.detached(priority: .userInitiated) { DemoLibrary.create(at: url) }.value
+            let made = await Task.detached(priority: .userInitiated) { DemoLibrary.create(at: url) }.value
+            if made { DemoLibrary.keepVersions(at: url) }
             addLocation(url)
         }
     }

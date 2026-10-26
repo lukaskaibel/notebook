@@ -91,6 +91,8 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
     private(set) var url: URL
     private let note: NoteDocument
     var isLoaded: Bool { note.isLoaded }
+    /// The note, for Revert To.
+    var noteDocument: NoteDocument { note }
     let editor = EditorController()
     var onClose: (() -> Void)?
 

@@ -41,6 +41,8 @@ final class NoteHistory: @unchecked Sendable {
         var date: Date
         /// "Mac", "iPhone" or "iPad".
         var device: String
+        /// On this device, or still in iCloud only: reading it waits for it to come down.
+        var isDownloaded = true
         var id: URL { url }
     }
 
@@ -114,6 +116,15 @@ final class NoteHistory: @unchecked Sendable {
         let device = device ?? Self.thisDevice
         let note = note.standardizedFileURL
         queue.async { [self] in write(text, of: note, at: date, device: device, onlyIfChanged: onlyIfChanged) }
+    }
+
+    /// Keeps a copy of a note as its file says, read in the background.
+    func keepFile(_ note: URL, at date: Date = Date(), device: String) {
+        let note = note.standardizedFileURL
+        queue.async { [self] in
+            guard let text = NoteDocument.read(note) else { return }
+            write(text, of: note, at: date, device: device, onlyIfChanged: false)
+        }
     }
 
     /// What this device is called in the names of its copies.
@@ -267,6 +278,15 @@ final class NoteHistory: @unchecked Sendable {
         [cloudRoot(), local].compactMap { $0 }
     }
 
+    /// Removes the copies of a note, or of every note in a folder: for sample notes made again where others were.
+    func forget(_ url: URL) {
+        let url = url.standardizedFileURL
+        queue.async { [self] in
+            for folder in folders(for: url).all { Self.remove(folder) }
+            newest = [:]
+        }
+    }
+
     // MARK: - Following notes
 
     /// A note or folder Notebook renamed or moved: its copies go along, to the right store for where it went. Copies
@@ -325,12 +345,17 @@ final class NoteHistory: @unchecked Sendable {
 
     // MARK: - Versions
 
-    /// A note's copies, newest first, from their names alone: nothing is read or brought down from iCloud.
+    /// A note's copies, newest first, from their names alone: nothing is read or brought down from iCloud. Copies iCloud
+    /// hasn't brought down yet say so.
     func versions(of note: URL) async -> [Version] {
         let note = note.standardizedFileURL
         return await withCheckedContinuation { continuation in
             queue.async { [self] in
-                let copies = folders(for: note).all.flatMap(Self.copies(in:))
+                let copies = folders(for: note).all.flatMap(Self.copies(in:)).map { copy in
+                    var copy = copy
+                    copy.isDownloaded = Self.isDownloaded(copy.url)
+                    return copy
+                }
                 continuation.resume(returning: copies.sorted { $0.date > $1.date })
             }
         }
