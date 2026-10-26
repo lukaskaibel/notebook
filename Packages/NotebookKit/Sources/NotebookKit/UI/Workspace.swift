@@ -264,6 +264,10 @@ public final class Workspace: NSObject {
             // A folder given on the command line (tests, screenshots): used for this run, not remembered.
             temporaryLocations = true
             let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true).standardizedFileURL
+            // Its notes' earlier versions stay with it on this device, apart from those of your own notes.
+            if let store = SearchIndex.storeURL(library: url.path, name: "History", in: .cachesDirectory) {
+                NoteHistory.shared.keepOnDevice(in: store.appendingPathComponent("History.noindex", isDirectory: true))
+            }
             #if DEBUG
             if UserDefaults.standard.bool(forKey: "NotebookDemo") { DemoLibrary.create(at: url) }
             #endif
@@ -275,6 +279,8 @@ public final class Workspace: NSObject {
             locations = LocationStore.load()
             hidden = HiddenFolders()
             reminders = Reminders()
+            // Versions a year old go, also those of notes not written in since; not while the app is starting.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 30) { NoteHistory.shared.tidyUp() }
         }
         #if DEBUG
         if temporaryLocations, UserDefaults.standard.bool(forKey: "NotebookDemo"), let library = locations.first {
@@ -1348,6 +1354,8 @@ public final class Workspace: NSObject {
         let result = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?)? in
             let renamed = fileName ? FileOperations.rename(url, toFileName: name, presenter: document) : FileOperations.rename(url, to: name, presenter: document)
             guard let renamed else { return nil }
+            // Its earlier versions go along, before the note saves or keeps a copy under its new name.
+            NoteHistory.shared.follow(from: url, to: renamed)
             return (renamed, FileNode.listing(of: renamed))
         }.value
         guard let renamed = result?.url else {
@@ -1400,6 +1408,7 @@ public final class Workspace: NSObject {
             let ext = (name as NSString).pathExtension
             let destination = FileOperations.uniqueURL(in: folder, name: (name as NSString).deletingPathExtension, extension: ext.isEmpty ? nil : ext)
             guard let moved = FileOperations.move(url, to: destination, presenter: document) else { return nil }
+            NoteHistory.shared.follow(from: url, to: moved)
             // Its pictures come along before it shows there, when they can.
             let assets = isHere ? FileOperations.copyAssets(of: moved, from: source, renaming: !undoing) : nil
             return (moved, FileNode.listing(of: moved), assets)
