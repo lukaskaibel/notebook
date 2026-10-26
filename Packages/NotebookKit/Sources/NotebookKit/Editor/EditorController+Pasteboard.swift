@@ -239,23 +239,13 @@ extension EditorController {
 
     /// A path for Markdown: spaces and brackets encoded so the link holds together everywhere.
     static func markdownPath(_ name: String) -> String {
-        var allowed = CharacterSet.alphanumerics
-        allowed.insert(charactersIn: "-._~")
-        return ".assets/" + (name.addingPercentEncoding(withAllowedCharacters: allowed) ?? name)
+        FileOperations.markdownPath(name)
     }
 
     private func uniqueAssetURL(named name: String) -> URL? {
         guard let folder, let assets = assetsFolder, delegate?.editor(self, mayWriteIn: folder) ?? true else { return nil }
         try? FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
-        let base = (name as NSString).deletingPathExtension
-        let ext = (name as NSString).pathExtension
-        var candidate = assets.appendingPathComponent(name)
-        var counter = 2
-        while FileManager.default.fileExists(atPath: candidate.path) || FileManager.default.fileExists(atPath: DrawingFile.strokesURL(for: candidate).path) {
-            candidate = assets.appendingPathComponent(ext.isEmpty ? "\(base) \(counter)" : "\(base) \(counter).\(ext)")
-            counter += 1
-        }
-        return candidate
+        return FileOperations.uniqueAssetURL(named: name, in: assets)
     }
 
     /// Copies a file into `.assets` and returns its Markdown path.

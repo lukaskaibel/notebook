@@ -16,6 +16,8 @@ Permissions, each asked for only when first needed:
 
 Widgets and controls: New Note is a widget (Home Screen, Lock Screen, the Mac's desktop) and a control (Control Center, Lock Screen, Action button). Each only opens Notebook with a new note in the default folder; the widgets show nothing of the user's notes.
 
+Share extension: "Notebook" in the share sheet of other apps (try a page in Safari or a photo in Photos) takes text, links, pictures and PDFs into a new note in the default folder or at the end of the note opened last. The extension leaves them in the app's App Group, and the app writes them into the user's folder the next time it is open.
+
 Spotlight: the notes in the user's folders are indexed on the device with Core Spotlight, so system search finds them; notes in hidden folders are left out.
 
 On iPhone and iPad, background refresh lets reminders set on another device be scheduled while the app is closed.
