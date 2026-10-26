@@ -11,6 +11,9 @@ extension Workspace {
     /// added to the Trash again, and what couldn't come over is named in an alert.
     func importFromAppleNotes(_ sources: [URL], into folder: URL) {
         guard !sources.isEmpty else { return }
+        // Kept for Undo as it is asked for, in its place among the changes asked for around it; what it adds is known
+        // once it is done.
+        let change = keepForUndo(FileChange(.make, "Import"))
         changeFiles { [self] follow in
             let folder = follow(folder)
             let imported = await Task.detached(priority: .userInitiated) { () -> (result: AppleNotesImport.Result, listings: [FileNode.Listing], madeFolder: Bool) in
@@ -23,10 +26,13 @@ extension Workspace {
                 let shown = result.added.filter { FileNode.samePath($0.deletingLastPathComponent(), folder) }
                 return (result, shown.compactMap { FileNode.listing(of: $0) }, madeFolder)
             }.value
-            // Kept for Undo once it is all there: how much an import adds is known only then.
-            undoTogether {
-                for url in imported.result.added { changeDone(keepForUndo(FileChange(.make, "Import")), to: url) }
+            let added = imported.result.added
+            change.parts = added.dropFirst().map { url in
+                let part = FileChange(.make, "Import")
+                part.after = url
+                return part
             }
+            changeDone(change, to: added.first)
             let parent = folder.deletingLastPathComponent()
             showChanges(in: imported.madeFolder ? [parent, folder] : [folder],
                         adding: imported.listings + (imported.madeFolder ? [FileNode.Listing(url: folder, kind: .folder)] : []))

@@ -378,6 +378,61 @@ final class AppleNotesImportTests: XCTestCase {
         XCTAssertTrue(exists(folder.appendingPathComponent("other.png")))
     }
 
+    // MARK: - What the second look found
+
+    func testAPackageInAttachmentsIsOneFile() throws {
+        for name in ["Linked.rtfd", "Loose.rtfd"] {
+            let package = archive.appendingPathComponent("Attachments/\(name)")
+            try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+            try Data("{\\rtf1 text}".utf8).write(to: package.appendingPathComponent("TXT.rtf"))
+        }
+        try write("Letter\n[Linked.rtfd](Attachments/Linked.rtfd)\n", to: archive.appendingPathComponent("Letter.md"))
+        let result = AppleNotesImport.run([archive], into: inbox)
+        let folder = inbox.appendingPathComponent("Archive")
+        XCTAssertTrue(exists(folder.appendingPathComponent(".assets/Linked.rtfd/TXT.rtf")))
+        XCTAssertTrue(exists(folder.appendingPathComponent("Loose.rtfd/TXT.rtf")))
+        XCTAssertFalse(exists(folder.appendingPathComponent("TXT.rtf")), "a package came apart")
+        XCTAssertFalse(exists(folder.appendingPathComponent("Linked.rtfd")), "a linked package came along loose too")
+        XCTAssertEqual(result.problems, [])
+    }
+
+    func testANameThatFoldsLikeAnotherIsLinkedByItsAddress() throws {
+        try write("Resume\nOld one.\n", to: archive.appendingPathComponent("Resume.md"))
+        try write("Résumé\nNew one.\n", to: archive.appendingPathComponent("Résumé.md"))
+        try write("Jobs\nSee [Résumé](R%C3%A9sum%C3%A9.md).\n", to: archive.appendingPathComponent("Jobs.md"))
+        _ = AppleNotesImport.run([archive], into: inbox)
+        let text = try read(inbox.appendingPathComponent("Archive/Jobs.md"))
+        XCTAssertFalse(text.contains("[["), "[[Résumé]] may find Resume: \(text)")
+        XCTAssertEqual(AppleNotesImport.file(String(text.drop { $0 != "(" }.dropFirst().prefix { $0 != ")" }), from: inbox.appendingPathComponent("Archive"))?.lastPathComponent,
+                       "Résumé.md")
+    }
+
+    func testNotesWrittenBeforeANoteTookAnotherNameLinkToItsNewName() throws {
+        try write("# Shopping list\n\n- [ ] Milk, for the [trip](Trip%20to%20Kyoto.md)\n", to: archive.appendingPathComponent("Shopping list.md"))
+        _ = AppleNotesImport.run([archive], into: inbox) {
+            try? "Mine\n".write(to: self.inbox.appendingPathComponent("Archive/Trip to Kyoto.md"), atomically: true, encoding: .utf8)
+        }
+        XCTAssertEqual(try read(inbox.appendingPathComponent("Archive/Shopping list.md")), "- [ ] Milk, for the [[Trip to Kyoto 2|trip]]\n")
+        XCTAssertEqual(try read(inbox.appendingPathComponent("Archive/Trip to Kyoto.md")), "Mine\n")
+    }
+
+    func testAttachmentsWithANoteInItOrWithoutNotesNextToItAreNotes() throws {
+        // A note someone attached, in Notes' Attachments.
+        try write("Recipe\nFrom a friend.\n", to: archive.appendingPathComponent("Attachments/Recipe.md"))
+        try write("Cooking\n[Recipe.md](Attachments/Recipe.md)\n", to: archive.appendingPathComponent("Cooking.md"))
+        // Notes in folders, with their Attachments above them.
+        let tree = export.appendingPathComponent("Tree")
+        try FileManager.default.createDirectory(at: tree.appendingPathComponent("Work"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: tree.appendingPathComponent("Attachments"), withIntermediateDirectories: true)
+        try png.write(to: tree.appendingPathComponent("Attachments/pic.png"))
+        try write("Plan\n![](../Attachments/pic.png)\n", to: tree.appendingPathComponent("Work/Plan.md"))
+        _ = AppleNotesImport.run([archive, tree], into: inbox)
+        XCTAssertEqual(try read(inbox.appendingPathComponent("Archive/Cooking.md")), "![Recipe.md](.assets/Recipe.md)\n")
+        XCTAssertFalse(exists(inbox.appendingPathComponent("Archive/Attachments")))
+        XCTAssertEqual(try read(inbox.appendingPathComponent("Tree/Work/Plan.md")), "![](.assets/pic.png)\n")
+        XCTAssertFalse(exists(inbox.appendingPathComponent("Tree/Attachments")))
+    }
+
     // MARK: - In the window
 
     /// The library read, with the sidebar in a window, whose undo manager keeps the changes to files, as in the app.
@@ -422,6 +477,27 @@ final class AppleNotesImportTests: XCTestCase {
         try await until("taken back") { !self.exists(folder) && !self.exists(self.inbox.appendingPathComponent("Errands.md")) }
         await workspace.changeFiles { _ in }.value
         XCTAssertTrue(exists(archive.appendingPathComponent("Trip to Kyoto.md")), "the export was touched")
+    }
+
+    /// Undo keeps the order the changes were asked for in: a note made while the import runs goes first.
+    func testUndoTakesBackInTheOrderAskedFor() async throws {
+        let (workspace, manager) = try await makeWindow()
+        workspace.importFromAppleNotes([archive], into: inbox)
+        // ⌘N a moment later, while the import is under way: an event of its own.
+        try await until("the group closed") { manager.groupingLevel == 0 }
+        workspace.newNote(in: inbox, title: "Later")
+        await workspace.changeFiles { _ in }.value
+        let later = inbox.appendingPathComponent("Later.md")
+        let folder = inbox.appendingPathComponent("Archive")
+        XCTAssertTrue(exists(later) && exists(folder))
+
+        try await until("the group closed") { manager.groupingLevel == 0 }
+        manager.undo()
+        try await until("the new note taken back") { !self.exists(later) }
+        await workspace.changeFiles { _ in }.value
+        XCTAssertTrue(exists(folder), "the import went first")
+        manager.undo()
+        try await until("the import taken back") { !self.exists(folder) }
     }
 
     /// A note imported on its own into a folder that was there: its picture goes into the folder's own `.assets`, a
