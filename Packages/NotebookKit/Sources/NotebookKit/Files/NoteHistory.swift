@@ -311,17 +311,28 @@ final class NoteHistory: @unchecked Sendable {
             // Only folders it can look in now say a note is gone: not one on a disk that isn't there.
             let seen = locations.map(\.standardizedFileURL).filter { (try? FileManager.default.contentsOfDirectory(atPath: $0.path)) != nil }
                 .map { (place: Self.place(of: $0, iCloudDrive: iCloudDrive).path, url: $0) }
+            goneSince = defaults.dictionary(forKey: Self.goneKey) as? [String: Date] ?? [:]
+            stillGone = [:]
             for root in roots() { tidyUp(root, in: root, now: now, device: device, seen: seen) }
+            defaults.set(stillGone, forKey: Self.goneKey)
         }
     }
+
+    /// The notes found gone at a tidy-up, by their paths, and since when: their copies go to the Trash once they are
+    /// still gone a day later, not while iCloud may still be bringing them to a device just set up.
+    private static let goneKey = "historyNotesGone"
+    // Only touched on `queue`, while tidying up.
+    private var goneSince: [String: Date] = [:]
+    private var stillGone: [String: Date] = [:]
 
     /// Thins each note's copies under a folder and takes away the folders left empty. True when it is empty itself.
     /// - This device's copies are thinned as when it writes them.
     /// - Another device's go when they are a year older than its newest copy of the note. That device thins the rest
     ///   itself, and this device's clock has no say: set years ahead, it would find them all a year old. A device not
     ///   used any more, or set up again, leaves a year of copies of each note, thinned when it wrote them last.
-    /// - The copies of a note gone from a folder in `seen`, deleted or renamed outside Notebook, go to the Trash, unless
-    ///   they may be of a note iCloud hasn't brought yet (`mayBeLive`). One that comes back gets them (`bringBack`).
+    /// - The copies of a note gone from a folder in `seen`, deleted or renamed outside Notebook, go to the Trash: when this
+    ///   device took one of them, so it had the note, and it was gone at a tidy-up a day before too. Not those that may be
+    ///   of a note iCloud hasn't brought yet (`mayBeLive`). One that comes back gets them (`bringBack`).
     /// - The History's own Trash is emptied of what went there a year ago (`emptyTrash`).
     @discardableResult
     private func tidyUp(_ folder: URL, in root: URL, now: Date, device: String, seen: [(place: String, url: URL)]) -> Bool {
@@ -348,9 +359,14 @@ final class NoteHistory: @unchecked Sendable {
             }
         }
         guard !copies.isEmpty else { return left == 0 }
-        if let note = note(of: folder, in: root, seen: seen), !FileOperations.exists(note), !mayBeLive(folder, device: device, now: now) {
-            toTrash(folders(for: note).all, of: note, as: Self.trashedName(device: device))
-            return true
+        if let note = note(of: folder, in: root, seen: seen), !FileOperations.exists(note),
+           copies.contains(where: { Self.isTaken($0, by: device) }), !mayBeLive(folder, device: device, now: now) {
+            let since = goneSince[note.path] ?? now
+            if now.timeIntervalSince(since) >= 86400 {
+                toTrash(folders(for: note).all, of: note, as: Self.trashedName(device: device))
+                return true
+            }
+            stillGone[note.path] = since
         }
         var removed = thin(copies.filter { Self.isTaken($0, by: device) }, now: now)
         let others = Dictionary(grouping: copies.filter { !Self.isTaken($0, by: device) }) { Self.label(of: $0) }
