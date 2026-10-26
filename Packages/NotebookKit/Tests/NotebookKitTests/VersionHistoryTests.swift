@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import NotebookKit
 
@@ -136,6 +137,224 @@ final class VersionHistoryTests: XCTestCase {
         XCTAssertEqual(its.count, 1)
         let others = await versions(of: draft)
         XCTAssertEqual(others, [])
+    }
+
+    // MARK: - Bringing a version back (#121, #122)
+
+    private func text(_ url: URL) -> String? { try? String(contentsOf: url, encoding: .utf8) }
+
+    /// The note open in the window, with something typed after it was opened.
+    private func openAndType(_ workspace: Workspace, _ manager: UndoManager, _ typed: String) async throws -> NSTextView {
+        workspace.open(draft)
+        try await until("open") { workspace.note?.isLoaded == true }
+        let textView = workspace.editor.textView
+        window?.makeFirstResponder(textView)
+        textView.setSelectedRange(NSRange(location: workspace.editor.text.utf16.count, length: 0))
+        textView.insertText(typed, replacementRange: textView.selectedRange())
+        try await until("the group closed") { manager.groupingLevel == 0 }
+        return textView
+    }
+
+    func testRestoreIsOneChangeUndoTakesBackAndKeepsWhatWasThere() async throws {
+        let (workspace, manager) = try await makeWindow()
+        _ = try await openAndType(workspace, manager, "Typed.")
+        let target = try XCTUnwrap(workspace.versionTarget())
+        workspace.restore("# Draft\n\nAn earlier version.\n", in: target, actionName: "Restore Version")
+        XCTAssertEqual(workspace.editor.text, "# Draft\n\nAn earlier version.\n")
+        XCTAssertEqual(manager.undoMenuItemTitle, "Undo Restore Version")
+        try await until("saved") { self.text(self.draft) == "# Draft\n\nAn earlier version.\n" }
+        let kept = await versions(of: draft)
+        XCTAssertEqual(kept.first, "# Draft\n\nFirst words.\nTyped.", "what was there is kept first")
+
+        try await undo(workspace, manager)
+        XCTAssertEqual(workspace.editor.text, "# Draft\n\nFirst words.\nTyped.")
+        try await until("saved") { self.text(self.draft) == "# Draft\n\nFirst words.\nTyped." }
+    }
+
+    func testRestoreKeepsTheCaretWhereTheChangeBegins() async throws {
+        let (workspace, manager) = try await makeWindow()
+        workspace.open(draft)
+        try await until("open") { workspace.note?.isLoaded == true }
+        let textView = workspace.editor.textView
+        window?.makeFirstResponder(textView)
+        textView.setSelectedRange(NSRange(location: 9, length: 0))
+        textView.insertText("X", replacementRange: textView.selectedRange())
+        try await until("the group closed") { manager.groupingLevel == 0 }
+        let target = try XCTUnwrap(workspace.versionTarget())
+        workspace.restore("# Draft\n\nOlder words.\n", in: target, actionName: "Restore Version")
+        XCTAssertEqual(workspace.editor.text, "# Draft\n\nOlder words.\n")
+        XCTAssertEqual(textView.selectedRange(), NSRange(location: 9, length: 0), "not after everything restored")
+    }
+
+    func testRevertToLastOpened() async throws {
+        let (workspace, manager) = try await makeWindow()
+        XCTAssertFalse(workspace.canRevertToLastOpened)
+        _ = try await openAndType(workspace, manager, "Typed.")
+        XCTAssertTrue(workspace.canRevertToLastOpened)
+        workspace.revertToLastOpened()
+        XCTAssertEqual(workspace.editor.text, "# Draft\n\nFirst words.\n")
+        XCTAssertFalse(workspace.canRevertToLastOpened)
+        XCTAssertEqual(manager.undoMenuItemTitle, "Undo Revert to Last Opened")
+        try await undo(workspace, manager)
+        XCTAssertEqual(workspace.editor.text, "# Draft\n\nFirst words.\nTyped.")
+    }
+
+    func testTheBrowserListsReadsAndShowsChanges() async throws {
+        let (workspace, manager) = try await makeWindow()
+        let now = Date()
+        history.keep("# Draft\n\nOlder words.\n", of: draft, at: now - 3 * 86400, device: "iPhone")
+        history.keep("# Draft\n\nFirst words.\n", of: draft, at: now - 600, device: "Mac")
+        _ = try await openAndType(workspace, manager, "Typed.")
+        var restored: String?
+        let browser = VersionBrowser(note: draft, current: { workspace.editor.text }) { restored = $0 }
+        await browser.load()
+        XCTAssertEqual(browser.versions?.map(\.device), ["Mac", "iPhone"])
+        XCTAssertEqual(browser.days.map(\.title).first, "Today")
+        try await until("the newest read") { browser.text == "# Draft\n\nFirst words.\n" }
+        browser.selection = browser.versions?.last?.url
+        try await until("the oldest read") { browser.text == "# Draft\n\nOlder words.\n" }
+        browser.showsChanges = true
+        try await until("the changes worked out") { browser.changes != nil }
+        let changes = try XCTUnwrap(browser.changes)
+        // The version ended with a line break, which the note now doesn't.
+        XCTAssertEqual(changes.text, "# Draft\n\nOlder words.\n\nFirst words.\nTyped.")
+        XCTAssertEqual(changes.removedLines, 1)
+        XCTAssertEqual(changes.addedLines, 2)
+        browser.restore()
+        XCTAssertEqual(restored, "# Draft\n\nOlder words.\n")
+    }
+
+    func testTheVersionShowsReadOnlyWithItsChangesMarked() async throws {
+        let (workspace, _) = try await makeWindow()
+        let reader = VersionReader(source: workspace.editor)
+        let changes = VersionChanges.between("# Plan\n\nDay one\n", "# Plan\n\nDay one\nDay two\n")
+        reader.show("# Plan\n\nDay one\n", changes: changes, title: "Plan", meta: "Today", folder: papers)
+        XCTAssertEqual(reader.editor.text, "# Plan\n\nDay one\nDay two\n")
+        XCTAssertEqual(reader.editor.layoutManager.changeMarks, changes.marks)
+        XCTAssertFalse(reader.editor.textView.isEditable)
+        XCTAssertTrue(reader.editor.textView.isSelectable, "its text can be copied")
+        XCTAssertFalse(reader.editor.restore(text: "Other", actionName: "Restore"), "nothing changes it")
+    }
+
+    func testShowChangesKeepsThePlaceYouWereAt() async throws {
+        let (workspace, _) = try await makeWindow()
+        let reader = VersionReader(source: workspace.editor)
+        reader.editor.view.frame = NSRect(x: 0, y: 0, width: 640, height: 600)
+        window?.contentView?.addSubview(reader.editor.view)
+        let version = (1...300).map { "Paragraph \($0) of the note as it was." }.joined(separator: "\n\n")
+        let now = "A new first line.\n\n" + version
+        reader.show(version, changes: nil, title: "Long", meta: "Today", folder: papers)
+        let editor = reader.editor
+        editor.layoutManager.ensureLayout(for: editor.container)
+        let y = editor.yPosition(of: (version as NSString).range(of: "Paragraph 150 ").location)
+        editor.setScrollTop(y)
+        let changes = VersionChanges.between(version, now)
+        reader.show(version, changes: changes, title: "Long", meta: "Today", folder: papers)
+        let top = editor.yPosition(of: (changes.text as NSString).range(of: "Paragraph 150 ").location)
+        XCTAssertEqual(editor.visibleRect.minY, top, accuracy: 2, "Paragraph 150 stays at the top")
+        reader.show(version, changes: nil, title: "Long", meta: "Today", folder: papers)
+        XCTAssertEqual(editor.visibleRect.minY, y, accuracy: 2, "and stays when Show Changes goes off")
+    }
+
+    func testAVersionIsNeverRestoredIntoAnotherNote() async throws {
+        let (workspace, _) = try await makeWindow()
+        let other = papers.appendingPathComponent("Other.md")
+        try "# Other\n\nIts own words.\n".write(to: other, atomically: true, encoding: .utf8)
+        workspace.open(draft)
+        try await until("open") { workspace.note?.isLoaded == true }
+        let target = try XCTUnwrap(workspace.versionTarget())
+        // Another note opens while the versions are up: from Spotlight, a reminder, a new note.
+        workspace.open(other)
+        try await until("the other open") { workspace.note?.isLoaded == true && workspace.note?.url.lastPathComponent == "Other.md" }
+        workspace.restore("# Draft\n\nAn earlier version.\n", in: target, actionName: "Restore Version")
+        XCTAssertEqual(workspace.editor.text, "# Other\n\nIts own words.\n")
+        try await Task.sleep(for: .milliseconds(900))
+        XCTAssertEqual(text(draft), "# Draft\n\nFirst words.\n")
+        XCTAssertEqual(text(other), "# Other\n\nIts own words.\n")
+    }
+
+    func testTheVersionsGoWhenAnotherNoteOpensAndAreLetGo() async throws {
+        let (workspace, _) = try await makeWindow()
+        let other = papers.appendingPathComponent("Other.md")
+        try "Other".write(to: other, atomically: true, encoding: .utf8)
+        workspace.open(draft)
+        try await until("open") { workspace.note?.isLoaded == true }
+        let window = try XCTUnwrap(self.window)
+        weak var browser: VersionBrowser?
+        do {
+            let made = VersionBrowser(note: draft, current: { "" }) { _ in }
+            browser = made
+            VersionsWindow.show(made, editor: workspace.editor, over: window)
+        }
+        try await until("the sheet is up") { window.attachedSheet != nil }
+        workspace.open(other)
+        try await until("the sheet went") { window.attachedSheet == nil }
+        try await until("let go") { browser == nil }
+
+        // Done, as its button does.
+        do {
+            let made = VersionBrowser(note: other, current: { "" }) { _ in }
+            browser = made
+            VersionsWindow.show(made, editor: workspace.editor, over: window)
+        }
+        try await until("the sheet is up again") { window.attachedSheet != nil }
+        // Not kept here: the sheet's view holds the browser.
+        try XCTUnwrap(window.attachedSheet?.contentViewController as? NSHostingController<VersionsSheet>).rootView.dismiss()
+        try await until("Done put it away") { window.attachedSheet == nil }
+        try await until("and let it go") { browser == nil }
+    }
+
+    func testAnotherVersionsChangesNeverShowForTheOnePicked() async throws {
+        let (workspace, _) = try await makeWindow()
+        history.keep("# Draft\n\nOne.\n", of: draft, at: Date() - 600, device: "Mac")
+        history.keep("# Draft\n\nTwo.\n", of: draft, at: Date() - 300, device: "Mac")
+        let browser = VersionBrowser(note: draft, current: { "# Draft\n\nNow.\n" }) { _ in }
+        await browser.load()
+        browser.showsChanges = true
+        // The older picked, then at once the newer: the older's comparison mustn't land.
+        browser.selection = browser.versions?.last?.url
+        browser.selection = browser.versions?.first?.url
+        try await until("the newer's changes") { browser.changes != nil }
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(browser.changes?.text, "# Draft\n\nTwo.\nNow.\n")
+        _ = workspace
+    }
+
+    func testRevertToFollowsTheWindowThatBecameKey() async throws {
+        _ = try await makeWindow()
+        _ = FileWindows.shared
+        let controller = FileWindowController(url: draft)
+        let window = try XCTUnwrap(controller.window)
+        func becameKey(_ window: NSWindow?) {
+            NotificationCenter.default.post(name: NSWindow.didBecomeKeyNotification, object: window)
+        }
+        becameKey(window)
+        XCTAssertTrue(Workspace.shared.keyFileNote === controller.noteDocument)
+        // Its sheet up, such as the versions': still the window you are working in.
+        let sheet = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 100), styleMask: [.titled], backing: .buffered, defer: false)
+        window.beginSheet(sheet, completionHandler: nil)
+        try await until("the sheet is up") { window.attachedSheet != nil }
+        becameKey(sheet)
+        XCTAssertTrue(Workspace.shared.keyFileNote === controller.noteDocument, "the sheet's window is still the one")
+        // The main window next, the note window's sheet still up: the main window's note.
+        becameKey(self.window)
+        XCTAssertNil(Workspace.shared.keyFileNote)
+        becameKey(window)
+        window.endSheet(sheet)
+        window.close()
+        XCTAssertNil(Workspace.shared.keyFileNote, "closed")
+    }
+
+    func testRevertToFollowsTheNoteWindowYouAreIn() async throws {
+        let (workspace, manager) = try await makeWindow()
+        _ = try await openAndType(workspace, manager, "Typed.")
+        XCTAssertTrue(workspace.canRevertToLastOpened)
+        let elsewhere = NoteDocument(url: papers.appendingPathComponent("Draft.md"), history: nil)
+        workspace.keyFileNote = elsewhere
+        XCTAssertTrue(workspace.revertNote === elsewhere)
+        XCTAssertFalse(workspace.canRevertToLastOpened, "that window's note wasn't changed")
+        workspace.keyFileNote = nil
+        elsewhere.close()
     }
 
     func testANoteOpenInAWindowOfItsOwnTakesWhatWasTypedToTheTrash() async throws {

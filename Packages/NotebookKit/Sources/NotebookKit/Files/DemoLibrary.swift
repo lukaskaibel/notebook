@@ -35,9 +35,102 @@ enum DemoLibrary {
 
     static let pharmacy = TodoPlace(name: "Pharmacy at Rosenthaler Platz", latitude: 52.529_6, longitude: 13.401_3)
 
-    static func create(at root: URL) {
+    /// Earlier versions of the Kyoto trip, written on a Mac and an iPhone over the last two weeks, to show version
+    /// history with, oldest first: the note as it began and the plan filling up. The newest is the note as it is.
+    static func versions(now: Date = .now) -> [(path: String, text: String, date: Date, device: String)] {
+        let calendar = Calendar.current
+        func at(_ days: Int, _ hour: Int, _ minute: Int) -> Date {
+            let day = calendar.date(byAdding: .day, value: -days, to: calendar.startOfDay(for: now)) ?? now
+            return calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day) ?? now
+        }
+        let path = "Travel/Kyoto trip.md"
+        return [
+            (path, """
+            Five days in October. Flights are booked.
+
+            ## Packing
+            - [ ] Passport
+            - [ ] Rail pass voucher
+
+            ## Plan
+            - **Day 1** Fushimi Inari
+
+            """, at(12, 21, 14), "iPhone"),
+            (path, """
+            Five days in October. Flights and the ryokan are booked, everything else stays loose.
+
+            ## Packing
+            - [x] Passport
+            - [ ] Rail pass voucher
+            - [ ] Power adapter, type A \(due(3, now: now))
+
+            ## Plan
+            - **Day 1** Fushimi Inari at sunrise
+            - **Day 2** Arashiyama: bamboo grove early
+
+            Room details are on the [ryokan's site](https://www.example.com/ryokan). Check-in is from 3 pm.
+
+            """, at(5, 8, 42), "Mac"),
+            (path, """
+            Five days in October. Flights and the ryokan are booked, everything else stays loose. Costs are in [[Budget]].
+
+            ![](.assets/torii.png)
+
+            ## Packing
+            - [x] Passport
+            - [x] Rail pass voucher
+            - [ ] Power adapter, type A \(due(3, now: now))
+            - [ ] Rain jacket
+
+            ## Plan
+            - **Day 1** Fushimi Inari at sunrise, before the tour groups
+            - **Day 2** Arashiyama: bamboo grove early
+            - **Day 3** Day trip to [[Nara]]
+
+            Room details are on the [ryokan's site](https://www.example.com/ryokan). Check-in is ==from 3 pm==.
+
+            """, at(2, 19, 5), "iPhone"),
+            (path, """
+            Five days in October. Flights and the ryokan are booked, everything else stays loose. Costs are in [[Budget]], the tickets in [[Flight tickets.pdf]].
+
+            ![](.assets/torii.png)
+
+            ## Packing
+            - [x] Passport
+            - [x] Rail pass voucher
+            - [ ] Power adapter, type A \(due(3, now: now))
+            - [ ] Rain jacket
+
+            ## Plan
+            - **Day 1** Fushimi Inari at sunrise, before the tour groups
+            - **Day 2** Arashiyama: bamboo grove early, then along the river
+            - **Day 3** Day trip to [[Nara]]
+
+            Room details are on the [ryokan's site](https://www.example.com/ryokan). Check-in is ==from 3 pm==.
+
+            > [!tip] Good to know
+            > Get an ICOCA card at the airport. It works on every train and in most convenience stores.
+
+            """, at(1, 10, 20), "Mac"),
+        ]
+    }
+
+    /// Keeps the sample versions in the history of the sample notes at `root`, made a moment ago, and the Kyoto trip as
+    /// it is now, as written on a Mac 35 minutes ago: opening it finds it the same as its newest version.
+    @MainActor
+    static func keepVersions(at root: URL, in history: NoteHistory = .shared) {
+        let now = Date()
+        for version in versions(now: now) {
+            history.keep(version.text, of: root.appendingPathComponent(version.path), at: version.date, device: version.device)
+        }
+        history.keepFile(root.appendingPathComponent("Travel/Kyoto trip.md"), at: now.addingTimeInterval(-35 * 60), device: "Mac")
+    }
+
+    /// Makes the sample notes in `root`, unless they are there already. Says whether it made them.
+    @discardableResult
+    static func create(at root: URL) -> Bool {
         let fm = FileManager.default
-        if fm.fileExists(atPath: root.appendingPathComponent("Travel/Kyoto trip.md").path) { return }
+        if fm.fileExists(atPath: root.appendingPathComponent("Travel/Kyoto trip.md").path) { return false }
         func folder(_ path: String) -> URL {
             let url = root.appendingPathComponent(path, isDirectory: true)
             try? fm.createDirectory(at: url, withIntermediateDirectories: true)
@@ -234,6 +327,7 @@ enum DemoLibrary {
             try? fm.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -item.edited * 86_400), .creationDate: Date(timeIntervalSinceNow: -item.made * 86_400)],
                                   ofItemAtPath: root.appendingPathComponent(item.path).path)
         }
+        return true
     }
 
     /// A made-up export of Apple Notes, for trying Import from Apple Notes with and taking its pictures: two Notes

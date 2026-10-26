@@ -11,6 +11,8 @@ import SwiftUI
 enum DebugRemote {
     /// The window `fakekey` made say it is key.
     nonisolated(unsafe) private static weak var fakeKeyWindow: NSWindow?
+    /// The sheet over it, with `fakekey sheet`: key as a sheet is, with the window under it main.
+    nonisolated(unsafe) private static weak var fakeKeySheet: NSWindow?
     /// A click the remote sends: what watches the app's clicks doesn't see it, as it goes straight to the window.
     static let clicked = Notification.Name("DebugRemoteClicked")
     private static var processed = 0
@@ -128,15 +130,24 @@ enum DebugRemote {
             // The window says it is key and main, as one clicked in the app in front does, while the app stays in the
             // background: SwiftUI's focus then behaves as it does for you.
             // Dropdowns too, so their glass is drawn as it is in the app in front.
+            // fakekey sheet: the sheet over it too (Browse All Versions…), with its default button lit.
             guard let window, let windowClass = object_getClass(window) else { break }
             fakeKeyWindow = window
-            for (patched, selector) in [(windowClass, #selector(getter: NSWindow.isKeyWindow)), (windowClass, #selector(getter: NSWindow.isMainWindow)),
-                                        (DropdownPanel.self, #selector(getter: NSWindow.isKeyWindow))] {
+            var patches = [(windowClass, #selector(getter: NSWindow.isKeyWindow)), (windowClass, #selector(getter: NSWindow.isMainWindow)),
+                           (DropdownPanel.self, #selector(getter: NSWindow.isKeyWindow))]
+            if argument == "sheet", let sheet = window.attachedSheet, let sheetClass = object_getClass(sheet) {
+                fakeKeySheet = sheet
+                patches.append((sheetClass, #selector(getter: NSWindow.isKeyWindow)))
+            }
+            for (patched, selector) in patches {
                 guard let method = class_getInstanceMethod(patched, selector) else { continue }
                 typealias Getter = @convention(c) (AnyObject, Selector) -> Bool
                 let original = unsafeBitCast(method_getImplementation(method), to: Getter.self)
                 let replacement: @convention(block) (AnyObject) -> Bool = { object in
-                    object === DebugRemote.fakeKeyWindow || object is DropdownPanel || original(object, selector)
+                    if selector == #selector(getter: NSWindow.isKeyWindow), let sheet = DebugRemote.fakeKeySheet, sheet.isVisible {
+                        return object === sheet || object is DropdownPanel || original(object, selector)
+                    }
+                    return object === DebugRemote.fakeKeyWindow || object is DropdownPanel || original(object, selector)
                 }
                 class_replaceMethod(patched, selector, imp_implementationWithBlock(replacement), method_getTypeEncoding(method))
             }
@@ -333,6 +344,42 @@ enum DebugRemote {
             let item = menu.items[index]
             log("menu \(argument): enabled=\(item.isEnabled) key=\(item.keyEquivalentModifierMask.rawValue)+\(item.keyEquivalent)")
             if item.isEnabled { menu.performActionForItem(at: index) }
+        case "showmenu":
+            // showmenu <Menu>[ > <Submenu>]: pops that menu of the menu bar up in the window, under where it is in the
+            // menu bar, for a picture (`capture all`), as the menu bar of an app in the background can't be opened.
+            // It shows on screen until `showmenu close`.
+            if argument == "close" {
+                trackedMenu?.cancelTracking()
+                trackedMenu = nil
+                break
+            }
+            let path = argument.components(separatedBy: " > ")
+            guard var menu = NSApp.mainMenu?.item(withTitle: path[0])?.submenu, let content = window?.contentView else { log("no menu \(argument)"); break }
+            menu.delegate?.menuNeedsUpdate?(menu)
+            menu.update()
+            var offset: CGFloat = 0
+            for title in path.dropFirst() {
+                guard let index = menu.items.firstIndex(where: { $0.title == title }), let submenu = menu.items[index].submenu else { log("no \(title) in \(menu.items.map(\.title))"); return }
+                offset = CGFloat(index)
+                menu = submenu
+                menu.delegate?.menuNeedsUpdate?(menu)
+                menu.update()
+            }
+            // The menu bar's own menus are drawn outside the app, where a picture of its windows doesn't see them: a
+            // menu of copies of their items is the app's.
+            let copy = NSMenu(title: menu.title)
+            for item in menu.items { if let item = item.copy() as? NSMenuItem { copy.addItem(item) } }
+            menu = copy
+            trackedMenu = menu
+            let top = 6 + offset * 22
+            let point = NSPoint(x: path.count > 1 ? 330 : 90, y: content.isFlipped ? top : content.bounds.height - top)
+            log("showmenu at \(point) in a view flipped=\(content.isFlipped), on screen at \(content.window?.convertPoint(toScreen: content.convert(point, to: nil)) ?? .zero)")
+            DispatchQueue.main.async {
+                let opened = CACurrentMediaTime()
+                let shown = menu.popUp(positioning: nil, at: point, in: content)
+                log(String(format: "showmenu closed after %.2f s, chosen=%@", CACurrentMediaTime() - opened, String(shown)))
+            }
+            log("showmenu \(argument): " + menu.items.map { $0.isSeparatorItem ? "—" : $0.title + ($0.isEnabled ? "" : " (disabled)") }.joined(separator: " | "))
         case "menus":
             // menus: every menu item with its shortcut and action, to check shortcuts are unique.
             func walk(_ menu: NSMenu, _ path: String) {
@@ -889,6 +936,7 @@ enum DebugRemote {
             if let workspace, DebugReminders.run(command, argument, workspace: workspace, url: resolve, log: log) { break }
             if let workspace, DebugFolderIcons.run(command, argument, workspace: workspace, url: resolve, log: log) { break }
             if let workspace, DebugTodos.run(command, argument, workspace: workspace, log: log) { break }
+            if let workspace, DebugVersions.run(command, argument, workspace: workspace, log: log) { break }
             log("unknown command: \(line)")
         }
     }

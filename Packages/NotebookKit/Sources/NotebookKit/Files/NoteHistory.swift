@@ -133,6 +133,15 @@ final class NoteHistory: @unchecked Sendable {
         queue.async { [self] in write(text, of: note, at: date, device: device, onlyIfChanged: onlyIfChanged) }
     }
 
+    /// Keeps a copy of a note as its file says, read in the background.
+    func keepFile(_ note: URL, at date: Date = Date(), device: String) {
+        let note = note.standardizedFileURL
+        queue.async { [self] in
+            guard let text = NoteDocument.read(note) else { return }
+            write(text, of: note, at: date, device: device, onlyIfChanged: false)
+        }
+    }
+
     /// What this device is called in the names of its copies: "Mac 3f9a2c". The letters tell two Macs apart, so two
     /// never write a copy of the same name, and they say which copies are this device's to thin.
     @MainActor
@@ -418,6 +427,15 @@ final class NoteHistory: @unchecked Sendable {
     /// The History folders there are: in iCloud and on this device.
     private func roots() -> [URL] {
         [cloudRoot(), local].compactMap { $0 }
+    }
+
+    /// Removes the copies of a note, or of every note in a folder: for sample notes made again where others were.
+    func forget(_ url: URL) {
+        let url = url.standardizedFileURL
+        queue.async { [self] in
+            for folder in folders(for: url).all { Self.remove(folder) }
+            newest = [:]
+        }
     }
 
     // MARK: - Following notes
@@ -731,7 +749,7 @@ final class NoteHistory: @unchecked Sendable {
     // MARK: - Versions
 
     /// A note's copies, newest first, from their names alone: nothing is read or brought down from iCloud. Those that
-    /// stayed in iCloud when it left are among them.
+    /// stayed in iCloud when it left are among them. Copies iCloud hasn't brought down yet say so.
     func versions(of note: URL) async -> [Version] {
         let note = note.standardizedFileURL
         return await withCheckedContinuation { continuation in

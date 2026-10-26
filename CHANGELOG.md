@@ -33,6 +33,18 @@ versions follow [semantic versioning](https://semver.org).
   between the notes you exported keep finding them, the title Notes repeats as the first line goes, and the folders you
   put the exports in come along. Notes' export itself is only read, nothing in your folders is written over, what
   couldn't come over is listed, and one Undo takes the whole import back.
+- Version history: Notebook keeps earlier versions of your notes as you write. It keeps the note as it was when you
+  start changing it, a version every ten minutes while you write, and one when you stop. On the Mac, File › Revert To ›
+  Browse All Versions… shows them by day next to the one you pick, as the note looks. Show Changes marks what was added
+  since then in green and what was taken out in red, word by word where a line changed. Restore puts a version back as
+  one change Undo takes back, and keeps the text you had as a version first; Revert To › Last Opened goes back to the
+  note as you opened it. On iPhone and iPad, Version History is in the note's ⋯ menu.
+  - **Where they're kept:** the versions are plain Markdown copies. Those of notes in iCloud are in Notebook's own
+    iCloud folder, which iCloud Drive doesn't show, so they reach your other devices. The rest stay on the device.
+  - **How long:** everything from the last hour, then one an hour for a day, one a day for a month and one a week for
+    a year.
+  - **Merges and conflicts:** before a change from elsewhere is merged in or a conflict is settled, both texts are
+    kept, so the one you didn't keep can be brought back.
 
 ### Changed
 

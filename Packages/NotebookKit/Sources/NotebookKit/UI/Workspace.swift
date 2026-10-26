@@ -17,7 +17,10 @@ public final class Workspace: NSObject {
     public private(set) var currentURL: URL?
     /// The To-dos list is shown on the right, in place of a file.
     public private(set) var showsTodos = false
-    public private(set) var note: NoteDocument?
+    public private(set) var note: NoteDocument? {
+        // Versions of the note left aren't restored into the next.
+        didSet { if note !== oldValue { closeVersions() } }
+    }
     @ObservationIgnored public let editor = EditorController()
     let index = SearchIndex()
 
@@ -122,6 +125,8 @@ public final class Workspace: NSObject {
     @ObservationIgnored var showWindow: (() -> Void)?
 
     #if os(macOS)
+    /// The note in its own window that you are working in, for Revert To; nil while it's the main window.
+    var keyFileNote: NoteDocument?
     @ObservationIgnored weak var sidebar: SidebarController?
     /// Remind Me… while it is open, so another one takes its place.
     @ObservationIgnored weak var reminderPopover: NSPopover?
@@ -161,6 +166,8 @@ public final class Workspace: NSObject {
     var folderIconRequest: FolderIconRequest?
     /// A file or folder to move, in the sheet that asks where to.
     var moving: MovingFile?
+    /// The open note's earlier versions, in the Version History sheet.
+    var versionBrowser: VersionBrowser?
     /// What each note looked like when you went on from it, shown while the screen of the note you go on to slides
     /// over it, and while you swipe back to it. There is only one editor, and it is on the screen in front.
     @ObservationIgnored var pageSnapshots: [URL: UIView] = [:]
@@ -279,7 +286,11 @@ public final class Workspace: NSObject {
                 NoteHistory.shared.keepOnDevice(in: store.appendingPathComponent("History.noindex", isDirectory: true))
             }
             #if DEBUG
-            if UserDefaults.standard.bool(forKey: "NotebookDemo") { DemoLibrary.create(at: url) }
+            if UserDefaults.standard.bool(forKey: "NotebookDemo"), DemoLibrary.create(at: url) {
+                // Versions of earlier sample notes at the same place go with them.
+                NoteHistory.shared.forget(url)
+                DemoLibrary.keepVersions(at: url)
+            }
             // YES: next to the library; a path: there, such as On My iPhone for the UI tests.
             if let export = UserDefaults.standard.string(forKey: "NotebookDemoExport"), export != "NO" {
                 let path = (export as NSString).expandingTildeInPath
@@ -489,7 +500,8 @@ public final class Workspace: NSObject {
     func addSampleNotes(in folder: URL) {
         let url = folder.appendingPathComponent("Sample Notes", isDirectory: true)
         Task {
-            await Task.detached(priority: .userInitiated) { DemoLibrary.create(at: url) }.value
+            let made = await Task.detached(priority: .userInitiated) { DemoLibrary.create(at: url) }.value
+            if made { DemoLibrary.keepVersions(at: url) }
             addLocation(url)
         }
     }
