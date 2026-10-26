@@ -76,6 +76,10 @@ versions follow [semantic versioning](https://semver.org).
   This iPhone uses, so its notes can be opened, shared and backed up from there. It was missing.
 - The sidebar on the Mac no longer scrolls back to the open note each time it is saved while you look at another part
   of it.
+- In the Mac's sidebar, Tab now goes on into the note that is open, with the caret where it was, as Tab goes from the
+  list to the note in Notes and Mail. Moving a file to the Trash from the sidebar opens the next file in its folder, or
+  the one before it at the end, as Notes shows the next note; before, the note opened before it came back, wherever it
+  was, and the sidebar jumped there. VoiceOver calls the outline next to the note "Outline", not "Sidebar".
 
 ## [1.0.0] – not released yet
 
