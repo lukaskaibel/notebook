@@ -83,6 +83,20 @@ final class LocationTests: XCTestCase {
         XCTAssertTrue(saved.linked.isEmpty, "found again on every launch")
     }
 
+    /// On My iPhone, chosen itself in the folder picker, is a folder called "File Provider Storage" (#130).
+    func testOnMyIPhoneIsKnownByItsFolder() {
+        let device = URL(fileURLWithPath: "/private/var/mobile/Containers/Shared/AppGroup/0A1B2C3D-4E5F-6789-ABCD-EF0123456789/File Provider Storage")
+        XCTAssertEqual(Location.onDeviceFolders(device), [])
+        XCTAssertEqual(Location.onDeviceFolders(device.appendingPathComponent("Downloads/Recipes")), ["Downloads", "Recipes"])
+        // A folder of that name anywhere else is a folder like any other.
+        XCTAssertNil(Location.onDeviceFolders(base.appendingPathComponent("File Provider Storage")))
+        XCTAssertNil(Location.onDeviceFolders(drive))
+        // Neither On My iPhone nor iCloud Drive gets its folder's name from the bookmark: they are named when added.
+        XCTAssertNil(LocationStore.bookmark(for: device).name)
+        XCTAssertNil(LocationStore.bookmark(for: drive).name)
+        XCTAssertEqual(LocationStore.bookmark(for: drive.appendingPathComponent("Papers")).name, "Papers")
+    }
+
     func testSidebarShowsLinkedFoldersAmongTheOthers() async throws {
         let workspace = try await makeWorkspace()
         guard let location = workspace.location(containing: drive), let root = workspace.root(for: location) else { return XCTFail("no iCloud Drive") }

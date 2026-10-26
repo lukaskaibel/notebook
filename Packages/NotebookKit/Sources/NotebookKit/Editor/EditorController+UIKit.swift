@@ -511,10 +511,18 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     func paste(from pasteboard: UIPasteboard) -> Bool {
         let target = selection
         if let data = pasteboard.data(forPasteboardType: Self.fragmentIdentifier), pasteFragment(data, at: target) { return true }
-        if let urls = pasteboard.urls?.filter(\.isFileURL), !urls.isEmpty, pasteFiles(urls, at: target) { return true }
-        if pasteboard.hasImages, !pasteboard.hasStrings, let image = pasteboard.image, let stored = storeAsset(image: image) {
-            insertOnOwnLines("![](\(stored))", at: target)
-            return true
+        // Where the note's folder has to be given first, what was read off the pasteboard goes in once it is: reading
+        // it again then would ask to paste.
+        if let urls = pasteboard.urls?.filter(\.isFileURL), !urls.isEmpty {
+            guard mayStore(urls, orRetry: { [weak self] in self?.insertFiles(urls) }) else { return true }
+            if pasteFiles(urls, at: target) { return true }
+        }
+        if pasteboard.hasImages, !pasteboard.hasStrings, let image = pasteboard.image {
+            guard mayStoreAssets(orRetry: { [weak self] in self?.insertPictures([image]) }) else { return true }
+            if let stored = storeAsset(image: image) {
+                insertOnOwnLines("![](\(stored))", at: target)
+                return true
+            }
         }
         if let string = pasteboard.string {
             pasteText(string, at: target)
@@ -625,7 +633,8 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
             let image: UIImage? = await withCheckedContinuation { continuation in
                 provider.loadObject(ofClass: UIImage.self) { object, _ in continuation.resume(returning: object as? UIImage) }
             }
-            return image.flatMap { storeAsset(image: $0) }.map { "![](\($0))" }
+            guard let image, await mayStoreAssets() else { return nil }
+            return storeAsset(image: image).map { "![](\($0))" }
         }
         let type = provider.registeredTypeIdentifiers.first { UTType($0)?.conforms(to: .data) == true } ?? UTType.data.identifier
         // The file is there only while this runs: it is copied right away.
@@ -642,13 +651,14 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         guard let copied else { return nil }
         let url = URL(fileURLWithPath: copied)
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
-        guard let stored = storeAsset(copying: url) else { return nil }
+        guard await mayStoreAssets(), let stored = storeAsset(copying: url) else { return nil }
         return MarkdownStyler.isImageFile(url) ? "![](\(stored))" : "![\(url.lastPathComponent)](\(stored))"
     }
 
     /// Pictures from the camera, the photo library or the document scanner, saved next to the note and put in at
     /// the caret, each on a line of its own.
     public func insertPictures(_ images: [UIImage]) {
+        guard mayStoreAssets(orRetry: { [weak self] in self?.insertPictures(images) }) else { return }
         let stored = images.compactMap { storeAsset(image: $0) }
         guard !stored.isEmpty else { return }
         insertOnOwnLines(stored.map { "![](\($0))" }.joined(separator: "\n"), at: selection)
@@ -656,7 +666,33 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
 
     /// Files picked in the Files app: copied next to the note, or linked when they are notes.
     public func insertFiles(_ urls: [URL]) {
+        guard mayStore(urls, orRetry: { [weak self] in self?.insertFiles(urls) }) else { return }
         _ = pasteFiles(urls, at: selection)
+    }
+
+    // MARK: - The note's folder
+
+    /// Whether pictures and drawings may go into `.assets`, asking for the note's folder first where Notebook has to
+    /// be given it: a note opened from another app.
+    func mayStoreAssets() async -> Bool {
+        guard let folder, let delegate, !delegate.editor(self, mayWriteIn: folder) else { return true }
+        return await delegate.editor(self, askToWriteIn: folder)
+    }
+
+    /// True when pictures and drawings may go into `.assets` now. Otherwise asks for the note's folder and does `retry`
+    /// once it is given, if the note is still open.
+    func mayStoreAssets(orRetry retry: @escaping () -> Void) -> Bool {
+        guard let folder, let delegate, !delegate.editor(self, mayWriteIn: folder) else { return true }
+        let note = loadCount
+        Task {
+            if await delegate.editor(self, askToWriteIn: folder), loadCount == note { retry() }
+        }
+        return false
+    }
+
+    /// The same for files to put in: notes become links, which need no folder; anything else is copied into `.assets`.
+    private func mayStore(_ files: [URL], orRetry retry: @escaping () -> Void) -> Bool {
+        files.allSatisfy { $0.pathExtension.lowercased() == "md" } || mayStoreAssets(orRetry: retry)
     }
 }
 

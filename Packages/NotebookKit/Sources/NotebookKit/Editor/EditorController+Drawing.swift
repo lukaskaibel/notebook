@@ -61,6 +61,10 @@ extension EditorController {
         let writing = isWritingInView
         var target = picture ?? (writing ? drawingAtCaret() : drawingInView())
         if target == nil {
+            #if os(iOS)
+            // A new drawing's files go into `.assets`, which a note opened from another app needs its folder for.
+            guard mayStoreAssets(orRetry: { [weak self] in self?.beginDrawing(in: picture) }) else { return }
+            #endif
             guard let (url, insertion) = insertDrawing(at: writing ? selection.location : lineInView(), writing: writing) else { return beep() }
             session.created[url] = insertion
             target = url

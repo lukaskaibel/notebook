@@ -5,6 +5,16 @@ versions follow [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Fixed
+
+- On iPhone and iPad, On My iPhone (On My iPad) chosen itself as a location was called "File Provider Storage", the
+  name of its folder on disk, on the first screen, in the sidebar and in Settings. It now has the name the Files app
+  gives it, also where you added it before.
+- On iPhone and iPad, a note opened from another app, such as with Share in the Files app, couldn't be renamed or take
+  pictures and drawings when it isn't in one of your locations, since the system gives Notebook only the file. The
+  first time it needs the note's folder, Notebook now asks for it, with the Files app's picker open at that folder, and
+  remembers it after that.
+
 ## [1.0.0] – not released yet
 
 The first version: notes as Markdown files in your own folders, on the Mac, iPhone and iPad. While it was being built,
