@@ -16,8 +16,8 @@ extension EditorController: NSTextViewDelegate, NSTextFieldDelegate {
         view.isAutomaticTextReplacementEnabled = false
         view.isAutomaticLinkDetectionEnabled = false
         view.isAutomaticDataDetectionEnabled = false
-        view.isContinuousSpellCheckingEnabled = true
-        view.isAutomaticSpellingCorrectionEnabled = false
+        applySpelling()
+        NotificationCenter.default.addObserver(self, selector: #selector(applySpelling), name: .notebookSpellingChanged, object: nil)
         view.smartInsertDeleteEnabled = false
         view.drawsBackground = false
         view.isVerticallyResizable = true
@@ -49,6 +49,14 @@ extension EditorController: NSTextViewDelegate, NSTextFieldDelegate {
     }
 
     public var view: NSView { scrollView }
+
+    /// Spelling as Edit › Spelling and Grammar sets it, the same in every note.
+    @objc func applySpelling() {
+        let settings = NotebookSettings.shared
+        textView.isContinuousSpellCheckingEnabled = settings.checksSpelling
+        textView.isGrammarCheckingEnabled = settings.checksGrammar
+        textView.isAutomaticSpellingCorrectionEnabled = settings.correctsSpelling
+    }
 
     // MARK: - What the shared editor asks of the text view
 

@@ -96,11 +96,11 @@ address. A PDF or any other file on a line of its own becomes a card with a prev
   <img alt="Further down the Kyoto note: a plan with a dashed link to the note Nara that doesn't exist yet, a web link with its pencil, a highlight, a Good to know callout, a table of days and areas, and a card for Flight tickets.pdf" src="Design/screenshots/objects-light.webp">
 </picture>
 
-Paste or drop a picture, from the Finder, Photos or Safari, and it's saved next to the note, in a hidden `.assets`
-folder, as PNG or JPEG so that other apps can show it. Drag a picture or file card to another place in the note to move
-it, or into another note, a folder in the sidebar, the Finder or another app for a copy. Delete it from the note and the
-file goes to the Trash once you leave the note, unless another note in the folder still uses it. Move a note to another
-folder and its pictures move along.
+Paste or drop a picture, from the Finder, Photos or Safari, or choose it with Attach File (Edit › Attach File… on the
+Mac), and it's saved next to the note, in a hidden `.assets` folder, as PNG or JPEG so that other apps can show it. Drag
+a picture or file card to another place in the note to move it, or into another note, a folder in the sidebar, the
+Finder or another app for a copy. Delete it from the note and the file goes to the Trash once you leave the note, unless
+another note in the folder still uses it. Move a note to another folder and its pictures move along.
 
 ### Drawings
 
@@ -613,8 +613,10 @@ exported it rather than when you wrote it.
 | --- | --- |
 | ⌘N | New note in the current folder, or with none, in the default folder |
 | ⇧⌘N | New folder in the current folder, named in place |
+| ⌘D | Duplicate the note |
 | ⌘Z, ⇧⌘Z | Undo and redo: typing, and changes to files (the Trash, a rename, a move, a new note or folder), newest first |
 | ⌘F | Search |
+| ⌥⌘F, ⇧⌘F | Find in the note, find and replace; ⌘G and ⇧⌘G for the next and previous |
 | ⌘K | Search and run commands; `>` for commands only |
 | ⇧⌘R | To-dos |
 | ⌘[ and ⌘], or swipe between pages | Back and forward; the swipe follows System Settings, as in Safari |
@@ -640,6 +642,7 @@ While writing:
 | ⇧⌘L | Checklist |
 | ⇧⌘U | Mark as checked |
 | ⇧⌘7, ⇧⌘9 | Bulleted list, numbered list |
+| ⇧⌘A | Attach a file: pictures, PDFs and other files go in at the caret |
 | ⌘' | Block quote |
 | Tab, ⇧Tab | Nest or un-nest a list item (in code: indent) |
 | ⌥⌘] and ⌥⌘[ | Increase and decrease indent |

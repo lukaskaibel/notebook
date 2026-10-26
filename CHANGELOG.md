@@ -46,6 +46,14 @@ versions follow [semantic versioning](https://semver.org).
   - **Merges and conflicts:** before a change from elsewhere is merged in or a conflict is settled, both texts are
     kept, so the one you didn't keep can be brought back.
 
+- The Mac's Edit menu has what Notes' has for writing. Edit › Find finds in the note you're in, in a find bar under the
+  toolbar: Find in Note (⌥⌘F), Find and Replace (⇧⌘F), Find Next and Previous (⌘G, ⇧⌘G), Use Selection for Find and
+  Jump to Selection (⌘J). ⌘F stays search, which finds in every note. Spelling and Grammar checks the note (⌘;), shows
+  the spelling panel, and turns checking as you type, grammar and correcting as you go on or off for every note;
+  Transformations makes words upper case, lower case or capitalized, and Speech reads the note aloud. Edit › Attach
+  File… (⇧⌘A) puts pictures, PDFs and other files in at the caret, stored next to the note as if dropped there.
+- File › Duplicate (⌘D), Rename and Move to Trash on the Mac, as in Notes, for the note in the window you're working in.
+
 ### Changed
 
 - Notes are saved in the background, on the Mac, iPhone and iPad: a slow disk, or iCloud holding a note while it puts
@@ -76,6 +84,9 @@ versions follow [semantic versioning](https://semver.org).
   This iPhone uses, so its notes can be opened, shared and backed up from there. It was missing.
 - The sidebar on the Mac no longer scrolls back to the open note each time it is saved while you look at another part
   of it.
+- On the Mac, File › Move To moved the note in the main window while a note's own window was in front; it now moves the
+  note you're working in. The Format menu's commands are dimmed while no note is open to format, rather than doing
+  nothing.
 
 ## [1.0.0] – not released yet
 
