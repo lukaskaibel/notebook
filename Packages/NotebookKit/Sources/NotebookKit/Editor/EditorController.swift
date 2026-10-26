@@ -47,8 +47,13 @@ public protocol EditorControllerDelegate: AnyObject {
     /// A to-do that repeats was ticked: what its line said on `line`, and the next one's line, now on that line.
     func editor(_ editor: EditorController, tickedRepeatingTodo source: String, line: Int, next: String)
     /// Whether pictures and drawings may go into the note's folder, which a note opened from the Finder in the
-    /// sandboxed build has to be given first.
+    /// sandboxed build has to be given first. On the Mac it asks for the folder then and there.
     func editor(_ editor: EditorController, mayWriteIn folder: URL) -> Bool
+    #if os(iOS)
+    /// Asks for the note's folder where `mayWriteIn` says no (a note opened from another app): true once pictures and
+    /// drawings may go into it.
+    func editor(_ editor: EditorController, askToWriteIn folder: URL) async -> Bool
+    #endif
 }
 
 /// What of a to-do's reminder a click asks to change: its date (its date's pill, the bell), its place (its place's
@@ -66,6 +71,9 @@ public extension EditorControllerDelegate {
     func editor(_ editor: EditorController, showTodoReminderOnLine line: Int, part: TodoPart) {}
     func editor(_ editor: EditorController, tickedRepeatingTodo source: String, line: Int, next: String) {}
     func editor(_ editor: EditorController, mayWriteIn folder: URL) -> Bool { true }
+    #if os(iOS)
+    func editor(_ editor: EditorController, askToWriteIn folder: URL) async -> Bool { false }
+    #endif
 }
 
 /// Notebook's editor: a TextKit 1 text view whose storage holds the note's Markdown exactly, styled so that it reads as
