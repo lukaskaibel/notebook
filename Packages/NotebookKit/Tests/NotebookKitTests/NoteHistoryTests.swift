@@ -479,16 +479,23 @@ final class NoteHistoryTests: XCTestCase {
         try Data().write(to: notes.appendingPathComponent(".Stub.md.icloud"))
         let gone = notes.appendingPathComponent("Gone.md")
         let synced = notes.appendingPathComponent("Synced.md")
+        let unseen = notes.appendingPathComponent("Never here.md")
         let loose = folder.appendingPathComponent("Elsewhere/Loose.md")
         history.keep("here", of: here)
         history.keep("not brought down", of: stub)
         history.keep("deleted in the Finder", of: gone, device: "Mac 222222")
         history.keep("on the iPhone", of: synced, at: Date() - 2 * 86400, device: "iPhone 111111")
+        history.keep("on the iPhone long ago", of: unseen, at: Date() - 60 * 86400, device: "iPhone 111111")
         history.keep("outside the locations", of: loose)
         let defaults = try XCTUnwrap(UserDefaults(suiteName: "notebook-history-\(UUID().uuidString)"))
         history.tidyUp(defaults: defaults, device: "Mac 222222", notesIn: [notes])
-        let kept = await [versions(here), versions(stub), versions(synced), versions(loose)]
-        XCTAssertEqual(kept, [["here"], ["not brought down"], ["on the iPhone"], ["outside the locations"]])
+        let first = await versions(gone)
+        XCTAssertEqual(first, ["deleted in the Finder"], "gone once: iCloud may still be bringing it")
+        // A day later, still gone.
+        history.tidyUp(defaults: defaults, device: "Mac 222222", now: Date() + 86400 + 60, notesIn: [notes])
+        let kept = await [versions(here), versions(stub), versions(synced), versions(unseen), versions(loose)]
+        XCTAssertEqual(kept, [["here"], ["not brought down"], ["on the iPhone"], ["on the iPhone long ago"], ["outside the locations"]],
+                       "there, not brought down, recent from another device, never on this one, outside the locations")
         let trashed = await versions(gone)
         XCTAssertEqual(trashed, [])
         // It comes back, put back in the Finder: its copies too.
