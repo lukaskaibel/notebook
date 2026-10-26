@@ -3,7 +3,9 @@
 <!--
 	What Notebook tells the App Store about privacy. It collects nothing and tracks no one (PRIVACY.md), and says why it
 	uses the APIs Apple asks a reason for:
-	- UserDefaults: the app's own settings, favourites, recent files, and the copy of hidden folders and reminders.
+	- UserDefaults: the app's own settings, favourites, recent files, and the copy of hidden folders and reminders; and,
+	  in the App Group it shares with its share extension, where something shared can go (the default folder's name and
+	  the note opened last).
 	- File dates: shown in a file's info (Created, Modified) and in the iPhone's file rows, and compared to tell whether a
 	  note, a PDF, a picture or a drawing in the folders you chose changed since it was read.
 	Debug builds also read the system's uptime, for the debug remote's mouse events; App Store builds have no debug code.
@@ -24,6 +26,7 @@
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
 				<string>CA92.1</string>
+				<string>1C8F.1</string>
 			</array>
 		</dict>
 		<dict>

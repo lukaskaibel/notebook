@@ -10,6 +10,14 @@ CURRENT_PROJECT_VERSION = 1
 NOTEBOOK_BUNDLE_IDENTIFIER = com.lukaskbl.Notebook
 PRODUCT_BUNDLE_IDENTIFIER = $(NOTEBOOK_BUNDLE_IDENTIFIER)
 
+// The App Group in which the share extension leaves what is shared, for the app to write into the notes (SharedNotes
+// in NotebookCapture). The App Store build has it, and so do builds for the Simulator, which need no team for it. In
+// other builds the share extension can't keep anything, and the app never looks in a group's folder: on the Mac that
+// would ask you for access to other apps' data.
+NOTEBOOK_APP_GROUP =
+NOTEBOOK_APP_GROUP[config=AppStore] = group.com.lukaskbl.Notebook
+NOTEBOOK_APP_GROUP[sdk=iphonesimulator*] = group.com.lukaskbl.Notebook
+
 // Notebook uses no encryption of its own (iCloud and HTTPS are Apple's), so App Store Connect doesn't ask about export
 // compliance for every build.
 INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO
@@ -34,8 +42,10 @@ CODE_SIGN_ENTITLEMENTS[sdk=macosx*] = $(NOTEBOOK_MAC_ENTITLEMENTS)
 // On iPhone and iPad too, only the App Store build has iCloud's key-value store, Notebook's iCloud folder and Time
 // Sensitive notifications. Debug and Release keep the folders you hide, your reminders and the versions of your notes
 // on the device, so they run in the Simulator without a team, and on your own iPhone or iPad with a free one, which
-// can't have iCloud.
+// can't have iCloud. In the Simulator they have the App Group.
 NOTEBOOK_IOS_ENTITLEMENTS =
+NOTEBOOK_IOS_ENTITLEMENTS[config=Debug][sdk=iphonesimulator*] = Config/AppGroup.entitlements
+NOTEBOOK_IOS_ENTITLEMENTS[config=Release][sdk=iphonesimulator*] = Config/AppGroup.entitlements
 NOTEBOOK_IOS_ENTITLEMENTS[config=AppStore] = Config/Notebook-iOS.entitlements
 CODE_SIGN_ENTITLEMENTS[sdk=iphone*] = $(NOTEBOOK_IOS_ENTITLEMENTS)
 
