@@ -223,22 +223,22 @@ final class NoteHistoryTests: XCTestCase {
         XCTAssertEqual(texts, ["now", "two days ago, later"])
     }
 
-    func testTidyingUpRemovesWhatIsAYearOld() async throws {
+    func testTidyingUpRemovesWhatIsAYearOldInTheTrash() async throws {
         let kept = drive.appendingPathComponent("Kept.md")
         history.keep("new", of: kept)
         await history.written()
-        // A note thrown away long ago, whose copies thinning hasn't looked at since.
-        let gone = cloud.appendingPathComponent("com~apple~CloudDocs/Old")
+        // A note thrown away long ago, whose copies wait in the History's Trash.
+        let gone = cloud.appendingPathComponent(".Trash/1700000000 abcdef12/com~apple~CloudDocs/Gone.md")
         func writeOld() throws {
-            let copy = gone.appendingPathComponent("Gone.md/" + NoteHistory.name(for: Date() - 400 * 86400, device: "iPhone"))
-            try FileManager.default.createDirectory(at: copy.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let copy = gone.appendingPathComponent(NoteHistory.name(for: Date() - 400 * 86400, device: "iPhone 111111"))
+            try FileManager.default.createDirectory(at: gone, withIntermediateDirectories: true)
             try "old".write(to: copy, atomically: true, encoding: .utf8)
         }
         try writeOld()
         let defaults = try XCTUnwrap(UserDefaults(suiteName: "notebook-history-\(UUID().uuidString)"))
         history.tidyUp(defaults: defaults)
         await history.written()
-        XCTAssertFalse(FileManager.default.fileExists(atPath: gone.path), "emptied folders go too")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: cloud.appendingPathComponent(".Trash/1700000000 abcdef12").path), "emptied folders go too")
         let versions = await history.versions(of: kept)
         XCTAssertEqual(versions.count, 1)
         // Once a day at most.
@@ -301,24 +301,28 @@ final class NoteHistoryTests: XCTestCase {
         XCTAssertEqual(copies(in: cloud.appendingPathComponent("com~apple~CloudDocs/Weekend.md")).count, 1)
     }
 
-    func testATrashedNotesCopiesStayApartAndComeBack() async throws {
-        // A note thrown away keeps its copies. Another renamed to its name doesn't get them, nor thins them, and when
-        // that rename is taken back they are there again for Put Back.
-        let gone = drive.appendingPathComponent("Plan.md")
-        history.keep("thrown away", of: gone, at: Date() - 120)
+    func testATrashedNotesCopiesWaitInTheTrashAndComeBackWhereItGoes() async throws {
+        // A note thrown away: its copies go to the History's Trash, and a note given its name doesn't get them.
+        let plan = drive.appendingPathComponent("Plan.md")
+        history.keep("thrown away", of: plan, at: Date() - 120)
+        history.trash(plan, as: "1700000000 abcdef12")
+        let none = await versions(plan)
+        XCTAssertEqual(none, [])
         let new = drive.appendingPathComponent("Untitled.md")
         history.keep("new", of: new)
-        history.follow(from: new, to: gone)
-        let taken = await versions(gone)
+        history.follow(from: new, to: plan)
+        let taken = await versions(plan)
         XCTAssertEqual(taken, ["new"])
-        history.follow(from: gone, to: new)
-        let back = await versions(gone)
-        XCTAssertEqual(back, ["thrown away"])
-        let own = await versions(new)
-        XCTAssertEqual(own, ["new"])
+        // Put back next to it, under a name of its own: its copies come along.
+        let back = drive.appendingPathComponent("Plan 2.md")
+        history.putBack("1700000000 abcdef12", to: back)
+        let own = await versions(back)
+        XCTAssertEqual(own, ["thrown away"])
+        let still = await versions(plan)
+        XCTAssertEqual(still, ["new"])
     }
 
-    func testCopiesNotDownloadedStayInICloudWhenTheNoteLeavesIt() async throws {
+    func testCopiesNotDownloadedStayInICloudAndAreFoundThere() async throws {
         let note = drive.appendingPathComponent("Weekend.md")
         history.keep("here", of: note)
         await history.written()
@@ -328,9 +332,18 @@ final class NoteHistoryTests: XCTestCase {
         try Data().write(to: placeholder)
         let outside = folder.appendingPathComponent("Notes/Weekend.md")
         history.follow(from: note, to: outside)
-        let moved = await versions(outside)
-        XCTAssertEqual(moved, ["here"])
+        await history.written()
         XCTAssertEqual(copies(in: there), [placeholder.lastPathComponent], "not carried along as a stub")
+        // The note's versions are looked for where it stayed too.
+        let listed = await history.versions(of: outside)
+        XCTAssertEqual(Set(listed.map(\.device)), ["Mac", "iPhone"])
+        XCTAssertEqual(listed.count, 2)
+        // Back into iCloud, as Undo takes it: they join up again.
+        history.follow(from: outside, to: note)
+        await history.written()
+        XCTAssertEqual(copies(in: there).count, 2)
+        let back = await history.versions(of: note)
+        XCTAssertEqual(back.count, 2)
     }
 
     /// The texts of a note's versions, newest first.
@@ -370,10 +383,9 @@ final class NoteHistoryTests: XCTestCase {
         XCTAssertEqual(kept, ["e", "d", "c", "b", "a"])
     }
 
-    func testTidyingUpLeavesAnotherDevicesCopiesOfANoteThatIsThere() async throws {
+    func testTidyingUpLeavesEachOtherDevicesNewest() async throws {
         let note = drive.appendingPathComponent("Kept.md")
-        try "kept".write(to: note, atomically: true, encoding: .utf8)
-        // Copies the iPhone took, a year old and more, which it hasn't thinned since.
+        // Copies an iPhone took, a year old and more, which it hasn't thinned since: it isn't used any more.
         let there = cloud.appendingPathComponent("com~apple~CloudDocs/Kept.md")
         try FileManager.default.createDirectory(at: there, withIntermediateDirectories: true)
         for (days, text) in [(400.0, "old, from the iPhone"), (500, "older, from the iPhone")] {
@@ -382,13 +394,13 @@ final class NoteHistoryTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: "notebook-history-\(UUID().uuidString)"))
         history.tidyUp(defaults: defaults, device: "Mac 222222")
         let kept = await versions(note)
-        XCTAssertEqual(kept.count, 2, "the iPhone thins its own")
+        XCTAssertEqual(kept, ["old, from the iPhone"], "its newest stays, whatever this clock says")
     }
 
     func testADayAheadWrittenDownDoesntStopTidyingUp() async throws {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: "notebook-history-\(UUID().uuidString)"))
         defaults.set(Date() + 30 * 86400, forKey: "historyTidiedUp")
-        let gone = cloud.appendingPathComponent("com~apple~CloudDocs/Gone.md")
+        let gone = cloud.appendingPathComponent(".Trash/1700000000 abcdef12/com~apple~CloudDocs/Gone.md")
         let copy = gone.appendingPathComponent(NoteHistory.name(for: Date() - 400 * 86400, device: "iPhone 111111"))
         try FileManager.default.createDirectory(at: gone, withIntermediateDirectories: true)
         try "old".write(to: copy, atomically: true, encoding: .utf8)

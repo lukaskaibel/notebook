@@ -1649,8 +1649,11 @@ public final class Workspace: NSObject {
         let change = keepForUndo(FileChange(.trash, "Move to Trash", from: url))
         return changeFiles { [self] follow in
             let url = follow(url)
-            change.remembered = remembered(url)
+            let remembered = remembered(url)
+            change.remembered = remembered
             let trashed = await trashNow(url)
+            // Its versions wait in the History's Trash, for Undo, and a note made under its name starts without them.
+            if trashed.done { NoteHistory.shared.trash(url, as: remembered.history) }
             // Moved to the Trash with nowhere to say it went, it can't be put back.
             changeDone(change, from: url, to: trashed.place)
             if !trashed.done { beep() }
@@ -1693,8 +1696,10 @@ public final class Workspace: NSObject {
             let url = follow(url)
             let known = rememberedForDeleting.flatMap { $0.path == url.path ? $0 : nil }
             rememberedForDeleting = nil
-            change.remembered = known ?? remembered(url)
+            let remembered = known ?? remembered(url)
+            change.remembered = remembered
             let deleted = await deleteNow(url)
+            if deleted.done { NoteHistory.shared.trash(url, as: remembered.history) }
             changeDone(change, from: url, to: deleted.place)
             if !deleted.done { beep() }
         }
