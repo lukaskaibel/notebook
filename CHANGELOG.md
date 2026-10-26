@@ -15,6 +15,13 @@ versions follow [semantic versioning](https://semver.org).
   new note in your default folder, named after the page or the first line, or go at the end of the note you opened
   last. Pictures and files go into the note's `.assets` folder, as when you add them in a note. Notebook writes them
   into your notes as soon as it's open; when that note is open in Notebook, they go in as one step of Undo.
+- A Today widget, as Reminders has one: the to-dos for today and the overdue ones, overdue first and in red as in
+  To-dos, on the Home Screen and the Lock Screen of iPhone and iPad and on the Mac's desktop. Tick a to-do in the
+  widget, and Notebook writes the tick into its note as To-dos would; a tap anywhere else opens To-dos or the to-do's
+  note. It moves on by itself at midnight and when a to-do's time passes.
+- A Note widget that shows a note of your choice, its title and as much of it as fits, with its headings, lists,
+  to-dos, links and bold or struck text as in the note. Pick the note under Edit Widget, from the notes you opened
+  last or by searching their names. It follows the note when you rename or move it in Notebook, and a tap opens it.
 
 ## [1.0.0] – not released yet
 

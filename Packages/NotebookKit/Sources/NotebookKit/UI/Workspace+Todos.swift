@@ -23,6 +23,10 @@ extension Workspace {
         // Ready only once every file has been read, not with the index kept from the last run: until then a to-do left
         // out would take its notification with it.
         todos.update(entries: index.byPathSnapshot, hidden: index.hiddenPaths, built: index.hasBuilt && !index.isBuilding)
+        widgetNotesRefresh?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.publishWidgetNotes(catalog: false) }
+        widgetNotesRefresh = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: work)
     }
 
     /// The to-dos changed: their notifications follow a moment later, so a pause in typing doesn't schedule them
@@ -33,7 +37,10 @@ extension Workspace {
         sidebar?.refreshTodosRow()
         #endif
         todoScheduling?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.scheduleTodoNotifications() }
+        let work = DispatchWorkItem { [weak self] in
+            self?.scheduleTodoNotifications()
+            self?.publishWidgetTodos()
+        }
         todoScheduling = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: work)
     }

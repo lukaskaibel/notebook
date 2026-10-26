@@ -181,6 +181,7 @@ extension Workspace {
         sidebarRefreshRows()
         watchForDueReminders()
         if ids?.isEmpty != true { scheduleReminders(ids) }
+        publishWidgetTodos()
     }
 
     /// Schedules the notifications of the reminders to come (or only of `ids`), with the note's points read off the

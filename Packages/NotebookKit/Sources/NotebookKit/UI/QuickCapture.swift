@@ -19,20 +19,20 @@ public enum QuickCapture {
                 throw workspace.locations.isEmpty ? NewNoteIntentError.noLocation : .notMade
             }
         }
-        takeSharedNotes()
+        takeFromExtensions()
     }
 
-    /// What was shared is written as the app starts, when it comes to the front, and at once when the share extension
-    /// says a note is waiting, while the app runs. The extension offers the places as they were when the app last went
-    /// away.
-    private static func takeSharedNotes() {
+    /// What was shared, and the to-dos ticked in a widget, are written as the app starts, when it comes to the front,
+    /// and at once when an extension says something is waiting, while the app runs. When it goes away, the share
+    /// extension gets the places it offers and the widgets what they show.
+    private static func takeFromExtensions() {
         #if DEBUG
         // A folder to take shared notes from in a build without the App Group, as the Mac's Debug build is.
         if let path = UserDefaults.standard.string(forKey: "NotebookSharedNotes") {
             SharedNotes.folder = URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
         }
         #endif
-        guard SharedNotes.folder != nil else { return }
+        guard SharedNotes.folder != nil || WidgetData.folder != nil else { return }
         #if os(macOS)
         let active = NSApplication.didBecomeActiveNotification, resigning = NSApplication.willResignActiveNotification
         #else
@@ -42,11 +42,16 @@ public enum QuickCapture {
             MainActor.assumeIsolated { writeShared() }
         }
         NotificationCenter.default.addObserver(forName: resigning, object: nil, queue: .main) { _ in
-            MainActor.assumeIsolated { Workspace.shared.publishSharePlaces() }
+            MainActor.assumeIsolated {
+                Workspace.shared.publishSharePlaces()
+                Workspace.shared.publishWidgetNotes()
+            }
         }
-        CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), nil, { _, _, _, _, _ in
-            DispatchQueue.main.async { MainActor.assumeIsolated { QuickCapture.writeShared() } }
-        }, SharedNotes.notification, nil, .deliverImmediately)
+        for name in [SharedNotes.notification, WidgetData.notification] {
+            CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), nil, { _, _, _, _, _ in
+                DispatchQueue.main.async { MainActor.assumeIsolated { QuickCapture.writeShared() } }
+            }, name, nil, .deliverImmediately)
+        }
         // Once the app is up: started in the background, as on the Mac at login, it doesn't become active.
         DispatchQueue.main.async { MainActor.assumeIsolated { writeShared() } }
     }
@@ -61,15 +66,18 @@ public enum QuickCapture {
             repeat {
                 writesAgain = false
                 await Workspace.shared.takeSharedNotes()
+                await Workspace.shared.takeWidgetTicks()
             } while writesAgain
+            // A note chosen in a widget since the app last ran shows there now.
+            Workspace.shared.publishWidgetNotes(catalog: false)
             writing = nil
         }
     }
 
-    /// A URL the app is opened with that asks for a note: a New Note widget's where the intent didn't run. False for
-    /// any other.
+    /// A URL the app is opened with from a widget: a New Note widget's where the intent didn't run, To-dos, a to-do or
+    /// a note. False for any other.
     public static func open(_ url: URL) -> Bool {
-        guard url == NewNoteIntent.widgetURL else { return false }
+        guard url == NewNoteIntent.widgetURL else { return Workspace.shared.openFromWidget(url) }
         Task { await Workspace.shared.newNoteFromOutside() }
         return true
     }

@@ -48,6 +48,8 @@ public final class Workspace: NSObject {
     @ObservationIgnored var dueTimer: Timer?
     /// The to-dos' notifications, scheduled a moment after the to-dos changed.
     @ObservationIgnored var todoScheduling: DispatchWorkItem?
+    /// The notes chosen in Note widgets, written for them a moment after files changed.
+    @ObservationIgnored var widgetNotesRefresh: DispatchWorkItem?
     /// The last change to a to-do's file, which the next waits for, and what to-dos' lines became (`current(_:)`).
     @ObservationIgnored var lastTodoWrite: Task<Void, Never>?
     /// The to-do being edited in To-dos, whose words are written with the notes when the app goes away.
@@ -1083,6 +1085,7 @@ public final class Workspace: NSObject {
         hiddenFolderMoved(from: old, to: new)
         reminderMoved(from: old, to: new)
         defaultFolderMoved(from: old, to: new)
+        widgetNoteMoved(from: old, to: new)
         favorites = favorites.map(fix)
         recents = recents.map(fix)
         history = history.map(fix)

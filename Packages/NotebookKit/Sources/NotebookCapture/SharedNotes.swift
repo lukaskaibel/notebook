@@ -34,15 +34,8 @@ public struct SharedNote: Codable, Equatable, Sendable {
 
 /// The notes shared to Notebook that it hasn't written yet, each in a folder of its own with its files.
 public enum SharedNotes {
-    /// The App Group the app and the share extension share, from their Info.plist (`NOTEBOOK_APP_GROUP`).
-    public static var groupIdentifier: String? {
-        (Bundle.main.object(forInfoDictionaryKey: "NotebookAppGroup") as? String).flatMap { $0.isEmpty ? nil : $0 }
-    }
-
     /// Where they wait, in the App Group's container; nil in a build without the App Group. Tests set one of theirs.
-    nonisolated(unsafe) public static var folder: URL? = groupIdentifier
-        .flatMap { FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: $0) }
-        .map { $0.appendingPathComponent("Library/Application Support/Shared Notes", isDirectory: true) }
+    nonisolated(unsafe) public static var folder: URL? = AppGroup.folder("Shared Notes")
 
     private static let partial = ".partial"
     private static let manifest = "note.json"
@@ -111,7 +104,7 @@ public enum SharedNotes {
     }
 
     /// The App Group's settings, which both read. Tests set their own.
-    nonisolated(unsafe) public static var defaults: UserDefaults? = groupIdentifier.flatMap { UserDefaults(suiteName: $0) }
+    nonisolated(unsafe) public static var defaults: UserDefaults? = AppGroup.defaults
 
     public static var places: Places? {
         get { defaults?.data(forKey: "places").flatMap { try? JSONDecoder().decode(Places.self, from: $0) } }

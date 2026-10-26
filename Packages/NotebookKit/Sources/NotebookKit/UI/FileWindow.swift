@@ -309,7 +309,9 @@ public final class NotebookAppDelegate: NSObject, NSApplicationDelegate {
 
     public func application(_ application: NSApplication, open urls: [URL]) {
         MainActor.assumeIsolated {
-            FileWindows.shared.open(urls)
+            // A tap in a widget: New Note, To-dos, a to-do or a note.
+            let files = urls.filter { !QuickCapture.open($0) }
+            if !files.isEmpty { FileWindows.shared.open(files) }
         }
     }
 
