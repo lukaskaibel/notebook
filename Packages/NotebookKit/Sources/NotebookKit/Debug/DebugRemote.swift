@@ -432,6 +432,9 @@ enum DebugRemote {
             }
         case "openfile":
             FileWindows.shared.open(URL(fileURLWithPath: argument))
+        case "closefile":
+            // closefile: closes the last of the notes' own windows, as its close button does.
+            FileWindows.shared.windows.last?.performClose(nil)
         case "samplenotes":
             // samplenotes <folder>: what Try Sample Notes… does once a folder is chosen.
             workspace?.addSampleNotes(in: URL(fileURLWithPath: argument, isDirectory: true))

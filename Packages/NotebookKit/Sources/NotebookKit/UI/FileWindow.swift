@@ -53,8 +53,8 @@ public final class FileWindows {
 
     var windows: [NSWindow] { controllers.values.compactMap(\.window) }
 
-    /// Writes what was typed in every window now: Notebook goes to the background or quits, and a window left open
-    /// as it quits isn't closed first.
+    /// Saves what was typed in every window now: Notebook goes to the background or quits, and a window left open as it
+    /// quits isn't closed first, but its note is left.
     func saveAll(quitting: Bool) {
         for controller in controllers.values { controller.save(quitting: quitting) }
     }
@@ -154,6 +154,7 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
         VersionsWindow.close(over: window)
         editor.endDrawing()
         note.update(text: editor.text)
+        // Saved off the main thread; a conflict met then keeps both, as no one can be asked.
         note.close()
         onClose?()
     }
@@ -161,8 +162,8 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
     func save(quitting: Bool) {
         editor.saveDrawingsNow(waiting: quitting)
         note.update(text: editor.text)
-        note.saveNow()
         note.keepCopyOfChanges()
+        if quitting { note.close() } else { note.saveNow() }
     }
 
     /// The main window's workspace, for a note in one of its locations: links reach every note there, and a new title
@@ -258,6 +259,8 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
                 // As from the sidebar, which says so itself when the name is taken. Links to it follow there.
                 renamed = await library.rename(url, to: name).value
             } else {
+                // What the note, here and in any other window, is writing is written under the old name first.
+                let documents = await NoteDocument.beginMoving(url)
                 // The notes next to it, which are what its links and theirs find, as they are before it is renamed.
                 (renamed, next) = await Task.detached(priority: .userInitiated) {
                     let targets = LinkTargets.reading(url.deletingLastPathComponent(), deep: false)
@@ -265,6 +268,7 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
                     if let renamed { NoteHistory.shared.follow(from: url, to: renamed) }
                     return (renamed, targets)
                 }.value
+                NoteDocument.endMoving(documents, from: url, to: renamed)
             }
             note.endMove(to: renamed)
             guard let renamed else {
@@ -323,6 +327,17 @@ public final class NotebookAppDelegate: NSObject, NSApplicationDelegate {
     public func applicationWillFinishLaunching(_ notification: Notification) {
         MainActor.assumeIsolated {
             ReminderNotifications.activate()
+        }
+    }
+
+    /// Quitting waits for notes still being written, off the main thread, which keeps going meanwhile: a note open in
+    /// two windows hears there when the other one wrote it.
+    public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        MainActor.assumeIsolated {
+            Workspace.shared.saveAll(quitting: true)
+            guard NoteDocument.isWriting else { return .terminateNow }
+            NoteDocument.whenAllWritten { NSApp.reply(toApplicationShouldTerminate: true) }
+            return .terminateLater
         }
     }
 
