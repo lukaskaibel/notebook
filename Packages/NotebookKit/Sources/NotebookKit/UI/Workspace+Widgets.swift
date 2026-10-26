@@ -100,9 +100,9 @@ extension Workspace {
         widgets.ticks = ticks.map(\.row).filter { !done.contains($0.id) }
         if !notTicked.isEmpty {
             let names = ListFormatter.localizedString(byJoining: notTicked)
-            report("Not Ticked", notTicked.count == 1
-                   ? "\(names) changed in its note after you ticked it in the widget, so Notebook left it as it is."
-                   : "\(names) changed in their notes after you ticked them in the widget, so Notebook left them as they are.")
+            reportInFront("Not Ticked", notTicked.count == 1
+                          ? "\(names) changed, or its note moved, after you ticked it in the widget, so Notebook left it as it is."
+                          : "\(names) changed, or their notes moved, after you ticked them in the widget, so Notebook left them as they are.")
         }
         publishWidgetTodos()
         WidgetCenter.shared.reloadTimelines(ofKind: WidgetData.todosKind)

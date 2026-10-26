@@ -21,8 +21,8 @@ extension Workspace {
                 await Task.detached(priority: .utility) { SharedNotes.remove(shared.note) }.value
             } else if await Task.detached(priority: .utility, operation: { SharedNotes.failedFirstTime(shared.note) }).value {
                 let name = shared.note.title.map { "“\($0)”, shared to Notebook," } ?? "What was shared to Notebook"
-                report("Couldn’t Add What Was Shared",
-                       "\(name) couldn’t be added to your notes. Notebook keeps it and tries again each time it opens.")
+                reportInFront("Couldn’t Add What Was Shared",
+                              "\(name) couldn’t be added to your notes. Notebook keeps it and tries again each time it opens.")
             }
         }
     }
@@ -72,9 +72,10 @@ extension Workspace {
                     return nil
                 }
                 guard let stored = Self.storeShared(note.files, from: files, in: folder) else { return undo([]) }
-                guard let made = FileOperations.createNote(in: folder, title: note.title ?? "Untitled",
-                                                           text: Self.sharedMarkdown(note.text, stored.markdown) + "\n") else { return undo(stored.urls) }
-                return (made.url, folder, FileNode.listing(of: made.url), madeFolder)
+                // Under a name no note has, here or arriving from iCloud meanwhile: nothing is written over.
+                guard let made = FileOperations.createNoteWithoutOverwriting(in: folder, title: note.title ?? "Untitled",
+                                                                             text: Self.sharedMarkdown(note.text, stored.markdown) + "\n") else { return undo(stored.urls) }
+                return (made, folder, FileNode.listing(of: made), madeFolder)
             }.value
         }.value
         guard let made else { return false }
