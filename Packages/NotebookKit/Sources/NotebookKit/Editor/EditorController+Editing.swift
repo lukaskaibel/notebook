@@ -32,12 +32,17 @@ extension EditorController {
     func restore(text: String, actionName: String) -> Bool {
         guard !isWaitingForText, !isReadOnly else { return false }
         guard let change = change(to: text) else { return true }
+        // A caret in what is replaced stays where that begins, near where you were, rather than after it all, and what
+        // is above it stays where it is on screen.
+        let selection = self.selection
+        let inside = selection.location > change.range.location && selection.location < change.range.upperBound
+        let caret = inside ? NSRange(location: change.range.location, length: 0) : change.caret
         let manager = textView.undoManager
         breakTyping()
         let opens = manager?.groupingLevel == 0
         if opens { manager?.beginUndoGrouping() }
-        preservingScroll {
-            replace(change.range, with: change.replacement, select: change.caret)
+        preservingScroll(anchor: inside ? change.range.location : nil) {
+            replace(change.range, with: change.replacement, select: caret)
         }
         manager?.setActionName(actionName)
         if opens { manager?.endUndoGrouping() }

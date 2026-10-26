@@ -155,6 +155,21 @@ final class VersionHistoryTests: XCTestCase {
         try await until("saved") { self.text(self.draft) == "# Draft\n\nFirst words.\nTyped." }
     }
 
+    func testRestoreKeepsTheCaretWhereTheChangeBegins() async throws {
+        let (workspace, manager) = try await makeWindow()
+        workspace.open(draft)
+        try await until("open") { workspace.note?.isLoaded == true }
+        let textView = workspace.editor.textView
+        window?.makeFirstResponder(textView)
+        textView.setSelectedRange(NSRange(location: 9, length: 0))
+        textView.insertText("X", replacementRange: textView.selectedRange())
+        try await until("the group closed") { manager.groupingLevel == 0 }
+        let target = try XCTUnwrap(workspace.versionTarget())
+        workspace.restore("# Draft\n\nOlder words.\n", in: target, actionName: "Restore Version")
+        XCTAssertEqual(workspace.editor.text, "# Draft\n\nOlder words.\n")
+        XCTAssertEqual(textView.selectedRange(), NSRange(location: 9, length: 0), "not after everything restored")
+    }
+
     func testRevertToLastOpened() async throws {
         let (workspace, manager) = try await makeWindow()
         XCTAssertFalse(workspace.canRevertToLastOpened)
