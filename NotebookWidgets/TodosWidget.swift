@@ -4,7 +4,8 @@ import WidgetKit
 
 /// Today's to-dos and the overdue ones, as Reminders' Today widget shows its reminders: the count and the first ones
 /// when small, the list when larger, the count on the Lock Screen. Overdue first, in red as in To-dos. A tap on a
-/// circle ticks the to-do; anywhere else opens To-dos, or the to-do in its note.
+/// circle ticks the to-do, or unticks it until Notebook has written it; anywhere else opens To-dos, or the to-do in its
+/// note.
 struct TodosWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: WidgetData.todosKind, provider: TodosTimeline()) { entry in
@@ -29,11 +30,15 @@ struct TodosEntry: TimelineEntry {
     let rows: [WidgetData.TodoRow]?
     /// Ticked here, on their way to the app.
     let ticked: Set<String>
+    /// Overdue ones the app counted but didn't list.
+    var leftOut = 0
 
     var overdue: [WidgetData.TodoRow] { rows?.filter { $0.isOverdue(at: date) } ?? [] }
     var today: [WidgetData.TodoRow] { rows?.filter { !$0.isOverdue(at: date) } ?? [] }
     /// What is still to do, without the ones just ticked.
-    var count: Int { (rows ?? []).filter { !ticked.contains($0.id) }.count }
+    var count: Int { (rows ?? []).filter { !ticked.contains($0.id) }.count + leftOut }
+    /// Whether one shown is ticked and not written into its note yet.
+    var waitsForApp: Bool { (rows ?? []).contains { ticked.contains($0.id) } }
 
     static let sample = TodosEntry(date: .now, rows: [
         WidgetData.TodoRow(kind: .todo, text: "Pick up the dry cleaning", path: "/Errands.md", note: "Errands", line: 1, source: "",
@@ -63,10 +68,12 @@ struct TodosTimeline: TimelineProvider {
     }
 
     private func entry(at date: Date) -> TodosEntry {
-        let rows = WidgetData.todos?.rows.filter { $0.isShown(at: date) }
+        let todos = WidgetData.todos
+        let rows = todos?.rows.filter { $0.isShown(at: date) }
         let overdue = rows?.filter { $0.isOverdue(at: date) } ?? []
         let today = rows?.filter { !$0.isOverdue(at: date) } ?? []
-        return TodosEntry(date: date, rows: rows.map { _ in overdue + today }, ticked: Set(WidgetData.ticked.map(\.id)))
+        return TodosEntry(date: date, rows: rows.map { _ in overdue + today }, ticked: Set(WidgetData.ticks.map(\.row.id)),
+                          leftOut: todos?.overdueLeftOut ?? 0)
     }
 }
 
@@ -171,8 +178,10 @@ struct TodosWidgetView: View {
                     ForEach(rows.prefix(limit)) { row in
                         TodoRowView(row: row, date: entry.date, isTicked: entry.ticked.contains(row.id), compact: compact)
                     }
-                    if rows.count > limit {
-                        Text("\(rows.count - limit) more").font(.caption2).foregroundStyle(.secondary)
+                    if !compact, entry.waitsForApp {
+                        waiting
+                    } else if rows.count + entry.leftOut > limit {
+                        Text("\(rows.count + entry.leftOut - limit) more").font(.caption2).foregroundStyle(.secondary)
                     }
                 }
             }
@@ -205,12 +214,18 @@ struct TodosWidgetView: View {
                         TodoRowView(row: row, date: entry.date, isTicked: entry.ticked.contains(row.id), compact: false)
                     }
                 }
-                let left = overdue.count + today.count - shownOverdue.count - shownToday.count
+                let left = overdue.count + today.count + entry.leftOut - shownOverdue.count - shownToday.count
                 if left > 0 {
                     Text("\(left) more").font(.caption).foregroundStyle(.secondary)
                 }
+                if entry.waitsForApp { waiting }
             }
         }
+    }
+
+    /// A tick isn't in the note until Notebook has written it.
+    private var waiting: some View {
+        Text("Ticked; Notebook writes it when it opens.").font(.caption2).foregroundStyle(.secondary).lineLimit(1)
     }
 
     private var empty: some View {
@@ -238,7 +253,7 @@ struct TodoRowView: View {
                         .widgetAccentable(isTicked)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(isTicked ? "Ticked" : "Tick")
+                .accessibilityLabel(isTicked ? "Untick" : "Tick")
             } else {
                 Image(systemName: "bell")
                     .font(compact ? .caption : .body)
@@ -246,9 +261,9 @@ struct TodoRowView: View {
             }
             Link(destination: WidgetData.url(todo: row)) {
                 VStack(alignment: .leading, spacing: 0) {
+                    // Ticked, grey, as To-dos shows it.
                     Text(row.text)
                         .font(compact ? .caption : .subheadline)
-                        .strikethrough(isTicked)
                         .foregroundStyle(isTicked ? .secondary : .primary)
                         .lineLimit(compact ? 1 : 2)
                     if !compact {

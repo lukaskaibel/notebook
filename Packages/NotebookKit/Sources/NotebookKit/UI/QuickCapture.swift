@@ -68,8 +68,9 @@ public enum QuickCapture {
                 await Workspace.shared.takeSharedNotes()
                 await Workspace.shared.takeWidgetTicks()
             } while writesAgain
-            // A note chosen in a widget since the app last ran shows there now.
+            // A note chosen in a widget since the app last ran shows there now, and the to-dos are as they are today.
             Workspace.shared.publishWidgetNotes(catalog: false)
+            Workspace.shared.publishWidgetTodos()
             writing = nil
         }
     }

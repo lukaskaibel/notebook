@@ -48,8 +48,8 @@ public final class Workspace: NSObject {
     @ObservationIgnored var dueTimer: Timer?
     /// The to-dos' notifications, scheduled a moment after the to-dos changed.
     @ObservationIgnored var todoScheduling: DispatchWorkItem?
-    /// The notes chosen in Note widgets, written for them a moment after files changed.
-    @ObservationIgnored var widgetNotesRefresh: DispatchWorkItem?
+    /// What was last written for the widgets, and the writing (`Workspace+Widgets`).
+    @ObservationIgnored let widgets = WidgetKeeping()
     /// The last change to a to-do's file, which the next waits for, and what to-dos' lines became (`current(_:)`).
     @ObservationIgnored var lastTodoWrite: Task<Void, Never>?
     /// The to-do being edited in To-dos, whose words are written with the notes when the app goes away.
@@ -455,6 +455,8 @@ public final class Workspace: NSObject {
         locations.removeAll { $0.id == id }
         if !temporaryLocations { LocationStore.save(locations) }
         locationsChanged()
+        // Its notes leave the widgets, and Edit Widget.
+        publishWidgetNotes()
     }
 
     #if os(macOS)
@@ -1711,6 +1713,7 @@ public final class Workspace: NSObject {
         defaultFolderMoved(from: url, to: nil)
         favorites.removeAll { HiddenFolders.withoutPrivate($0) == HiddenFolders.withoutPrivate(url.path) }
         if !temporaryLocations { UserDefaults.standard.set(favorites, forKey: "favorites") }
+        widgetNoteThrownAway(url)
         showChanges(in: [url.deletingLastPathComponent()], removing: [url])
     }
 

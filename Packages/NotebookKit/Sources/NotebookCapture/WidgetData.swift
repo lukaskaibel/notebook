@@ -20,10 +20,13 @@ public enum WidgetData {
         public var rows: [TodoRow]
         /// False until the app has read every note once.
         public var isComplete: Bool
+        /// How many overdue ones there are beyond those in `rows`, the oldest kept: they count, but aren't listed.
+        public var overdueLeftOut: Int?
 
-        public init(rows: [TodoRow], isComplete: Bool) {
+        public init(rows: [TodoRow], isComplete: Bool, overdueLeftOut: Int? = nil) {
             self.rows = rows
             self.isComplete = isComplete
+            self.overdueLeftOut = overdueLeftOut
         }
     }
 
@@ -43,10 +46,16 @@ public enum WidgetData {
         /// When it is due: its day's start or its time.
         public var due: Date
         public var hasTime: Bool
+        /// When the note was last changed as the app read it (seconds since 2001, to the nanosecond), to tell whether
+        /// it changed since.
+        public var modified: Double?
+        /// The names of the to-do's notifications, which a tick in the widget takes back at once.
+        public var notifications: [String]?
 
         public var id: String { path + "\u{0}\(line)\u{0}" + source }
 
-        public init(kind: Kind, text: String, path: String, note: String, line: Int, source: String, due: Date, hasTime: Bool) {
+        public init(kind: Kind, text: String, path: String, note: String, line: Int, source: String, due: Date, hasTime: Bool,
+                    modified: Double? = nil, notifications: [String]? = nil) {
             self.kind = kind
             self.text = text
             self.path = path
@@ -55,6 +64,8 @@ public enum WidgetData {
             self.source = source
             self.due = due
             self.hasTime = hasTime
+            self.modified = modified
+            self.notifications = notifications
         }
 
         /// Overdue at `now`: a time that passed, or a day before today.
@@ -75,20 +86,73 @@ public enum WidgetData {
 
     // MARK: - Ticking
 
-    /// To-dos ticked in a widget, by their row's ID, for the app to write into their notes; until it has, the widget
-    /// shows them ticked.
-    public static var ticked: [TodoRow] {
-        get { read([TodoRow].self, "ticked.json") ?? [] }
-        set { write(newValue, "ticked.json") }
+    /// A to-do ticked in a widget, on its way to the app, which writes it into its note; until then the widget shows it
+    /// ticked. With the notifications taken back for it, to give them back if it is unticked before that.
+    public struct Tick: Codable, Equatable, Sendable {
+        public var row: TodoRow
+        /// The notifications that were waiting, archived (`UNNotificationRequest`).
+        public var withdrawn: Data?
+
+        public init(row: TodoRow, withdrawn: Data? = nil) {
+            self.row = row
+            self.withdrawn = withdrawn
+        }
     }
 
-    /// Hands a tick to the app, and tells it if it runs, as the share extension does.
-    public static func tick(_ row: TodoRow) {
-        var ticked = ticked
-        guard !ticked.contains(where: { $0.id == row.id }) else { return }
-        ticked.append(row)
-        self.ticked = ticked
+    /// The ticks the app hasn't written yet, oldest first. A tick stays until the app has written it, or found there
+    /// was nothing to write: one that couldn't be written waits for the next time.
+    public static var ticks: [Tick] {
+        guard let url = folder?.appendingPathComponent(ticksName) else { return [] }
+        var ticks: [Tick] = []
+        NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: nil) { url in
+            ticks = decoded([Tick].self, from: url) ?? []
+        }
+        return ticks
+    }
+
+    /// Ticks a to-do, or unticks one ticked by mistake that the app hasn't written yet, and tells the app if it runs,
+    /// as the share extension does. Whether it is ticked now; unticked, what was taken back for it. Read and written
+    /// in one coordinated go, as the app takes ticks away in the same way.
+    @discardableResult
+    public static func toggleTick(_ row: TodoRow) -> (ticked: Bool, withdrawn: Data?) {
+        var result: (ticked: Bool, withdrawn: Data?) = (false, nil)
+        changeTicks { ticks in
+            if let index = ticks.firstIndex(where: { $0.row.id == row.id }) {
+                result = (false, ticks.remove(at: index).withdrawn)
+            } else {
+                ticks.append(Tick(row: row))
+                result = (true, nil)
+            }
+        }
         CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), CFNotificationName(notification), nil, nil, true)
+        return result
+    }
+
+    /// Keeps the notifications taken back for a tick.
+    public static func keepWithdrawn(_ withdrawn: Data, for id: String) {
+        changeTicks { ticks in
+            if let index = ticks.firstIndex(where: { $0.row.id == id }) { ticks[index].withdrawn = withdrawn }
+        }
+    }
+
+    /// Forgets ticks the app is done with.
+    public static func removeTicks(_ ids: Set<String>) {
+        guard !ids.isEmpty else { return }
+        changeTicks { ticks in ticks.removeAll { ids.contains($0.row.id) } }
+    }
+
+    private static let ticksName = "ticked.json"
+
+    private static func changeTicks(_ change: (inout [Tick]) -> Void) {
+        guard let folder else { return }
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        NSFileCoordinator().coordinate(writingItemAt: folder.appendingPathComponent(ticksName), options: .forMerging, error: nil) { url in
+            var ticks = decoded([Tick].self, from: url) ?? []
+            let before = ticks
+            change(&ticks)
+            guard ticks != before else { return }
+            encoded(ticks, to: url)
+        }
     }
 
     /// Posted when a to-do was ticked in a widget.
@@ -98,6 +162,10 @@ public enum WidgetData {
 
     /// A note as a widget shows it: its name, where it is, and its lines with their styles, read by the app.
     public struct Note: Codable, Hashable, Sendable {
+        /// Why a widget doesn't show a note it was chosen for: thrown away or outside the locations, or in a folder
+        /// you hid. It shows again once it is back.
+        public enum Missing: String, Codable, Sendable { case gone, hidden }
+
         public var path: String
         public var title: String
         /// Where it is, as the sidebar leads to it: "iCloud Drive › Travel".
@@ -105,13 +173,21 @@ public enum WidgetData {
         public var blocks: [Block]
         /// More of the note than the blocks hold.
         public var isCut: Bool
+        /// Nil while it is shown; then its title, place and blocks are empty.
+        public var missing: Missing?
 
-        public init(path: String, title: String, place: String, blocks: [Block], isCut: Bool) {
+        public init(path: String, title: String, place: String, blocks: [Block], isCut: Bool, missing: Missing? = nil) {
             self.path = path
             self.title = title
             self.place = place
             self.blocks = blocks
             self.isCut = isCut
+            self.missing = missing
+        }
+
+        /// The note at a path, no longer shown, and why.
+        public static func missing(_ why: Missing, path: String) -> Note {
+            Note(path: path, title: "", place: "", blocks: [], isCut: false, missing: why)
         }
     }
 
@@ -159,20 +235,36 @@ public enum WidgetData {
         }
     }
 
-    /// The notes chosen in widgets, by the ID each was chosen by (its path then), with where it is now and what it
-    /// says. The app follows them when they are renamed or moved.
+    /// The notes chosen in widgets, by the ID each was chosen by (`noteID`), with where it is now and what it says.
+    /// The app follows them when they are renamed or moved.
     public static var notes: [String: Note] {
         get { read([String: Note].self, "notes.json") ?? [:] }
         set { write(newValue, "notes.json") }
     }
 
+    /// The ID a note is chosen by: when it was made, and its path then. Its own, unlike its path, which another note
+    /// can have later, once it moved.
+    public static func noteID(path: String, created: Date?) -> String {
+        "\(Int(created?.timeIntervalSince1970 ?? 0))|" + path
+    }
+
+    /// The path a note had when it was chosen.
+    public static func notePath(id: String) -> String {
+        // An ID from before it said when the note was made is its path.
+        guard let bar = id.firstIndex(of: "|"), Int(id[..<bar]) != nil else { return id }
+        return String(id[id.index(after: bar)...])
+    }
+
     /// Notes to choose from in Edit Widget: the ones opened last, the favourites, then the ones changed last.
     public struct CatalogEntry: Codable, Hashable, Sendable {
+        /// What it is chosen by (`noteID`).
+        public var id: String
         public var path: String
         public var title: String
         public var place: String
 
-        public init(path: String, title: String, place: String) {
+        public init(id: String, path: String, title: String, place: String) {
+            self.id = id
             self.path = path
             self.title = title
             self.place = place
@@ -206,10 +298,7 @@ public enum WidgetData {
     // MARK: - Files
 
     private static func read<T: Decodable>(_ type: T.Type, _ name: String) -> T? {
-        guard let url = folder?.appendingPathComponent(name), let data = try? Data(contentsOf: url) else { return nil }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try? decoder.decode(type, from: data)
+        folder.flatMap { decoded(type, from: $0.appendingPathComponent(name)) }
     }
 
     /// Whole or not at all, so a widget never reads half of it.
@@ -221,6 +310,17 @@ public enum WidgetData {
             return
         }
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        encoded(value, to: url)
+    }
+
+    private static func decoded<T: Decodable>(_ type: T.Type, from url: URL) -> T? {
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try? decoder.decode(type, from: data)
+    }
+
+    private static func encoded<T: Encodable>(_ value: T, to url: URL) {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         try? encoder.encode(value).write(to: url, options: .atomic)

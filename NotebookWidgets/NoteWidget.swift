@@ -73,7 +73,12 @@ struct NoteWidgetView: View {
     }
 
     @ViewBuilder private var content: some View {
-        if let note = entry.note {
+        if let note = entry.note, let missing = note.missing {
+            switch missing {
+            case .gone: message("This note was moved to the Trash or is no longer in your notes. Edit the widget to pick another.")
+            case .hidden: message("This note is in a folder you hid.")
+            }
+        } else if let note = entry.note {
             #if os(iOS)
             if family == .accessoryRectangular {
                 VStack(alignment: .leading, spacing: 0) {
@@ -136,7 +141,7 @@ struct NoteWidgetView: View {
 }
 
 /// A line of the note as the editor shows it: a heading bigger and bold, a point after its bullet or number, a to-do
-/// after its circle, a quote after its bar.
+/// after its circle, grey once done, a quote after its bar.
 struct BlockView: View {
     let block: WidgetData.Block
     let size: CGFloat
@@ -186,7 +191,7 @@ struct BlockView: View {
             var intent: InlinePresentationIntent = []
             if run.bold { intent.insert(.stronglyEmphasized) }
             if run.italic { intent.insert(.emphasized) }
-            if run.struck || isDone { intent.insert(.strikethrough) }
+            if run.struck { intent.insert(.strikethrough) }
             if run.code { intent.insert(.code) }
             if !intent.isEmpty { part.inlinePresentationIntent = intent }
             if run.link { part.foregroundColor = ink }

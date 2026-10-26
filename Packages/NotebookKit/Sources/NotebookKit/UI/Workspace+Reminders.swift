@@ -253,6 +253,8 @@ extension Workspace {
                 self.updateReminderLine()
                 self.sidebarRefreshRows()
                 self.refreshTodoPills()
+                // At midnight the to-dos the widget is given go on by a day.
+                self.publishWidgetTodos()
                 self.watchForDueReminders()
             }
         }
