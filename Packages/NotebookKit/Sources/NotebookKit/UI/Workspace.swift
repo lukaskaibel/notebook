@@ -309,6 +309,8 @@ public final class Workspace: NSObject {
             // Versions a year old go, also those of notes not written in since; not while the app is starting.
             DispatchQueue.main.asyncAfter(deadline: .now() + 30) { NoteHistory.shared.tidyUp() }
         }
+        // What the History does by itself, as it sets aside copies a new note isn't to have, says which device did it.
+        _ = NoteHistory.thisDevice
         #if DEBUG
         if temporaryLocations, UserDefaults.standard.bool(forKey: "NotebookDemo"), let library = locations.first {
             for path in DemoLibrary.hiddenFolders { hidden.set(hiddenKey(for: library.url.appendingPathComponent(path)), hidden: true) }
@@ -958,6 +960,8 @@ public final class Workspace: NSObject {
                     #endif
                 }.value
                 if thrownAway {
+                    // Copies of what was typed and taken away again go too.
+                    NoteHistory.shared.trash(url, as: NoteHistory.trashedName())
                     forgetRecent(url)
                     showChanges(in: [url.deletingLastPathComponent()], removing: [url])
                 }
@@ -980,9 +984,10 @@ public final class Workspace: NSObject {
         guard isLeftEmpty(note), !named else { return }
         note.close()
         let url = note.url
+        let history = NoteHistory.trashedName()
         let done = DispatchSemaphore(value: 0)
         DispatchQueue.global(qos: .userInitiated).async {
-            _ = FileOperations.trash(url)
+            if FileOperations.trash(url) { NoteHistory.shared.trash(url, as: history) }
             done.signal()
         }
         _ = done.wait(timeout: .now() + 1)
@@ -1579,6 +1584,7 @@ public final class Workspace: NSObject {
                     let accessing = url.startAccessingSecurityScopedResource()
                     defer { if accessing { url.stopAccessingSecurityScopedResource() } }
                     guard (try? FileManager.default.copyItem(at: url, to: destination)) != nil else { return nil }
+                    NoteHistory.shared.made(destination)
                     return (destination, FileNode.listing(of: destination))
                 }
             }.value

@@ -305,8 +305,9 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         history?.keep(text, of: url, onlyIfChanged: true)
     }
 
+    /// As you type: lengths that differ say it at once, and a long note's text takes a while to compare.
     private func noteWhetherChangedSinceOpening() {
-        let changed = openedText.map { $0 != text } ?? false
+        let changed = openedText.map { $0.utf16.count != text.utf16.count || $0 != text } ?? false
         if changed != isChangedSinceOpening { isChangedSinceOpening = changed }
     }
 
@@ -677,10 +678,14 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         all.allObjects.filter { (!$0.isClosed || writing.contains($0)) && FileNode.isSameOrInside($0.url, url) }
     }
 
-    /// What was typed in the notes at `url` or in it is written: before it goes to the Trash, so it goes along.
+    /// What was typed in the notes at `url` or in it is written, and kept as a version: before it goes to the Trash, so
+    /// both go along. A note open in a window of its own there closes once it is gone, with nothing left to keep.
     static func save(atOrInside url: URL) async {
         let documents = documents(atOrInside: url)
-        for document in documents { document.saveNow() }
+        for document in documents {
+            document.keepCopyOfChanges()
+            document.saveNow()
+        }
         for document in documents { await document.saved() }
     }
 

@@ -320,21 +320,29 @@ final class VersionHistoryTests: XCTestCase {
         _ = workspace
     }
 
-    func testRevertToFollowsTheNoteWindowWhileItsSheetIsUp() async throws {
+    func testRevertToFollowsTheWindowThatBecameKey() async throws {
         _ = try await makeWindow()
+        _ = FileWindows.shared
         let controller = FileWindowController(url: draft)
         let window = try XCTUnwrap(controller.window)
-        controller.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification, object: window))
+        func becameKey(_ window: NSWindow?) {
+            NotificationCenter.default.post(name: NSWindow.didBecomeKeyNotification, object: window)
+        }
+        becameKey(window)
         XCTAssertTrue(Workspace.shared.keyFileNote === controller.noteDocument)
+        // Its sheet up, such as the versions': still the window you are working in.
         let sheet = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 100), styleMask: [.titled], backing: .buffered, defer: false)
         window.beginSheet(sheet, completionHandler: nil)
         try await until("the sheet is up") { window.attachedSheet != nil }
-        controller.windowDidResignKey(Notification(name: NSWindow.didResignKeyNotification, object: window))
+        becameKey(sheet)
         XCTAssertTrue(Workspace.shared.keyFileNote === controller.noteDocument, "the sheet's window is still the one")
-        window.endSheet(sheet)
-        controller.windowDidResignKey(Notification(name: NSWindow.didResignKeyNotification, object: window))
+        // The main window next, the note window's sheet still up: the main window's note.
+        becameKey(self.window)
         XCTAssertNil(Workspace.shared.keyFileNote)
+        becameKey(window)
+        window.endSheet(sheet)
         window.close()
+        XCTAssertNil(Workspace.shared.keyFileNote, "closed")
     }
 
     func testRevertToFollowsTheNoteWindowYouAreIn() async throws {
@@ -347,6 +355,32 @@ final class VersionHistoryTests: XCTestCase {
         XCTAssertFalse(workspace.canRevertToLastOpened, "that window's note wasn't changed")
         workspace.keyFileNote = nil
         elsewhere.close()
+    }
+
+    func testANoteOpenInAWindowOfItsOwnTakesWhatWasTypedToTheTrash() async throws {
+        let (workspace, manager) = try await makeWindow()
+        // Open in a window of its own, as a note window has it, while the sidebar throws it away.
+        let own = NoteDocument(url: draft)
+        own.update(text: "# Draft\n\nTyped in its own window.\n")
+        _ = await workspace.trash(draft).value
+        own.close()
+        await own.saved()
+        let gone = await versions(of: draft)
+        XCTAssertEqual(gone, [], "nothing written where it was")
+        try await undo(workspace, manager)
+        let back = await versions(of: draft)
+        XCTAssertEqual(back, ["# Draft\n\nTyped in its own window.\n", "# Draft\n\nFirst words.\n"])
+    }
+
+    func testANoteMadeWhereVersionsWereLeftStartsWithoutThem() async throws {
+        let (workspace, _) = try await makeWindow()
+        // A note thrown away in the Finder left its versions.
+        let untitled = papers.appendingPathComponent("Untitled.md")
+        history.keep("# Thrown away in the Finder\n", of: untitled)
+        let made = await workspace.newNote(in: papers).value
+        XCTAssertEqual(made, untitled)
+        let none = await versions(of: untitled)
+        XCTAssertEqual(none, [])
     }
 
     func testADuplicateStartsWithoutVersions() async throws {
@@ -532,6 +566,19 @@ final class VersionCopyTests: XCTestCase {
         XCTAssertEqual(same.count, 2)
         again.close()
         await again.saved()
+    }
+
+    func testRevertToKnowsWhetherTheTextIsAsItOpened() async throws {
+        let note = try open("one\n")
+        note.update(text: "one\ntwo\n")
+        XCTAssertTrue(note.isChangedSinceOpening)
+        // As long, and something else.
+        note.update(text: "owt\n")
+        XCTAssertTrue(note.isChangedSinceOpening)
+        note.update(text: "one\n")
+        XCTAssertFalse(note.isChangedSinceOpening)
+        note.close()
+        await note.saved()
     }
 
     func testCopiesWaitForARenameAndGoWhereTheNoteWent() async throws {

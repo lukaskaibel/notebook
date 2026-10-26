@@ -502,6 +502,7 @@ enum AppleNotesImport {
             NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: nil) { url in
                 do {
                     try Data(text.utf8).write(to: url, options: .withoutOverwriting)
+                    NoteHistory.shared.made(url)
                     outcome = .written
                 } catch {
                     outcome = FileManager.default.fileExists(atPath: url.path) ? .taken : .failed

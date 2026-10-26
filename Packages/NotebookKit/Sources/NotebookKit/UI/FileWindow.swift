@@ -10,6 +10,20 @@ public final class FileWindows {
     public static let shared = FileWindows()
     private var controllers: [String: FileWindowController] = [:]
 
+    private init() {
+        // Revert To acts on the note of the window you are in: whichever became key, or the one its sheet is over.
+        NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { notification in
+            guard let window = notification.object as? NSWindow else { return }
+            MainActor.assumeIsolated { Self.becameKey(window) }
+        }
+    }
+
+    static func becameKey(_ window: NSWindow) {
+        var window = window
+        while let below = window.sheetParent ?? window.parent { window = below }
+        Workspace.shared.keyFileNote = (window.windowController as? FileWindowController)?.noteDocument
+    }
+
     public func open(_ url: URL) {
         let url = url.standardizedFileURL
         if let existing = controllers[url.path] {
@@ -139,15 +153,6 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
     override func showWindow(_ sender: Any?) {
         super.showWindow(sender)
         window?.makeFirstResponder(editor.textView)
-    }
-
-    func windowDidBecomeKey(_ notification: Notification) {
-        Workspace.shared.keyFileNote = note
-    }
-
-    func windowDidResignKey(_ notification: Notification) {
-        // To a sheet over it, such as the versions', it is still the window you are working in.
-        if window?.attachedSheet == nil, Workspace.shared.keyFileNote === note { Workspace.shared.keyFileNote = nil }
     }
 
     func windowWillClose(_ notification: Notification) {
