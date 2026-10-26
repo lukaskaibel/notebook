@@ -473,8 +473,9 @@ devices apart. The versions of notes anywhere else, and of every note in builds 
 kept the same way in the app's Application Support folder, on that device only. Each device thins the versions it took;
 another device's go a year after the newest that device took of the note, so a clock set wrong on one can't take away
 the others'. Those of a note you delete in Notebook go to the History's own Trash, come back with Undo, or when you put
-the note back in the Finder and open it, and go a year later. A note Notebook makes under a name another had starts
-without its versions. Settings › your name › iCloud › Storage on iPhone and
+the note back in the Finder and open it, and go a year later. Those of a note deleted outside Notebook go there too,
+once a day, unless another device took one in the last month: iCloud may not have brought that note yet. A note
+Notebook makes under a name another had starts without its versions. Settings › your name › iCloud › Storage on iPhone and
 iPad, or System Settings › your name › iCloud › Manage on the Mac, shows how much Notebook keeps in iCloud, and can
 delete it.
 
@@ -713,8 +714,8 @@ Planned, and not built yet:
   A reminder set on another device reaches an iPhone or iPad the next time Notebook runs there or gets time in the
   background. Reminders of notes don't repeat, and a Mac doesn't remind you at places.
 - Footnotes are styled but don't jump to their text.
-- **Versions of a note renamed or moved outside Notebook,** in the Finder or another app, stay under its old name and
-  don't show for it; a note another app makes under that name shows them (#148).
+- **Versions of a note renamed or moved outside Notebook,** in the Finder or another app, don't follow it: they go to
+  the History's Trash, and come back only if it gets its old name again (#148).
 - On iPhone and iPad there is no Settings › App Icon (iOS only switches between icons built into the app), no PNG
   export and no window of its own for a single file.
 - **Sketches** as files of their own, next to your notes rather than in one.
