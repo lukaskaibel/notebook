@@ -11,9 +11,9 @@ versions follow [semantic versioning](https://semver.org).
   `every 2 weeks on Friday`, `every month on the last`, `every year`, `… when done` and the other rules Tasks reads), in
   the note, in To-dos or in its notification, and the next one is written above it with its dates moved on, while the
   one you ticked gets the day it was done, `✅ 2026-10-26`, as Tasks writes them. Its due date, time, scheduled and
-  start dates keep their distances, a month's end stays a month's end, and its reminder moves to the next one. One Undo
-  takes both back, and unticking it in To-dos while it still shows ticked does too; unticking it in the note doesn't
-  make another.
+  start dates keep their distances, a day the next month doesn't have becomes its last day (31 January, every month,
+  is next due on 28 February), and its reminder moves to the next one. One Undo takes both back, and unticking it in
+  To-dos while it still shows ticked does too; unticking it in the note doesn't make another.
 
 ## [1.0.0] – not released yet
 
