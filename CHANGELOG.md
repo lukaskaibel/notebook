@@ -45,6 +45,8 @@ versions follow [semantic versioning](https://semver.org).
   version in, rather than closing as if it had been deleted.
 - Leaving a note you took pictures out of no longer downloads the other notes in its folder from iCloud to see whether
   they use those pictures: with one of them still in iCloud, the pictures stay.
+- On iPhone and iPad, the Files app shows On My iPhone › Notebook (On My iPad › Notebook), the folder Keep Notes on
+  This iPhone uses, so its notes can be opened, shared and backed up from there. It was missing.
 - The sidebar on the Mac no longer scrolls back to the open note each time it is saved while you look at another part
   of it.
 
