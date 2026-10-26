@@ -25,6 +25,14 @@ versions follow [semantic versioning](https://semver.org).
   start dates keep their distances, a day the next month doesn't have becomes its last day (31 January, every month,
   is next due on 28 February), and its reminder moves to the next one. One Undo takes both back, and unticking it in
   To-dos while it still shows ticked does too; unticking it in the note doesn't make another.
+- Import from Apple Notes, on the Mac, iPhone and iPad. Export notes from Notes as Markdown first: on the Mac, select
+  the notes of a folder and choose File › Export as › Markdown; on iPhone and iPad, Share › Export as Markdown, one note
+  at a time. Then choose File › Import from Apple Notes… in Notebook, or Import from Apple Notes in the ⋯ menu, and pick
+  the folder Notes made. Its notes come into the folder you're in, each with its pictures and files in the `.assets`
+  folder next to it, so they move with it, as Notebook's own do. Files Notes wrote without an extension get one, links
+  between the notes you exported keep finding them, the title Notes repeats as the first line goes, and the folders you
+  put the exports in come along. Notes' export itself is only read, nothing in your folders is written over, what
+  couldn't come over is listed, and one Undo takes the whole import back.
 
 ### Changed
 

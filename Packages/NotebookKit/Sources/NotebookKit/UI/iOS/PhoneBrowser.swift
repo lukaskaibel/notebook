@@ -52,6 +52,7 @@ struct PhoneBrowser: View {
             ), top: 60)
         }
         .modifier(FileAlerts(workspace: workspace, newFolderIn: $newFolderIn))
+        .modifier(AppleNotesImporter(workspace: workspace))
         .onAppear {
             // Back where you were: in the note you had open, with its folders behind it.
             if let url = workspace.currentURL, path.isEmpty { path = folders(to: url) + [Page(url: url, isFolder: false)] }
@@ -205,6 +206,11 @@ struct HomeScreen: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button { addsLocation = true } label: { Label("Add Location", systemImage: "plus.rectangle.on.folder") }
+                    if let folder = workspace.defaultFolder {
+                        Button { workspace.appleNotesImportFolder = folder } label: {
+                            Label("Import from Apple Notes", systemImage: "square.and.arrow.down.on.square")
+                        }
+                    }
                     // The files at the top of each location below are sorted too.
                     Section {
                         SortByPicker(folder: nil)
@@ -364,6 +370,9 @@ struct FolderScreen: View {
                 Menu {
                     Section {
                         Button { newFolderIn = page.url } label: { Label("New Folder", systemImage: "folder.badge.plus") }
+                        Button { workspace.appleNotesImportFolder = page.url } label: {
+                            Label("Import from Apple Notes", systemImage: "square.and.arrow.down.on.square")
+                        }
                     }
                     Section {
                         SortByPicker(folder: page.url)
