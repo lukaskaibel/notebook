@@ -19,9 +19,9 @@ public enum FileOrder: String, CaseIterable, Identifiable, Sendable {
     var isByDate: Bool { self != .name }
 }
 
-/// The order you chose, and the one place that knows where it is kept: every folder asks here how it is sorted, so
-/// keeping an order per folder later changes nothing else. For now one order goes for every folder, in the user
-/// defaults of this device.
+/// The order you chose, and the one place that knows where it is kept: every folder asks here how it is sorted. One
+/// order goes for every folder, as in Obsidian, in the user defaults of this device; folders with an order of their own,
+/// as Notes has them, would change only this.
 @MainActor
 @Observable
 public final class FileOrders {
