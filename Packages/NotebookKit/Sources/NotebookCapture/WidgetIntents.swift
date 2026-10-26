@@ -26,14 +26,24 @@ public struct TickTodoIntent: AppIntent {
         // The extension's notification center is the app's: the ones waiting are kept, to give back on an untick.
         let center = UNUserNotificationCenter.current()
         if toggled.ticked {
-            let waiting = await center.pendingNotificationRequests().filter { names.contains($0.identifier) }
-            center.removePendingNotificationRequests(withIdentifiers: names)
-            center.removeDeliveredNotifications(withIdentifiers: names)
+            // By their names, and by the note and the to-do they are for: a name changes with the lines under the to-do.
+            let waiting = await center.pendingNotificationRequests().filter { names.contains($0.identifier) || Self.isFor(row, $0.content) }
+            let shown = await center.deliveredNotifications().filter { Self.isFor(row, $0.request.content) }.map(\.request.identifier)
+            center.removePendingNotificationRequests(withIdentifiers: names + waiting.map(\.identifier))
+            center.removeDeliveredNotifications(withIdentifiers: names + shown)
             if !waiting.isEmpty, let kept = Self.archived(waiting) { WidgetData.keepWithdrawn(kept, for: row.id) }
         } else if let kept = toggled.withdrawn {
             for request in Self.requests(from: kept) where Self.isToCome(request) { try? await center.add(request) }
         }
         return .result()
+    }
+
+    /// Whether a notification is the to-do's: the app puts the note's path and the to-do's line in it.
+    static func isFor(_ row: WidgetData.TodoRow, _ content: UNNotificationContent) -> Bool {
+        guard let path = content.userInfo["path"] as? String, content.userInfo["source"] as? String == row.source else { return false }
+        // File events can name a note "/private/var/…" that was "/var/…".
+        func plain(_ path: String) -> String { path.hasPrefix("/private/") ? String(path.dropFirst(8)) : path }
+        return plain(path) == plain(row.path)
     }
 
     static func archived(_ requests: [UNNotificationRequest]) -> Data? {

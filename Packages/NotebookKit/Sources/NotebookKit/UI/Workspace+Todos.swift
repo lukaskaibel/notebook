@@ -179,7 +179,7 @@ extension Workspace {
             return nil
         }
         guard mark.isClosed != done else {
-            outcome?(.written)
+            outcome?(.unchanged)
             return nil
         }
         return setTodoMark(todo, done ? .done : .open, fromNotification: fromNotification, unless: refused, outcome: outcome)
@@ -204,7 +204,7 @@ extension Workspace {
         }
         let today = TodoDay.today
         guard let after = Todos.marking(todo.source, as: mark, today: today) else {
-            outcome?(.written)
+            outcome?(.unchanged)
             return nil
         }
         let edit: TodoLinesEdit = { text, document, index in
@@ -515,11 +515,15 @@ extension Workspace {
     }
 
     /// Changes a to-do in its file: the line it is on now, found by what it said. The line and what it says after the
-    /// change, or nil when the to-do isn't there (`notThere`) or the file couldn't be read or written (`failed`).
+    /// change, or nil when the to-do or its file isn't there (`notThere`) or the file couldn't be read or written
+    /// (`failed`).
     nonisolated private static func write(_ todo: TodoReference, edit: TodoLinesEdit) -> (change: (line: Int, source: String)?, outcome: TodoChangeOutcome) {
         var result: (change: (line: Int, source: String)?, outcome: TodoChangeOutcome) = (nil, .failed)
         var error: NSError?
         NSFileCoordinator().coordinate(writingItemAt: todo.url, options: .forMerging, error: &error) { url in
+            // Renamed, moved or deleted somewhere else: there is no to-do to change. (One only in iCloud is downloaded
+            // for the coordinated write first.)
+            guard FileManager.default.fileExists(atPath: url.path) else { return result.outcome = .notThere }
             guard let data = try? Data(contentsOf: url), let text = NoteDocument.decode(data) else { return }
             let string = text as NSString
             let document = MarkdownParser.parse(string)
@@ -600,10 +604,10 @@ extension Workspace {
 /// What Undo keeps a change to a to-do's file under, to take it out again if the change couldn't be written.
 private final class TodoUndoTarget {}
 
-/// What became of a change to a to-do, for what waits on it (a tick from a widget): written, or nothing left to
-/// change (done already); not there to change (gone, or changed since); or not written now, to be tried again.
+/// What became of a change to a to-do, for what waits on it (a tick from a widget): written; nothing to change (done
+/// already); not there to change (gone, changed since, or its note gone); or not written now, to be tried again.
 enum TodoChangeOutcome: Sendable {
-    case written, notThere, failed
+    case written, unchanged, notThere, failed
 }
 
 /// A to-do that repeats, ticked in To-dos or from its notification: the line it was ticked to, what it said before and

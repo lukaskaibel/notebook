@@ -135,10 +135,14 @@ public enum WidgetData {
         }
     }
 
-    /// Forgets ticks the app is done with.
-    public static func removeTicks(_ ids: Set<String>) {
-        guard !ids.isEmpty else { return }
-        changeTicks { ticks in ticks.removeAll { ids.contains($0.row.id) } }
+    /// Forgets a tick the app is done with, and says whether it was still there: not, when it was unticked meanwhile.
+    public static func removeTick(_ id: String) -> Bool {
+        var wasThere = false
+        changeTicks { ticks in
+            wasThere = ticks.contains { $0.row.id == id }
+            ticks.removeAll { $0.row.id == id }
+        }
+        return wasThere
     }
 
     private static let ticksName = "ticked.json"
@@ -246,6 +250,12 @@ public enum WidgetData {
     /// can have later, once it moved.
     public static func noteID(path: String, created: Date?) -> String {
         "\(Int(created?.timeIntervalSince1970 ?? 0))|" + path
+    }
+
+    /// When the note chosen by an ID was made, to the second; nil when the ID doesn't say.
+    public static func noteCreated(id: String) -> Int? {
+        guard let bar = id.firstIndex(of: "|"), let seconds = Int(id[..<bar]), seconds != 0 else { return nil }
+        return seconds
     }
 
     /// The path a note had when it was chosen.

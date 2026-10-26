@@ -140,6 +140,17 @@ final class WidgetDataTests: XCTestCase {
         XCTAssertEqual(try read(errands), before)
     }
 
+    /// The extension finds a to-do's notifications by its note and line too: their names change with the lines under
+    /// it.
+    func testANotificationIsFoundByItsNoteAndLine() {
+        let row = WidgetData.TodoRow(kind: .todo, text: "Call", path: "/var/mobile/Errands.md", note: "Errands", line: 3, source: "- [ ] Call", due: .now, hasTime: true)
+        let content = UNMutableNotificationContent()
+        content.userInfo = ["path": "/private/var/mobile/Errands.md", "source": "- [ ] Call", "line": 5]
+        XCTAssertTrue(TickTodoIntent.isFor(row, content))
+        content.userInfo["source"] = "- [ ] Call mum"
+        XCTAssertFalse(TickTodoIntent.isFor(row, content))
+    }
+
     /// An untick gives back what the tick took back.
     func testAnUntickGivesBackTheNotifications() {
         let row = WidgetData.TodoRow(kind: .todo, text: "Call", path: "/Errands.md", note: "Errands", line: 3, source: "- [ ] Call", due: .now, hasTime: true)
@@ -197,8 +208,79 @@ final class WidgetDataTests: XCTestCase {
         await workspace.takeWidgetTicks()
         XCTAssertEqual(try read(errands), changed)
         XCTAssertTrue(WidgetData.ticks.isEmpty)
+        workspace.showReportsWaiting()
         try await until("the alert") { window?.attachedSheet != nil }
         if let sheet = window?.attachedSheet { window?.endSheet(sheet) }
+    }
+
+    /// A to-do whose note was renamed, moved or deleted outside Notebook isn't waited for: dropped, and you're told.
+    func testATickOfATodoWhoseNoteIsGoneIsDropped() async throws {
+        let workspace = makeWorkspace()
+        try await readTodos(workspace)
+        WidgetData.toggleTick(try row("Milk", in: workspace))
+        try FileManager.default.moveItem(at: errands, to: library.appendingPathComponent("Errands renamed.md"))
+        await workspace.takeWidgetTicks()
+        XCTAssertTrue(WidgetData.ticks.isEmpty, "it waits for a note that's gone")
+        workspace.showReportsWaiting()
+        try await until("the alert") { window?.attachedSheet != nil }
+        if let sheet = window?.attachedSheet { window?.endSheet(sheet) }
+    }
+
+    /// Unticked in the widget while Notebook writes the tick: the tick is taken back, so the note says what the widget
+    /// does.
+    func testAnUntickWhileTheTickIsWrittenIsKept() async throws {
+        let workspace = makeWorkspace()
+        try await readTodos(workspace)
+        let milk = try row("Milk", in: workspace)
+        WidgetData.toggleTick(milk)
+        let holding = DispatchSemaphore(value: 0), held = DispatchSemaphore(value: 0)
+        let errands = errands
+        DispatchQueue.global().async {
+            NSFileCoordinator().coordinate(writingItemAt: errands, options: [], error: nil) { _ in
+                held.signal()
+                holding.wait()
+            }
+        }
+        await withCheckedContinuation { continuation in DispatchQueue.global().async { held.wait(); continuation.resume() } }
+        let taking = Task { await workspace.takeWidgetTicks() }
+        try await Task.sleep(for: .milliseconds(500))
+        XCTAssertFalse(WidgetData.toggleTick(milk).ticked)
+        holding.signal()
+        await taking.value
+        await workspace.lastTodoWrite?.value
+        let text = try read(errands)
+        XCTAssertTrue(text.contains("- [ ] Milk"), text)
+        XCTAssertFalse(text.contains("- [x] Milk"), text)
+        XCTAssertTrue(WidgetData.ticks.isEmpty)
+    }
+
+    /// Daily to-dos with the ones done on other days under them: ticking two in the widget ticks both, though writing
+    /// the first changes the note.
+    func testTicksOfRepeatingTodosWithTheirPastAreWritten() async throws {
+        let today = TodoDue(.now, time: false).markdown
+        let yesterday = TodoDue(Calendar.current.date(byAdding: .day, value: -1, to: .now)!, time: false).markdown
+        let done = "✅ " + String(yesterday.dropFirst(2))
+        let routines = library.appendingPathComponent("Routines.md")
+        try """
+        - [ ] Stretch 🔁 every day \(today)
+        - [x] Stretch 🔁 every day \(yesterday) \(done)
+        - [ ] Vitamins 🔁 every day \(today)
+        - [x] Vitamins 🔁 every day \(yesterday) \(done)
+
+        """.write(to: routines, atomically: true, encoding: .utf8)
+        let workspace = makeWorkspace()
+        try await readTodos(workspace)
+        try await until("the routines were read") { workspace.todos.items.contains { $0.todo.text == "Vitamins" } }
+        let stretch = try row("Stretch", in: workspace), vitamins = try row("Vitamins", in: workspace)
+        WidgetData.toggleTick(stretch)
+        WidgetData.toggleTick(vitamins)
+        await workspace.takeWidgetTicks()
+        let text = try read(routines)
+        for source in [stretch.source, vitamins.source] {
+            let ticked = try XCTUnwrap(Todos.marking(source, as: .done, today: .today)?.line)
+            XCTAssertTrue(text.contains(ticked), "not ticked: \(source)\n\(text)")
+        }
+        XCTAssertTrue(WidgetData.ticks.isEmpty)
     }
 
     /// A to-do that repeats, ticked on another device before Notebook ran here: when its next one says what it said, it
@@ -315,7 +397,7 @@ final class WidgetDataTests: XCTestCase {
         let workspace = makeWorkspace()
         workspace.start()
         try await until("the library was read") { workspace.hasReadLocations }
-        let id = WidgetData.noteID(path: trip.path, created: .now)
+        let id = WidgetData.noteID(path: trip.path, created: try trip.resourceValues(forKeys: [.creationDateKey]).creationDate)
         workspace.widgetNotes = [id: Workspace.widgetNote("Text", url: trip, place: "")]
         workspace.widgetNoteThrownAway(library.appendingPathComponent("Travel"))
         XCTAssertEqual(workspace.widgetNotes[id]?.missing, .gone)
@@ -330,6 +412,22 @@ final class WidgetDataTests: XCTestCase {
         XCTAssertTrue(workspace.openFromWidget(WidgetData.url(note: id)))
         try await Task.sleep(for: .milliseconds(200))
         XCTAssertNil(workspace.currentURL, "a hidden note opened")
+    }
+
+    /// A note thrown away, then a new one at its path: the widget doesn't show the new one as the one chosen.
+    func testANewNoteAtAGoneNotesPathIsntShown() async throws {
+        let workspace = makeWorkspace()
+        workspace.start()
+        try await until("the library was read") { workspace.hasReadLocations }
+        let id = WidgetData.noteID(path: trip.path, created: try trip.resourceValues(forKeys: [.creationDateKey]).creationDate)
+        workspace.widgetNotes = [id: Workspace.widgetNote("Text", url: trip, place: "")]
+        try FileManager.default.removeItem(at: trip)
+        workspace.widgetNoteThrownAway(trip)
+        try await Task.sleep(for: .milliseconds(1100))
+        try "# Kyoto trip\n\nSomething else.\n".write(to: trip, atomically: true, encoding: .utf8)
+        workspace.renderWidgetNotes([id])
+        try await Task.sleep(for: .milliseconds(500))
+        XCTAssertEqual(workspace.widgetNotes[id]?.missing, .gone, "a new note shown as the one chosen")
     }
 
     /// Edit Widget offers no note in a folder you hid, and gives a new note at an old one's path an ID of its own.

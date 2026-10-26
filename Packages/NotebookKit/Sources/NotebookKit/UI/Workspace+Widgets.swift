@@ -66,8 +66,9 @@ extension Workspace {
     /// Writes the to-dos ticked in a widget into their notes, once the locations can be written: in the editor that
     /// shows the note, where Undo takes it back, or else in its file, merged with what is there. A tick stays until it
     /// is written: one that can't be now (its file can't be read or written) waits for the next time, and its
-    /// notifications stay away meanwhile. One whose to-do is gone or changed since is dropped, nothing written over it,
-    /// and you're told, unless it was done meanwhile somewhere else.
+    /// notifications stay away meanwhile. One whose to-do is gone or changed since, or whose note is, is dropped,
+    /// nothing written over it, and you're told, unless it was done meanwhile somewhere else. Each is forgotten as soon
+    /// as it is written, in one step with seeing it is still there: unticked in the widget meanwhile, it is taken back.
     func takeWidgetTicks() async {
         guard WidgetData.folder != nil else { return }
         let ticks = await Task.detached(priority: .userInitiated) { WidgetData.ticks }.value
@@ -75,29 +76,24 @@ extension Workspace {
         guard !ticks.isEmpty else { return }
         start()
         await surveyed()
-        var finished = Set<String>()
         var notTicked: [String] = []
         for tick in ticks {
             let row = tick.row
-            guard row.kind == .todo else {
-                finished.insert(row.id)
-                continue
-            }
             // Unticked in the widget meanwhile.
             guard await Task.detached(priority: .userInitiated, operation: { WidgetData.ticks.contains { $0.row.id == row.id } }).value else { continue }
-            switch await writeWidgetTick(row) {
+            let written = row.kind == .todo ? await writeWidgetTick(row) : (.unchanged, nil)
+            guard written.outcome != .failed else { continue }
+            let wasThere = await Task.detached(priority: .userInitiated) { WidgetData.removeTick(row.id) }.value
+            switch written.outcome {
             case .written:
-                finished.insert(row.id)
+                if !wasThere, let todo = written.todo { await untickTodo(todo, to: Todos.mark(of: row.source) ?? .open)?.value }
             case .notThere:
-                finished.insert(row.id)
-                if !(await isDoneElsewhere(row)) { notTicked.append("“\(row.text)”") }
-            case .failed:
-                continue
+                if wasThere, !(await isDoneElsewhere(row)) { notTicked.append("“\(row.text)”") }
+            case .unchanged, .failed:
+                break
             }
         }
-        let done = finished
-        await Task.detached(priority: .userInitiated) { WidgetData.removeTicks(done) }.value
-        widgets.ticks = ticks.map(\.row).filter { !done.contains($0.id) }
+        widgets.ticks = await Task.detached(priority: .userInitiated) { WidgetData.ticks.map(\.row) }.value
         if !notTicked.isEmpty {
             let names = ListFormatter.localizedString(byJoining: notTicked)
             reportInFront("Not Ticked", notTicked.count == 1
@@ -108,10 +104,11 @@ extension Workspace {
         WidgetCenter.shared.reloadTimelines(ofKind: WidgetData.todosKind)
     }
 
-    /// Ticks a to-do from a widget as To-dos does, and says what became of it. A to-do that repeats and was ticked
-    /// somewhere else meanwhile (the note changed since the widget's to-dos were written, and next to its line is one
-    /// done with its words) isn't ticked again: when the next one says what it said, it would be found in its place.
-    private func writeWidgetTick(_ row: WidgetData.TodoRow) async -> TodoChangeOutcome {
+    /// Ticks a to-do from a widget as To-dos does, and says what became of it, and the to-do it ticked. A to-do that
+    /// repeats and was ticked somewhere else meanwhile (the note changed since the widget's to-dos were written, and
+    /// next to its line is that to-do ticked) isn't ticked again: when the next one says what it said, it would be
+    /// found in its place.
+    private func writeWidgetTick(_ row: WidgetData.TodoRow) async -> (outcome: TodoChangeOutcome, todo: TodoReference?) {
         let url = URL(fileURLWithPath: Self.widgetPath(row.path))
         let todo = TodoReference(url: url, line: row.line, source: row.source)
         let modified = await Task.detached(priority: .userInitiated) {
@@ -121,37 +118,36 @@ extension Workspace {
         let repeats = Todos.marking(row.source, as: .done, today: .today)?.next != nil
         var task: Task<Void, Never>?
         let outcome = await withCheckedContinuation { continuation in
-            task = setTodoDone(todo, true, unless: changed && repeats ? Self.doneNextTo(row.source) : nil) { continuation.resume(returning: $0) }
+            task = setTodoDone(todo, true, unless: changed && repeats ? Self.tickedNextTo(row.source) : nil) { continuation.resume(returning: $0) }
         }
         await task?.value
-        return outcome
+        return (outcome, todo)
     }
 
-    /// Whether a line next to a to-do's is one done with its words: the to-do ticked, by ticking that writes the next
-    /// one in its place.
-    nonisolated static func doneNextTo(_ source: String) -> TodoLinesCheck {
-        let words = Todos.line(source)?.text
-        return { text, document, index in
-            [index - 1, index + 1].contains { Self.isDone(document.lines[safe: $0], words: words, in: text) }
+    /// Whether a line next to a to-do's is that to-do ticked, as ticking it somewhere else leaves it. Not any done one
+    /// with its words: one ticked another day stays next to the one that came after it.
+    nonisolated static func tickedNextTo(_ source: String) -> TodoLinesCheck {
+        { text, document, index in
+            [index - 1, index + 1].contains { Self.isTicked(document.lines[safe: $0], from: source, in: text) }
         }
     }
 
-    /// Whether a to-do ticked in a widget that wasn't there to tick was done meanwhile: its note has one done with its
-    /// words.
+    /// Whether a to-do ticked in a widget that wasn't there to tick was done meanwhile: its note has it ticked.
     private func isDoneElsewhere(_ row: WidgetData.TodoRow) async -> Bool {
         let url = URL(fileURLWithPath: Self.widgetPath(row.path))
-        let words = Todos.line(row.source)?.text
         let shown = editorShowing(url)?.text
         return await Task.detached(priority: .utility) {
             guard let text = shown ?? NoteDocument.read(url) else { return false }
             let string = text as NSString
-            return MarkdownParser.parse(string).lines.contains { Self.isDone($0, words: words, in: string) }
+            return MarkdownParser.parse(string).lines.contains { Self.isTicked($0, from: row.source, in: string) }
         }.value
     }
 
-    nonisolated private static func isDone(_ line: MarkdownLine?, words: String?, in text: NSString) -> Bool {
-        guard let line, case .listItem(let item) = line.kind, item.isTask, item.mark.isClosed, let words else { return false }
-        return Todos.line(text.substring(with: line.range))?.text == words
+    /// Whether a line is the to-do of `source` done (or cancelled): back to its mark, without the day it was done, it
+    /// says exactly what the to-do said.
+    nonisolated static func isTicked(_ line: MarkdownLine?, from source: String, in text: NSString) -> Bool {
+        guard let line, case .listItem(let item) = line.kind, item.isTask, item.mark.isClosed else { return false }
+        return Todos.marking(text.substring(with: line.range), as: Todos.mark(of: source) ?? .open, today: .today)?.line == source
     }
 
     /// The notifications of to-dos ticked in a widget and not written yet don't come back meanwhile.
@@ -199,13 +195,15 @@ extension Workspace {
             return
         }
         let kept = widgetNotes
-        enum Look: Sendable { case read(place: String), hidden, gone }
+        enum Look: Sendable { case read(place: String, made: Int?), hidden, gone }
         var asked: [String: (kept: String?, path: String, look: Look)] = [:]
         for id in chosen ?? Set(kept.keys) {
             let path = Self.widgetPath(kept[id]?.path ?? WidgetData.notePath(id: id))
             let url = URL(fileURLWithPath: path)
+            // Gone, then a note at its path again: it must be the one chosen, made when it was, not a new one there.
+            let made = kept[id]?.missing == .gone ? WidgetData.noteCreated(id: id) : nil
             let look: Look = SearchIndex.isHidden(path, in: index.hiddenPaths) ? .hidden
-                : location(containing: url) == nil ? .gone : .read(place: place(of: url.deletingLastPathComponent()))
+                : location(containing: url) == nil ? .gone : .read(place: place(of: url.deletingLastPathComponent()), made: made)
             asked[id] = (kept[id]?.path, path, look)
         }
         widgets.isRendering = true
@@ -217,8 +215,11 @@ extension Workspace {
                 switch ask.look {
                 case .hidden: read[id] = .missing(.hidden, path: ask.path)
                 case .gone: read[id] = .missing(.gone, path: ask.path)
-                case .read(let place):
-                    if let text = NoteDocument.read(url) {
+                case .read(let place, let made):
+                    if let made, let created = (try? url.resourceValues(forKeys: [.creationDateKey]))?.creationDate,
+                       Int(created.timeIntervalSince1970) != made {
+                        read[id] = .missing(.gone, path: ask.path)
+                    } else if let text = NoteDocument.read(url) {
                         read[id] = Self.widgetNote(text, url: url, place: place)
                     } else if !FileManager.default.fileExists(atPath: ask.path) {
                         read[id] = .missing(.gone, path: ask.path)
