@@ -5,8 +5,39 @@ versions follow [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- New Note as a widget and a control: the widget on the Home Screen and the Lock Screen of iPhone and iPad and on the
+  Mac's desktop, the control in Control Center, on the Lock Screen and on the iPhone's Action button. A tap opens
+  Notebook with a new note in your default folder and the caret in its title, as New Note in Shortcuts does. The
+  widget shows Notebook's icon and the pencil in its ink; on the Lock Screen it is the pencil alone, or with its name.
+- To-dos that repeat, as with Obsidian's Tasks plugin: tick off a to-do with `🔁 every week` (or `every weekday`,
+  `every 2 weeks on Friday`, `every month on the last`, `every year`, `… when done` and the other rules Tasks reads), in
+  the note, in To-dos or in its notification, and the next one is written above it with its dates moved on, while the
+  one you ticked gets the day it was done, `✅ 2026-10-26`, as Tasks writes them. Its due date, time, scheduled and
+  start dates keep their distances, a day the next month doesn't have becomes its last day (31 January, every month,
+  is next due on 28 February), and its reminder moves to the next one. One Undo takes both back, and unticking it in
+  To-dos while it still shows ticked does too; unticking it in the note doesn't make another.
+
+### Changed
+
+- Notes are saved in the background, on the Mac, iPhone and iPad: a slow disk, or iCloud holding a note while it puts
+  in another device's version, no longer makes the window wait when you pause typing, leave a note or switch apps.
+  What you type meanwhile is saved right after. A note you have just left is still written, and quitting, renaming,
+  moving or putting it in the Trash waits for it, so what you typed goes along.
+
 ### Fixed
 
+- A note open in the main window and in a window of its own no longer makes Notebook hang as you type in one of them.
+  Each window now shows what was typed in the other, and quitting with both open quits.
+- Leaving a note a moment after another device changed the same lines no longer loses what you typed since the last
+  save. Notebook can't ask any more, so it keeps both: the note keeps the other device's version, and what you typed
+  goes into a copy next to it, named after your Mac or device, such as "Gift ideas (Anna's iPhone)". The same goes for
+  closing a note's own window on the Mac and for quitting.
+- A note whose file another app replaces with a new version, the way some apps save, stays open and takes the new
+  version in, rather than closing as if it had been deleted.
+- Leaving a note you took pictures out of no longer downloads the other notes in its folder from iCloud to see whether
+  they use those pictures: with one of them still in iCloud, the pictures stay.
 - On iPhone and iPad, On My iPhone (On My iPad) chosen itself as a location was called "File Provider Storage", the
   name of its folder on disk, on the first screen, in the sidebar and in Settings. It now has the name the Files app
   gives it, also where you added it before.

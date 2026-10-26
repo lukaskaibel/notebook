@@ -53,6 +53,12 @@ public final class Workspace: NSObject {
     /// The to-do being edited in To-dos, whose words are written with the notes when the app goes away.
     @ObservationIgnored weak var todoEditing: TodoEditing?
     @ObservationIgnored var todoRewrites: [String: TodoReference] = [:]
+    /// To-dos that repeat, ticked in To-dos or from a notification, by the line they were ticked to (`takeBackTick`).
+    @ObservationIgnored var todoTicks: [String: TodoTick] = [:]
+    #if DEBUG
+    /// What `remindOfNext` was asked for, for tests: the next one's line, and whether as it will be.
+    @ObservationIgnored var remindedOfNext: [(source: String, asItWillBe: Bool)] = []
+    #endif
     #if DEBUG
     /// The sample notes' reminders, shown but never scheduled: a run on the sample notes leaves no notification behind.
     @ObservationIgnored var unscheduledReminders = Set<UUID>()
@@ -174,6 +180,8 @@ public final class Workspace: NSObject {
     @ObservationIgnored private var refreshScheduled = false
     /// `.assets` files the open note used, so the ones it drops can go to the Trash when you leave it.
     @ObservationIgnored private var assetsInUse = Set<String>()
+    /// Saved as the app quits: asking the app to quit, and then quitting, both say so.
+    @ObservationIgnored private var hasQuit = false
     /// Every folder Move To offers, in order (`prepareMoveFolders`).
     @ObservationIgnored private var moveFolders: MoveFolders?
     @ObservationIgnored private var preparingMoveFolders: MoveFolders.Key?
@@ -883,16 +891,23 @@ public final class Workspace: NSObject {
         // Back or ⌘N while typing a new name: the name counts, as it would once the title is left.
         if editor.isEditingTitle { editor.commitTitle() }
         note.update(text: editor.text)
+        // Saved off the main thread; the note is kept until it is written.
         note.close()
         let folder = note.url.deletingLastPathComponent()
         let dropped = assetsInUse.subtracting(FileOperations.assetNames(in: note.text))
-        // It reads every note in the folder, which takes a while in a large one.
-        if !dropped.isEmpty { Task.detached(priority: .utility) { FileOperations.cleanUpAssets(in: folder, candidates: dropped) } }
+        if !dropped.isEmpty {
+            Task {
+                // It reads the notes in the folder, this one as it is written now; in a large folder that takes a while.
+                await note.saved()
+                Task.detached(priority: .utility) { FileOperations.cleanUpAssets(in: folder, candidates: dropped) }
+            }
+        }
         if isLeftEmpty(note) {
             let url = note.url
             // Nothing was made that Undo could take back.
             if let change = newNoteChange, change.after.map({ FileNode.samePath($0, url) }) == true { dropFromUndo(change) }
             changeFiles { [self] follow in
+                await note.saved()
                 let url = follow(url)
                 let thrownAway = await Task.detached(priority: .userInitiated) { () -> Bool in
                     #if os(iOS)
@@ -1040,6 +1055,7 @@ public final class Workspace: NSObject {
     }
 
     private func currentNoteDeleted() {
+        note?.close()
         note = nil
         currentURL = nil
     }
@@ -1344,19 +1360,20 @@ public final class Workspace: NSObject {
         let isNote = FileKind(url: url, isDirectory: false) == .note
         let links = updatingLinks && !undoing ? linkSnapshot() : nil
         let document = noteMoving(with: url)
-        document?.beginMove()
+        // What notes there are writing is written where they are still.
+        let documents = await NoteDocument.beginMoving(url)
         let result = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?)? in
             let renamed = fileName ? FileOperations.rename(url, toFileName: name, presenter: document) : FileOperations.rename(url, to: name, presenter: document)
             guard let renamed else { return nil }
             return (renamed, FileNode.listing(of: renamed))
         }.value
         guard let renamed = result?.url else {
-            document?.endMove(to: nil)
+            NoteDocument.endMoving(documents, from: url, to: nil)
             let shown = fileName && isNote ? (name as NSString).deletingPathExtension : name
             report("The name “\(shown)” is already taken.", "Please choose a different name.")
             return nil
         }
-        moved(url, to: renamed, listing: result?.listing, document: document)
+        moved(url, to: renamed, listing: result?.listing, document: document, documents: documents)
         if undoing {
             takeBackLinks(change?.links, from: url, to: renamed)
         } else if let links {
@@ -1392,7 +1409,7 @@ public final class Workspace: NSObject {
         let isNote = FileKind(url: url, isDirectory: false) == .note
         let links = undoing ? nil : linkSnapshot()
         let document = noteMoving(with: url)
-        document?.beginMove()
+        let documents = await NoteDocument.beginMoving(url)
         let name = fileName ?? url.lastPathComponent
         let result = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?, assets: (names: Set<String>, renamed: Bool)?)? in
             // Read before it moves only when that is quick: a note still in iCloud would have to come down first.
@@ -1405,7 +1422,7 @@ public final class Workspace: NSObject {
             return (moved, FileNode.listing(of: moved), assets)
         }.value
         guard let result else {
-            document?.endMove(to: nil)
+            NoteDocument.endMoving(documents, from: url, to: nil)
             beep()
             return nil
         }
@@ -1418,7 +1435,7 @@ public final class Workspace: NSObject {
                 FileOperations.cleanUpAssets(in: source, candidates: assets.names)
             }
         }
-        self.moved(url, to: moved, listing: result.listing, document: document)
+        self.moved(url, to: moved, listing: result.listing, document: document, documents: documents)
         // A picture whose name another had there came under a name of its own: the open note takes in what it says now.
         if result.assets?.renamed == true { document?.presentedItemDidChange() }
         if undoing {
@@ -1444,10 +1461,10 @@ public final class Workspace: NSObject {
         return note
     }
 
-    /// A file Notebook renamed or moved, followed everywhere: by the note that was open in it, by what remembers files
-    /// by their address, and in the sidebar, at once.
-    private func moved(_ old: URL, to new: URL, listing: FileNode.Listing?, document: NoteDocument?) {
-        document?.endMove(to: document.map { Self.relocated($0.url, from: old, to: new) })
+    /// A file Notebook renamed or moved, followed everywhere: by the notes open in it (`documents`, the main window's
+    /// `document` among them), by what remembers files by their address, and in the sidebar, at once.
+    private func moved(_ old: URL, to new: URL, listing: FileNode.Listing?, document: NoteDocument?, documents: [NoteDocument]) {
+        NoteDocument.endMoving(documents, from: old, to: new)
         #if os(macOS)
         sidebar?.follow(from: old, to: new)
         #endif
@@ -1612,6 +1629,8 @@ public final class Workspace: NSObject {
             note = nil
             currentURL = nil
         }
+        // What was typed in notes there goes along to the Trash, rather than coming back where they were.
+        await NoteDocument.save(atOrInside: url)
         let trashed = await Task.detached(priority: .userInitiated, operation: { FileOperations.moveToTrash(url) }).value
         guard trashed.done else { return trashed }
         thrownAway(url)
@@ -1642,6 +1661,7 @@ public final class Workspace: NSObject {
     /// Deletes for good, in a change to files under way, and says where it waits for Undo, if anywhere.
     func deleteNow(_ url: URL) async -> (done: Bool, place: URL?) {
         if let current = currentURL, FileNode.isSameOrInside(current, url) { closeFile() }
+        await NoteDocument.save(atOrInside: url)
         let deleted = await Task.detached(priority: .userInitiated, operation: { FileOperations.delete(url) }).value
         if deleted.done { thrownAway(url) }
         return deleted
@@ -1733,8 +1753,12 @@ public final class Workspace: NSObject {
     }
 
     /// Saves everything; called when the app goes to the background or (`quitting`) quits, when drawings are written
-    /// before it goes on.
+    /// before it goes on and the notes are left: quitting waits for them to be written (`NoteDocument.isWriting`).
     public func saveAll(quitting: Bool = false) {
+        if quitting {
+            guard !hasQuit else { return }
+            hasQuit = true
+        }
         editor.saveDrawingsNow(waiting: quitting)
         todoEditing?.commit(now: quitting)
         #if os(macOS)
@@ -1744,10 +1768,11 @@ public final class Workspace: NSObject {
         if !quitting { index.keepChanges() }
         guard let note else { return }
         note.update(text: editor.text)
-        note.saveNow()
         #if os(macOS)
         if quitting { trashAsQuitting(note) }
         #endif
+        // A conflict met as it quits can't be asked about: it keeps both.
+        if quitting { note.close() } else { note.saveNow() }
     }
 
     func resolveConflict(_ resolution: NoteDocument.Resolution) {
@@ -1956,5 +1981,10 @@ extension Workspace: EditorControllerDelegate {
     public func editor(_ editor: EditorController, showTodoReminderOnLine line: Int, part: TodoPart) {
         guard let currentURL, note != nil else { return }
         askForTodoReminder(in: editor, url: currentURL, line: line, part: part)
+    }
+
+    public func editor(_ editor: EditorController, tickedRepeatingTodo source: String, line: Int, next: String) {
+        guard let currentURL, note != nil else { return }
+        repeatingTodoTicked(in: currentURL, line: line, source: source, next: next)
     }
 }

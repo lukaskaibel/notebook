@@ -234,6 +234,18 @@ enum DebugRemote {
                 editor.scrollView.contentView.scroll(to: NSPoint(x: 0, y: y))
                 editor.scrollView.reflectScrolledClipView(editor.scrollView.contentView)
             }
+        case "scrolllist":
+            // scrolllist <y>: the list showing in place of the editor, such as To-dos, scrolled to y.
+            guard let y = numbers.first, let root = window?.contentView else { break }
+            func scrollViews(in view: NSView) -> [NSScrollView] {
+                ((view as? NSScrollView).map { [$0] } ?? []) + view.subviews.flatMap(scrollViews(in:))
+            }
+            let others = [editor?.scrollView, workspace?.sidebar?.outline.enclosingScrollView].compactMap { $0 }
+            guard let list = scrollViews(in: root).filter({ view in !view.isHiddenOrHasHiddenAncestor && !others.contains { $0 === view } })
+                .max(by: { ($0.documentView?.frame.height ?? 0) < ($1.documentView?.frame.height ?? 0) }) else { return log("scrolllist: no list") }
+            list.contentView.scroll(to: NSPoint(x: 0, y: y))
+            list.reflectScrolledClipView(list.contentView)
+            log("scrolllist \(Int(y)) in \(type(of: list))")
         case "move":
             // move <x> <y> [<x2> <y2>]: the pointer moving to a point, or from one to another, through the window, as
             // SwiftUI's hover sees it (the real pointer stays put).
@@ -373,6 +385,9 @@ enum DebugRemote {
             }
         case "openfile":
             FileWindows.shared.open(URL(fileURLWithPath: argument))
+        case "closefile":
+            // closefile: closes the last of the notes' own windows, as its close button does.
+            FileWindows.shared.windows.last?.performClose(nil)
         case "samplenotes":
             // samplenotes <folder>: what Try Sample Notes… does once a folder is chosen.
             workspace?.addSampleNotes(in: URL(fileURLWithPath: argument, isDirectory: true))

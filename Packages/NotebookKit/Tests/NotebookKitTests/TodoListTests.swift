@@ -113,6 +113,168 @@ final class TodoListTests: XCTestCase {
         XCTAssertTrue(workspace.editor.text.contains("- [x] Call Dr. Weber ⏰ 2099-05-06 14:00\n    - ask about the results\n- [x] Book the taxi"))
     }
 
+    // MARK: - Repeating to-dos
+
+    private var plants: URL { library.appendingPathComponent("Plants.md") }
+    private let repeating = "- [ ] Water the plants 🔁 every week ⏰ 2099-01-05 18:00\n    - the fern too\n- [ ] Call mum\n"
+    private var repeatingTicked: String {
+        "- [ ] Water the plants 🔁 every week ⏰ 2099-01-12 18:00\n- [x] Water the plants 🔁 every week ⏰ 2099-01-05 18:00 ✅ \(TodoDay.today)\n    - the fern too\n- [ ] Call mum\n"
+    }
+
+    private func dues(_ workspace: Workspace) -> [Int?] {
+        workspace.todos.items.filter { $0.todo.text == "Water the plants" }.map(\.todo.due?.day)
+    }
+
+    func testTickingARepeatingTodoInItsFileWritesTheNextOne() async throws {
+        try repeating.write(to: plants, atomically: true, encoding: .utf8)
+        let workspace = try await makeWorkspace()
+        let water = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Water the plants" })
+        let before = try XCTUnwrap(workspace.todoJobs().first { $0.source == water.todo.source })
+        XCTAssertEqual(workspace.todoJobIdentifiers(of: water.reference), [before.identifier])
+        // The next one's notification, put in at once, is named as the to-dos' own scheduling names it later.
+        let nextJob = try XCTUnwrap(workspace.todoJob(for: TodoReference(url: plants, line: 0, source: "- [ ] Water the plants 🔁 every week ⏰ 2099-01-12 18:00"), asItWillBe: true))
+
+        await workspace.setTodoDone(water.reference, true)?.value
+        XCTAssertEqual(try String(contentsOf: plants, encoding: .utf8), repeatingTicked)
+        // To-dos lists the next one in its place, and its notification is the next one's.
+        XCTAssertEqual(dues(workspace), [12])
+        try await until { workspace.todoJobs().contains { $0.source.contains("2099-01-12") } }
+        XCTAssertFalse(workspace.todoJobs().contains { $0.identifier == before.identifier }, "the done one reminds no more")
+        let next = try XCTUnwrap(workspace.todoJobs().first { $0.source.contains("2099-01-12") })
+        XCTAssertEqual(next.date, TodoDue(year: 2099, month: 1, day: 12, hour: 18, minute: 0).date())
+        XCTAssertEqual(next.identifier, nextJob.identifier)
+        XCTAssertEqual(next.date, nextJob.date)
+        workspace.readAgain([library])
+        try await until { workspace.todos.items.contains { $0.todo.text == "Water the plants" && $0.modified != water.modified } }
+        XCTAssertEqual(workspace.todoJobs().first { $0.source.contains("2099-01-12") }?.identifier, nextJob.identifier, "and once the note is read again")
+
+        // One Undo takes back both lines, and Redo brings them again.
+        let manager = workspace.fileUndoManager
+        XCTAssertEqual(manager.undoActionName, "Check")
+        manager.undo()
+        try await until { (try? String(contentsOf: self.plants, encoding: .utf8)) == self.repeating }
+        manager.redo()
+        try await until { (try? String(contentsOf: self.plants, encoding: .utf8)) == self.repeatingTicked }
+        try await until { self.dues(workspace) == [12] }
+
+        // Unticked in To-dos while it still shows ticked: it is as it was, without the next one.
+        await workspace.untickTodo(water.reference, to: .open)?.value
+        XCTAssertEqual(try String(contentsOf: plants, encoding: .utf8), repeating)
+        try await until { self.dues(workspace) == [5] }
+        // Ticked again: one next one.
+        await workspace.setTodoDone(water.reference, true)?.value
+        XCTAssertEqual(try String(contentsOf: plants, encoding: .utf8), repeatingTicked)
+    }
+
+    func testTheNextOnesReminderComesOnceTheTickIsWritten() async throws {
+        try repeating.write(to: plants, atomically: true, encoding: .utf8)
+        let workspace = try await makeWorkspace()
+        let water = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Water the plants" })
+        let next = "- [ ] Water the plants 🔁 every week ⏰ 2099-01-12 18:00"
+        // Changed on another device before the tick is written: nothing is ticked, and the reminders stay as they are.
+        let elsewhere = repeating.replacingOccurrences(of: "Water the plants", with: "Water the ferns")
+        try elsewhere.write(to: plants, atomically: true, encoding: .utf8)
+        await workspace.setTodoDone(water.reference, true, fromNotification: true)?.value
+        XCTAssertEqual(try String(contentsOf: plants, encoding: .utf8), elsewhere)
+        XCTAssertTrue(workspace.remindedOfNext.isEmpty)
+        // Written: the next one's reminder, from its notification as it will be before To-dos lists it.
+        try repeating.write(to: plants, atomically: true, encoding: .utf8)
+        await workspace.setTodoDone(water.reference, true, fromNotification: true)?.value
+        XCTAssertEqual(try String(contentsOf: plants, encoding: .utf8), repeatingTicked)
+        XCTAssertEqual(workspace.remindedOfNext.map(\.source), [next])
+        XCTAssertEqual(workspace.remindedOfNext.map(\.asItWillBe), [true])
+    }
+
+    func testTickingInTheEditorRemindsOfTheNextOneAsListed() async throws {
+        try repeating.write(to: plants, atomically: true, encoding: .utf8)
+        let workspace = try await makeWorkspace()
+        workspace.open(plants)
+        try await until { workspace.note?.isLoaded == true }
+        workspace.editor.toggleCheckbox(line: 0)
+        XCTAssertEqual(workspace.editor.text, repeatingTicked)
+        XCTAssertEqual(workspace.remindedOfNext.map(\.source), ["- [ ] Water the plants 🔁 every week ⏰ 2099-01-12 18:00"])
+        XCTAssertEqual(workspace.remindedOfNext.map(\.asItWillBe), [false], "only what To-dos lists, as the to-dos' own scheduling")
+    }
+
+    func testTheNextOnesNotificationAsItWillBe() async throws {
+        let workspace = try await makeWorkspace()
+        let next = "- [ ] Water the plants 🔁 every week ⏰ 2099-01-12 18:00"
+        XCTAssertNil(workspace.todoJob(for: TodoReference(url: plants, line: 0, source: next)), "To-dos doesn't list it yet")
+        let job = try XCTUnwrap(workspace.todoJob(for: TodoReference(url: plants, line: 0, source: next), asItWillBe: true))
+        XCTAssertEqual(job.identifier, Workspace.todoIdentifier(path: plants.path, source: next, notes: ""))
+        XCTAssertEqual(job.title, "Water the plants")
+        XCTAssertEqual(job.noteName, "Plants")
+        XCTAssertNil(workspace.todoJob(for: TodoReference(url: base.appendingPathComponent("Elsewhere.md"), line: 0, source: next), asItWillBe: true),
+                     "not in a location")
+        workspace.setHidden(library.appendingPathComponent("Archive"), true)
+        try await until { !workspace.todos.items.contains { $0.todo.text == "Something old" } }
+        XCTAssertNil(workspace.todoJob(for: TodoReference(url: hidden, line: 0, source: next), asItWillBe: true), "in a hidden folder")
+    }
+
+    func testATodoWhoseNextOneSaysTheSame() async throws {
+        let original = "- [ ] Stretch 🔁 every day\n- [ ] Call mum\n"
+        let ticked = "- [ ] Stretch 🔁 every day\n- [x] Stretch 🔁 every day ✅ \(TodoDay.today)\n- [ ] Call mum\n"
+        try original.write(to: plants, atomically: true, encoding: .utf8)
+        let workspace = try await makeWorkspace()
+        let stretch = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Stretch" })
+        await workspace.setTodoDone(stretch.reference, true)?.value
+        XCTAssertEqual(try String(contentsOf: plants, encoding: .utf8), ticked)
+        // The line it was on is the next one's: what is done to it from To-dos goes there, not into the done one.
+        XCTAssertEqual(workspace.current(stretch.reference), stretch.reference)
+        XCTAssertEqual(workspace.todos.items.filter { $0.todo.text == "Stretch" }.count, 1)
+        // Unticked during its three seconds: as it was.
+        await workspace.untickTodo(stretch.reference, to: .open)?.value
+        XCTAssertEqual(try String(contentsOf: plants, encoding: .utf8), original)
+        // Ticked again, then a day from To-dos, and ticked once more: each on the open one.
+        await workspace.setTodoDone(stretch.reference, true)?.value
+        XCTAssertEqual(try String(contentsOf: plants, encoding: .utf8), ticked)
+        await workspace.setTodo(stretch.reference, due: TodoDue(year: 2099, month: 1, day: 2), place: nil)?.value
+        XCTAssertEqual(try String(contentsOf: plants, encoding: .utf8), ticked.replacingOccurrences(of: "- [ ] Stretch 🔁 every day\n", with: "- [ ] Stretch 🔁 every day 📅 2099-01-02\n"))
+        await workspace.setTodoDone(workspace.current(stretch.reference), true)?.value
+        XCTAssertTrue(try String(contentsOf: plants, encoding: .utf8).hasPrefix("- [ ] Stretch 🔁 every day 📅 2099-01-03\n- [x] Stretch 🔁 every day 📅 2099-01-02 ✅ "))
+    }
+
+    func testRepeatingTodosInANoteWithCRLF() async throws {
+        try "- [ ] Water 🔁 every week 📅 2099-01-05\r\n- [ ] Clean the flat\r\n    - [ ] Hoover 🔁 every week\r\n".write(to: plants, atomically: true, encoding: .utf8)
+        let workspace = try await makeWorkspace()
+        let water = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Water" })
+        await workspace.setTodoDone(water.reference, true)?.value
+        let today = TodoDay.today
+        XCTAssertEqual(try String(contentsOf: plants, encoding: .utf8),
+                       "- [ ] Water 🔁 every week 📅 2099-01-12\r\n- [x] Water 🔁 every week 📅 2099-01-05 ✅ \(today)\r\n- [ ] Clean the flat\r\n    - [ ] Hoover 🔁 every week\r\n")
+        let clean = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Clean the flat" })
+        workspace.toggle(0, under: clean)
+        try await until {
+            (try? String(contentsOf: self.plants, encoding: .utf8))?.hasSuffix("- [ ] Clean the flat\r\n    - [ ] Hoover 🔁 every week\r\n    - [x] Hoover 🔁 every week ✅ \(today)\r\n") == true
+        }
+    }
+
+    func testARepeatingSubTodoTickedInTodos() async throws {
+        try "- [ ] Clean the flat\n    - [ ] Hoover 🔁 every week\n    - [ ] Windows\n".write(to: plants, atomically: true, encoding: .utf8)
+        let workspace = try await makeWorkspace()
+        let clean = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Clean the flat" })
+        workspace.toggle(0, under: clean)
+        let ticked = "- [ ] Clean the flat\n    - [ ] Hoover 🔁 every week\n    - [x] Hoover 🔁 every week ✅ \(TodoDay.today)\n    - [ ] Windows\n"
+        try await until { (try? String(contentsOf: self.plants, encoding: .utf8)) == ticked }
+        workspace.fileUndoManager.undo()
+        try await until { (try? String(contentsOf: self.plants, encoding: .utf8)) == "- [ ] Clean the flat\n    - [ ] Hoover 🔁 every week\n    - [ ] Windows\n" }
+    }
+
+    func testTickingARepeatingTodoInTheOpenNote() async throws {
+        try repeating.write(to: plants, atomically: true, encoding: .utf8)
+        let workspace = try await makeWorkspace()
+        workspace.open(plants)
+        try await until { workspace.note?.isLoaded == true }
+        let water = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Water the plants" })
+        workspace.setTodoDone(water.reference, true)
+        XCTAssertEqual(workspace.editor.text, repeatingTicked)
+        XCTAssertEqual(dues(workspace), [12])
+        workspace.untickTodo(water.reference, to: .open)
+        XCTAssertEqual(workspace.editor.text, repeating)
+        // Written to the file at once, as a notification's Done may have only a moment.
+        try await until { (try? String(contentsOf: self.plants, encoding: .utf8)) == self.repeating }
+    }
+
     // MARK: - Editing in To-dos
 
     func testEditingATodoAndItsLinesInItsFile() async throws {
