@@ -218,7 +218,9 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     func saveNow() {
         saveTimer?.invalidate()
         saveTimer = nil
-        guard canSave else { return }
+        // Whether there is anything to save is known once what is being written is: typed back to what was saved
+        // before, the text differs from what is being written.
+        guard isWorking || canSave else { return }
         wantsSave = true
         next()
     }

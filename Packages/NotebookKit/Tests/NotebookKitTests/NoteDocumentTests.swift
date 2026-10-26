@@ -120,6 +120,21 @@ final class NoteDocumentTests: XCTestCase {
         note.close()
     }
 
+    /// Typed back to what was saved while a save of the change runs (a to-do ticked and unticked at once): that is
+    /// saved after it too, and the file ends as the note does.
+    func testTypingBackDuringASaveIsSavedToo() async throws {
+        let (note, url) = makeNote("- [ ] one\n")
+        slow(writes: 0.4)
+        note.update(text: "- [x] one\n")
+        note.saveNow()
+        note.update(text: "- [ ] one\n")
+        note.saveNow()
+        await note.saved()
+        XCTAssertEqual(onDisk(url), "- [ ] one\n")
+        XCTAssertFalse(note.hasUnsavedChanges)
+        note.close()
+    }
+
     /// iCloud putting in another device's version holds the file: the save waits for it off the main thread, which
     /// goes on meanwhile, and then merges what came with what was typed.
     func testAWriterHoldingTheFileDoesNotHoldUpTheWindow() async throws {
