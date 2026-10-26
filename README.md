@@ -474,8 +474,9 @@ kept the same way in the app's Application Support folder, on that device only. 
 another device's go a year after the newest that device took of the note, so a clock set wrong on one can't take away
 the others'. Those of a note you delete in Notebook go to the History's own Trash, come back with Undo, or when you put
 the note back in the Finder and open it, and go a year later. Those of a note deleted outside Notebook go there too,
-once a day, unless another device took one in the last month: iCloud may not have brought that note yet. A note
-Notebook makes under a name another had starts without its versions. Settings › your name › iCloud › Storage on iPhone and
+from a device that had the note, once it is still gone a day later, and not while another device took one in the last
+month: iCloud may not have brought that note yet. A note Notebook makes under a name another had starts without its
+versions. Settings › your name › iCloud › Storage on iPhone and
 iPad, or System Settings › your name › iCloud › Manage on the Mac, shows how much Notebook keeps in iCloud, and can
 delete it.
 
