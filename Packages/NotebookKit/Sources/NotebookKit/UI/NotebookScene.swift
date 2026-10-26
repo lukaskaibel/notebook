@@ -27,6 +27,8 @@ public struct NotebookScene: Scene {
         }
         .windowToolbarStyle(.unified)
         .defaultSize(width: 1280, height: 820)
+        // Open at every launch, also when it was closed as Notebook quit, which it no longer does by itself.
+        .defaultLaunchBehavior(.presented)
         .commands {
             CommandGroup(replacing: .appInfo) {
                 Button("About Notebook") { Acknowledgements.showAbout() }
@@ -160,6 +162,11 @@ public struct NotebookScene: Scene {
                 formatButton(.indent, #selector(MarkdownTextView.indentLines(_:)), "]", [.command, .option], name: "Increase Indent")
                 formatButton(.outdent, #selector(MarkdownTextView.outdentLines(_:)), "[", [.command, .option], name: "Decrease Indent")
             }
+            // The main window, also once it was closed, as Window › Notes in Notes.
+            CommandGroup(before: .windowList) {
+                MainWindowItem()
+                Divider()
+            }
         }
 
         Settings {
@@ -170,6 +177,15 @@ public struct NotebookScene: Scene {
     private func formatButton(_ command: FormatCommand, _ action: Selector, _ key: Character, _ modifiers: EventModifiers, name: String? = nil) -> some View {
         Button { NSApp.sendAction(action, to: nil, from: nil) } label: { Label(name ?? command.name, systemImage: command.symbol) }
             .keyboardShortcut(KeyEquivalent(key), modifiers: modifiers)
+    }
+}
+
+/// Window › Notebook: brings the main window to the front, and opens it again after it was closed.
+private struct MainWindowItem: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Button("Notebook") { openWindow(id: "main") }
     }
 }
 

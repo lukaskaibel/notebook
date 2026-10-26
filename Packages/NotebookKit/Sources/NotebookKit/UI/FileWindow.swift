@@ -326,6 +326,10 @@ public final class NotebookAppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Closing the window leaves Notebook running, as Notes does: the Dock icon and Window › Notebook bring it back,
+    /// and SwiftUI would otherwise quit an app whose one window is closed.
+    public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
     public func application(_ application: NSApplication, open urls: [URL]) {
         MainActor.assumeIsolated {
             FileWindows.shared.open(urls)
