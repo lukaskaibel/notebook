@@ -447,6 +447,74 @@ final class NoteHistoryTests: XCTestCase {
         XCTAssertEqual(Set(back.map(\.device)), ["Mac", "iPhone"])
     }
 
+    func testRecentCopiesFromAnotherDeviceStayForANoteMadeThere() async throws {
+        // The iPhone wrote a note two days ago, and iCloud brought its copies here before the note.
+        let plan = drive.appendingPathComponent("Plan.md")
+        history.keep("from the iPhone", of: plan, at: Date() - 2 * 86400, device: "iPhone 111111")
+        history.made(plan)
+        let mixed = await versions(plan)
+        XCTAssertEqual(mixed, ["from the iPhone"], "a live note's history isn't hidden")
+        // Older ones are another note's.
+        let old = drive.appendingPathComponent("Old.md")
+        history.keep("from the iPhone, long ago", of: old, at: Date() - 40 * 86400, device: "iPhone 111111")
+        history.made(old)
+        let none = await versions(old)
+        XCTAssertEqual(none, [])
+    }
+
+    func testANoteICloudHasntBroughtDownKeepsItsName() throws {
+        let notes = folder.appendingPathComponent("Notes", isDirectory: true)
+        try FileManager.default.createDirectory(at: notes, withIntermediateDirectories: true)
+        try Data().write(to: notes.appendingPathComponent(".Plan.md.icloud"))
+        XCTAssertTrue(FileOperations.exists(notes.appendingPathComponent("Plan.md")))
+        XCTAssertEqual(FileOperations.uniqueURL(in: notes, name: "Plan", extension: "md").lastPathComponent, "Plan 2.md")
+    }
+
+    func testTidyingUpSendsTheCopiesOfANoteGoneToTheTrash() async throws {
+        let notes = folder.appendingPathComponent("Notes", isDirectory: true)
+        try FileManager.default.createDirectory(at: notes, withIntermediateDirectories: true)
+        let here = notes.appendingPathComponent("Here.md")
+        try "here".write(to: here, atomically: true, encoding: .utf8)
+        let stub = notes.appendingPathComponent("Stub.md")
+        try Data().write(to: notes.appendingPathComponent(".Stub.md.icloud"))
+        let gone = notes.appendingPathComponent("Gone.md")
+        let synced = notes.appendingPathComponent("Synced.md")
+        let loose = folder.appendingPathComponent("Elsewhere/Loose.md")
+        history.keep("here", of: here)
+        history.keep("not brought down", of: stub)
+        history.keep("deleted in the Finder", of: gone, device: "Mac 222222")
+        history.keep("on the iPhone", of: synced, at: Date() - 2 * 86400, device: "iPhone 111111")
+        history.keep("outside the locations", of: loose)
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "notebook-history-\(UUID().uuidString)"))
+        history.tidyUp(defaults: defaults, device: "Mac 222222", notesIn: [notes])
+        let kept = await [versions(here), versions(stub), versions(synced), versions(loose)]
+        XCTAssertEqual(kept, [["here"], ["not brought down"], ["on the iPhone"], ["outside the locations"]])
+        let trashed = await versions(gone)
+        XCTAssertEqual(trashed, [])
+        // It comes back, put back in the Finder: its copies too.
+        try "deleted in the Finder".write(to: gone, atomically: true, encoding: .utf8)
+        history.keep("deleted in the Finder", of: gone, onlyIfChanged: true)
+        let back = await versions(gone)
+        XCTAssertEqual(back, ["deleted in the Finder"])
+    }
+
+    func testANoteNotebookMadeDoesntGetTheCopiesOfOneThrownAwayThere() async throws {
+        // Duplicate, throw the copy away, Duplicate again: the new copy says what the old one did.
+        let copy = drive.appendingPathComponent("Plan copy.md")
+        history.keep("the same text", of: copy)
+        let name = NoteHistory.trashedName(device: "Mac 222222")
+        history.trash(copy, as: name)
+        history.made(copy)
+        history.keep("the same text", of: copy, onlyIfChanged: true)
+        let none = await versions(copy)
+        XCTAssertEqual(none, [])
+        // Undo of the first still finds them.
+        let back = drive.appendingPathComponent("Plan copy 2.md")
+        history.putBack(name, to: back)
+        let own = await versions(back)
+        XCTAssertEqual(own, ["the same text"])
+    }
+
     func testTrashedNamesSayWhenAndOnWhat() throws {
         let name = NoteHistory.trashedName(device: "iPhone 3f9a2c")
         let trashed = try XCTUnwrap(NoteHistory.trashed(name + " " + NoteHistory.placeMark("com~apple~CloudDocs/Plan.md")))
