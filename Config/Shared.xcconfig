@@ -31,16 +31,18 @@ CODE_SIGN_IDENTITY[sdk=iphoneos*] = Apple Development
 // Debug and Release run without the sandbox, so tests can point the app at any folder. The App Store build is
 // sandboxed and reaches folders through the bookmarks of the locations you add, and may ask where you are, for a
 // reminder's Current Location. It also has iCloud's key-value store,
-// which takes the folders you hide and your reminders to your other devices, and Time Sensitive notifications, which
-// get reminders through a Focus; the other builds keep hidden folders and reminders on this Mac.
+// which takes the folders you hide and your reminders to your other devices, Notebook's own iCloud folder
+// (iCloud.$(CFBundleIdentifier)), whose History folder takes the earlier versions of your notes in iCloud there too,
+// and Time Sensitive notifications, which get reminders through a Focus. The other builds keep hidden folders,
+// reminders and versions on this Mac, the versions in Application Support.
 NOTEBOOK_MAC_ENTITLEMENTS =
 NOTEBOOK_MAC_ENTITLEMENTS[config=AppStore] = Config/Notebook-macOS.entitlements
 CODE_SIGN_ENTITLEMENTS[sdk=macosx*] = $(NOTEBOOK_MAC_ENTITLEMENTS)
 
-// On iPhone and iPad too, only the App Store build has iCloud's key-value store and Time Sensitive notifications.
-// Debug and Release keep the folders you hide and your reminders on the device, so they run in the Simulator without a
-// team, and on your own iPhone or iPad with a free one, which can't have iCloud. In the Simulator they have the App
-// Group.
+// On iPhone and iPad too, only the App Store build has iCloud's key-value store, Notebook's iCloud folder and Time
+// Sensitive notifications. Debug and Release keep the folders you hide, your reminders and the versions of your notes
+// on the device, so they run in the Simulator without a team, and on your own iPhone or iPad with a free one, which
+// can't have iCloud. In the Simulator they have the App Group.
 NOTEBOOK_IOS_ENTITLEMENTS =
 NOTEBOOK_IOS_ENTITLEMENTS[config=Debug][sdk=iphonesimulator*] = Config/AppGroup.entitlements
 NOTEBOOK_IOS_ENTITLEMENTS[config=Release][sdk=iphonesimulator*] = Config/AppGroup.entitlements

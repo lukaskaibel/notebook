@@ -35,7 +35,7 @@ enum FileOperations {
         }
         var candidate = make(name)
         var counter = 2
-        while FileManager.default.fileExists(atPath: candidate.path) {
+        while exists(candidate) {
             candidate = make("\(name) \(counter)")
             counter += 1
         }
@@ -96,6 +96,12 @@ enum FileOperations {
         }
     }
 
+    /// A file there, also one iCloud hasn't brought down to this iPhone or iPad yet, which shows as ".name.icloud".
+    static func exists(_ url: URL) -> Bool {
+        FileManager.default.fileExists(atPath: url.path)
+            || FileManager.default.fileExists(atPath: url.deletingLastPathComponent().appendingPathComponent("." + url.lastPathComponent + ".icloud").path)
+    }
+
     /// A file name from a title: the characters files can't have become dashes.
     static func fileName(from title: String) -> String {
         var name = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -114,7 +120,9 @@ enum FileOperations {
         NSFileCoordinator().coordinate(writingItemAt: url, options: .forReplacing, error: nil) { url in
             written = (try? Data(text.utf8).write(to: url, options: .atomic)) != nil
         }
-        return written ? (url, madeFolder) : nil
+        guard written else { return nil }
+        NoteHistory.shared.made(url)
+        return (url, madeFolder)
     }
 
     /// A new note under a name no other file has, even with another made in the folder at the same moment: the name is
@@ -135,7 +143,10 @@ enum FileOperations {
                     taken = true
                 } catch {}
             }
-            if written { return url }
+            if written {
+                NoteHistory.shared.made(url)
+                return url
+            }
             if !taken { return nil }
         }
         return nil
@@ -257,7 +268,9 @@ enum FileOperations {
         NSFileCoordinator().coordinate(readingItemAt: url, options: [], writingItemAt: destination, options: .forReplacing, error: nil) { from, to in
             copied = (try? FileManager.default.copyItem(at: from, to: to)) != nil
         }
-        return copied ? destination : nil
+        guard copied else { return nil }
+        NoteHistory.shared.made(destination)
+        return destination
     }
 
     // MARK: - Links

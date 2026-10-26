@@ -16,6 +16,13 @@ advertising, and it collects nothing about you.
   build, in iCloud's key-value store, which Apple syncs to your other devices signed in to the same Apple Account. A
   reminder of a note is the place of the note in your folders, its time and the place it reminds you at (a name and its
   coordinates); it is never written into the note, so it doesn't go along when you share the note.
+- **Earlier versions of your notes**, for version history, are plain copies of a note's text, taken as you write and
+  kept for a year. Each copy's name says when it was taken and on what kind of device, with a few letters that tell
+  your devices apart. In the App Store build, the versions of notes in iCloud are kept in Notebook's own iCloud folder,
+  which Apple syncs to your other devices signed in to the same Apple Account, as it syncs iCloud Drive; the folder
+  doesn't show in iCloud Drive. The versions of notes anywhere else, and of every note in builds without iCloud, stay
+  in the app's own folder on that device. Settings › your name › iCloud › Storage on iPhone and iPad, or System
+  Settings › your name › iCloud › Manage on the Mac, shows how much Notebook keeps in iCloud, and can delete it.
 - **A to-do's date, time and place** are part of the to-do: they are written into the note after its words, a place as
   a link to it in Apple Maps, so they go along with the note like everything else in it.
 - **Notifications** of reminders and to-dos are scheduled on each of your devices by the system. Their text is the
@@ -53,10 +60,11 @@ advertising, and it collects nothing about you.
   Either is saved next to the note, like any other picture.
 
 On iPhone and iPad, deleting the app deletes everything it stored on the device, along with the notes kept in its own
-folder there. On the Mac, the app's preferences, its search index and its list of the notes in Spotlight stay in its
-container, `~/Library/Containers/com.lukaskbl.Notebook`, until you delete that folder too. The folders you hide, your
-reminders and your Home and Work stay in iCloud's key-value store for your other devices. Your notes are your files and
-stay where they are.
+folder there. On the Mac, the app's preferences, its search index, its list of the notes in Spotlight and the versions
+of notes outside iCloud stay in its container, `~/Library/Containers/com.lukaskbl.Notebook`, until you delete that
+folder too. The folders you hide, your reminders and your Home and Work stay in iCloud's key-value store for your other
+devices, and the versions of notes in iCloud in Notebook's iCloud folder, until you delete it in iCloud's storage
+settings. Your notes are your files and stay where they are.
 
 ## What is sent, and to whom
 
@@ -67,7 +75,8 @@ stay where they are.
   shows the address instead.
 - When you click or tap a web link in a note, your browser opens it.
 - If your notes are in iCloud Drive, Apple syncs them as it syncs every other file there; Notebook asks the system to
-  download notes that aren't on your device yet, so it can show and search them. What Apple does with iCloud Drive is
+  download notes that aren't on your device yet, so it can show and search them. Apple syncs the earlier versions of
+  those notes, in Notebook's own iCloud folder, the same way. What Apple does with iCloud Drive is
   described in [Apple's privacy policy](https://www.apple.com/legal/privacy/).
 
 ## Sample notes

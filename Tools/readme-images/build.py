@@ -112,6 +112,8 @@ for theme in [] if only == "devices" else ["dark", "light"]:
     # The sidebar's folders with their symbols, emoji and colours, and Customize Folder… open next to one of them.
     webp(place(crop_card(window(f"customize-{theme}"), CUSTOMIZE_BOX, theme), theme, (110, 90), 1400, rim=False),
          f"customize-{theme}")
+    # Browse All Versions… over the window, with Show Changes on for a version from the iPhone.
+    webp(place(window(f"versions-{theme}"), theme, (130, 110), 1800), f"versions-{theme}")
     # To-dos, with its row selected at the top of the sidebar; then a note's to-dos with their pills, and Remind Me open
     # from one at a place.
     webp(place(window(f"todos-{theme}"), theme, (130, 110), 1800), f"todos-{theme}")

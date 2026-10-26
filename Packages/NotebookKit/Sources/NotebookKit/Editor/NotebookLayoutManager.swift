@@ -31,6 +31,8 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
     var hidesEditingControls = false
     /// Where the code block with the copy button over it starts: its language label makes way for the button.
     var copyButtonBlock: Int?
+    /// Show Changes in Version History: what was added since an earlier version and what was taken out, marked in it.
+    var changeMarks: [VersionChanges.Mark] = []
 
     override init() {
         super.init()
@@ -290,8 +292,44 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
                 drawn.insert(ObjectIdentifier(decoration))
                 drawDecoration(decoration, range: extent(of: decoration, around: run), container: container, origin: origin)
             }
+            #if os(iOS)
+            // On the Mac the text view draws them, as they reach into the margin it keeps the text from.
+            if !changeMarks.isEmpty { drawChangeMarks(in: characters, container: container, origin: origin) }
+            #endif
         }
         super.drawBackground(forGlyphRange: glyphsToShow, at: origin)
+    }
+
+    /// Lines added since the version on green, lines taken out on red, as in a diff, and within a line that changed the
+    /// words that did, stronger, those taken out struck through. A + or − in the margin says it without the colour.
+    func drawChangeMarks(in characters: NSRange, container: NSTextContainer, origin: NSPoint) {
+        guard let length = textStorage?.length else { return }
+        let isDark = source?.isDarkAppearance == true
+        let shown = NSRange(location: characters.location, length: characters.length + 1)
+        for mark in changeMarks where mark.range.upperBound <= length && NSIntersectionRange(mark.range, shown).length > 0 {
+            let color: NSColor = mark.kind == .added ? .systemGreen : .systemRed
+            if mark.isLine {
+                guard let line = blockRect(mark.range, container: container, origin: origin) else { continue }
+                // Into the margin where there is one; an iPhone has little, and the sign needs it more.
+                let box = line.insetBy(dx: -min(6, max(0, line.minX - 14)), dy: -1)
+                color.withAlphaComponent(isDark ? 0.17 : 0.11).setFill()
+                NSBezierPath(roundedRect: box, xRadius: 5, yRadius: 5).fill()
+                let font = NSFont.monospacedSystemFont(ofSize: 13, weight: .semibold)
+                let sign = NSAttributedString(string: mark.kind == .added ? "+" : "−", attributes: [.font: font, .foregroundColor: color])
+                let glyph = glyphIndexForCharacter(at: mark.range.location)
+                let baseline = glyph < numberOfGlyphs ? self.baseline(forGlyphAt: glyph, origin: origin) : box.minY + font.ascender
+                sign.draw(at: CGPoint(x: max(2, box.minX - 16), y: baseline - font.ascender))
+            } else {
+                enumerateRects(mark.range, container: container) { rect in
+                    let box = NSRect(x: rect.minX - 1.5, y: rect.minY, width: rect.width + 3, height: rect.height).offsetBy(dx: origin.x, dy: origin.y)
+                    color.withAlphaComponent(isDark ? 0.36 : 0.24).setFill()
+                    NSBezierPath(roundedRect: box, xRadius: 3, yRadius: 3).fill()
+                    guard mark.kind == .removed else { return }
+                    color.withAlphaComponent(0.8).setFill()
+                    NSRect(x: box.minX, y: box.midY - 0.5, width: box.width, height: 1).fill()
+                }
+            }
+        }
     }
 
     /// Where a heading's level shows while the caret is on it: in the margin, left of the text.
