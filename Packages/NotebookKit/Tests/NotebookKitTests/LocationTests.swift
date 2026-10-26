@@ -83,18 +83,23 @@ final class LocationTests: XCTestCase {
         XCTAssertTrue(saved.linked.isEmpty, "found again on every launch")
     }
 
-    /// On My iPhone, chosen itself in the folder picker, is a folder called "File Provider Storage" (#130).
-    func testOnMyIPhoneIsKnownByItsFolder() {
+    /// On My iPhone, chosen itself in the folder picker, is a folder called "File Provider Storage" (#130), like the
+    /// storage of other apps' file providers; its bookmark names Apple's own provider.
+    func testOnMyIPhoneIsKnownByItsBookmark() {
         let device = URL(fileURLWithPath: "/private/var/mobile/Containers/Shared/AppGroup/0A1B2C3D-4E5F-6789-ABCD-EF0123456789/File Provider Storage")
-        XCTAssertEqual(Location.onDeviceFolders(device), [])
-        XCTAssertEqual(Location.onDeviceFolders(device.appendingPathComponent("Downloads/Recipes")), ["Downloads", "Recipes"])
-        // A folder of that name anywhere else is a folder like any other.
-        XCTAssertNil(Location.onDeviceFolders(base.appendingPathComponent("File Provider Storage")))
-        XCTAssertNil(Location.onDeviceFolders(drive))
-        // Neither On My iPhone nor iCloud Drive gets its folder's name from the bookmark: they are named when added.
-        XCTAssertNil(LocationStore.bookmark(for: device).name)
-        XCTAssertNil(LocationStore.bookmark(for: drive).name)
-        XCTAssertEqual(LocationStore.bookmark(for: drive.appendingPathComponent("Papers")).name, "Papers")
+        // What a bookmark made from the folder picker's address has in it, among the folder's path.
+        func bookmark(provider: String) -> Data { Data("book\u{0}fp:/3xefWl4FZpxAEjeAG2GfjmAOxOJQGq9x=/\(provider)//fid=144320352\u{0}".utf8) }
+        let onDevice = bookmark(provider: "com.apple.FileProvider.LocalStorage")
+        XCTAssertEqual(Location.onDeviceFolders(device, bookmark: onDevice), [])
+        XCTAssertEqual(Location.onDeviceFolders(device.appendingPathComponent("Downloads/Recipes"), bookmark: onDevice), ["Downloads", "Recipes"])
+        // Another app's file provider keeps its files in a folder of that name too.
+        XCTAssertNil(Location.onDeviceFolders(device, bookmark: bookmark(provider: "com.example.WorkingCopy.FileProvider")))
+        XCTAssertNil(Location.onDeviceFolders(device.appendingPathComponent("8F3A/Notes"), bookmark: bookmark(provider: "com.example.WorkingCopy.FileProvider")))
+        // Without a bookmark (a folder given on the command line, a location not looked up yet) it is a folder like any other.
+        XCTAssertNil(Location.onDeviceFolders(device, bookmark: nil))
+        XCTAssertNil(Location.onDeviceFolders(drive, bookmark: onDevice))
+        XCTAssertNil(Location(id: UUID(), name: "File Provider Storage", path: device.path, bookmark: nil).onDeviceFolders)
+        XCTAssertEqual(Location(id: UUID(), name: "File Provider Storage", path: device.path, bookmark: onDevice).onDeviceFolders, [])
     }
 
     func testSidebarShowsLinkedFoldersAmongTheOthers() async throws {

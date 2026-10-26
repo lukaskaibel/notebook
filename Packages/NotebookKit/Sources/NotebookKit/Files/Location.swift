@@ -44,11 +44,17 @@ public struct Location: Identifiable, Codable, Equatable, Sendable {
         url.lastPathComponent == "com~apple~CloudDocs" && url.deletingLastPathComponent().lastPathComponent == "Mobile Documents"
     }
 
-    /// The folders from On My iPhone (On My iPad) down to `url`: none for On My iPhone itself, nil for a folder that
-    /// isn't in it. On disk it is "AppGroup/<id>/File Provider Storage", which the system calls that even in
-    /// `localizedName`. Other apps' groups have folders of that name too, Photos' for its picker, but the folder
-    /// picker doesn't offer them.
-    static func onDeviceFolders(_ url: URL) -> [String]? {
+    /// The folders from On My iPhone (On My iPad) down to the location's folder: none for On My iPhone itself, nil for
+    /// a folder that isn't in it.
+    var onDeviceFolders: [String]? { Self.onDeviceFolders(url, bookmark: bookmark) }
+
+    /// On disk On My iPhone is "AppGroup/<id>/File Provider Storage", which the system calls that even in
+    /// `localizedName`, and other apps' file providers keep their files in folders of that name too (Working Copy,
+    /// Nextcloud). What tells them apart is the bookmark: it names the file provider of what it points to, and On My
+    /// iPhone's is Apple's own. Bookmarks have no API for that, so one that doesn't name it, in a later system say,
+    /// leaves the folder its own name.
+    static func onDeviceFolders(_ url: URL, bookmark: Data?) -> [String]? {
+        guard let bookmark, bookmark.range(of: Data("/com.apple.FileProvider.LocalStorage/".utf8)) != nil else { return nil }
         let components = url.standardizedFileURL.pathComponents
         guard let index = components.firstIndex(of: "File Provider Storage"), index >= 2, components[index - 2] == "AppGroup" else { return nil }
         return Array(components[(index + 1)...])
@@ -63,12 +69,13 @@ public struct Location: Identifiable, Codable, Equatable, Sendable {
     #endif
 
     /// The name of a folder that is a place of its own in the Finder or the Files app, iCloud Drive or On My iPhone,
-    /// which its folder on disk doesn't have. Nil for any other folder, which goes by its own.
+    /// which its folder on disk doesn't have. Nil for any other folder, which goes by its own. On My iPhone is known by
+    /// its bookmark, which a new location gets a moment after it is added.
     @MainActor
-    static func placeName(for url: URL) -> String? {
+    static func placeName(for url: URL, bookmark: Data?) -> String? {
         if url.path == iCloudDrivePath || isICloudDriveRoot(url) { return "iCloud Drive" }
         #if os(iOS)
-        if onDeviceFolders(url)?.isEmpty == true { return onDeviceName }
+        if onDeviceFolders(url, bookmark: bookmark)?.isEmpty == true { return onDeviceName }
         #endif
         return nil
     }
@@ -108,7 +115,7 @@ public struct Location: Identifiable, Codable, Equatable, Sendable {
         if path == documents || path.hasPrefix(documents + "/") {
             return ([Self.onDeviceName, "Notebook"] + path.dropFirst(documents.count).split(separator: "/").map(String.init)).joined(separator: " › ")
         }
-        if let folders = Self.onDeviceFolders(url) {
+        if let folders = onDeviceFolders {
             return ([Self.onDeviceName] + folders).joined(separator: " › ")
         }
         return url.pathComponents.suffix(2).joined(separator: " › ")
@@ -195,7 +202,7 @@ enum LocationStore {
               var locations = try? JSONDecoder().decode([Location].self, from: data) else { return [] }
         // Kept before Notebook knew On My iPhone, it was "File Provider Storage", its folder's name.
         for index in locations.indices {
-            if let name = Location.placeName(for: locations[index].url) { locations[index].name = name }
+            if let name = Location.placeName(for: locations[index].url, bookmark: locations[index].bookmark) { locations[index].name = name }
         }
         return locations
     }
@@ -207,15 +214,15 @@ enum LocationStore {
     /// A location for a folder you just chose, to show at once: its bookmark comes from `bookmark(for:)`.
     static func make(for url: URL) -> Location {
         startAccessing(url)
-        return Location(id: UUID(), name: Location.placeName(for: url) ?? url.lastPathComponent, path: url.standardizedFileURL.path, bookmark: nil)
+        return Location(id: UUID(), name: Location.placeName(for: url, bookmark: nil) ?? url.lastPathComponent, path: url.standardizedFileURL.path, bookmark: nil)
     }
 
     /// The bookmark that finds the folder again next time, and the name the Finder gives it ("Dokumente" for
-    /// Documents in German): nil for iCloud Drive and On My iPhone, which `make` named already. Off the main thread.
-    nonisolated static func bookmark(for url: URL) -> (bookmark: Data?, name: String?) {
+    /// Documents in German). Off the main thread.
+    nonisolated static func bookmark(for url: URL) -> (bookmark: Data?, name: String) {
         let bookmark = try? url.bookmarkData(options: creating, includingResourceValuesForKeys: nil, relativeTo: nil)
-        let isPlace = url.path == Location.iCloudDrivePath || Location.isICloudDriveRoot(url) || Location.onDeviceFolders(url)?.isEmpty == true
-        return (bookmark, isPlace ? nil : FileManager.default.displayName(atPath: url.path))
+        let name = url.path == Location.iCloudDrivePath || Location.isICloudDriveRoot(url) ? "iCloud Drive" : FileManager.default.displayName(atPath: url.path)
+        return (bookmark, name)
     }
 
     /// Where a saved location's folder is now, with a fresh bookmark when the old one is stale, and access to it

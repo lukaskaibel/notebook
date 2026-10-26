@@ -515,9 +515,15 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     @discardableResult
     func paste(from pasteboard: UIPasteboard) -> Bool {
         let target = selection
-        if let data = pasteboard.data(forPasteboardType: Self.fragmentIdentifier), pasteFragment(data, at: target) { return true }
         // Where the note's folder has to be given first, what was read off the pasteboard goes in once it is: reading
         // it again then would ask to paste.
+        if let data = pasteboard.data(forPasteboardType: Self.fragmentIdentifier) {
+            guard !copiesAssets(data) || mayStoreAssets(orRetry: { [weak self] in
+                guard let self else { return }
+                _ = self.pasteFragment(data, at: self.selection)
+            }) else { return true }
+            if pasteFragment(data, at: target) { return true }
+        }
         if let urls = pasteboard.urls?.filter(\.isFileURL), !urls.isEmpty {
             guard mayStore(urls, orRetry: { [weak self] in self?.insertFiles(urls) }) else { return true }
             if pasteFiles(urls, at: target) { return true }
@@ -622,24 +628,37 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         let providers = drop.dropSession.items.map(\.itemProvider)
         let note = loadCount
         Task { @MainActor in
-            var markdown: [String] = []
+            // Everything is read first; then the note's folder is asked for once, where it has to be given.
+            var dropped: [Dropped] = []
             for provider in providers {
-                if let stored = await self.store(provider) { markdown.append(stored) }
+                if let item = await self.load(provider) { dropped.append(item) }
             }
+            defer { dropped.forEach { $0.throwAway() } }
             // Large files take a while: by then another note may be open, which they aren't for.
-            guard !markdown.isEmpty, self.loadCount == note else { return }
+            guard !dropped.isEmpty, await self.mayStoreAssets(), self.loadCount == note else { return }
+            let markdown = dropped.compactMap(self.store)
+            guard !markdown.isEmpty else { return }
             self.insertOnOwnLines(markdown.joined(separator: "\n"), at: NSRange(location: min(location, self.storage.length), length: 0))
         }
     }
 
-    /// A dropped item in `.assets`, as Markdown: a picture, or any other file as its card.
-    private func store(_ provider: NSItemProvider) async -> String? {
+    /// A dropped item, read: a picture, or a copy of a file, in a folder of its own among the temporary files.
+    private enum Dropped {
+        case picture(UIImage)
+        case file(URL)
+
+        func throwAway() {
+            if case .file(let url) = self { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        }
+    }
+
+    /// Reads a dropped item, before anything of it is stored.
+    private func load(_ provider: NSItemProvider) async -> Dropped? {
         if !provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier), provider.canLoadObject(ofClass: UIImage.self) {
             let image: UIImage? = await withCheckedContinuation { continuation in
                 provider.loadObject(ofClass: UIImage.self) { object, _ in continuation.resume(returning: object as? UIImage) }
             }
-            guard let image, await mayStoreAssets() else { return nil }
-            return storeAsset(image: image).map { "![](\($0))" }
+            return image.map(Dropped.picture)
         }
         let type = provider.registeredTypeIdentifiers.first { UTType($0)?.conforms(to: .data) == true } ?? UTType.data.identifier
         // The file is there only while this runs: it is copied right away.
@@ -653,11 +672,18 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
                 continuation.resume(returning: (try? FileManager.default.copyItem(at: url, to: file)) != nil ? file.path : nil)
             }
         }
-        guard let copied else { return nil }
-        let url = URL(fileURLWithPath: copied)
-        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
-        guard await mayStoreAssets(), let stored = storeAsset(copying: url) else { return nil }
-        return MarkdownStyler.isImageFile(url) ? "![](\(stored))" : "![\(url.lastPathComponent)](\(stored))"
+        return copied.map { .file(URL(fileURLWithPath: $0)) }
+    }
+
+    /// A dropped item in `.assets`, as Markdown: a picture, or any other file as its card.
+    private func store(_ dropped: Dropped) -> String? {
+        switch dropped {
+        case .picture(let image):
+            return storeAsset(image: image).map { "![](\($0))" }
+        case .file(let url):
+            guard let stored = storeAsset(copying: url) else { return nil }
+            return MarkdownStyler.isImageFile(url) ? "![](\(stored))" : "![\(url.lastPathComponent)](\(stored))"
+        }
     }
 
     /// Pictures from the camera, the photo library or the document scanner, saved next to the note and put in at
@@ -698,6 +724,14 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     /// The same for files to put in: notes become links, which need no folder; anything else is copied into `.assets`.
     private func mayStore(_ files: [URL], orRetry retry: @escaping () -> Void) -> Bool {
         files.allSatisfy { $0.pathExtension.lowercased() == "md" } || mayStoreAssets(orRetry: retry)
+    }
+
+    /// Whether pasting text copied in Notebook copies pictures and files into `.assets`: those of a note elsewhere.
+    private func copiesAssets(_ fragment: Data) -> Bool {
+        guard let fields = try? JSONSerialization.jsonObject(with: fragment) as? [String: String], let markdown = fields["markdown"],
+              let source = fields["folder"], !source.isEmpty, let folder,
+              URL(fileURLWithPath: source).standardizedFileURL != folder.standardizedFileURL else { return false }
+        return markdown.contains("](.assets/")
     }
 }
 

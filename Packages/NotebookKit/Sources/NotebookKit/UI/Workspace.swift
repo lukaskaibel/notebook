@@ -372,7 +372,8 @@ public final class Workspace: NSObject {
                 locations[index].bookmark = bookmark
                 saves = true
             }
-            if let name = survey.name, name != locations[index].name {
+            // On My iPhone is known by its bookmark, which a new location has only now.
+            if let name = Location.placeName(for: locations[index].url, bookmark: locations[index].bookmark) ?? survey.name, name != locations[index].name {
                 locations[index].name = name
                 saves = true
                 reloadsAll = true
@@ -1960,7 +1961,7 @@ extension Workspace: EditorControllerDelegate {
     }
 
     public func editor(_ editor: EditorController, askToWriteIn folder: URL) async -> Bool {
-        await FolderAccess.ask(for: folder, to: "keep this note’s pictures and drawings next to it")
+        await FolderAccess.ask(for: folder, to: "keep this note's pictures and drawings next to it")
     }
     #endif
 
