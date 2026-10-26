@@ -521,7 +521,7 @@ Notes exports Markdown itself, and Notebook brings that in:
    Notes** in the ⋯ menu) and pick the folder Notes made, or the folder you saved the exports into. On the Mac the
    panel says where the notes will go: the folder selected in the sidebar, else the one of the note you have open,
    else the default folder. On the iPhone they go into the folder whose ⋯ menu you used, or from the first screen
-   into the default folder; on the iPad, as on the Mac, into the folder selected in the sidebar.
+   into the default folder; on the iPad, into the folder of the note you have open, else the default folder.
 
 Each folder you pick becomes a folder, with the folders in it; the folder Notes makes for a single note becomes just the
 note. Notes puts the pictures and files of all the notes it exports in one Attachments folder; the import puts each

@@ -1,10 +1,10 @@
 import XCTest
 
-/// An iPhone: Import from Apple Notes in a folder's ⋯ menu, with the folder Notes exported picked in the Files app's
-/// picker, where you would have saved it: On My iPhone. The app starts on fresh sample notes in its own home folder,
-/// and writes a made-up Notes export to On My iPhone (`-NotebookDemoExport`), which the test takes away again, so
-/// nothing of yours is touched.
-final class PhoneImportTests: XCTestCase {
+/// Import from Apple Notes in the ⋯ menu, with the folder Notes exported picked in the Files app's picker, where you
+/// would have saved it: On My iPhone (On My iPad). The app starts on fresh sample notes in its own home folder, and
+/// writes a made-up Notes export to On My iPhone (`-NotebookDemoExport`), which the test takes away again, so nothing
+/// of yours is touched.
+final class AppleNotesImportUITests: XCTestCase {
     var app: XCUIApplication!
     var export: URL?
 
@@ -19,34 +19,15 @@ final class PhoneImportTests: XCTestCase {
         super.tearDown()
     }
 
-    func testImportFromAppleNotes() throws {
+    /// On the iPhone, from a folder's ⋯ menu, into that folder.
+    func testImportOnTheIPhone() throws {
         try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .phone, "a folder's ⋯ menu is the iPhone's")
-        let export = try onMyIPhone().appendingPathComponent("From Notes", isDirectory: true)
-        self.export = export
-        try? FileManager.default.removeItem(at: export)
-        app = XCUIApplication()
-        // A `~` is the app's home in the Simulator.
-        app.launchArguments = ["-NotebookLibrary", "~/Documents/UITests-\(UUID().uuidString)", "-NotebookLibraryName", "Library",
-                               "-NotebookDemo", "YES", "-NotebookDemoExport", export.path, "-NotebookTips", "hide",
-                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
-        app.launch()
-
+        try launch()
         tap("Inbox")
         tap("More")
         shot("1-menu")
         tap("Import from Apple Notes")
-        // The Files app's picker, from another process a moment later: On My iPhone, then into the folder Notes' export
-        // is in, and Open.
-        let browse = app.buttons["Browse"]
-        XCTAssertTrue(browse.waitForExistence(timeout: 20), app.debugDescription)
-        browse.tap()
-        if !element(containing: "From Notes").waitForExistence(timeout: 5) { tap("On My iPhone") }
-        let folder = element(containing: "From Notes")
-        XCTAssertTrue(folder.waitForExistence(timeout: 10), app.debugDescription)
-        folder.tap()
-        XCTAssertTrue(element(containing: "Trips").waitForExistence(timeout: 10), app.debugDescription)
-        shot("2-picker")
-        tap("Open")
+        try pickExport()
 
         // In the Inbox now, with the folders the exports were saved in, each note's picture in its `.assets`, and
         // links between the notes as [[links]].
@@ -55,6 +36,62 @@ final class PhoneImportTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Shrines to see"].waitForExistence(timeout: 10), app.debugDescription)
         shot("3-folder")
         tap("Osaka weekend")
+        try checkNote()
+    }
+
+    /// On the iPad, from the sidebar's ⋯ menu, into the default folder with no note open: the Inbox.
+    func testImportOnTheIPad() throws {
+        try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "the sidebar's ⋯ menu is the iPad's")
+        XCUIDevice.shared.orientation = .landscapeLeft
+        try launch()
+        tap("More")
+        shot("1-menu")
+        tap("Import from Apple Notes")
+        try pickExport()
+
+        // The sidebar shows what came, opened down to it.
+        XCTAssertTrue(app.staticTexts["From Notes"].waitForExistence(timeout: 10), app.debugDescription)
+        tap("Trips")
+        tap("Osaka weekend")
+        try checkNote()
+    }
+
+    private func launch() throws {
+        let export = try onMyDevice().appendingPathComponent("From Notes", isDirectory: true)
+        self.export = export
+        try? FileManager.default.removeItem(at: export)
+        app = XCUIApplication()
+        // A `~` is the app's home in the Simulator.
+        app.launchArguments = ["-NotebookLibrary", "~/Documents/UITests-\(UUID().uuidString)", "-NotebookLibraryName", "Library",
+                               "-NotebookDemo", "YES", "-NotebookDemoExport", export.path, "-NotebookTips", "hide",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+    }
+
+    /// The Files app's picker, from another process a moment later: On My iPhone, into the folder Notes' export is in,
+    /// and Open. On the iPhone, On My iPhone is under Browse; on the iPad, in the picker's sidebar.
+    private func pickExport() throws {
+        let place = UIDevice.current.userInterfaceIdiom == .pad ? "On My iPad" : "On My iPhone"
+        let browse = app.buttons["Browse"]
+        let sidebarItem = app.cells["DOC.sidebar.item.\(place)"]
+        let end = Date().addingTimeInterval(20)
+        while !browse.exists, !sidebarItem.exists, Date() < end { Thread.sleep(forTimeInterval: 0.5) }
+        if sidebarItem.exists {
+            sidebarItem.tap()
+        } else {
+            XCTAssertTrue(browse.exists, app.debugDescription)
+            browse.tap()
+            if !cell("From Notes").waitForExistence(timeout: 5) { tap(place) }
+        }
+        let folder = cell("From Notes")
+        XCTAssertTrue(folder.waitForExistence(timeout: 10), app.debugDescription)
+        folder.tap()
+        XCTAssertTrue(cell("Trips").waitForExistence(timeout: 10), app.debugDescription)
+        shot("2-picker")
+        tap("Open")
+    }
+
+    private func checkNote() throws {
         let note = app.textViews["Note"].firstMatch
         XCTAssertTrue(note.waitForExistence(timeout: 10), app.debugDescription)
         waitForValue(note, containing: "What to take is in [[Packing list]], the shrines in [[Shrines to see]].")
@@ -64,9 +101,9 @@ final class PhoneImportTests: XCTestCase {
         shot("4-note")
     }
 
-    /// On My iPhone in the Files app: the folder of the Simulator's File Provider for this device's own storage, next
-    /// to the containers of the apps.
-    private func onMyIPhone() throws -> URL {
+    /// On My iPhone in the Files app: the folder of the Simulator's File Provider for the device's own storage, next to
+    /// the containers of the apps.
+    private func onMyDevice() throws -> URL {
         let containers = URL(fileURLWithPath: NSHomeDirectory()).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let groups = containers.appendingPathComponent("Shared/AppGroup")
         for group in (try? FileManager.default.contentsOfDirectory(at: groups, includingPropertiesForKeys: nil)) ?? [] {
@@ -85,9 +122,9 @@ final class PhoneImportTests: XCTestCase {
         element.tap()
     }
 
-    /// The first cell whose name starts with `text`, as the Files app's picker names its rows ("From Notes, Folder, …").
-    private func element(containing text: String) -> XCUIElement {
-        app.cells.matching(NSPredicate(format: "label BEGINSWITH %@", text)).firstMatch
+    /// A row of the Files app's picker, whose name starts with the file's ("From Notes, Folder, …").
+    private func cell(_ name: String) -> XCUIElement {
+        app.cells.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
     }
 
     private func waitForValue(_ element: XCUIElement, containing text: String? = nil, lacking: String? = nil, file: StaticString = #filePath, line: UInt = #line) {
@@ -103,6 +140,7 @@ final class PhoneImportTests: XCTestCase {
     /// (`TEST_RUNNER_SHOTS=<folder> xcodebuild test …`).
     private func shot(_ name: String) {
         guard let folder = ProcessInfo.processInfo.environment["SHOTS"] else { return }
-        try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: folder).appendingPathComponent("iphone-\(name).png"))
+        let device = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "iphone"
+        try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: folder).appendingPathComponent("\(device)-\(name).png"))
     }
 }
