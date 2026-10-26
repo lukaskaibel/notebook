@@ -26,7 +26,7 @@ xcrun simctl list runtimes available | grep -q "iOS 27.0 " || {
 echo "Building…"
 mkdir -p "$work"
 xcodebuild -project Notebook.xcodeproj -scheme Notebook -configuration Debug -destination 'generic/platform=iOS Simulator' \
-  -derivedDataPath "$work/DerivedData" PRODUCT_BUNDLE_IDENTIFIER=$bundle_id build -quiet
+  -derivedDataPath "$work/DerivedData" NOTEBOOK_BUNDLE_IDENTIFIER=$bundle_id build -quiet
 
 # simulator <name> <device type>: a simulator of the script's own, made the first time and booted, by its UDID.
 simulator() {

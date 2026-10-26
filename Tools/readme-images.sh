@@ -32,7 +32,7 @@ mkdir -p "$raw"
 if [ "$only" != devices ]; then
 echo "Building…"
 xcodebuild -project Notebook.xcodeproj -scheme Notebook -configuration Debug -destination 'platform=macOS,arch=arm64' \
-  -derivedDataPath "$work/DerivedData" PRODUCT_BUNDLE_IDENTIFIER=$bundle_id build -quiet
+  -derivedDataPath "$work/DerivedData" NOTEBOOK_BUNDLE_IDENTIFIER=$bundle_id build -quiet
 mkdir -p "$raw"
 swiftc -O Tools/readme-images/capture.swift -o "$work/capture" 2>/dev/null
 
@@ -162,7 +162,7 @@ fi
 echo "Building for iPhone and iPad…"
 ios_app=$work/DerivedData-iOS/Build/Products/Debug-iphonesimulator/Notebook.app
 xcodebuild -project Notebook.xcodeproj -scheme Notebook -configuration Debug -destination 'generic/platform=iOS Simulator' \
-  -derivedDataPath "$work/DerivedData-iOS" PRODUCT_BUNDLE_IDENTIFIER=$bundle_id build -quiet
+  -derivedDataPath "$work/DerivedData-iOS" NOTEBOOK_BUNDLE_IDENTIFIER=$bundle_id build -quiet
 
 # simulator <name> <device type>: a simulator of the script's own, made the first time and booted, by its UDID.
 simulator() {

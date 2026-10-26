@@ -7,6 +7,10 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- New Note as a widget and a control: the widget on the Home Screen and the Lock Screen of iPhone and iPad and on the
+  Mac's desktop, the control in Control Center, on the Lock Screen and on the iPhone's Action button. A tap opens
+  Notebook with a new note in your default folder and the caret in its title, as New Note in Shortcuts does. The
+  widget shows Notebook's icon and the pencil in its ink; on the Lock Screen it is the pencil alone, or with its name.
 - Version history: Notebook keeps earlier versions of your notes as you write. It keeps the note as it was when you
   start changing it, a version every ten minutes while you write, and one when you stop. On the Mac, File › Revert To ›
   Browse All Versions… shows them by day next to the one you pick, as the note looks. Show Changes marks what was added
