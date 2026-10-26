@@ -32,6 +32,8 @@ public struct NotebookScene: Scene {
                 Button("About Notebook") { Acknowledgements.showAbout() }
             }
             CommandGroup(replacing: .importExport) {
+                Button { workspace.chooseAppleNotesExport() } label: { Label("Import from Apple Notes…", systemImage: "square.and.arrow.down.on.square") }
+                    .disabled(workspace.locations.isEmpty)
                 Menu {
                     Button { workspace.export(as: .pdf) } label: { Label("PDF…", systemImage: "doc.richtext") }
                         .keyboardShortcut("e", modifiers: [.command, .option])
@@ -90,9 +92,10 @@ public struct NotebookScene: Scene {
                 .keyboardShortcut("i", modifiers: [.command, .control])
                 .disabled(workspace.locations.isEmpty || workspace.showsTodos)
                 Divider()
+                SortByPicker(folder: workspace.folderInView)
+                Toggle(isOn: $settings.foldersFirst) { Label("Keep Folders on Top", systemImage: "folder") }
                 Toggle(isOn: $settings.showsOnlyNotes) { Label("Show Only Notes", systemImage: "doc.text") }
                 Toggle(isOn: $settings.dimsOtherFiles) { Label("Dim Files That Aren’t Notes", systemImage: "sun.min") }
-                Toggle(isOn: $settings.foldersFirst) { Label("Keep Folders on Top", systemImage: "folder") }
                 // The Finder's shortcut for its hidden files.
                 Button { workspace.toggleAllHiddenFolders() } label: {
                     Label(workspace.showsAllHiddenFolders ? "Hide Hidden Folders" : "Show Hidden Folders",
