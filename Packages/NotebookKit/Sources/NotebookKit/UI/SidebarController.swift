@@ -105,6 +105,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         scrollView.contentInsets = NSEdgeInsets(top: 0, left: 0, bottom: 8, right: 0)
         workspace.sidebar = self
         NotificationCenter.default.addObserver(self, selector: #selector(optionsChanged), name: .notebookSidebarOptionsChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(orderChanged), name: .notebookFileOrderChanged, object: nil)
         rebuildTop()
         outline.reloadData()
         expandSections()
@@ -135,6 +136,19 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
 
     @objc private func optionsChanged() {
         reloadAll()
+    }
+
+    /// You chose another order: the files in open folders slide into it, as in the Finder. Closed folders are sorted
+    /// when they open.
+    @objc private func orderChanged() {
+        guard renaming == nil else { heldAll = true; return }
+        var shown = workspace.locations.compactMap { workspace.root(for: $0) }
+        for row in 0..<outline.numberOfRows {
+            if let node = outline.item(atRow: row) as? FileNode, outline.isItemExpanded(node) { shown.append(node) }
+        }
+        let keep = Set(shown.map(ObjectIdentifier.init))
+        visible = visible.filter { keep.contains($0.key) }
+        reload(shown)
     }
 
     /// The To-dos row, first of all.
@@ -215,31 +229,48 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     }
 
     /// Folders whose contents changed, or were read for the first time: then their files fade in below them, and
-    /// nothing else in the sidebar moves.
+    /// nothing else in the sidebar moves. Files that came, went or took another place in the order (a note just saved,
+    /// when the newest come first) fade and slide there, as in the Finder. The selected row stays selected, and on
+    /// screen if it was.
     func reload(_ nodes: [FileNode]) {
         guard renaming == nil else { heldNodes += nodes; return }
         let expanded = expandedPaths()
+        let selected = outline.selectedRow
+        let selectedInView = selected >= 0 && NSLocationInRange(selected, outline.rows(in: outline.visibleRect))
         var topChanged = false
         var shown = false
+        var moved = false
         for node in nodes {
-            let wasEmpty = visible[ObjectIdentifier(node)]?.isEmpty ?? true
+            let before = visible[ObjectIdentifier(node)]
+            let wasEmpty = before?.isEmpty ?? true
             visible[ObjectIdentifier(node)] = nil
             if node.parent == nil {
-                guard let section = section(forRoot: node), section.children.isEmpty, wasEmpty else { topChanged = true; continue }
+                guard let section = section(forRoot: node) else { topChanged = true; continue }
+                let old = section.children
                 section.children = visibleChildren(of: node)
-                guard !section.children.isEmpty else { continue }
-                if outline.isItemExpanded(section) {
-                    outline.insertItems(at: IndexSet(integersIn: 0..<section.children.count), inParent: section, withAnimation: .effectFade)
-                } else if !collapsedSections.contains(section.sectionKey ?? "") {
-                    isExpandingSections = true
-                    outline.expandItem(section)
-                    isExpandingSections = false
+                if old.isEmpty, wasEmpty {
+                    guard !section.children.isEmpty else { continue }
+                    if outline.isItemExpanded(section) {
+                        outline.insertItems(at: IndexSet(integersIn: 0..<section.children.count), inParent: section, withAnimation: .effectFade)
+                    } else if !collapsedSections.contains(section.sectionKey ?? "") {
+                        isExpandingSections = true
+                        outline.expandItem(section)
+                        isExpandingSections = false
+                    }
+                    shown = true
+                } else if outline.isItemExpanded(section) {
+                    moved = rearrange(in: section, from: old, to: section.children) || moved
+                    shown = true
+                } else {
+                    outline.reloadItem(section, reloadChildren: true)
                 }
-                shown = true
             } else if outline.row(forItem: node) >= 0 {
-                let count = visibleChildren(of: node).count
-                if outline.isItemExpanded(node), wasEmpty, count > 0 {
-                    outline.insertItems(at: IndexSet(integersIn: 0..<count), inParent: node, withAnimation: .effectFade)
+                let children = visibleChildren(of: node)
+                if outline.isItemExpanded(node), wasEmpty, !children.isEmpty {
+                    outline.insertItems(at: IndexSet(integersIn: 0..<children.count), inParent: node, withAnimation: .effectFade)
+                    shown = true
+                } else if outline.isItemExpanded(node), let before, !before.isEmpty {
+                    moved = rearrange(in: node, from: before, to: children) || moved
                     shown = true
                 } else {
                     outline.reloadItem(node, reloadChildren: true)
@@ -255,7 +286,43 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         // A folder read ahead of time, still closed, changes nothing on screen.
         guard topChanged || shown || !wantedExpansion.isEmpty || !movedExpansion.isEmpty else { return }
         restoreExpansion(expanded)
-        selectCurrent()
+        // A selected row that shows for the first time (the note open at launch, its folder just read) is scrolled
+        // to; one that was on screen stays there, following its file to its new place; one you scrolled away from is
+        // left where it is.
+        selectCurrent(scrolling: false)
+        let row = outline.selectedRow
+        if row >= 0, selected < 0 || selectedInView {
+            scrollRowToVisible(row, animated: moved && selected >= 0)
+        }
+    }
+
+    /// Moves, adds and takes away rows so they show a folder's files as they are now: they slide to their new places
+    /// and fade in and out, and the rest of the sidebar stays as it is. Too many changes at once show all at once.
+    /// The rows that stay show what changed about their files (in iCloud or not, a folder's look). Says whether any
+    /// row moved.
+    private func rearrange(in parent: AnyObject, from old: [AnyObject], to new: [AnyObject]) -> Bool {
+        guard let changes = RowChanges(from: old.map(ObjectIdentifier.init), to: new.map(ObjectIdentifier.init), limit: 200) else {
+            outline.reloadItem(parent, reloadChildren: true)
+            return false
+        }
+        isSelectingProgrammatically = true
+        if changes.count > 0 {
+            outline.beginUpdates()
+            for step in changes.steps {
+                switch step {
+                case .remove(let index): outline.removeItems(at: [index], inParent: parent, withAnimation: .effectFade)
+                case .move(let from, let to): outline.moveItem(at: from, inParent: parent, to: to, inParent: parent)
+                case .insert(let index): outline.insertItems(at: [index], inParent: parent, withAnimation: .effectFade)
+                }
+            }
+            outline.endUpdates()
+        }
+        let came = Set(new.map(ObjectIdentifier.init)).subtracting(old.map(ObjectIdentifier.init))
+        let onScreen = outline.rows(in: outline.visibleRect)
+        let rows = IndexSet(new.lazy.filter { !came.contains(ObjectIdentifier($0)) }.map { self.outline.row(forItem: $0) }.filter { NSLocationInRange($0, onScreen) })
+        if !rows.isEmpty { outline.reloadData(forRowIndexes: rows, columnIndexes: [0]) }
+        isSelectingProgrammatically = false
+        return changes.steps.contains { if case .move = $0 { true } else { false } }
     }
 
     private func section(forRoot root: FileNode) -> SidebarEntry? {
@@ -320,19 +387,19 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         outline.scrollRowToVisible(row)
     }
 
-    /// The folder you selected, or else the open file, or To-dos.
-    private func selectCurrent() {
-        if workspace.showsTodos { return selectTodos() }
+    /// The folder you selected, or else the open file, or To-dos, scrolled to unless `scrolling` is false.
+    private func selectCurrent(scrolling: Bool = true) {
+        if workspace.showsTodos { return selectTodos(scrolling: scrolling) }
         guard let current = workspace.selectedFolder ?? workspace.currentURL, let node = workspace.node(for: current, reading: false) else { return }
-        selectRow(for: node)
+        selectRow(for: node, scrolling: scrolling)
     }
 
-    func selectTodos() {
+    func selectTodos(scrolling: Bool = true) {
         let row = outline.row(forItem: todosEntry)
         guard row >= 0, outline.selectedRow != row else { return }
         isSelectingProgrammatically = true
         outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-        outline.scrollRowToVisible(row)
+        if scrolling { outline.scrollRowToVisible(row) }
         isSelectingProgrammatically = false
     }
 
@@ -343,13 +410,28 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         outline.reloadData(forRowIndexes: IndexSet(integer: row), columnIndexes: [0])
     }
 
-    private func selectRow(for node: FileNode) {
+    private func selectRow(for node: FileNode, scrolling: Bool = true) {
         let row = outline.row(forItem: node)
         guard row >= 0 else { return }
         isSelectingProgrammatically = true
         outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-        outline.scrollRowToVisible(row)
+        if scrolling { outline.scrollRowToVisible(row) }
         isSelectingProgrammatically = false
+    }
+
+    /// Scrolls a row into view, as little as it takes; with `animated`, gliding there, with rows that slide to new places.
+    private func scrollRowToVisible(_ row: Int, animated: Bool) {
+        let clip = scrollView.contentView
+        let rect = outline.rect(ofRow: row)
+        let shown = outline.visibleRect
+        guard animated, rect.minY < shown.minY || rect.maxY > shown.maxY else { return outline.scrollRowToVisible(row) }
+        let y = rect.minY < shown.minY ? clip.bounds.minY - (shown.minY - rect.minY) : clip.bounds.minY + (rect.maxY - shown.maxY)
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.25
+            context.allowsImplicitAnimation = true
+            clip.animator().setBoundsOrigin(NSPoint(x: clip.bounds.minX, y: y))
+        }
+        scrollView.reflectScrolledClipView(clip)
     }
 
     // MARK: - Data source

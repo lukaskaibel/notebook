@@ -362,6 +362,11 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   Option-drag copies. The New Folder button next to a location's name makes a folder at its top, New Folder in a
   folder's menu one inside it, named in place as in the Finder. Deleting moves to the Trash, never further, and Undo
   (⌘Z) puts it back, as it takes back a rename, a move or a new file. Favourites sit at the top of the sidebar.
+- **Sorted by name or by date.** View › Sort By, or Sort By in the ⋯ menu on iPhone and iPad, sorts every folder's
+  notes and files by name, as the Finder does, or newest first by when they were last edited or made, as Notes does.
+  Sorted by date, the note you write in moves to the top of its folder once it is saved, still selected; Keep Folders
+  on Top keeps folders above the files either way. The dates come with the folder as it is read, so a large folder
+  sorts at once.
 - **iPhone and iPad.** The same editor, search and file handling, with screens made for each: one folder per screen
   on the iPhone, the sidebar on the iPad. Pick iCloud Drive or any folder in the Files app's picker, or keep notes on
   the device, in On My iPhone › Notebook. A bar above the keyboard, whose tools you choose, formats, links and adds

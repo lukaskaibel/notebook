@@ -591,11 +591,16 @@ public final class Workspace: NSObject {
         reader.read(requests, ahead: ahead) { [weak self] results in
             guard let self else { return }
             var changed: [FileNode] = []
+            var firstRead = false
             for result in results {
                 guard let listing = result.listing, let node = node(for: URL(fileURLWithPath: result.path), reading: false), node.isFolder else { continue }
-                if node.apply(listing) { changed.append(node) }
+                let wasRead = node.hasLoadedChildren
+                if node.apply(listing) {
+                    changed.append(node)
+                    firstRead = firstRead || !wasRead
+                }
             }
-            if !changed.isEmpty { sidebarReload(changed) }
+            if !changed.isEmpty { sidebarReload(changed, animated: !firstRead) }
             done?()
         }
     }
@@ -633,6 +638,15 @@ public final class Workspace: NSObject {
             if url.lastPathComponent == ".assets" { continue }
             indexFolders.append(url)
             if let node = existingNode(for: url), node.isFolder, node.hasLoadedChildren { changed.append(node) }
+        }
+        // A folder's own date changes with what is in it (saving a note puts a new file in its place): where folders are
+        // sorted by date, it may take another place in the folder it is in, which is read again too.
+        let parents = Set(folders.map { URL(fileURLWithPath: $0).deletingLastPathComponent().path }).subtracting(folders)
+        for path in parents {
+            let url = URL(fileURLWithPath: path)
+            guard NotebookSettings.shared.fileOrders.order(of: url).isByDate, let node = existingNode(for: url), node.isFolder, node.hasLoadedChildren,
+                  !changed.contains(node) else { continue }
+            changed.append(node)
         }
         read(changed, again: true)
         index.refresh(folders: indexFolders, locations: locations)
@@ -1106,6 +1120,11 @@ public final class Workspace: NSObject {
         if let selectedFolder { return selectedFolder }
         if let currentURL { return currentURL.deletingLastPathComponent() }
         return defaultFolder
+    }
+
+    /// The folder Sort By is about: the one selected in the sidebar, or else the open file's.
+    var folderInView: URL? {
+        selectedFolder ?? currentURL?.deletingLastPathComponent()
     }
 
     /// Where new notes made outside a folder go: the folder chosen in Settings while it is in a location, or the Inbox.
@@ -1813,11 +1832,17 @@ public final class Workspace: NSObject {
         #endif
     }
 
-    private func sidebarReload(_ nodes: [FileNode]) {
+    /// Folders whose files changed. The lists on iPhone and iPad slide rows to their new places, with `animated`: not
+    /// for a folder read for the first time, whose files are just there.
+    private func sidebarReload(_ nodes: [FileNode], animated: Bool = true) {
         #if os(macOS)
         sidebar?.reload(nodes)
         #else
-        treeVersion += 1
+        if animated {
+            withAnimation { treeVersion += 1 }
+        } else {
+            treeVersion += 1
+        }
         #endif
     }
 }
