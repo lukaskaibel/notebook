@@ -62,9 +62,9 @@ enum FileOperations {
         return ".assets/" + (name.addingPercentEncoding(withAllowedCharacters: allowed) ?? name)
     }
 
-    /// Copies a file into a folder's `.assets`, under a name not taken there, in a coordinated write. Its Markdown
-    /// path, or nil when it couldn't be copied.
-    static func storeAsset(copying url: URL, in folder: URL) -> String? {
+    /// Copies a file into a folder's `.assets`, under a name not taken there, in a coordinated write. Where it went,
+    /// or nil when it couldn't be copied.
+    static func storeAsset(copying url: URL, in folder: URL) -> URL? {
         let assets = folder.appendingPathComponent(".assets", isDirectory: true)
         try? FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
         let destination = uniqueAssetURL(named: url.lastPathComponent, in: assets)
@@ -72,7 +72,22 @@ enum FileOperations {
         NSFileCoordinator().coordinate(readingItemAt: url, options: [], writingItemAt: destination, options: .forReplacing, error: nil) { from, to in
             copied = (try? FileManager.default.copyItem(at: from, to: to)) != nil
         }
-        return copied ? markdownPath(destination.lastPathComponent) : nil
+        return copied ? destination : nil
+    }
+
+    /// Takes back copies made a moment ago that nothing uses, in coordinated deletes, and the `.assets` folder they
+    /// were the first files in. Only for files Notebook itself just put there: anything else goes to the Trash.
+    static func removeStoredAssets(_ urls: [URL]) {
+        for url in urls {
+            NSFileCoordinator().coordinate(writingItemAt: url, options: .forDeleting, error: nil) { url in
+                try? FileManager.default.removeItem(at: url)
+            }
+        }
+        for assets in Set(urls.map { $0.deletingLastPathComponent() }) {
+            if (try? FileManager.default.contentsOfDirectory(atPath: assets.path))?.isEmpty == true {
+                try? FileManager.default.removeItem(at: assets)
+            }
+        }
     }
 
     /// A file name from a title: the characters files can't have become dashes.

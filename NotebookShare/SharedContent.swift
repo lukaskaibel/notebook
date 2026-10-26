@@ -61,8 +61,9 @@ final class SharedContent {
         return blocks.joined(separator: "\n\n")
     }
 
-    /// Leaves it for Notebook.
-    func keep(as title: String, at destination: SharedNote.Destination) throws {
+    /// Leaves it for Notebook, moving the copies of its files there off the main thread, so the sheet doesn't stop
+    /// for twenty videos.
+    func keep(as title: String, at destination: SharedNote.Destination) async throws {
         var names = Set<String>()
         let named = files.map { url -> (url: URL, name: String) in
             let base = url.deletingPathExtension().lastPathComponent, ext = url.pathExtension
@@ -76,7 +77,7 @@ final class SharedContent {
         }
         let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let note = SharedNote(destination: destination, title: title.isEmpty ? nil : title, text: markdown, files: named.map(\.name))
-        try SharedNotes.add(note, files: named)
+        try await Task.detached(priority: .userInitiated) { try SharedNotes.add(note, moving: named) }.value
     }
 
     func cleanUp() {

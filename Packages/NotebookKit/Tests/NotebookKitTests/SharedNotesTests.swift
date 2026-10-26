@@ -49,9 +49,15 @@ final class SharedNotesTests: XCTestCase {
         return workspace
     }
 
-    private func share(_ destination: SharedNote.Destination = .newNote, title: String? = "Kyoto", text: String, files: [String] = []) throws {
+    /// As the share extension leaves it: the files are its own copies, moved over.
+    @discardableResult
+    private func share(_ destination: SharedNote.Destination = .newNote, title: String? = "Kyoto", text: String, files: [String] = []) throws -> SharedNote {
+        let copies = given.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: copies, withIntermediateDirectories: true)
+        for name in files { try FileManager.default.copyItem(at: given.appendingPathComponent(name), to: copies.appendingPathComponent(name)) }
         let note = SharedNote(destination: destination, title: title, text: text, files: files)
-        try SharedNotes.add(note, files: files.map { (given.appendingPathComponent($0), $0) })
+        try SharedNotes.add(note, moving: files.map { (copies.appendingPathComponent($0), $0) })
+        return note
     }
 
     private func until(_ what: String, seconds: Double = 5, _ condition: () -> Bool) async throws {
@@ -142,6 +148,91 @@ final class SharedNotesTests: XCTestCase {
         XCTAssertEqual(SharedNotes.waiting().map(\.note.text), ["Milk"])
     }
 
+    /// Text at the end of a PDF or a picture would ruin it: shared "to the end" of one, it becomes a note of its own.
+    func testOnlyANoteIsAddedTo() async throws {
+        let pdf = papers.appendingPathComponent("Tickets.pdf")
+        let bytes = Data([0x25, 0x50, 0x44, 0x46, 0xE2, 0xE3, 0xCF, 0xD3, 0x0A])
+        try bytes.write(to: pdf)
+        try share(.endOf(path: pdf.path), title: "Thought", text: "A thought.")
+        await makeWorkspace().takeSharedNotes()
+        XCTAssertEqual(try Data(contentsOf: pdf), bytes, "the PDF was written into")
+        XCTAssertEqual(try read(inbox.appendingPathComponent("Thought.md")), "A thought.\n")
+    }
+
+    /// The note to add to is looked for in an editor only once its files are copied. The copy is held up here, as
+    /// iCloud can, by a coordinated write on the file, and meanwhile another note is opened: the text goes into the
+    /// note's file, not into the editor now showing the other one.
+    func testTheNoteIsLookedForWhenTheFilesAreCopied() async throws {
+        let errands = library.appendingPathComponent("Errands.md")
+        try "- [ ] Milk\n".write(to: errands, atomically: true, encoding: .utf8)
+        let workspace = makeWorkspace()
+        workspace.start()
+        try await until("the library was read") { workspace.hasReadLocations }
+        workspace.open(draft)
+        try await until("the note was shown") { workspace.editor.text == "# Draft\n\nSome text.\n" }
+        let note = try share(.endOf(path: draft.path), text: "A thought.", files: ["Torii.jpg"])
+        let file = outbox.appendingPathComponent(note.id.uuidString).appendingPathComponent("Torii.jpg")
+        let holding = DispatchSemaphore(value: 0), held = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            NSFileCoordinator().coordinate(writingItemAt: file, options: [], error: nil) { _ in
+                held.signal()
+                holding.wait()
+            }
+        }
+        held.wait()
+        let taking = Task { await workspace.takeSharedNotes() }
+        try await Task.sleep(for: .milliseconds(300))
+        workspace.open(errands)
+        try await until("the other note was shown") { workspace.editor.text == "- [ ] Milk\n" }
+        holding.signal()
+        await taking.value
+        XCTAssertEqual(workspace.editor.text, "- [ ] Milk\n", "it went into the editor of another note")
+        try await until("it was written") { (try? self.read(self.draft)) == "# Draft\n\nSome text.\n\nA thought.\n\n![](.assets/Torii.jpg)\n" }
+        XCTAssertEqual(try read(errands), "- [ ] Milk\n")
+        XCTAssertTrue(SharedNotes.waiting().isEmpty)
+    }
+
+    /// Without every one of its files nothing is written and nothing stays in `.assets`, however often it is tried;
+    /// it waits for the next time.
+    func testAllOrNothing() async throws {
+        let note = try share(.endOf(path: draft.path), text: "A thought.", files: ["Torii.jpg", "Tickets.pdf"])
+        // The PDF went missing from what the extension left.
+        try FileManager.default.removeItem(at: outbox.appendingPathComponent(note.id.uuidString).appendingPathComponent("Tickets.pdf"))
+        for _ in 1...2 { await makeWorkspace().takeSharedNotes() }
+        XCTAssertEqual(try read(draft), "# Draft\n\nSome text.\n")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: papers.appendingPathComponent(".assets").path), "a copy stayed behind")
+        XCTAssertEqual(SharedNotes.waiting().map(\.note.id), [note.id])
+    }
+
+    /// The extension's copies are moved, not copied a second time.
+    func testTheFilesAreMoved() throws {
+        let copy = given.appendingPathComponent("Copy.jpg")
+        try FileManager.default.copyItem(at: given.appendingPathComponent("Torii.jpg"), to: copy)
+        let note = SharedNote(destination: .newNote, title: nil, text: "", files: ["Torii.jpg"])
+        try SharedNotes.add(note, moving: [(copy, "Torii.jpg")])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: copy.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: outbox.appendingPathComponent(note.id.uuidString + "/Torii.jpg").path))
+    }
+
+    /// What a stopped extension left half written, and what can't be read, goes once it is old enough.
+    func testLeftoversAreRemoved() throws {
+        let manager = FileManager.default
+        let stopped = outbox.appendingPathComponent("A.partial"), writing = outbox.appendingPathComponent("B.partial")
+        let unreadable = outbox.appendingPathComponent("C"), fresh = outbox.appendingPathComponent("D")
+        for folder in [stopped, writing, unreadable, fresh] { try manager.createDirectory(at: folder, withIntermediateDirectories: true) }
+        try Data("{".utf8).write(to: unreadable.appendingPathComponent("note.json"))
+        try Data("{".utf8).write(to: fresh.appendingPathComponent("note.json"))
+        let old = Date().addingTimeInterval(-2 * 86400)
+        for folder in [stopped, unreadable] { try manager.setAttributes([.creationDate: old], ofItemAtPath: folder.path) }
+        let kept = try share(text: "Milk")
+        SharedNotes.removeLeftovers()
+        XCTAssertFalse(manager.fileExists(atPath: stopped.path))
+        XCTAssertFalse(manager.fileExists(atPath: unreadable.path))
+        XCTAssertTrue(manager.fileExists(atPath: writing.path), "one being written was removed")
+        XCTAssertTrue(manager.fileExists(atPath: fresh.path), "one too new to judge was removed")
+        XCTAssertEqual(SharedNotes.waiting().map(\.note.id), [kept.id])
+    }
+
     /// The extension offers the default folder and the note open, or opened last.
     func testThePlacesOffered() async throws {
         let workspace = makeWorkspace()
@@ -150,6 +241,12 @@ final class SharedNotesTests: XCTestCase {
         workspace.open(draft)
         workspace.publishSharePlaces()
         XCTAssertEqual(SharedNotes.places?.defaultFolder, "Inbox")
+        XCTAssertEqual(SharedNotes.places?.lastNoteTitle, "Draft")
+        // A PDF open, or opened last, isn't offered: the note before it is.
+        let pdf = papers.appendingPathComponent("Tickets.pdf")
+        try Data("%PDF-1.4".utf8).write(to: pdf)
+        workspace.open(pdf)
+        workspace.publishSharePlaces()
         XCTAssertEqual(SharedNotes.places?.lastNoteTitle, "Draft")
     }
 }
