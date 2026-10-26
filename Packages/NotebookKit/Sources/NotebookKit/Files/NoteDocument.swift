@@ -116,7 +116,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         saveTimer = nil
         if conflict != nil {
             conflict = nil
-            // Nothing typed here: the other version is still in iCloud, and asked about next time.
+            // With nothing typed here, the other version stays in iCloud and is asked about next time.
             if hasUnsavedChanges { keepBoth() }
         }
         wantsSave = true
