@@ -141,7 +141,17 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
         window?.makeFirstResponder(editor.textView)
     }
 
+    func windowDidBecomeKey(_ notification: Notification) {
+        Workspace.shared.keyFileNote = note
+    }
+
+    func windowDidResignKey(_ notification: Notification) {
+        if Workspace.shared.keyFileNote === note { Workspace.shared.keyFileNote = nil }
+    }
+
     func windowWillClose(_ notification: Notification) {
+        if Workspace.shared.keyFileNote === note { Workspace.shared.keyFileNote = nil }
+        VersionsWindow.close(over: window)
         editor.endDrawing()
         note.update(text: editor.text)
         note.close()

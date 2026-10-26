@@ -70,7 +70,7 @@ public struct NotebookScene: Scene {
                 if let url = workspace.currentURL {
                     MoveToMenu(workspace: workspace, url: url)
                 }
-                if workspace.note != nil {
+                if workspace.revertNote != nil {
                     Menu {
                         Button("Last Opened") { workspace.revertToLastOpened() }
                             .disabled(!workspace.canRevertToLastOpened)

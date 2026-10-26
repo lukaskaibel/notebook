@@ -13,8 +13,9 @@ import SwiftUI
 final class VersionReader: EditorControllerDelegate {
     let editor = EditorController()
     weak var source: EditorController?
-    /// What is shown, so the same isn't laid out again.
+    /// What is shown, so the same isn't laid out again, and the changes it shows, to find places in it.
     private var shown: (text: String, marks: [VersionChanges.Mark], meta: String)?
+    private var shownChanges: VersionChanges?
 
     init(source: EditorController) {
         self.source = source
@@ -23,11 +24,23 @@ final class VersionReader: EditorControllerDelegate {
         editor.layoutManager.hidesEditingControls = true
     }
 
-    func show(_ text: String, marks: [VersionChanges.Mark], title: String, meta: String, folder: URL) {
+    /// Shows a version as it was, or with `changes`. Show Changes turned on or off keeps the place you were at.
+    func show(_ version: String, changes: VersionChanges?, title: String, meta: String, folder: URL) {
+        let text = changes?.text ?? version
+        let marks = changes?.marks ?? []
         if let shown, shown.text == text, shown.marks == marks, shown.meta == meta { return }
-        if shown?.text != text || shown?.meta != meta { editor.load(text: text, folder: folder, title: title, meta: meta) }
+        if let shown, shown.meta == meta, shown.text != text {
+            let before = shownChanges
+            editor.load(text: text, folder: folder, title: title, meta: meta) { index in
+                let inVersion = before?.offset(inVersion: index) ?? index
+                return changes?.offset(inChanges: inVersion) ?? inVersion
+            }
+        } else if shown?.text != text || shown?.meta != meta {
+            editor.load(text: text, folder: folder, title: title, meta: meta)
+        }
         editor.showChanges(marks)
         shown = (text, marks, meta)
+        shownChanges = changes
     }
 
     func editorTextDidChange(_ editor: EditorController) {}
@@ -88,8 +101,7 @@ struct VersionPreview: View {
 
     private func update() {
         guard let text = browser.text, let version = browser.selected else { return }
-        let changes = browser.changes
-        reader.show(changes?.text ?? text, marks: changes?.marks ?? [], title: browser.title, meta: VersionBrowser.longTitle(version),
+        reader.show(text, changes: browser.changes, title: browser.title, meta: VersionBrowser.longTitle(version),
                     folder: browser.note.deletingLastPathComponent())
     }
 }
@@ -204,17 +216,24 @@ struct VersionsSheet: View {
 enum VersionsWindow {
     private static var open: [ObjectIdentifier: (sheet: NSWindow, reader: VersionReader)] = [:]
 
+    /// The sheet, held weakly by what its Done and Restore close: held by the view, it would hold the sheet, its
+    /// editor, the browser and the note for good.
+    private final class Sheet {
+        weak var window: NSWindow?
+    }
+
     static func show(_ browser: VersionBrowser, editor: EditorController, over window: NSWindow) {
         guard window.attachedSheet == nil else { return NSSound.beep() }
         let reader = VersionReader(source: editor)
-        var sheet: NSWindow?
-        let view = VersionsSheet(browser: browser, reader: reader) {
-            guard let sheet else { return }
-            window.endSheet(sheet)
+        let sheet = Sheet()
+        let view = VersionsSheet(browser: browser, reader: reader) { [weak window] in
+            guard let made = sheet.window else { return }
+            window?.endSheet(made)
         }
         let controller = NSHostingController(rootView: view)
         let made = NSWindow(contentViewController: controller)
-        sheet = made
+        made.isReleasedWhenClosed = false
+        sheet.window = made
         let size = NSSize(width: min(940, window.frame.width - 60), height: min(660, window.frame.height - 80))
         made.setContentSize(NSSize(width: max(size.width, 760), height: max(size.height, 480)))
         let key = ObjectIdentifier(made)

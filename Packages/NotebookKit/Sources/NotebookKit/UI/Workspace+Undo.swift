@@ -168,6 +168,8 @@ extension Workspace {
     /// too), else to the changes to files.
     func undo() {
         if UIApplication.shared.sendAction(Selector(("undo:")), to: nil, from: nil, for: nil) { return }
+        // A field with nothing to undo, such as the note's title or a search, takes nothing else back.
+        if UIResponder.focused is UITextInput { return }
         // With the keyboard away, the open note's own Undo, which weighs its changes against those to files, newest
         // first: a version restored from Version History is taken back too.
         if note != nil, let manager = editor.textView.undoManager, manager.canUndo { return manager.undo() }
@@ -176,6 +178,7 @@ extension Workspace {
 
     func redo() {
         if UIApplication.shared.sendAction(Selector(("redo:")), to: nil, from: nil, for: nil) { return }
+        if UIResponder.focused is UITextInput { return }
         if note != nil, let manager = editor.textView.undoManager, manager.canRedo { return manager.redo() }
         if fileUndoManager.canRedo { fileUndoManager.redo() }
     }
@@ -301,3 +304,20 @@ extension Workspace {
         }
     }
 }
+
+#if os(iOS)
+extension UIResponder {
+    private static weak var found: UIResponder?
+
+    /// What has the focus, which UIKit doesn't say: an action sent to the first responder finds out.
+    static var focused: UIResponder? {
+        found = nil
+        UIApplication.shared.sendAction(#selector(noteFocused), to: nil, from: nil, for: nil)
+        return found
+    }
+
+    @objc private func noteFocused() {
+        UIResponder.found = self
+    }
+}
+#endif

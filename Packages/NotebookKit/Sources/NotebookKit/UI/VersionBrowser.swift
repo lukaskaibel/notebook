@@ -32,9 +32,10 @@ final class VersionBrowser: Identifiable {
     var showsChanges = false {
         didSet { if showsChanges != oldValue { updateChanges() } }
     }
-    /// The picked version with what changed since then, while Show Changes is on.
+    /// The picked version with what changed since then, while Show Changes is on, once worked out.
     private(set) var changes: VersionChanges?
     @ObservationIgnored private var reading = 0
+    @ObservationIgnored private var comparing = 0
 
     init(note: URL, history: NoteHistory = .shared, current: @escaping () -> String, restore: @escaping (String) -> Void) {
         self.note = note
@@ -69,8 +70,25 @@ final class VersionBrowser: Identifiable {
         }
     }
 
+    /// Works out what changed off the main thread: a long note with many changes takes a moment, and the version shows
+    /// as it was until then.
     private func updateChanges() {
-        changes = showsChanges ? text.map { VersionChanges.between($0, current()) } : nil
+        comparing += 1
+        let attempt = comparing
+        guard showsChanges, let text else {
+            changes = nil
+            return
+        }
+        let now = current()
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let found = VersionChanges.between(text, now)
+            await self?.take(found, attempt)
+        }
+    }
+
+    private func take(_ found: VersionChanges, _ attempt: Int) {
+        guard attempt == comparing else { return }
+        changes = found
     }
 
     func restore() {

@@ -15,25 +15,52 @@ extension Workspace {
         #if os(macOS)
         let window: NSWindow?
         #endif
+        /// Whether the note is still the one its editor shows: another may have been opened since (from Spotlight, a
+        /// reminder, a new note), and a version is never put into that one.
+        let isCurrent: @MainActor () -> Bool
     }
 
     func versionTarget() -> VersionTarget? {
         #if os(macOS)
         if let key = NSApp.keyWindow, let controller = key.windowController as? FileWindowController {
-            return controller.isLoaded ? VersionTarget(note: controller.noteDocument, editor: controller.editor, window: key) : nil
+            guard controller.isLoaded else { return nil }
+            return VersionTarget(note: controller.noteDocument, editor: controller.editor, window: key) { [weak controller] in
+                controller?.window?.isVisible == true
+            }
         }
         guard let note, note.isLoaded else { return nil }
-        return VersionTarget(note: note, editor: editor, window: editor.textView.window)
+        return VersionTarget(note: note, editor: editor, window: editor.textView.window) { [weak self, weak note] in
+            note != nil && self?.note === note
+        }
         #else
         guard let note, note.isLoaded else { return nil }
-        return VersionTarget(note: note, editor: editor)
+        return VersionTarget(note: note, editor: editor) { [weak self, weak note] in note != nil && self?.note === note }
+        #endif
+    }
+
+    /// The note Revert To acts on: on the Mac the one in the window you are working in, a note's own or the main
+    /// window's.
+    var revertNote: NoteDocument? {
+        #if os(macOS)
+        keyFileNote ?? note
+        #else
+        note
         #endif
     }
 
     /// Whether Revert To › Last Opened would change the note: something was changed since it was opened.
     var canRevertToLastOpened: Bool {
-        guard let note, note.isLoaded else { return false }
+        guard let note = revertNote, note.isLoaded else { return false }
         return note.isChangedSinceOpening
+    }
+
+    /// The open note changed: the versions shown were another's, and go.
+    func closeVersions() {
+        #if os(macOS)
+        VersionsWindow.close(over: editor.textView.window)
+        #else
+        versionBrowser = nil
+        #endif
     }
 
     /// The note as it was when it was opened, as one change Undo takes back.
@@ -59,7 +86,9 @@ extension Workspace {
     }
 
     /// Puts a version's text in the note as one change Undo takes back. The text there was is kept as a version first.
+    /// Nothing happens when the note isn't the one open any more.
     func restore(_ text: String, in target: VersionTarget, actionName: String) {
+        guard target.isCurrent(), target.note.isLoaded else { return beep() }
         target.note.update(text: target.editor.text)
         target.note.keepCopyBeforeRestoring()
         target.editor.restore(text: text, actionName: actionName)

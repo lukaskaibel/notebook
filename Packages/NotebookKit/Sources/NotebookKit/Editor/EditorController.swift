@@ -826,6 +826,18 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         return layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil).minY + textOrigin.y
     }
 
+    /// Puts other text in where you are: the line at the top of what shows, found in the new text by `map`, stays where
+    /// it was, rather than the text starting again at its top. Show Changes, turned on and off.
+    func load(text: String, folder: URL?, title: String, meta: String, keepingPlace map: (Int) -> Int) {
+        guard isInWindow, storage.length > 0 else { return load(text: text, folder: folder, title: title, meta: meta) }
+        let index = firstVisibleCharacter()
+        let offset = yPosition(of: index) - visibleRect.minY
+        load(text: text, folder: folder, title: title, meta: meta)
+        let mapped = min(max(0, map(index)), storage.length)
+        layoutManager.ensureLayout(forCharacterRange: NSRange(location: 0, length: min(storage.length, mapped + 1)))
+        setScrollTop(max(-topInset, yPosition(of: mapped) - offset))
+    }
+
     private func firstVisibleCharacter() -> Int {
         let visible = visibleRect
         let point = NSPoint(x: visible.minX + 1, y: max(0, visible.minY + topInset - textOrigin.y + 1))

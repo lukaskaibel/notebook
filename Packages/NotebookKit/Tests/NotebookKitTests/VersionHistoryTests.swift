@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import NotebookKit
 
@@ -198,6 +199,7 @@ final class VersionHistoryTests: XCTestCase {
         browser.selection = browser.versions?.last?.url
         try await until("the oldest read") { browser.text == "# Draft\n\nOlder words.\n" }
         browser.showsChanges = true
+        try await until("the changes worked out") { browser.changes != nil }
         let changes = try XCTUnwrap(browser.changes)
         // The version ended with a line break, which the note now doesn't.
         XCTAssertEqual(changes.text, "# Draft\n\nOlder words.\n\nFirst words.\nTyped.")
@@ -211,12 +213,92 @@ final class VersionHistoryTests: XCTestCase {
         let (workspace, _) = try await makeWindow()
         let reader = VersionReader(source: workspace.editor)
         let changes = VersionChanges.between("# Plan\n\nDay one\n", "# Plan\n\nDay one\nDay two\n")
-        reader.show(changes.text, marks: changes.marks, title: "Plan", meta: "Today", folder: papers)
+        reader.show("# Plan\n\nDay one\n", changes: changes, title: "Plan", meta: "Today", folder: papers)
         XCTAssertEqual(reader.editor.text, "# Plan\n\nDay one\nDay two\n")
         XCTAssertEqual(reader.editor.layoutManager.changeMarks, changes.marks)
         XCTAssertFalse(reader.editor.textView.isEditable)
         XCTAssertTrue(reader.editor.textView.isSelectable, "its text can be copied")
         XCTAssertFalse(reader.editor.restore(text: "Other", actionName: "Restore"), "nothing changes it")
+    }
+
+    func testShowChangesKeepsThePlaceYouWereAt() async throws {
+        let (workspace, _) = try await makeWindow()
+        let reader = VersionReader(source: workspace.editor)
+        reader.editor.view.frame = NSRect(x: 0, y: 0, width: 640, height: 600)
+        window?.contentView?.addSubview(reader.editor.view)
+        let version = (1...300).map { "Paragraph \($0) of the note as it was." }.joined(separator: "\n\n")
+        let now = "A new first line.\n\n" + version
+        reader.show(version, changes: nil, title: "Long", meta: "Today", folder: papers)
+        let editor = reader.editor
+        editor.layoutManager.ensureLayout(for: editor.container)
+        let y = editor.yPosition(of: (version as NSString).range(of: "Paragraph 150 ").location)
+        editor.setScrollTop(y)
+        let changes = VersionChanges.between(version, now)
+        reader.show(version, changes: changes, title: "Long", meta: "Today", folder: papers)
+        let top = editor.yPosition(of: (changes.text as NSString).range(of: "Paragraph 150 ").location)
+        XCTAssertEqual(editor.visibleRect.minY, top, accuracy: 2, "Paragraph 150 stays at the top")
+        reader.show(version, changes: nil, title: "Long", meta: "Today", folder: papers)
+        XCTAssertEqual(editor.visibleRect.minY, y, accuracy: 2, "and stays when Show Changes goes off")
+    }
+
+    func testAVersionIsNeverRestoredIntoAnotherNote() async throws {
+        let (workspace, _) = try await makeWindow()
+        let other = papers.appendingPathComponent("Other.md")
+        try "# Other\n\nIts own words.\n".write(to: other, atomically: true, encoding: .utf8)
+        workspace.open(draft)
+        try await until("open") { workspace.note?.isLoaded == true }
+        let target = try XCTUnwrap(workspace.versionTarget())
+        // Another note opens while the versions are up: from Spotlight, a reminder, a new note.
+        workspace.open(other)
+        try await until("the other open") { workspace.note?.isLoaded == true && workspace.note?.url.lastPathComponent == "Other.md" }
+        workspace.restore("# Draft\n\nAn earlier version.\n", in: target, actionName: "Restore Version")
+        XCTAssertEqual(workspace.editor.text, "# Other\n\nIts own words.\n")
+        try await Task.sleep(for: .milliseconds(900))
+        XCTAssertEqual(text(draft), "# Draft\n\nFirst words.\n")
+        XCTAssertEqual(text(other), "# Other\n\nIts own words.\n")
+    }
+
+    func testTheVersionsGoWhenAnotherNoteOpensAndAreLetGo() async throws {
+        let (workspace, _) = try await makeWindow()
+        let other = papers.appendingPathComponent("Other.md")
+        try "Other".write(to: other, atomically: true, encoding: .utf8)
+        workspace.open(draft)
+        try await until("open") { workspace.note?.isLoaded == true }
+        let window = try XCTUnwrap(self.window)
+        weak var browser: VersionBrowser?
+        do {
+            let made = VersionBrowser(note: draft, current: { "" }) { _ in }
+            browser = made
+            VersionsWindow.show(made, editor: workspace.editor, over: window)
+        }
+        try await until("the sheet is up") { window.attachedSheet != nil }
+        workspace.open(other)
+        try await until("the sheet went") { window.attachedSheet == nil }
+        try await until("let go") { browser == nil }
+
+        // Done, as its button does.
+        do {
+            let made = VersionBrowser(note: other, current: { "" }) { _ in }
+            browser = made
+            VersionsWindow.show(made, editor: workspace.editor, over: window)
+        }
+        try await until("the sheet is up again") { window.attachedSheet != nil }
+        // Not kept here: the sheet's view holds the browser.
+        try XCTUnwrap(window.attachedSheet?.contentViewController as? NSHostingController<VersionsSheet>).rootView.dismiss()
+        try await until("Done put it away") { window.attachedSheet == nil }
+        try await until("and let it go") { browser == nil }
+    }
+
+    func testRevertToFollowsTheNoteWindowYouAreIn() async throws {
+        let (workspace, manager) = try await makeWindow()
+        _ = try await openAndType(workspace, manager, "Typed.")
+        XCTAssertTrue(workspace.canRevertToLastOpened)
+        let elsewhere = NoteDocument(url: papers.appendingPathComponent("Draft.md"), history: nil)
+        workspace.keyFileNote = elsewhere
+        XCTAssertTrue(workspace.revertNote === elsewhere)
+        XCTAssertFalse(workspace.canRevertToLastOpened, "that window's note wasn't changed")
+        workspace.keyFileNote = nil
+        elsewhere.close()
     }
 
     func testADuplicateStartsWithoutVersions() async throws {

@@ -17,7 +17,10 @@ public final class Workspace: NSObject {
     public private(set) var currentURL: URL?
     /// The To-dos list is shown on the right, in place of a file.
     public private(set) var showsTodos = false
-    public private(set) var note: NoteDocument?
+    public private(set) var note: NoteDocument? {
+        // Versions of the note left aren't restored into the next.
+        didSet { if note !== oldValue { closeVersions() } }
+    }
     @ObservationIgnored public let editor = EditorController()
     let index = SearchIndex()
 
@@ -122,6 +125,8 @@ public final class Workspace: NSObject {
     @ObservationIgnored var showWindow: (() -> Void)?
 
     #if os(macOS)
+    /// The note in its own window that you are working in, for Revert To; nil while it's the main window.
+    var keyFileNote: NoteDocument?
     @ObservationIgnored weak var sidebar: SidebarController?
     /// Remind Me… while it is open, so another one takes its place.
     @ObservationIgnored weak var reminderPopover: NSPopover?

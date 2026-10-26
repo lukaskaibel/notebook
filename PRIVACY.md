@@ -17,7 +17,8 @@ advertising, and it collects nothing about you.
   reminder of a note is the place of the note in your folders, its time and the place it reminds you at (a name and its
   coordinates); it is never written into the note, so it doesn't go along when you share the note.
 - **Earlier versions of your notes**, for version history, are plain copies of a note's text, taken as you write and
-  kept for a year. In the App Store build, the versions of notes in iCloud are kept in Notebook's own iCloud folder,
+  kept for a year. Each copy's name says when it was taken and on what kind of device, with a few letters picked at
+  random that tell your devices apart. In the App Store build, the versions of notes in iCloud are kept in Notebook's own iCloud folder,
   which Apple syncs to your other devices signed in to the same Apple Account, as it syncs iCloud Drive; the folder
   doesn't show in iCloud Drive. The versions of notes anywhere else, and of every note in builds without iCloud, stay
   in the app's own folder on that device. Settings › your name › iCloud › Storage on iPhone and iPad, or System
