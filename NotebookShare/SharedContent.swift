@@ -80,6 +80,11 @@ final class SharedContent {
         try await Task.detached(priority: .userInitiated) { try SharedNotes.add(note, moving: named) }.value
     }
 
+    /// Whether the copies of the files are all still there: a failed Save puts them back, unless that failed too.
+    var filesAreThere: Bool {
+        files.allSatisfy { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
     func cleanUp() {
         try? FileManager.default.removeItem(at: folder)
     }

@@ -14,9 +14,9 @@ enum FileOperations {
     #endif
 
     /// A slow iCloud, for trying out that nothing waits for a change to files: in Debug builds, with
-    /// `-NotebookSlowWrites <seconds>`, each one waits that long first. One on the main thread isn't slowed down but
-    /// logged, to find any that shouldn't be there.
-    private static func debugWait(_ what: String, _ url: URL) {
+    /// `-NotebookSlowWrites <seconds>`, each one, and each save of a note, waits that long first. One on the main thread
+    /// isn't slowed down but logged, to find any that shouldn't be there.
+    static func debugWait(_ what: String, _ url: URL) {
         #if DEBUG
         if Thread.isMainThread {
             mainThreadWrites.withLock { $0 += 1 }
@@ -63,15 +63,17 @@ enum FileOperations {
     }
 
     /// Copies a file into a folder's `.assets`, under a name not taken there, in a coordinated write. Where it went,
-    /// or nil when it couldn't be copied.
+    /// or nil when it couldn't be copied; then a `.assets` made for it goes again.
     static func storeAsset(copying url: URL, in folder: URL) -> URL? {
         let assets = folder.appendingPathComponent(".assets", isDirectory: true)
+        let madeAssets = !FileManager.default.fileExists(atPath: assets.path)
         try? FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
         let destination = uniqueAssetURL(named: url.lastPathComponent, in: assets)
         var copied = false
         NSFileCoordinator().coordinate(readingItemAt: url, options: [], writingItemAt: destination, options: .forReplacing, error: nil) { from, to in
             copied = (try? FileManager.default.copyItem(at: from, to: to)) != nil
         }
+        if !copied, madeAssets { removeEmptyFolder(assets) }
         return copied ? destination : nil
     }
 
@@ -83,10 +85,14 @@ enum FileOperations {
                 try? FileManager.default.removeItem(at: url)
             }
         }
-        for assets in Set(urls.map { $0.deletingLastPathComponent() }) {
-            if (try? FileManager.default.contentsOfDirectory(atPath: assets.path))?.isEmpty == true {
-                try? FileManager.default.removeItem(at: assets)
-            }
+        for assets in Set(urls.map { $0.deletingLastPathComponent() }) { removeEmptyFolder(assets) }
+    }
+
+    /// Deletes a folder Notebook just made, in a coordinated delete, only if it is still empty: whether it is and
+    /// deleting it are one step (`rmdir`), so a file another app or device puts in meanwhile keeps it, and itself.
+    static func removeEmptyFolder(_ folder: URL) {
+        NSFileCoordinator().coordinate(writingItemAt: folder, options: .forDeleting, error: nil) { folder in
+            _ = rmdir(folder.path)
         }
     }
 
@@ -109,6 +115,30 @@ enum FileOperations {
             written = (try? Data(text.utf8).write(to: url, options: .atomic)) != nil
         }
         return written ? (url, madeFolder) : nil
+    }
+
+    /// A new note under a name no other file has, even with another made in the folder at the same moment: the name is
+    /// taken by creating the file, and when that finds one there, the next ("Groceries (Anna’s iPhone) 2"). Nil when it
+    /// couldn't be written, as when the folder is gone.
+    static func createNoteWithoutOverwriting(in folder: URL, title: String, text: String) -> URL? {
+        debugWait("made a note in", folder)
+        let name = fileName(from: title).isEmpty ? "Untitled" : fileName(from: title)
+        for _ in 0..<1000 {
+            let url = uniqueURL(in: folder, name: name, extension: "md")
+            var taken = false
+            var written = false
+            NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: nil) { url in
+                do {
+                    try Data(text.utf8).write(to: url, options: .withoutOverwriting)
+                    written = true
+                } catch CocoaError.fileWriteFileExists {
+                    taken = true
+                } catch {}
+            }
+            if written { return url }
+            if !taken { return nil }
+        }
+        return nil
     }
 
     @discardableResult
@@ -335,7 +365,7 @@ enum FileOperations {
     }
 
     /// A name for a picture or file in an `.assets` folder that neither it nor, for a drawing, its strokes have there.
-    private static func freeAssetName(for name: String, in folder: URL) -> String {
+    static func freeAssetName(for name: String, in folder: URL) -> String {
         let base = (name as NSString).deletingPathExtension
         let ext = (name as NSString).pathExtension
         var counter = 2
@@ -353,13 +383,20 @@ enum FileOperations {
     }
 
     /// Pictures and files in a folder's `.assets` that no note in the folder uses any more, among `candidates`,
-    /// go to the Trash.
+    /// go to the Trash. Only notes on this device are read: with one there still in iCloud, which would have to come
+    /// down for it, they all stay.
     static func cleanUpAssets(in folder: URL, candidates: Set<String>) {
         guard !candidates.isEmpty else { return }
-        let notes = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
+        let keys: [URLResourceKey] = [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey]
+        let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: keys)) ?? []
         var used = Set<String>()
-        for note in notes where note.pathExtension.lowercased() == "md" {
-            guard let text = NoteDocument.read(note) else { continue }
+        for file in files {
+            // A note not on this device, as iCloud used to show it: ".Groceries.md.icloud".
+            if file.lastPathComponent.hasPrefix("."), file.lastPathComponent.lowercased().hasSuffix(".md.icloud") { return }
+            guard file.pathExtension.lowercased() == "md" else { continue }
+            if let values = try? file.resourceValues(forKeys: Set(keys)), values.isUbiquitousItem == true,
+               values.ubiquitousItemDownloadingStatus != .current { return }
+            guard let text = NoteDocument.read(file) else { continue }
             used.formUnion(assetNames(in: text))
         }
         for name in withDrawingStrokes(candidates).subtracting(withDrawingStrokes(used)) {

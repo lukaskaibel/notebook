@@ -33,6 +33,9 @@ final class FileChange {
     weak var manager: UndoManager?
     /// When it was done or undone last, counted with the changes to the note's text (`UndoOrder`).
     var order = 0
+    /// Files changed with it, which Undo and Redo take back and bring again with it: all an import added besides the
+    /// first.
+    var parts: [FileChange] = []
 
     init(_ kind: Kind, _ name: String, from url: URL? = nil) {
         self.kind = kind
@@ -199,21 +202,28 @@ extension Workspace {
     /// file made or thrown away, else by renaming or moving it.
     private func takeBack(_ change: FileChange, undoing: Bool) {
         changeFiles { [self] follow in
-            guard let source = (undoing ? change.after : change.before).map(follow) else { return }
-            let target = (undoing ? change.before : change.after).map(follow)
-            var result: URL?
-            if change.kind == (undoing ? .make : .trash) {
-                change.remembered = remembered(source)
-                result = await throwAwayNow(source)
-            } else if let target, change.kind == (undoing ? .trash : .make) {
-                result = await putBackNow(source, to: target, remembered: change.remembered)
-            } else if let target {
-                result = await relocateNow(source, to: target, change: change, undoing: undoing)
-            }
+            for part in change.parts { _ = await takeBackNow(part, undoing: undoing, follow: follow) }
             // Couldn't: what Undo or Redo would do with it next can't be done either.
-            guard let result else { return dropFromUndo(change) }
-            if undoing { change.before = result } else { change.after = result }
+            if await !takeBackNow(change, undoing: undoing, follow: follow) { dropFromUndo(change) }
         }
+    }
+
+    /// Takes one file back, or brings it again: whether that could be done.
+    private func takeBackNow(_ change: FileChange, undoing: Bool, follow: (URL) -> URL) async -> Bool {
+        guard let source = (undoing ? change.after : change.before).map(follow) else { return true }
+        let target = (undoing ? change.before : change.after).map(follow)
+        var result: URL?
+        if change.kind == (undoing ? .make : .trash) {
+            change.remembered = remembered(source)
+            result = await throwAwayNow(source)
+        } else if let target, change.kind == (undoing ? .trash : .make) {
+            result = await putBackNow(source, to: target, remembered: change.remembered)
+        } else if let target {
+            result = await relocateNow(source, to: target, change: change, undoing: undoing)
+        }
+        guard let result else { return false }
+        if undoing { change.before = result } else { change.after = result }
+        return true
     }
 
     /// To the Trash, or on iPhone and iPad, where a place has no Recently Deleted, deleted for good (as it was when

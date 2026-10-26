@@ -7,7 +7,7 @@ import NotebookCapture
 extension Workspace {
     /// Writes the notes waiting, oldest first, once the locations have been looked up: their bookmarks are what lets
     /// Notebook write in them. A note is forgotten only once it is written; one that can't be, without a location
-    /// say, waits for the next time.
+    /// say, waits for the next time. One that can't be written though there are places for it is told about, once.
     func takeSharedNotes() async {
         start()
         await surveyed()
@@ -16,8 +16,14 @@ extension Workspace {
             SharedNotes.removeLeftovers()
             return SharedNotes.waiting()
         }.value
-        for shared in waiting where await write(shared.note, files: shared.files) {
-            await Task.detached(priority: .utility) { SharedNotes.remove(shared.note) }.value
+        for shared in waiting {
+            if await write(shared.note, files: shared.files) {
+                await Task.detached(priority: .utility) { SharedNotes.remove(shared.note) }.value
+            } else if await Task.detached(priority: .utility, operation: { SharedNotes.failedFirstTime(shared.note) }).value {
+                let name = shared.note.title.map { "“\($0)”, shared to Notebook," } ?? "What was shared to Notebook"
+                report("Couldn’t Add What Was Shared",
+                       "\(name) couldn’t be added to your notes. Notebook keeps it and tries again each time it opens.")
+            }
         }
     }
 
@@ -62,7 +68,7 @@ extension Workspace {
                 if madeFolder { try? manager.createDirectory(at: folder, withIntermediateDirectories: true) }
                 func undo(_ stored: [URL]) -> (url: URL, folder: URL, listing: FileNode.Listing?, madeFolder: Bool)? {
                     FileOperations.removeStoredAssets(stored)
-                    if madeFolder, (try? manager.contentsOfDirectory(atPath: folder.path))?.isEmpty == true { try? manager.removeItem(at: folder) }
+                    if madeFolder { FileOperations.removeEmptyFolder(folder) }
                     return nil
                 }
                 guard let stored = Self.storeShared(note.files, from: files, in: folder) else { return undo([]) }

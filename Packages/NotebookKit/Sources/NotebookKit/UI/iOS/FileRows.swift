@@ -16,6 +16,9 @@ struct FileRow: View {
     var icon: FolderIcon?
     /// Shows the date and the start of a note, or the date and size of a file, under the name.
     var showsDetail = false
+    /// The date to show: when the file was last edited, or when it was made while the newest made come first, as in
+    /// Notes. Without one, when search last read it edited.
+    var date: Date?
     /// A hidden folder, there while its location shows hidden folders.
     var isHidden = false
 
@@ -79,7 +82,7 @@ struct FileRow: View {
     private var detail: String? {
         guard kind != .folder else { return nil }
         let entry = workspace.index.entry(for: url)
-        let date = entry?.modified.map(Self.shortDate)
+        let date = (self.date ?? entry?.modified).map(Self.shortDate)
         if kind == .note {
             let start = entry?.text.map(Self.firstLine) ?? ""
             return [date, start.isEmpty ? "No additional text" : start].compactMap { $0 }.joined(separator: "  ")
@@ -116,8 +119,11 @@ extension FileNode {
     /// A row for this file in a list.
     @MainActor
     func row(in workspace: Workspace, showsDetail: Bool = false) -> FileRow {
-        FileRow(workspace: workspace, url: url, name: isLinked ? name : workspace.newName(for: url) ?? (kind == .folder ? workspace.folderName(url) : name), kind: kind,
-                isInCloud: isInCloud, icon: icon, showsDetail: showsDetail, isHidden: isFolder && workspace.isHidden(url))
+        // The dates came with the folder's files, so they show at once, and say what the list is sorted by.
+        let byCreation = showsDetail && NotebookSettings.shared.fileOrders.order(of: url.deletingLastPathComponent()) == .dateCreated
+        return FileRow(workspace: workspace, url: url, name: isLinked ? name : workspace.newName(for: url) ?? (kind == .folder ? workspace.folderName(url) : name),
+                       kind: kind, isInCloud: isInCloud, icon: icon, showsDetail: showsDetail, date: byCreation ? created : modified,
+                       isHidden: isFolder && workspace.isHidden(url))
     }
 }
 

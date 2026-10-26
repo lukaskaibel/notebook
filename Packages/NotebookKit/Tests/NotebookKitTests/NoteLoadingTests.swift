@@ -73,6 +73,7 @@ final class NoteLoadingTests: XCTestCase {
         // From then on it is a note like any other.
         note.update(text: "one\ntwo\nthree\n")
         note.saveNow()
+        waitUntil { (try? self.onDisk(url)) == "one\ntwo\nthree\n" }
         XCTAssertEqual(try onDisk(url), "one\ntwo\nthree\n")
         note.close()
     }
@@ -148,6 +149,7 @@ final class NoteLoadingTests: XCTestCase {
 
         editor.insert("Typed. ")
         workspace.saveAll()
+        waitUntil { (try? self.onDisk(url)) == "Typed. # Kyoto\nFlights booked\n" }
         XCTAssertEqual(try onDisk(url), "Typed. # Kyoto\nFlights booked\n")
     }
 

@@ -179,7 +179,7 @@ final class SharedNotesTests: XCTestCase {
                 holding.wait()
             }
         }
-        held.wait()
+        await withCheckedContinuation { continuation in DispatchQueue.global().async { held.wait(); continuation.resume() } }
         let taking = Task { await workspace.takeSharedNotes() }
         try await Task.sleep(for: .milliseconds(300))
         workspace.open(errands)
@@ -202,6 +202,43 @@ final class SharedNotesTests: XCTestCase {
         XCTAssertEqual(try read(draft), "# Draft\n\nSome text.\n")
         XCTAssertFalse(FileManager.default.fileExists(atPath: papers.appendingPathComponent(".assets").path), "a copy stayed behind")
         XCTAssertEqual(SharedNotes.waiting().map(\.note.id), [note.id])
+    }
+
+    /// When the first file is the one missing, the Inbox made for the note and its `.assets` go again, and the note
+    /// waits. It is told about once, not every time it is tried again.
+    func testANoteThatCantBeWrittenLeavesNothingAndIsToldAboutOnce() async throws {
+        let note = try share(text: "A thought.", files: ["Torii.jpg", "Tickets.pdf"])
+        try FileManager.default.removeItem(at: outbox.appendingPathComponent(note.id.uuidString).appendingPathComponent("Torii.jpg"))
+        await makeWorkspace().takeSharedNotes()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: inbox.path), "the Inbox made for it stayed")
+        XCTAssertEqual(SharedNotes.waiting().map(\.note.id), [note.id])
+        try await until("the alert") { window?.attachedSheet != nil }
+        if let sheet = window?.attachedSheet { window?.endSheet(sheet) }
+        await makeWorkspace().takeSharedNotes()
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertNil(window?.attachedSheet, "told about twice")
+        XCTAssertEqual(SharedNotes.waiting().map(\.note.id), [note.id])
+    }
+
+    /// A folder Notebook made is taken back only while it is empty: a file put in meanwhile keeps it.
+    func testAFolderIsTakenBackOnlyWhileEmpty() throws {
+        let empty = library.appendingPathComponent("Empty"), used = library.appendingPathComponent("Used")
+        for folder in [empty, used] { try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) }
+        try Data([1]).write(to: used.appendingPathComponent("Arrived.jpg"))
+        FileOperations.removeEmptyFolder(empty)
+        FileOperations.removeEmptyFolder(used)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: empty.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: used.appendingPathComponent("Arrived.jpg").path))
+    }
+
+    /// When the extension can't leave a note, the files it moved go back, for Save to be tried again.
+    func testAFailedSaveGivesTheFilesBack() throws {
+        let copy = given.appendingPathComponent("Copy.jpg")
+        try FileManager.default.copyItem(at: given.appendingPathComponent("Torii.jpg"), to: copy)
+        let note = SharedNote(destination: .newNote, title: nil, text: "", files: ["Torii.jpg", "Gone.pdf"])
+        XCTAssertThrowsError(try SharedNotes.add(note, moving: [(copy, "Torii.jpg"), (given.appendingPathComponent("Gone.pdf"), "Gone.pdf")]))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: copy.path), "the picture wasn't given back")
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: outbox.path), [])
     }
 
     /// The extension's copies are moved, not copied a second time.

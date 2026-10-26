@@ -9,7 +9,11 @@ final class ShareViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        let sheet = UIHostingController(rootView: ShareView(content: content) { [weak self] kept in self?.finish(kept) })
+        let sheet = UIHostingController(rootView: ShareView(content: content) { [weak self] isSaving in
+            self?.isModalInPresentation = isSaving
+        } done: { [weak self] kept in
+            self?.finish(kept)
+        })
         addChild(sheet)
         sheet.view.frame = view.bounds
         sheet.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -19,7 +23,11 @@ final class ShareViewController: UIViewController {
         Task { await content.load(items) }
     }
 
+    private var finished = false
+
     private func finish(_ kept: Bool) {
+        guard !finished else { return }
+        finished = true
         content.cleanUp()
         if kept {
             extensionContext?.completeRequest(returningItems: nil)
@@ -36,14 +44,18 @@ final class ShareViewController: NSViewController {
     private let content = SharedContent()
 
     override func loadView() {
-        let sheet = NSHostingView(rootView: ShareView(content: content) { [weak self] kept in self?.finish(kept) })
+        let sheet = NSHostingView(rootView: ShareView(content: content) { _ in } done: { [weak self] kept in self?.finish(kept) })
         view = sheet
         preferredContentSize = sheet.fittingSize
         let items = extensionContext?.inputItems.compactMap { $0 as? NSExtensionItem } ?? []
         Task { await content.load(items) }
     }
 
+    private var finished = false
+
     private func finish(_ kept: Bool) {
+        guard !finished else { return }
+        finished = true
         content.cleanUp()
         if kept {
             extensionContext?.completeRequest(returningItems: nil)

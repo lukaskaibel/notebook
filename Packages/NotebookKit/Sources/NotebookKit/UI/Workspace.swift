@@ -148,6 +148,8 @@ public final class Workspace: NSObject {
     /// Counts the times ⌘K asked for Settings and for Add Location, which the screens show.
     var settingsRequest = 0
     var locationRequest = 0
+    /// The folder Import from Apple Notes puts the notes in, while the Files app's picker asks for them.
+    var appleNotesImportFolder: URL?
     #endif
     /// A file to delete for good, once you said so, where there is no Recently Deleted to put it in.
     var deleting: URL?
@@ -182,6 +184,8 @@ public final class Workspace: NSObject {
     @ObservationIgnored private var refreshScheduled = false
     /// `.assets` files the open note used, so the ones it drops can go to the Trash when you leave it.
     @ObservationIgnored private var assetsInUse = Set<String>()
+    /// Saved as the app quits: asking the app to quit, and then quitting, both say so.
+    @ObservationIgnored private var hasQuit = false
     /// Every folder Move To offers, in order (`prepareMoveFolders`).
     @ObservationIgnored private var moveFolders: MoveFolders?
     @ObservationIgnored private var preparingMoveFolders: MoveFolders.Key?
@@ -274,6 +278,12 @@ public final class Workspace: NSObject {
             let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true).standardizedFileURL
             #if DEBUG
             if UserDefaults.standard.bool(forKey: "NotebookDemo") { DemoLibrary.create(at: url) }
+            // YES: next to the library; a path: there, such as On My iPhone for the UI tests.
+            if let export = UserDefaults.standard.string(forKey: "NotebookDemoExport"), export != "NO" {
+                let path = (export as NSString).expandingTildeInPath
+                DemoLibrary.createAppleNotesExport(at: path.hasPrefix("/") ? URL(fileURLWithPath: path, isDirectory: true)
+                                                   : url.deletingLastPathComponent().appendingPathComponent("From Notes", isDirectory: true))
+            }
             #endif
             locations = [Location(id: Location.id(for: url.path), name: UserDefaults.standard.string(forKey: "NotebookLibraryName") ?? url.lastPathComponent, path: url.path, bookmark: nil)]
             favorites = []
@@ -599,11 +609,16 @@ public final class Workspace: NSObject {
         reader.read(requests, ahead: ahead) { [weak self] results in
             guard let self else { return }
             var changed: [FileNode] = []
+            var firstRead = false
             for result in results {
                 guard let listing = result.listing, let node = node(for: URL(fileURLWithPath: result.path), reading: false), node.isFolder else { continue }
-                if node.apply(listing) { changed.append(node) }
+                let wasRead = node.hasLoadedChildren
+                if node.apply(listing) {
+                    changed.append(node)
+                    firstRead = firstRead || !wasRead
+                }
             }
-            if !changed.isEmpty { sidebarReload(changed) }
+            if !changed.isEmpty { sidebarReload(changed, animated: !firstRead) }
             done?()
         }
     }
@@ -635,12 +650,21 @@ public final class Workspace: NSObject {
         let folders = pendingFolders
         pendingFolders = []
         var changed: [FileNode] = []
+        var seen = Set<ObjectIdentifier>()
+        func add(_ node: FileNode) {
+            if node.isFolder, node.hasLoadedChildren, seen.insert(ObjectIdentifier(node)).inserted { changed.append(node) }
+        }
         var indexFolders: [URL] = []
         for path in folders {
             let url = URL(fileURLWithPath: path)
             if url.lastPathComponent == ".assets" { continue }
             indexFolders.append(url)
-            if let node = existingNode(for: url), node.isFolder, node.hasLoadedChildren { changed.append(node) }
+            guard let node = existingNode(for: url), node.isFolder else { continue }
+            add(node)
+            // A folder's own dates change with what is in it (saving a note puts a new file in its place), so the folder
+            // it is in is read again too, whatever the order: they are right when you choose to sort by date. A folder
+            // iCloud Drive links in (Desktop) is in the location's top.
+            if let parent = node.parent { add(parent) }
         }
         read(changed, again: true)
         index.refresh(folders: indexFolders, locations: locations)
@@ -891,16 +915,23 @@ public final class Workspace: NSObject {
         // Back or ⌘N while typing a new name: the name counts, as it would once the title is left.
         if editor.isEditingTitle { editor.commitTitle() }
         note.update(text: editor.text)
+        // Saved off the main thread; the note is kept until it is written.
         note.close()
         let folder = note.url.deletingLastPathComponent()
         let dropped = assetsInUse.subtracting(FileOperations.assetNames(in: note.text))
-        // It reads every note in the folder, which takes a while in a large one.
-        if !dropped.isEmpty { Task.detached(priority: .utility) { FileOperations.cleanUpAssets(in: folder, candidates: dropped) } }
+        if !dropped.isEmpty {
+            Task {
+                // It reads the notes in the folder, this one as it is written now; in a large folder that takes a while.
+                await note.saved()
+                Task.detached(priority: .utility) { FileOperations.cleanUpAssets(in: folder, candidates: dropped) }
+            }
+        }
         if isLeftEmpty(note) {
             let url = note.url
             // Nothing was made that Undo could take back.
             if let change = newNoteChange, change.after.map({ FileNode.samePath($0, url) }) == true { dropFromUndo(change) }
             changeFiles { [self] follow in
+                await note.saved()
                 let url = follow(url)
                 let thrownAway = await Task.detached(priority: .userInitiated) { () -> Bool in
                     #if os(iOS)
@@ -1048,6 +1079,7 @@ public final class Workspace: NSObject {
     }
 
     private func currentNoteDeleted() {
+        note?.close()
         note = nil
         currentURL = nil
     }
@@ -1115,6 +1147,11 @@ public final class Workspace: NSObject {
         if let selectedFolder { return selectedFolder }
         if let currentURL { return currentURL.deletingLastPathComponent() }
         return defaultFolder
+    }
+
+    /// The folder Sort By is about: the one selected in the sidebar, or else the open file's.
+    var folderInView: URL? {
+        selectedFolder ?? currentURL?.deletingLastPathComponent()
     }
 
     /// Where new notes made outside a folder go: the folder chosen in Settings while it is in a location, or the Inbox.
@@ -1242,10 +1279,10 @@ public final class Workspace: NSObject {
                 return nil
             }
             let inbox = inbox.map(follow)
-            let made = await Task.detached(priority: .userInitiated) { () -> (url: URL, folder: URL, listing: FileNode.Listing?, madeFolder: Bool)? in
+            let made = await Task.detached(priority: .userInitiated) { () -> (url: URL, folder: URL, listing: FileNode.Listing?, folderListing: FileNode.Listing?)? in
                 let folder = inbox.flatMap { FileManager.default.fileExists(atPath: chosen.path) ? nil : $0 } ?? chosen
                 guard let made = FileOperations.createNote(in: folder, title: title ?? "Untitled", text: text) else { return nil }
-                return (made.url, folder, FileNode.listing(of: made.url), made.madeFolder)
+                return (made.url, folder, FileNode.listing(of: made.url), made.madeFolder ? FileNode.listing(of: folder) ?? FileNode.Listing(url: folder, kind: .folder) : nil)
             }.value
             changeDone(change, to: made?.url)
             guard let made else {
@@ -1255,8 +1292,8 @@ public final class Workspace: NSObject {
             // The Inbox, made for the first note in it, shows too.
             let folder = made.folder
             let parent = folder.deletingLastPathComponent()
-            showChanges(in: made.madeFolder ? [parent, folder] : [folder],
-                        adding: (made.listing.map { [$0] } ?? []) + (made.madeFolder ? [FileNode.Listing(url: folder, kind: .folder)] : []))
+            showChanges(in: made.folderListing != nil ? [parent, folder] : [folder],
+                        adding: (made.listing.map { [$0] } ?? []) + (made.folderListing.map { [$0] } ?? []))
             open(made.url, focusTitle: title == nil)
             // After opening it: a new note left empty for this one goes, with its own New Note.
             if title == nil { newNoteChange = change }
@@ -1290,13 +1327,17 @@ public final class Workspace: NSObject {
         let change = keepForUndo(FileChange(.make, "New Folder"))
         changeFiles { [self] follow in
             let parent = follow(parent)
-            let made = await Task.detached(priority: .userInitiated, operation: { FileOperations.createFolder(in: parent, name: name) }).value
-            changeDone(change, to: made)
-            guard let url = made else {
+            let made = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?)? in
+                FileOperations.createFolder(in: parent, name: name).map { ($0, FileNode.listing(of: $0)) }
+            }.value
+            changeDone(change, to: made?.url)
+            guard let made else {
                 return report("The folder couldn’t be made.", "Notebook can’t write in “\(folderName(parent))”.")
             }
-            // In the sidebar at once, however long reading its folder takes in iCloud.
-            showChanges(in: [parent], adding: [FileNode.Listing(url: url, kind: .folder)])
+            let url = made.url
+            // In the sidebar at once, however long reading its folder takes in iCloud, with its dates: where the newest
+            // come first, it shows at the top straight away, where reading its folder again will keep it.
+            showChanges(in: [parent], adding: [made.listing ?? FileNode.Listing(url: url, kind: .folder, modified: .now, created: .now)])
             // Selected, on the Mac with its name ready to type over. Revealing it reads its folder if it hasn't been.
             #if os(macOS)
             selectedFolder = url
@@ -1353,19 +1394,20 @@ public final class Workspace: NSObject {
         let isNote = FileKind(url: url, isDirectory: false) == .note
         let links = updatingLinks && !undoing ? linkSnapshot() : nil
         let document = noteMoving(with: url)
-        document?.beginMove()
+        // What notes there are writing is written where they are still.
+        let documents = await NoteDocument.beginMoving(url)
         let result = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?)? in
             let renamed = fileName ? FileOperations.rename(url, toFileName: name, presenter: document) : FileOperations.rename(url, to: name, presenter: document)
             guard let renamed else { return nil }
             return (renamed, FileNode.listing(of: renamed))
         }.value
         guard let renamed = result?.url else {
-            document?.endMove(to: nil)
+            NoteDocument.endMoving(documents, from: url, to: nil)
             let shown = fileName && isNote ? (name as NSString).deletingPathExtension : name
             report("The name “\(shown)” is already taken.", "Please choose a different name.")
             return nil
         }
-        moved(url, to: renamed, listing: result?.listing, document: document)
+        moved(url, to: renamed, listing: result?.listing, document: document, documents: documents)
         if undoing {
             takeBackLinks(change?.links, from: url, to: renamed)
         } else if let links {
@@ -1401,7 +1443,7 @@ public final class Workspace: NSObject {
         let isNote = FileKind(url: url, isDirectory: false) == .note
         let links = undoing ? nil : linkSnapshot()
         let document = noteMoving(with: url)
-        document?.beginMove()
+        let documents = await NoteDocument.beginMoving(url)
         let name = fileName ?? url.lastPathComponent
         let result = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?, assets: (names: Set<String>, renamed: Bool)?)? in
             // Read before it moves only when that is quick: a note still in iCloud would have to come down first.
@@ -1414,7 +1456,7 @@ public final class Workspace: NSObject {
             return (moved, FileNode.listing(of: moved), assets)
         }.value
         guard let result else {
-            document?.endMove(to: nil)
+            NoteDocument.endMoving(documents, from: url, to: nil)
             beep()
             return nil
         }
@@ -1427,7 +1469,7 @@ public final class Workspace: NSObject {
                 FileOperations.cleanUpAssets(in: source, candidates: assets.names)
             }
         }
-        self.moved(url, to: moved, listing: result.listing, document: document)
+        self.moved(url, to: moved, listing: result.listing, document: document, documents: documents)
         // A picture whose name another had there came under a name of its own: the open note takes in what it says now.
         if result.assets?.renamed == true { document?.presentedItemDidChange() }
         if undoing {
@@ -1453,10 +1495,10 @@ public final class Workspace: NSObject {
         return note
     }
 
-    /// A file Notebook renamed or moved, followed everywhere: by the note that was open in it, by what remembers files
-    /// by their address, and in the sidebar, at once.
-    private func moved(_ old: URL, to new: URL, listing: FileNode.Listing?, document: NoteDocument?) {
-        document?.endMove(to: document.map { Self.relocated($0.url, from: old, to: new) })
+    /// A file Notebook renamed or moved, followed everywhere: by the notes open in it (`documents`, the main window's
+    /// `document` among them), by what remembers files by their address, and in the sidebar, at once.
+    private func moved(_ old: URL, to new: URL, listing: FileNode.Listing?, document: NoteDocument?, documents: [NoteDocument]) {
+        NoteDocument.endMoving(documents, from: old, to: new)
         #if os(macOS)
         sidebar?.follow(from: old, to: new)
         #endif
@@ -1474,8 +1516,10 @@ public final class Workspace: NSObject {
         }
         let node = loadedNode(old)
         let kind = listing?.kind ?? node?.kind ?? .other
+        // A file that couldn't be read at its new place keeps the dates it had, and with them its place in a date order.
+        let kept = node.map { FileNode.Listing(url: new, kind: kind, isInCloud: $0.isInCloud, modified: $0.modified, created: $0.created, icon: $0.icon) }
         showChanges(in: [old.deletingLastPathComponent(), new.deletingLastPathComponent()], removing: [old],
-                    adding: [listing ?? FileNode.Listing(url: new, kind: kind)], carrying: node)
+                    adding: [listing ?? kept ?? FileNode.Listing(url: new, kind: kind)], carrying: node)
         // Search reads what is in a folder again only one folder at a time, as files change in it.
         if kind == .folder { index.refresh(folders: [new], deep: [new], locations: locations) }
     }
@@ -1621,6 +1665,8 @@ public final class Workspace: NSObject {
             note = nil
             currentURL = nil
         }
+        // What was typed in notes there goes along to the Trash, rather than coming back where they were.
+        await NoteDocument.save(atOrInside: url)
         let trashed = await Task.detached(priority: .userInitiated, operation: { FileOperations.moveToTrash(url) }).value
         guard trashed.done else { return trashed }
         thrownAway(url)
@@ -1651,6 +1697,7 @@ public final class Workspace: NSObject {
     /// Deletes for good, in a change to files under way, and says where it waits for Undo, if anywhere.
     func deleteNow(_ url: URL) async -> (done: Bool, place: URL?) {
         if let current = currentURL, FileNode.isSameOrInside(current, url) { closeFile() }
+        await NoteDocument.save(atOrInside: url)
         let deleted = await Task.detached(priority: .userInitiated, operation: { FileOperations.delete(url) }).value
         if deleted.done { thrownAway(url) }
         return deleted
@@ -1742,8 +1789,12 @@ public final class Workspace: NSObject {
     }
 
     /// Saves everything; called when the app goes to the background or (`quitting`) quits, when drawings are written
-    /// before it goes on.
+    /// before it goes on and the notes are left: quitting waits for them to be written (`NoteDocument.isWriting`).
     public func saveAll(quitting: Bool = false) {
+        if quitting {
+            guard !hasQuit else { return }
+            hasQuit = true
+        }
         editor.saveDrawingsNow(waiting: quitting)
         todoEditing?.commit(now: quitting)
         #if os(macOS)
@@ -1753,10 +1804,11 @@ public final class Workspace: NSObject {
         if !quitting { index.keepChanges() }
         guard let note else { return }
         note.update(text: editor.text)
-        note.saveNow()
         #if os(macOS)
         if quitting { trashAsQuitting(note) }
         #endif
+        // A conflict met as it quits can't be asked about: it keeps both.
+        if quitting { note.close() } else { note.saveNow() }
     }
 
     func resolveConflict(_ resolution: NoteDocument.Resolution) {
@@ -1822,11 +1874,17 @@ public final class Workspace: NSObject {
         #endif
     }
 
-    private func sidebarReload(_ nodes: [FileNode]) {
+    /// Folders whose files changed. The lists on iPhone and iPad slide rows to their new places, with `animated`: not
+    /// for a folder read for the first time, whose files are just there.
+    private func sidebarReload(_ nodes: [FileNode], animated: Bool = true) {
         #if os(macOS)
         sidebar?.reload(nodes)
         #else
-        treeVersion += 1
+        if animated {
+            withAnimation { treeVersion += 1 }
+        } else {
+            treeVersion += 1
+        }
         #endif
     }
 }

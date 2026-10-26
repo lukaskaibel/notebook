@@ -230,7 +230,122 @@ enum DemoLibrary {
         makePDF(at: root.appendingPathComponent("Projects/Offer.pdf"), title: "Offer", lines: [
             "Design and build of the Notebook website", "Three pages, light and dark", "Delivery in four weeks",
         ])
+        for item in dates {
+            try? fm.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -item.edited * 86_400), .creationDate: Date(timeIntervalSinceNow: -item.made * 86_400)],
+                                  ofItemAtPath: root.appendingPathComponent(item.path).path)
+        }
     }
+
+    /// A made-up export of Apple Notes, for trying Import from Apple Notes with and taking its pictures: two Notes
+    /// folders exported with File › Export as › Markdown, each saved into From Notes under its name, as the README says
+    /// to. As Notes writes them, each note starts with its title, and the pictures and files of all of an export's
+    /// notes are in its Attachments folder, the pictures without an extension. In Debug builds,
+    /// `-NotebookDemoExport YES` with `-NotebookLibrary` writes it next to the library, `-NotebookDemoExport <path>`
+    /// there.
+    static func createAppleNotesExport(at root: URL) {
+        let fm = FileManager.default
+        if fm.fileExists(atPath: root.path) { return }
+        let recipes = root.appendingPathComponent("Recipes", isDirectory: true)
+        let trips = root.appendingPathComponent("Trips", isDirectory: true)
+        try? fm.createDirectory(at: recipes, withIntermediateDirectories: true)
+        try? fm.createDirectory(at: trips.appendingPathComponent("Attachments"), withIntermediateDirectories: true)
+        func write(_ folder: URL, _ name: String, _ text: String, written: String) {
+            let url = folder.appendingPathComponent(name)
+            try? Data(text.utf8).write(to: url)
+            let date = ISO8601DateFormatter().date(from: written + "T09:30:00Z")
+            try? fm.setAttributes([.creationDate: date as Any, .modificationDate: date as Any], ofItemAtPath: url.path)
+        }
+
+        write(recipes, "Lemon pasta.md", """
+        # Lemon pasta
+
+        Serves two, quick on a weeknight.
+
+        ## Ingredients
+        - 200 g spaghetti
+        - 1 lemon, zest and juice
+        - 40 g butter
+        - Parmesan
+
+        ## Steps
+        1. Cook the pasta in salted water.
+        2. Melt the butter with the zest, add the juice and a ladle of pasta water.
+        3. Toss with the pasta and the cheese.
+
+        What to buy is in [Weekly shopping](Weekly%20shopping.md).
+
+        """, written: "2026-02-02")
+        write(recipes, "Weekly shopping.md", """
+        Weekly shopping
+
+        - [x] Spaghetti
+        - [ ] Lemons
+        - [ ] Butter
+        - [x] Parmesan
+        - [ ] Olive oil
+
+        """, written: "2026-02-03")
+        write(trips, "Osaka weekend.md", """
+        Osaka weekend
+
+        Friday to Sunday in March. The train from Tokyo leaves at 7:40.
+
+        | Day | Plan |
+        | --- | --- |
+        | Friday | Dotonbori, dinner in Shinsekai |
+        | Saturday | Osaka Castle, then the aquarium |
+        | Sunday | Day trip to Nara, back by 18:10 |
+
+        ![](Attachments/IMG_2050)
+
+        [Hotel booking.pdf](Attachments/Hotel%20booking.pdf)
+
+        What to take is in [Packing list](Packing%20list.md), the shrines in [Shrines to see](Shrines%20to%20see.md).
+
+        """, written: "2026-03-14")
+        write(trips, "Shrines to see.md", """
+        Shrines to see
+
+        - Sumiyoshi Taisha, early in the morning
+        - Kasuga Taisha in Nara, with its lanterns
+
+        ![](Attachments/IMG_2041)
+
+        """, written: "2026-03-10")
+        write(trips, "Packing list.md", """
+        Packing list
+
+        - [x] Passport
+        - [ ] Charger
+        - [ ] Rain jacket
+        - [ ] Sunglasses
+
+        """, written: "2026-03-12")
+        drawReceipt(to: trips.appendingPathComponent("Attachments/IMG_2050.jpg"))
+        drawTorii(to: trips.appendingPathComponent("Attachments/IMG_2041.png"))
+        for name in ["IMG_2050.jpg", "IMG_2041.png"] {
+            let url = trips.appendingPathComponent("Attachments/\(name)")
+            try? fm.moveItem(at: url, to: url.deletingPathExtension())
+        }
+        makeScan(at: trips.appendingPathComponent("Attachments/Hotel booking.pdf"), lines: [
+            "HOTEL NAMBA", "Reservation confirmed", "2 nights, 13 to 15 March, two guests", "Check-in from 15:00",
+        ])
+    }
+
+    /// When each sample was last edited and was made, in days before now, as a few weeks of use leave them, to sort by
+    /// date with: the trip planned weeks ago and changed today, a link saved this morning, last year's flat at the
+    /// bottom. Folders last, as writing in them changes their dates.
+    static let dates: [(path: String, edited: Double, made: Double)] = [
+        ("Travel/Kyoto trip.md", 0.01, 23), ("Travel/Budget.md", 1, 20), ("Travel/Getting to the ryokan.md", 2, 9),
+        ("Travel/ryokan.jpg", 6, 6), ("Travel/Ryokan confirmation.pdf", 12, 12), ("Travel/Flight tickets.pdf", 30, 30),
+        ("Inbox/Shared link.md", 0.1, 0.1), ("Inbox/Errands.md", 0.15, 5), ("Inbox/Gift ideas.md", 4, 40),
+        ("Personal/Weekend.md", 0.2, 2), ("Personal/Questions for Dr. Weber.md", 1, 8), ("Personal/Cooking/Recipes.md", 15, 60),
+        ("Projects/Notebook roadmap.md", 0.02, 50), ("Projects/Offer.pdf", 10, 10), ("Projects/Design/Meeting notes.md", 7, 49),
+        ("University/Linear algebra/Week 3.md", 3, 10), ("Archive/2025/Old apartment.md", 200, 300),
+        ("Travel/Photos", 6, 25), ("Personal/Cooking", 15, 60), ("Projects/Design", 7, 50), ("University/Linear algebra", 3, 40),
+        ("Archive/2025", 200, 300), ("Travel", 0.5, 30), ("Inbox", 0.1, 60), ("Personal", 2, 60), ("Projects", 10, 50),
+        ("University", 3, 40), ("Archive", 200, 300),
+    ]
 
     private static func drawTorii(to url: URL, jpeg: Bool = false) {
         let width = 1400, height = 620

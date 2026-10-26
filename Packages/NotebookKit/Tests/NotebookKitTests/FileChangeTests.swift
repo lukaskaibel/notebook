@@ -280,7 +280,46 @@ final class FileChangeTests: XCTestCase {
         assertNothingOnTheMainThread()
     }
 
+    /// A note thrown away a moment after it was left, while what was typed in it is still being written: that goes
+    /// along to the Trash, and the note doesn't come back where it was.
+    func testWhatWasTypedGoesAlongToTheTrash() async throws {
+        let (workspace, _) = try await makeSidebar()
+        workspace.open(other)
+        slow(writes: 0.4)
+        workspace.editor.insert("Typed. ")
+        workspace.saveAll()
+        // Saved after the save under way.
+        workspace.editor.insert("More. ")
+        workspace.open(draft)
+        XCTAssertTrue(NoteDocument.isWriting, "written before it was left")
+        let trashed = await workspace.trashNow(other)
+        XCTAssertTrue(trashed.done)
+        defer { trashed.place.map { try? FileManager.default.removeItem(at: $0) } }
+        XCTAssertEqual(trashed.place.flatMap { try? String(contentsOf: $0, encoding: .utf8) }, "Typed. More. # Other\n")
+        await NoteDocument.allWritten()
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertFalse(exists(other), "came back")
+        assertNothingOnTheMainThread()
+    }
+
     // MARK: - Moving
+
+    /// A note moved a moment after it was left, while what was typed in it is still being written: that is written
+    /// before it moves, and nothing is left where it was.
+    func testWhatWasTypedMovesAlong() async throws {
+        let (workspace, _) = try await makeSidebar()
+        workspace.open(other)
+        workspace.editor.insert("Typed. ")
+        slow(writes: 0.4)
+        workspace.open(draft)
+        let moving = await workspace.move(other, into: archive).value
+        let moved = try XCTUnwrap(moving)
+        XCTAssertEqual(try String(contentsOf: moved, encoding: .utf8), "Typed. # Other\n")
+        await NoteDocument.allWritten()
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertFalse(exists(other), "came back")
+        assertNothingOnTheMainThread()
+    }
 
     /// Moved to another folder, the open note follows, takes its picture along before it shows there, and the picture
     /// no note in Papers uses any more goes away from there.
