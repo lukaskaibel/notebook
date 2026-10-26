@@ -28,6 +28,7 @@ fastlane can't do these; they are set by hand.
 | Business › Digital Services Act | The account's trader status, which App Store Connect asks for before an app is offered in the EU. Set once for all apps of the account. |
 | Certificates, Identifiers & Profiles › Identifiers › `com.lukaskbl.Notebook` | **iCloud** (with CloudKit support) and **Time Sensitive Notifications**. fastlane turns them on before it fetches the App Store profiles, if they are off. |
 | Certificates, Identifiers & Profiles › Identifiers › iCloud Containers | **`iCloud.com.lukaskbl.Notebook`**, description "Notebook": "+" › iCloud Containers › Register. Then, under the App ID `com.lukaskbl.Notebook`, iCloud › Configure › tick the container › Save. Version history keeps the earlier versions of notes in iCloud there. The App Store Connect API can't make a container or give it to an App ID; without it fastlane stops before exporting and says so. A container can't be deleted or renamed. |
+| Certificates, Identifiers & Profiles › Identifiers › `com.lukaskbl.Notebook.Widgets` | The widgets' extension, for iOS and macOS, with no capabilities. fastlane registers it the first time it builds the app, and makes its App Store profiles with the app's. |
 | Users and Access › Integrations | The App Store Connect API key fastlane uses (App Manager or Admin, with access to certificates, identifiers and profiles). |
 
 ## Why the answers are what they are

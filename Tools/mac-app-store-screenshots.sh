@@ -34,7 +34,7 @@ trap finish EXIT
 echo "Building…"
 mkdir -p "$work"
 xcodebuild -project Notebook.xcodeproj -scheme Notebook -configuration Debug -destination 'platform=macOS,arch=arm64' \
-  -derivedDataPath "$work/DerivedData" PRODUCT_BUNDLE_IDENTIFIER=$bundle_id build -quiet
+  -derivedDataPath "$work/DerivedData" NOTEBOOK_BUNDLE_IDENTIFIER=$bundle_id build -quiet
 swiftc -O Tools/readme-images/capture.swift -o "$work/capture" 2>/dev/null
 
 # say <command>…: drives the app through its debug remote.
