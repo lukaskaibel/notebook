@@ -105,7 +105,8 @@ extension EditorController {
         if !modifiers.subtracting(allowed).isEmpty { return false }
         switch hit {
         case .checkbox(let line):
-            toggleCheckbox(line: line)
+            // A double-click ticks once.
+            if event.clickCount == 1 { toggleCheckbox(line: line) }
             return true
         case .link(let kind):
             closeSuggestions()
