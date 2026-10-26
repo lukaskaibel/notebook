@@ -22,7 +22,9 @@ public struct NotebookScene: Scene {
                     DebugRemote.startIfRequested(workspace: workspace)
                     #endif
                 }
-                .onOpenURL { url in workspace.openFromOutside(url) }
+                .onOpenURL { url in
+                    if !QuickCapture.open(url) { workspace.openFromOutside(url) }
+                }
                 .continuesSpotlight(workspace)
         }
         .commands { TouchCommands(workspace: workspace) }

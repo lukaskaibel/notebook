@@ -9,6 +9,7 @@ struct NotebookApp: App {
 
     init() {
         NotebookSettings.importFolioSettings()
+        QuickCapture.start()
     }
 
     var body: some Scene {

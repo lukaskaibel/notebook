@@ -7,6 +7,8 @@ let package = Package(
     platforms: [.macOS("27.0"), .iOS("27.0")],
     products: [
         .library(name: "NotebookKit", targets: ["NotebookKit"]),
+        // What the widgets' extension shares with the app, without the rest of NotebookKit: the New Note intent.
+        .library(name: "NotebookCapture", targets: ["NotebookCapture"]),
     ],
     dependencies: [
         // Exact, as in Issues: its Mac images come out upside down and MermaidImage turns them round,
@@ -16,8 +18,13 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "NotebookCapture",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .target(
             name: "NotebookKit",
             dependencies: [
+                "NotebookCapture",
                 .product(name: "BeautifulMermaid", package: "beautiful-mermaid-swift"),
                 .product(name: "SwiftMath", package: "SwiftMath"),
             ],
@@ -27,7 +34,7 @@ let package = Package(
         ),
         .testTarget(
             name: "NotebookKitTests",
-            dependencies: ["NotebookKit"],
+            dependencies: ["NotebookKit", "NotebookCapture"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
     ]
