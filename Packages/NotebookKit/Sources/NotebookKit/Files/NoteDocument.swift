@@ -62,6 +62,8 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     /// The file was deleted or put in the Trash, or is about to be replaced and it isn't known yet which: nothing is
     /// written there. Read off the main thread, where it is written.
     @ObservationIgnored private let isDeleted = Mutex(false)
+    /// Where the file was when it was said to be deleted: what `checkDeletion` looks at.
+    @ObservationIgnored private var noticedAt: URL?
     @ObservationIgnored private var isPresenting = true
     /// Where notes are read and written. The coordinated reads and writes wait for iCloud without holding a thread.
     private nonisolated static let fileQueue: OperationQueue = {
@@ -263,8 +265,9 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         case changed(String, modified: Date?)
         /// What it says, read after it changed elsewhere.
         case read(String, modified: Date?)
-        /// It was replaced, not deleted, and says this now.
-        case replaced(String, modified: Date?)
+        /// It is still where it was when it was said to be deleted (at `at`): replaced, and says this now (nil when it
+        /// can't be read).
+        case replaced(String?, modified: Date?, at: URL)
         /// It was deleted, or put in the Trash.
         case deleted
         /// A conflict was settled: what it says now, the base this note's text goes over.
@@ -334,9 +337,12 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         case .read(let disk, let modified):
             takeIn(disk, modified: modified)
             if !isClosed { checkForConflictVersions() }
-        case .replaced(let disk, let modified):
+        case .replaced(_, _, let original) where !FileNode.samePath(url, original):
+            // Moved away as it went, as into the Trash.
+            if !isClosed { onDelete?() }
+        case .replaced(let disk, let modified, _):
             isDeleted.withLock { $0 = false }
-            if isLoaded { takeIn(disk, modified: modified) }
+            if let disk, isLoaded { takeIn(disk, modified: modified) }
             // What was typed here meanwhile, held until it was known, is written now.
             if hasUnsavedChanges { wantsSave = true }
         case .deleted:
@@ -398,14 +404,18 @@ public final class NoteDocument: NSObject, NSFilePresenter {
 
     /// Finds out whether the file went or was replaced (a `.forReplacing` write is a deletion to everyone else), once
     /// the writer that said so is done: with a coordinator of its own, which waits for that writer, where this note's
-    /// own would be let through before it.
+    /// own would be let through before it. It looks where the file was when the notice came, not where the coordinator
+    /// followed it: put in the Trash, a file is moved there and found, but it went all the same.
     private func checkDeletion() {
-        let intent = NSFileAccessIntent.readingIntent(with: url, options: .withoutChanges)
+        let original = noticedAt ?? url
+        noticedAt = nil
+        let intent = NSFileAccessIntent.readingIntent(with: original, options: .withoutChanges)
         work { finish in
-            NSFileCoordinator().coordinate(with: [intent], queue: Self.fileQueue) { error in
-                guard error == nil, FileManager.default.fileExists(atPath: intent.url.path) else { return finish(.deleted) }
-                let disk = (try? Data(contentsOf: intent.url)).flatMap(Self.decode)
-                finish(disk.map { .replaced($0, modified: Self.modificationDate(intent.url)) } ?? .failed)
+            // Even when the coordinator fails, the file itself says whether it is still there.
+            NSFileCoordinator().coordinate(with: [intent], queue: Self.fileQueue) { _ in
+                guard FileManager.default.fileExists(atPath: original.path) else { return finish(.deleted) }
+                let disk = (try? Data(contentsOf: original)).flatMap(Self.decode)
+                finish(.replaced(disk, modified: Self.modificationDate(original), at: original))
             }
         }
     }
@@ -463,11 +473,11 @@ public final class NoteDocument: NSObject, NSFilePresenter {
             } else if case .keepingBoth(let mine, let device) = settling {
                 NSFileCoordinator(filePresenter: self).coordinate(with: [intent], queue: Self.fileQueue) { error in
                     let disk = error == nil ? (try? Data(contentsOf: intent.url)).flatMap(Self.decode) : nil
-                    let note = intent.url
+                    // Next to where the note is now, or, said to be deleted (and maybe moved into the Trash), where it was.
+                    let note = self.isDeleted.withLock { $0 } ? url : intent.url
                     // Written once the note is let go of.
                     Self.fileQueue.addOperation {
-                        // Put in the Trash meanwhile, or the same as it: nothing to keep.
-                        guard !self.isDeleted.withLock({ $0 }), disk != mine else { return finish(.keptBoth(disk ?? mine)) }
+                        guard disk != mine else { return finish(.keptBoth(mine)) }
                         let kept = Self.writeCopy(of: note, from: device, text: mine)
                         finish(kept ? .keptBoth(disk ?? mine) : .failed)
                     }
@@ -476,11 +486,12 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         }
     }
 
-    /// A copy of a note next to it, named after where its text comes from: "Groceries (Lukas’s iPhone)".
+    /// A copy of a note next to it, named after where its text comes from: "Groceries (Lukas’s iPhone)". Two made at
+    /// once (the note open in two windows, left as the app quits) take a name each. Not written when the folder is gone.
     @discardableResult
     nonisolated private static func writeCopy(of url: URL, from source: String, text: String) -> Bool {
         let name = "\(url.deletingPathExtension().lastPathComponent) (\(source))"
-        return FileOperations.createNote(in: url.deletingLastPathComponent(), title: name, text: text) != nil
+        return FileOperations.createNoteWithoutOverwriting(in: url.deletingLastPathComponent(), title: name, text: text) != nil
     }
 
     /// This Mac's or device's name, as the Finder and the Files app say it.
@@ -646,6 +657,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         completionHandler(nil)
         MainActor.assumeIsolated {
             saveTimer?.invalidate()
+            if noticedAt == nil { noticedAt = url }
             wantsDeletionCheck = true
             next()
         }

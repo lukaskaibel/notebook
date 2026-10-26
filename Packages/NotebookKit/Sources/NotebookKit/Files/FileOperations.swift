@@ -63,6 +63,30 @@ enum FileOperations {
         return written ? (url, madeFolder) : nil
     }
 
+    /// A new note under a name no other file has, even with another made in the folder at the same moment: the name is
+    /// taken by creating the file, and when that finds one there, the next ("Groceries (Anna’s iPhone) 2"). Nil when it
+    /// couldn't be written, as when the folder is gone.
+    static func createNoteWithoutOverwriting(in folder: URL, title: String, text: String) -> URL? {
+        debugWait("made a note in", folder)
+        let name = fileName(from: title).isEmpty ? "Untitled" : fileName(from: title)
+        for _ in 0..<1000 {
+            let url = uniqueURL(in: folder, name: name, extension: "md")
+            var taken = false
+            var written = false
+            NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: nil) { url in
+                do {
+                    try Data(text.utf8).write(to: url, options: .withoutOverwriting)
+                    written = true
+                } catch CocoaError.fileWriteFileExists {
+                    taken = true
+                } catch {}
+            }
+            if written { return url }
+            if !taken { return nil }
+        }
+        return nil
+    }
+
     @discardableResult
     static func createFolder(in parent: URL, name: String = "New Folder") -> URL? {
         debugWait("made a folder in", parent)

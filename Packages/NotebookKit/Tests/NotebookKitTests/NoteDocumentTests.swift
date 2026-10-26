@@ -302,6 +302,52 @@ final class NoteDocumentTests: XCTestCase {
         XCTAssertEqual(Array(copies(of: url).values), ["one mine\ntwo\n"])
     }
 
+    /// The note open twice, both with typing on the line another device changed, both left at once (the app quits): a
+    /// copy each, neither written over the other.
+    func testTwoNotesLeftAtOnceKeepACopyEach() async throws {
+        let (first, url) = makeNote("one\ntwo\n")
+        let second = NoteDocument(url: url)
+        first.update(text: "one, in the first\ntwo\n")
+        second.update(text: "one, in the second\ntwo\n")
+        try "one theirs\ntwo\n".write(to: url, atomically: true, encoding: .utf8)
+        first.close()
+        second.close()
+        await NoteDocument.allWritten()
+        XCTAssertEqual(onDisk(url), "one theirs\ntwo\n")
+        XCTAssertEqual(Set(copies(of: url).values), ["one, in the first\ntwo\n", "one, in the second\ntwo\n"])
+    }
+
+    /// Copies of one note made at the same moment each take a name of their own.
+    func testCopiesMadeAtOnceTakeANameEach() throws {
+        let (note, url) = makeNote("")
+        note.close()
+        let folder = url.deletingLastPathComponent()
+        DispatchQueue.concurrentPerform(iterations: 8) { index in
+            _ = FileOperations.createNoteWithoutOverwriting(in: folder, title: "Note (Mac)", text: "copy \(index)")
+        }
+        XCTAssertEqual(Set(copies(of: url).values), Set((0..<8).map { "copy \($0)" }))
+    }
+
+    /// Deleted elsewhere while a conflict was still asked about, then left: what was typed is kept as a copy where the
+    /// note was, not dropped.
+    func testAConflictLeftAfterTheNoteWasDeletedKeepsTheCopy() async throws {
+        let (note, url) = makeNote("one\ntwo\n")
+        var deleted = false
+        note.onDelete = { deleted = true }
+        note.update(text: "one mine\ntwo\n")
+        await writeElsewhere("one theirs\ntwo\n", to: url)
+        try await until("asked") { note.conflict != nil }
+        await Task.detached {
+            NSFileCoordinator().coordinate(writingItemAt: url, options: .forDeleting, error: nil) { url in
+                try? FileManager.default.removeItem(at: url)
+            }
+        }.value
+        try await until("told it went") { deleted }
+        note.close()
+        await NoteDocument.allWritten()
+        XCTAssertEqual(Array(copies(of: url).values), ["one mine\ntwo\n"])
+    }
+
     /// Left with nothing typed that wasn't written: no copy.
     func testANoteLeftWithNothingNewMakesNoCopy() async throws {
         let (note, url) = makeNote("one\ntwo\n")
@@ -332,6 +378,47 @@ final class NoteDocumentTests: XCTestCase {
         note.close()
         await NoteDocument.allWritten()
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path), "written again")
+    }
+
+    /// Put in the Trash by another app (or Notebook's sidebar), with coordination: the file is moved into the Trash, and
+    /// the note hears of that move, but it went all the same. The note's own window closes, as in 1.0, and what is typed
+    /// in it is never written into the Trash or back where it was.
+    func testANoteTrashedElsewhereIsGoneNotReplaced() async throws {
+        let (note, url) = makeNote("one\n")
+        var deleted = false
+        note.onDelete = { deleted = true }
+        note.update(text: "one\ntwo\n")
+        let trashed = await Task.detached { FileOperations.moveToTrash(url) }.value
+        XCTAssertTrue(trashed.done)
+        defer { trashed.place.map { try? FileManager.default.removeItem(at: $0) } }
+        try await until("told it went") { deleted }
+        note.close()
+        await NoteDocument.allWritten()
+        XCTAssertEqual(trashed.place.flatMap(onDisk), "one\n", "written into the Trash")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path), "written back")
+    }
+
+    /// A file replaced by one that can't be read: still there, so it is no deletion, and saving goes on once it can.
+    func testAnUnreadableReplacementDoesNotStopSaving() async throws {
+        let (note, url) = makeNote("one\n")
+        var deleted = false
+        note.onDelete = { deleted = true }
+        await Task.detached {
+            NSFileCoordinator().coordinate(writingItemAt: url, options: .forReplacing, error: nil) { url in
+                try? Data("one\n".utf8).write(to: url, options: .atomic)
+                try? FileManager.default.setAttributes([.posixPermissions: 0o200], ofItemAtPath: url.path)
+            }
+        }.value
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path) }
+        try await Task.sleep(for: .milliseconds(300))
+        await note.saved()
+        XCTAssertFalse(deleted)
+        note.update(text: "one\ntwo\n")
+        note.saveNow()
+        await note.saved()
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path)
+        XCTAssertEqual(onDisk(url), "one\ntwo\n")
+        note.close()
     }
 
     /// A note left while it is still written, then put in the Trash: what was typed goes along, and the note doesn't
