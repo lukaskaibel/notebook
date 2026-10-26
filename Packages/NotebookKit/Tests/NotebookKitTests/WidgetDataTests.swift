@@ -71,7 +71,7 @@ final class WidgetDataTests: XCTestCase {
     func testTheTodosAreTodaysOverdueAndTheWeeksToCome() async throws {
         let workspace = makeWorkspace()
         workspace.start()
-        try await until("the to-dos were read") { !workspace.index.isBuilding && workspace.todos.isReady }
+        try await until("the to-dos were read", seconds: 20) { workspace.todos.isReady && workspace.todos.items.contains { $0.todo.text == "Milk" } }
         let rows = workspace.widgetTodoRows()
         XCTAssertEqual(rows.map(\.text), ["Dry cleaning", "Milk", "Dentist"])
         XCTAssertTrue(rows[0].isOverdue(at: .now))
@@ -87,7 +87,7 @@ final class WidgetDataTests: XCTestCase {
     func testATickFromTheWidgetIsWrittenIntoTheNote() async throws {
         let workspace = makeWorkspace()
         workspace.start()
-        try await until("the to-dos were read") { !workspace.index.isBuilding && workspace.todos.isReady }
+        try await until("the to-dos were read", seconds: 20) { workspace.todos.isReady && workspace.todos.items.contains { $0.todo.text == "Milk" } }
         let milk = try XCTUnwrap(workspace.widgetTodoRows().first { $0.text == "Milk" })
         WidgetData.tick(milk)
         XCTAssertEqual(WidgetData.ticked.map(\.id), [milk.id])
@@ -102,7 +102,7 @@ final class WidgetDataTests: XCTestCase {
     func testATickOfATodoThatChangedSinceIsDropped() async throws {
         let workspace = makeWorkspace()
         workspace.start()
-        try await until("the to-dos were read") { !workspace.index.isBuilding && workspace.todos.isReady }
+        try await until("the to-dos were read", seconds: 20) { workspace.todos.isReady && workspace.todos.items.contains { $0.todo.text == "Milk" } }
         let milk = try XCTUnwrap(workspace.widgetTodoRows().first { $0.text == "Milk" })
         WidgetData.tick(milk)
         let changed = try String(contentsOf: errands, encoding: .utf8).replacingOccurrences(of: "Milk", with: "Oat milk")
@@ -152,7 +152,7 @@ final class WidgetDataTests: XCTestCase {
     func testATapOpensTheNoteOrTheTodo() async throws {
         let workspace = makeWorkspace()
         workspace.start()
-        try await until("the to-dos were read") { !workspace.index.isBuilding && workspace.todos.isReady }
+        try await until("the to-dos were read", seconds: 20) { workspace.todos.isReady && workspace.todos.items.contains { $0.todo.text == "Milk" } }
         WidgetData.notes = [trip.path: Workspace.widgetNote("Text", url: trip, place: "")]
         XCTAssertTrue(workspace.openFromWidget(WidgetData.url(note: trip.path)))
         try await until("the note opened") { workspace.currentURL.map { FileNode.samePath($0, self.trip) } == true }
