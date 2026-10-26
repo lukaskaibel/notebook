@@ -137,7 +137,8 @@ final class SearchSession {
     private(set) var textCount = 0
     /// New results are on their way.
     private(set) var isSearching = false
-    @ObservationIgnored private unowned let workspace: Workspace
+    /// Weak, so background search that outlives a workspace (in tests) finds nothing rather than crashing.
+    @ObservationIgnored private weak var workspace: Workspace?
     @ObservationIgnored var limits = SearchCorpus.Limits()
     /// Whether the last section offers a new note with the name typed.
     @ObservationIgnored var offersNewNote = true
@@ -157,6 +158,7 @@ final class SearchSession {
 
     /// Searches for `text`, in place of what was searched for before.
     func update(_ text: String) {
+        guard let workspace else { return }
         query = text
         generation += 1
         let generation = generation
