@@ -55,6 +55,12 @@ public final class Workspace: NSObject {
     /// The to-do being edited in To-dos, whose words are written with the notes when the app goes away.
     @ObservationIgnored weak var todoEditing: TodoEditing?
     @ObservationIgnored var todoRewrites: [String: TodoReference] = [:]
+    /// To-dos that repeat, ticked in To-dos or from a notification, by the line they were ticked to (`takeBackTick`).
+    @ObservationIgnored var todoTicks: [String: TodoTick] = [:]
+    #if DEBUG
+    /// What `remindOfNext` was asked for, for tests: the next one's line, and whether as it will be.
+    @ObservationIgnored var remindedOfNext: [(source: String, asItWillBe: Bool)] = []
+    #endif
     #if DEBUG
     /// The sample notes' reminders, shown but never scheduled: a run on the sample notes leaves no notification behind.
     @ObservationIgnored var unscheduledReminders = Set<UUID>()
@@ -1931,5 +1937,10 @@ extension Workspace: EditorControllerDelegate {
     public func editor(_ editor: EditorController, showTodoReminderOnLine line: Int, part: TodoPart) {
         guard let currentURL, note != nil else { return }
         askForTodoReminder(in: editor, url: currentURL, line: line, part: part)
+    }
+
+    public func editor(_ editor: EditorController, tickedRepeatingTodo source: String, line: Int, next: String) {
+        guard let currentURL, note != nil else { return }
+        repeatingTodoTicked(in: currentURL, line: line, source: source, next: next)
     }
 }
