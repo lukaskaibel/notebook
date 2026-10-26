@@ -1,0 +1,9 @@
+// The widgets' extension: New Note on the Home Screen, the Lock Screen and the Mac's desktop, and in Control Center.
+// It is built with the app and goes inside it, so it takes the app's version, team and signing.
+#include "Shared.xcconfig"
+
+PRODUCT_BUNDLE_IDENTIFIER = $(NOTEBOOK_BUNDLE_IDENTIFIER).Widgets
+
+// On the Mac every extension runs in the sandbox, in every build. It needs nothing else, on iPhone and iPad nothing.
+CODE_SIGN_ENTITLEMENTS[sdk=macosx*] = Config/Widgets-macOS.entitlements
+CODE_SIGN_ENTITLEMENTS[sdk=iphone*] =

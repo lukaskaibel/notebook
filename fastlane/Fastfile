@@ -31,6 +31,12 @@ ENV["LANG"] = "en_US.UTF-8" if ENV["LANG"].to_s.empty?
 ENV["LC_ALL"] = "en_US.UTF-8" if ENV["LC_ALL"].to_s.empty?
 
 APP_ID = "com.lukaskbl.Notebook"
+# The app and the extensions inside it, by the names of their targets. Each has a bundle identifier of its own, which
+# starts with the app's, and profiles of its own.
+BUNDLES = {
+  "Notebook" => APP_ID,
+  "NotebookWidgets" => "#{APP_ID}.Widgets"
+}.freeze
 # Absolute paths, taken while loading: lanes run from other folders, and __dir__ is relative in a Fastfile.
 HERE = File.expand_path(__dir__)
 ROOT = File.expand_path("..", HERE)
@@ -105,30 +111,35 @@ def signs_for_store_from_start?(platform)
   platform == :mac && !ENV["CI"].to_s.empty?
 end
 
-# The App Store profile for the app's target alone, in Config/Local.xcconfig (gitignored), which only the app's
-# target reads: given to xcodebuild, the profile would go to the Swift packages too, which take none.
-def give_target_profile(profile)
+# The App Store profiles of the app's and the extensions' targets, in Config/Local.xcconfig (gitignored), which only
+# they read, each taking its own by its name: given to xcodebuild, one profile would go to every target, and to the
+# Swift packages too, which take none.
+def give_target_profiles(profiles)
   path = File.join(ROOT, "Config", "Local.xcconfig")
-  lines = ["", "// From fastlane on GitHub: the Mac app is signed for the App Store from the start.",
-           "PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*] = #{profile}"]
+  lines = ["", "// From fastlane on GitHub: the Mac app and its extensions are signed for the App Store from the start."]
+  BUNDLES.each { |target, identifier| lines << "NOTEBOOK_MAC_PROFILE_#{target} = #{profiles.fetch(identifier)}" }
+  lines << "PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*] = $(NOTEBOOK_MAC_PROFILE_$(TARGET_NAME))"
   File.write(path, (File.exist?(path) ? File.read(path) : "") + lines.join("\n") + "\n")
 end
 
 # The archive is signed for development; the export signs it for the App Store: with the team's Apple Distribution
-# certificate in this Mac's keychain and an App Store profile that fastlane makes or fetches with the API key. (The key
-# may not use Apple's cloud-managed certificates, so Xcode can't do this part by itself.) The Mac's .pkg is signed with
-# a Mac Installer Distribution certificate, which fastlane creates the first time; macOS then asks once whether
-# xcodebuild may use its key. On GitHub that certificate comes from the secrets, since one made there would be a new
-# one on every run. Returns the export options.
+# certificate in this Mac's keychain and App Store profiles, for the app and each extension, that fastlane makes or
+# fetches with the API key. (The key may not use Apple's cloud-managed certificates, so Xcode can't do this part by
+# itself.) The Mac's .pkg is signed with a Mac Installer Distribution certificate, which fastlane creates the first
+# time; macOS then asks once whether xcodebuild may use its key. On GitHub that certificate comes from the secrets,
+# since one made there would be a new one on every run. Returns the export options.
 def store_signing(platform)
   folder = File.join(OUTPUT, "signing")
   register_this_mac if platform == :mac && !signs_for_store_from_start?(platform)
+  register_extensions
   turn_on_capabilities
-  # get_provisioning_profile would sign the profile with whatever certificate get_certificates handled last.
-  lane_context.delete(SharedValues::CERT_CERTIFICATE_ID)
-  get_provisioning_profile(api_key: api_key, app_identifier: APP_ID, platform: platform == :mac ? "macos" : "ios",
-                           output_path: folder)
-  profile = lane_context[SharedValues::SIGH_NAME]
+  profiles = BUNDLES.values.to_h do |identifier|
+    # get_provisioning_profile would sign the profile with whatever certificate get_certificates handled last.
+    lane_context.delete(SharedValues::CERT_CERTIFICATE_ID)
+    get_provisioning_profile(api_key: api_key, app_identifier: identifier, platform: platform == :mac ? "macos" : "ios",
+                             output_path: folder)
+    [identifier, lane_context[SharedValues::SIGH_NAME]]
+  end
   if platform == :mac && !signs_for_store_from_start?(platform)
     get_certificates(api_key: api_key, platform: "macos", type: "mac_installer_distribution", output_path: folder)
     lane_context.delete(SharedValues::CERT_CERTIFICATE_ID)
@@ -138,7 +149,7 @@ def store_signing(platform)
     signingStyle: "manual",
     teamID: secret("DEVELOPMENT_TEAM"),
     signingCertificate: "Apple Distribution",
-    provisioningProfiles: { APP_ID => profile },
+    provisioningProfiles: profiles,
     manageAppVersionAndBuildNumber: false
   }
   options[:installerSigningCertificate] = installer if platform == :mac
@@ -151,6 +162,18 @@ def installer_certificate
   name = sh("security find-identity -v 2>/dev/null", log: false)[/"(Mac Installer Distribution|3rd Party Mac Developer Installer)/, 1]
   UI.user_error!("No Mac Installer Distribution certificate in the keychain (on GitHub: MAC_INSTALLER_CERTIFICATE_P12).") if name.nil?
   name
+end
+
+# The extensions' bundle identifiers, registered with the team the first time one is built, for iPhone, iPad and the
+# Mac, like the app's. They need no capabilities.
+def register_extensions
+  api_key
+  BUNDLES.each do |target, identifier|
+    next if identifier == APP_ID || Spaceship::ConnectAPI::BundleId.find(identifier)
+
+    UI.message("Registering #{identifier}")
+    Spaceship::ConnectAPI::BundleId.create(name: target, platform: "UNIVERSAL", identifier: identifier)
+  end
 end
 
 # The entitlements ask for iCloud's key-value store (hidden folders and reminders go to your other devices through it)
@@ -231,7 +254,7 @@ def archive_for_store(platform, marketing_version: version)
   folder = File.join(OUTPUT, platform.to_s)
   UI.header("#{config[:name]}: Notebook #{marketing_version} (#{build_number})")
   export_options = store_signing(platform)
-  give_target_profile(export_options[:provisioningProfiles][APP_ID]) if signs_for_store_from_start?(platform)
+  give_target_profiles(export_options[:provisioningProfiles]) if signs_for_store_from_start?(platform)
   package = build_app(
     project: PROJECT,
     scheme: SCHEME,
@@ -253,12 +276,14 @@ def archive_for_store(platform, marketing_version: version)
   package
 end
 
-# The Mac App Store takes only sandboxed apps.
+# The Mac App Store takes only sandboxed apps, and macOS runs only sandboxed extensions.
 def check_sandbox(archive)
   app = Dir[File.join(archive, "Products", "Applications", "*.app")].first
-  entitlements = sh("codesign -d --entitlements - --xml #{app.shellescape} 2>/dev/null", log: false)
-  sandboxed = Plist.parse_xml(entitlements)&.fetch("com.apple.security.app-sandbox", false)
-  UI.user_error!("The archived Mac app is not sandboxed; not uploading it.") unless sandboxed == true
+  [app, *Dir[File.join(app, "Contents", "PlugIns", "*.appex")]].each do |bundle|
+    entitlements = sh("codesign -d --entitlements - --xml #{bundle.shellescape} 2>/dev/null", log: false)
+    sandboxed = Plist.parse_xml(entitlements)&.fetch("com.apple.security.app-sandbox", false)
+    UI.user_error!("The archived #{File.basename(bundle)} is not sandboxed; not uploading it.") unless sandboxed == true
+  end
 end
 
 # Uploads a build and waits until App Store Connect has processed it, which "What to Test" needs. The internal testers
