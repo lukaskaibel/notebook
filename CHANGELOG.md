@@ -23,8 +23,9 @@ versions follow [semantic versioning](https://semver.org).
   at a time. Then choose File › Import from Apple Notes… in Notebook, or Import from Apple Notes in the ⋯ menu, and pick
   the folder Notes made. Its notes come into the folder you're in, each with its pictures and files in the `.assets`
   folder next to it, so they move with it, as Notebook's own do. Files Notes wrote without an extension get one, links
-  between the notes you exported become `[[links]]`, the title Notes repeats as the first line goes, and the folders
-  you put the exports in come along. Notes' export itself is only read, and one Undo takes the whole import back.
+  between the notes you exported keep finding them, the title Notes repeats as the first line goes, and the folders you
+  put the exports in come along. Notes' export itself is only read, nothing in your folders is written over, what
+  couldn't come over is listed, and one Undo takes the whole import back.
 
 ## [1.0.0] – not released yet
 

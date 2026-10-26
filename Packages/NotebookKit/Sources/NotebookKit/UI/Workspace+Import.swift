@@ -6,16 +6,11 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 extension Workspace {
-    /// What Import from Apple Notes asks for: the folder Notes' Markdown export makes, or the notes in it.
-    static let appleNotesExportTypes: [UTType] = [.folder, UTType(filenameExtension: "md", conformingTo: .text) ?? .plainText]
-
-    /// Import from Apple Notes: the folders and notes Notes exported, put into `folder` as Notebook keeps notes
-    /// (`AppleNotesImport`), off the main thread. What it made shows in the sidebar, selected, and one Undo takes all
-    /// of it to the Trash again.
+    /// Import from Apple Notes: the folders Notes exported, put into `folder` as Notebook keeps notes
+    /// (`AppleNotesImport`), off the main thread. What it made shows in the sidebar, selected; one Undo takes all it
+    /// added to the Trash again, and what couldn't come over is named in an alert.
     func importFromAppleNotes(_ sources: [URL], into folder: URL) {
         guard !sources.isEmpty else { return }
-        var changes: [FileChange] = []
-        undoTogether { changes = sources.map { _ in keepForUndo(FileChange(.make, "Import")) } }
         changeFiles { [self] follow in
             let folder = follow(folder)
             let imported = await Task.detached(priority: .userInitiated) { () -> (result: AppleNotesImport.Result, listings: [FileNode.Listing], madeFolder: Bool) in
@@ -25,31 +20,36 @@ extension Workspace {
                 let madeFolder = !FileManager.default.fileExists(atPath: folder.path)
                 if madeFolder { try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) }
                 let result = AppleNotesImport.run(sources, into: folder)
-                return (result, result.made.compactMap { $0.flatMap { FileNode.listing(of: $0) } }, madeFolder)
+                let shown = result.added.filter { FileNode.samePath($0.deletingLastPathComponent(), folder) }
+                return (result, shown.compactMap { FileNode.listing(of: $0) }, madeFolder)
             }.value
-            for (change, made) in zip(changes, imported.result.made) { changeDone(change, to: made) }
-            let made = imported.result.made.compactMap { $0 }
+            // Kept for Undo once it is all there: how much an import adds is known only then.
+            undoTogether {
+                for url in imported.result.added { changeDone(keepForUndo(FileChange(.make, "Import")), to: url) }
+            }
             let parent = folder.deletingLastPathComponent()
             showChanges(in: imported.madeFolder ? [parent, folder] : [folder],
                         adding: imported.listings + (imported.madeFolder ? [FileNode.Listing(url: folder, kind: .folder)] : []))
-            if let first = made.first { reveal(first, select: true) }
-            if made.count < sources.count || imported.result.failed > 0 {
-                report(made.isEmpty ? "The notes couldn’t be imported." : "Some notes couldn’t be imported.",
-                       "Notebook can’t read them, or can’t write in “\(folderName(folder))”.")
+            if let first = imported.result.made.compactMap({ $0 }).first { reveal(first, select: true) }
+            let problems = imported.result.problems
+            if !problems.isEmpty {
+                let more = problems.count > 6 ? "\n… and \(problems.count - 6) more." : ""
+                report(problems.count == 1 ? "Something couldn’t be imported." : "\(problems.count) things couldn’t be imported.",
+                       problems.prefix(6).joined(separator: "\n") + more)
             }
         }
     }
 
     #if os(macOS)
-    /// File › Import from Apple Notes…: asks for what Notes exported, over the window, then imports it where a new
-    /// note would go.
+    /// File › Import from Apple Notes…: asks for the folder Notes exported, over the window, then imports it where a
+    /// new note would go. Only folders: in the App Store build, a note picked on its own comes without its Attachments
+    /// folder and the notes its links point at, which the sandbox keeps out of reach.
     public func chooseAppleNotesExport() {
         guard let folder = folderForNewNote else { return }
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
-        panel.canChooseFiles = true
+        panel.canChooseFiles = false
         panel.allowsMultipleSelection = true
-        panel.allowedContentTypes = Self.appleNotesExportTypes
         panel.prompt = "Import"
         panel.message = "Choose the folder Notes made with File › Export as › Markdown. Its notes go into “\(place(of: folder))”, with their pictures and files."
         let done = { [self] (response: NSApplication.ModalResponse) in
@@ -65,7 +65,8 @@ extension Workspace {
 }
 
 #if os(iOS)
-/// The Files app's picker for Import from Apple Notes, while the workspace asks for it (`appleNotesImportFolder`).
+/// The Files app's picker for Import from Apple Notes, while the workspace asks for it (`appleNotesImportFolder`). Only
+/// folders, as on the Mac: a note picked on its own comes without its Attachments folder.
 struct AppleNotesImporter: ViewModifier {
     @Bindable var workspace: Workspace
     /// Where the notes go, kept for when the picker is done: it may say it closed before it says what was picked.
@@ -74,7 +75,7 @@ struct AppleNotesImporter: ViewModifier {
     func body(content: Content) -> some View {
         content
             .fileImporter(isPresented: Binding(get: { workspace.appleNotesImportFolder != nil }, set: { if !$0 { workspace.appleNotesImportFolder = nil } }),
-                          allowedContentTypes: Workspace.appleNotesExportTypes, allowsMultipleSelection: true) { result in
+                          allowedContentTypes: [.folder], allowsMultipleSelection: true) { result in
                 guard case .success(let urls) = result, let folder else { return }
                 workspace.importFromAppleNotes(urls, into: folder)
             }

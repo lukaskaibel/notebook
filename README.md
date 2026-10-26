@@ -362,7 +362,7 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   anywhere else, they go to the default folder you choose in Settings, an Inbox at the top of your first location
   until you do. One you leave empty goes away again.
 - **Moving from Apple Notes.** Export notes from Notes as Markdown, then Import from Apple Notes brings them in,
-  each with its pictures and files next to it, links between them as `[[links]]`, in the folders you exported them
+  each with its pictures and files next to it and its links to the others working, in the folders you exported them
   into. See [Moving from Apple Notes](#moving-from-apple-notes).
 - **A new note from anywhere.** New Note is in Shortcuts, Spotlight and Siri ("New note in Notebook"), a widget for the
   Home Screen, the Lock Screen and the Mac's desktop, and a control for Control Center, the Lock Screen and the iPhone's
@@ -531,19 +531,21 @@ Notes exports Markdown itself, and Notebook brings that in:
    exports everything at once, so do it folder by folder; to keep your folders, save each export into a folder of the
    same name, for example `From Notes/Work`, `From Notes/Recipes`. On iPhone and iPad, open a note, tap Share › Export as
    Markdown and save it to Files; that is one note at a time.
-2. **Import into Notebook.** Choose **File › Import from Apple Notes…** (on iPhone and iPad, **Import from Apple
-   Notes** in the ⋯ menu) and pick the folder Notes made, or the folder you saved the exports into. On the Mac the
-   panel says where the notes will go: the folder selected in the sidebar, else the one of the note you have open,
-   else the default folder. On the iPhone they go into the folder whose ⋯ menu you used, or from the first screen
-   into the default folder; on the iPad, into the folder of the note you have open, else the default folder.
+2. **Import into Notebook.** Choose **File › Import from Apple Notes…** (on iPhone and iPad, **Import from Apple Notes**
+   in the ⋯ menu) and pick the folder Notes made, or the folder you saved the exports into. On the Mac the panel says
+   where the notes will go: the folder selected in the sidebar, else the one of the note you have open, else the default
+   folder. On the iPhone they go into the folder whose ⋯ menu you used, or from the first screen into the default
+   folder; on the iPad, into the folder of the note you have open, else the default folder.
 
 Each folder you pick becomes a folder, with the folders in it; the folder Notes makes for a single note becomes just the
 note. Notes puts the pictures and files of all the notes it exports in one Attachments folder; the import puts each
 note's own into the `.assets` folder next to it, as Notebook does with yours, so they move with the note, and gives
-those Notes wrote without an extension one. Links between the notes you exported become `[[links]]`, the title Notes
-repeats as each note's first line goes, since the file's name is the title, and a file no note links to comes along
-as a file next to the notes rather than being left behind. Notes' export is only read. Undo (⌘Z) takes the whole
-import back to the Trash.
+those Notes wrote without an extension one. Links between the notes you exported keep finding them: `[[links]]` to
+notes in the same folder, relative Markdown links to the others. The title Notes repeats as each note's first line goes,
+since the file's name is the title, and a file no note links to comes along as a file next to the notes rather than
+being left behind. Notes' export is only read, nothing already in your folders is written over, and what couldn't come
+over, such as a picture that couldn't be read, is listed when the import is done. Undo (⌘Z) takes everything the
+import added back to the Trash.
 
 What comes over is what Notes' export has: headings, bold and italic, lists, checklists, links and attachments, but no
 colours or fonts, and #tags as plain text. Each note keeps the dates of the file Notes wrote, which may be when you

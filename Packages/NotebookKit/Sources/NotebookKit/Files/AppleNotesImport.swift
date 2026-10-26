@@ -8,39 +8,51 @@ import UniformTypeIdentifiers
 ///
 /// - a note's pictures and files go into the `.assets` folder next to it, as Notebook's own do, so they move with it.
 ///   One Notes wrote without an extension gets one from what it is.
-/// - links between the notes exported together become `[[links]]`.
+/// - links between the notes exported together point at them again: `[[links]]` in the same folder, relative Markdown
+///   links elsewhere, which find exactly that note.
 /// - the title, which Notes writes again as the first line, goes: the file's name is the title.
 /// - each folder picked becomes a folder, with the folders in it, as the exports were put there. The folder Notes makes
 ///   for a single note is only that note.
 /// - the notes keep the dates their files have.
 ///
-/// The export is only read. A file in an Attachments folder that no note links to comes along as a file of its own,
-/// next to the notes, rather than being left behind.
+/// The export is only read, all of it before anything is written, and nothing outside it is, whatever a link says.
+/// Nothing that is there already is written over. A file in an Attachments folder that no note links to comes along as
+/// a file of its own, next to the notes, and what can't come over is named in `Result.problems`, so nothing is left
+/// behind without a word.
 enum AppleNotesImport {
-    /// What an import made: for each folder or file picked, the folder or note it became, or nil when it couldn't be;
-    /// how many notes were written, and how many couldn't be.
+    /// What an import did:
+    /// - `made`: for each folder or file picked, the folder or note it became, or nil when it couldn't be.
+    /// - `added`: everything it put into the folder it imported into, which was there before: the folders and notes it
+    ///   made there, the files it copied there, and the pictures and files it put into that folder's `.assets`. One Undo
+    ///   takes these to the Trash; what the import made inside its own folders goes with them.
+    /// - `problems`: what couldn't come over, by where it is in the export, with why.
     struct Result: Sendable {
         var made: [URL?]
+        var added: [URL]
         var notes: Int
-        var failed: Int
+        var problems: [String]
     }
 
     /// What a link in a note points at, once it is in Notebook.
     enum Target: Equatable {
-        /// Another note of the import, as `[[target]]` finds it.
-        case note(String)
+        /// Another note of the import: its address from the note's folder, and the name `[[…]]` finds it by when it is
+        /// in the same folder and its name has nothing a `[[link]]` reads otherwise.
+        case note(wiki: String?, address: String)
         /// A file in the note's `.assets`, by its address in Markdown.
         case asset(String, isPicture: Bool)
     }
 
-    /// Imports `sources`, the folders and Markdown files Notes exported, into `folder`, which is there already. Off
+    /// Imports `sources`, the folders Notes exported (or its Markdown files), into `folder`, which is there already. Off
     /// the main thread: an export can have hundreds of notes, and iCloud may have to bring each down first.
-    static func run(_ sources: [URL], into folder: URL) -> Result {
-        let run = Run(sources: sources)
-        let made = sources.map { run.plan($0, into: folder) }
+    /// `beforeWriting` runs once the export has been read and the folders made, for tests.
+    static func run(_ sources: [URL], into folder: URL, beforeWriting: (() -> Void)? = nil) -> Result {
+        let run = Run(sources: sources, target: folder)
+        let made = sources.map { run.take($0) }
+        beforeWriting?()
         run.writeNotes()
         run.keepUnlinkedFiles()
-        return Result(made: made.map { url in url.flatMap { run.failed.contains($0.path) ? nil : $0 } }, notes: run.written, failed: run.failed.count)
+        let written = made.map { url in url.flatMap { run.written[$0.path] ?? (run.failed.contains($0.path) ? nil : $0) } }
+        return Result(made: written, added: run.added, notes: run.written.count, problems: run.problems)
     }
 
     static func isNote(_ url: URL) -> Bool {
@@ -56,15 +68,20 @@ enum AppleNotesImport {
         return withoutTitle(rewritingLinks(text, target), title: title)
     }
 
-    /// `[text](address)` and `![text](address)` whose address `target` knows, rewritten: as `[[links]]` to notes, and
-    /// to files in `.assets`, shown in the note (`![…](…)`) when they were or stand on a line of their own, as Notes
-    /// shows its attachments.
+    /// `[text](address)` and `![text](address)` whose address `target` knows, rewritten: to notes as `[[links]]` or
+    /// relative links, and to files in `.assets`, shown in the note (`![…](…)`) when they were or stand on a line of
+    /// their own, as Notes shows its attachments. Not in code, where they are text.
     private static func rewritingLinks(_ text: String, _ target: (String) -> Target?) -> String {
+        let code = codeRanges(in: text)
+        func isInCode(_ index: String.Index) -> Bool {
+            let offset = text.utf16.distance(from: text.startIndex, to: index)
+            return code.contains { NSLocationInRange(offset, $0) }
+        }
         var result = ""
         var rest = text[...]
         while let middle = rest.range(of: "](") {
             let before = rest[..<middle.lowerBound]
-            guard let open = before.lastIndex(of: "["), !before[open...].contains("\n"),
+            guard let open = before.lastIndex(of: "["), !before[open...].contains("\n"), !isInCode(open),
                   let (address, end) = destination(in: rest[middle.upperBound...]) else {
                 result += rest[..<middle.upperBound]
                 rest = rest[middle.upperBound...]
@@ -88,12 +105,35 @@ enum AppleNotesImport {
         return result
     }
 
+    /// Code blocks, maths and inline code, as the editor reads them.
+    private static func codeRanges(in text: String) -> [NSRange] {
+        var ranges: [NSRange] = []
+        for line in MarkdownParser.parse(text as NSString).lines {
+            switch line.kind {
+            case .fence, .code, .mathDelimiter, .math:
+                ranges.append(line.range)
+            default:
+                for span in line.spans {
+                    switch span.kind {
+                    case .code, .math: ranges.append(span.range)
+                    default: break
+                    }
+                }
+            }
+        }
+        return ranges
+    }
+
     private static func markdown(for target: Target, label: String, bang: Bool, alone: Bool) -> String {
         switch target {
-        case .note(let name):
-            if bang { return "![[\(name)]]" }
+        case .note(let wiki, let address):
             let shown = label.trimmingCharacters(in: .whitespaces)
-            return shown.isEmpty || shown == (name as NSString).lastPathComponent ? "[[\(name)]]" : "[[\(name)|\(shown)]]"
+            if let wiki, !shown.contains("]"), !shown.contains("|") {
+                if bang { return "![[\(wiki)]]" }
+                return shown.isEmpty || shown == wiki ? "[[\(wiki)]]" : "[[\(wiki)|\(shown)]]"
+            }
+            let name = ((address as NSString).lastPathComponent.removingPercentEncoding ?? address) as NSString
+            return "[\(shown.isEmpty ? name.deletingPathExtension : label)](\(address))"
         case .asset(let address, let isPicture):
             guard bang || alone else { return "[\(label)](\(address))" }
             // A file's card says its name, as for files Notebook puts in a note itself.
@@ -161,12 +201,11 @@ enum AppleNotesImport {
         return plain.trimmingCharacters(in: .whitespaces)
     }
 
-    /// Whether a line and a file name say the same, but for case and the characters a file name can't have.
+    /// Whether a line and a file name say the same, but for case, dots before it and the characters a file name can't
+    /// have.
     static func sameName(_ line: String, _ name: String) -> Bool {
         func folded(_ text: String) -> String {
-            var text = text
-            for character in ["/", ":", "\\"] { text = text.replacingOccurrences(of: character, with: "-") }
-            return text.trimmingCharacters(in: .whitespaces).folding(options: .caseInsensitive, locale: nil)
+            FileOperations.fileName(from: text).folding(options: .caseInsensitive, locale: nil)
         }
         return !line.isEmpty && folded(line) == folded(name)
     }
@@ -174,11 +213,13 @@ enum AppleNotesImport {
     // MARK: - Files
 
     /// The file a link's address names, from the folder of the note: nil for web addresses, anchors and files that
-    /// aren't there. Notes may write the address with its spaces encoded or not.
+    /// aren't there. Notes may write the address with its spaces encoded or not, and a name may have a colon in it, so
+    /// an address counts as a web address only when it names no file.
     static func file(_ address: String, from folder: URL) -> URL? {
         guard !address.isEmpty, !address.hasPrefix("#") else { return nil }
-        if let url = URL(string: address), let scheme = url.scheme, scheme.count > 1 {
-            return scheme == "file" && FileManager.default.fileExists(atPath: url.path) ? url : nil
+        if address.lowercased().hasPrefix("file:") {
+            guard let url = URL(string: address), FileManager.default.fileExists(atPath: url.path) else { return nil }
+            return url
         }
         let withoutAnchor = address.firstIndex(of: "#").map { String(address[..<$0]) }
         for path in [address.removingPercentEncoding, address, withoutAnchor?.removingPercentEncoding].compactMap({ $0 }) where !path.isEmpty {
@@ -230,54 +271,119 @@ enum AppleNotesImport {
         url.resolvingSymlinksInPath().standardizedFileURL.path
     }
 
+    /// An address a file is to get, but for case and how accented letters are written, as the file system tells names
+    /// apart.
+    private static func nameKey(_ url: URL) -> String {
+        url.standardizedFileURL.path.precomposedStringWithCanonicalMapping.folding(options: .caseInsensitive, locale: nil)
+    }
+
+    /// What the Finder leaves in folders, which isn't part of an export.
+    private static func isClutter(_ url: URL) -> Bool {
+        let name = url.lastPathComponent
+        return [".DS_Store", ".localized", "Icon\r"].contains(name) || name.hasPrefix("._")
+    }
+
     // MARK: - An import
+
+    /// What is in the export, all of it read before anything is written: a folder picked inside the one imported
+    /// into would otherwise list the folders made in it.
+    private indirect enum Item {
+        /// A folder of the export, what is in it, and its Attachments folders.
+        case folder(URL, [Item], attachments: [URL])
+        /// A note, with the Attachments of the folder Notes made for it alone.
+        case note(URL, attachments: [URL])
+        case file(URL)
+    }
 
     /// One import: the notes of the export and where each goes, written once all are known, so that links between
     /// them find them under the names they get.
     private final class Run {
+        /// The folder imported into.
+        let target: URL
         /// Where the export is: the folders picked, and the folders of the notes picked on their own, outside which
         /// nothing is read, whatever a link says.
         let boundaries: [String]
         var notes: [(source: URL, destination: URL)] = []
         /// Where each note goes, by where it is in the export.
         var destinations: [String: URL] = [:]
-        /// The addresses notes will have, taken before they are written.
+        /// The addresses notes will have, taken before they are written, as the file system tells names apart.
         var reserved = Set<String>()
         /// The Attachments folders of the export, with the folder their notes go to, and the files notes linked to.
         var attachmentFolders: [(folder: URL, destination: URL)] = []
         var linked = Set<String>()
         /// The files put in a `.assets`, by the file and the folder: a picture two notes there show is copied once.
         var copied: [String: String] = [:]
-        var written = 0
+        /// Notes written, by the address they were to get and the one they got, and those that couldn't be.
+        var written: [String: URL] = [:]
         var failed = Set<String>()
+        var added: [URL] = []
+        var problems: [String] = []
 
-        init(sources: [URL]) {
+        init(sources: [URL], target: URL) {
+            self.target = target.standardizedFileURL
             boundaries = sources.map { source in
                 let isFolder = (try? source.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
                 return AppleNotesImport.key(isFolder ? source : source.deletingLastPathComponent())
             }
         }
 
-        /// Takes in a folder or note of the export, going into `folder`: a folder is made at once, a note only gets its
-        /// address. Where it goes, or nil.
-        func plan(_ source: URL, into folder: URL) -> URL? {
-            guard isFolder(source) else {
-                return AppleNotesImport.isNote(source) ? reserve(source, in: folder) : copy(source, into: folder)
+        /// Takes in a folder or note picked: reads all of it, then makes its folders in the folder imported into and
+        /// gives its notes their addresses. Where it goes, or nil.
+        func take(_ source: URL) -> URL? {
+            let inside = AppleNotesImport.key(target)
+            let picked = AppleNotesImport.key(source)
+            if isFolder(source), inside == picked || inside.hasPrefix(picked + "/") {
+                problem(source, "the folder the notes go into is in it")
+                return nil
             }
-            let contents = ((try? FileManager.default.contentsOfDirectory(at: source, includingPropertiesForKeys: [.isDirectoryKey, .isPackageKey], options: .skipsHiddenFiles)) ?? [])
-                .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
-            let attachments = contents.filter { isFolder($0) && $0.lastPathComponent.lowercased() == "attachments" }
-            let rest = contents.filter { item in !attachments.contains(item) }
+            guard let item = read(source) else { return nil }
+            return make(item, in: target)
+        }
+
+        private func read(_ url: URL) -> Item? {
+            guard isFolder(url) else { return AppleNotesImport.isNote(url) ? .note(url, attachments: []) : .file(url) }
+            let contents = listing(url)
+            let hasNotes = contents.contains { AppleNotesImport.isNote($0) && !isFolder($0) }
+            // Notes' Attachments sits next to the notes it is for, and has no notes in it; a folder of yours in Notes
+            // called Attachments, exported with the others, is a folder like them.
+            let attachments = contents.filter { item in
+                hasNotes && isFolder(item) && item.lastPathComponent.lowercased() == "attachments"
+                    && !listing(item).contains { AppleNotesImport.isNote($0) && !isFolder($0) }
+            }
+            let rest = contents.filter { !attachments.contains($0) }
             // The folder Notes makes for a single note, named after it, is just that note.
-            if rest.count == 1, let note = rest.first, AppleNotesImport.isNote(note),
-               AppleNotesImport.sameName(note.deletingPathExtension().lastPathComponent, source.lastPathComponent) {
-                attachmentFolders += attachments.map { ($0, folder) }
-                return reserve(note, in: folder)
+            if rest.count == 1, let note = rest.first, AppleNotesImport.isNote(note), !isFolder(note),
+               AppleNotesImport.sameName(note.deletingPathExtension().lastPathComponent, url.lastPathComponent) {
+                return .note(note, attachments: attachments)
             }
-            guard let made = FileOperations.createFolder(in: folder, name: source.lastPathComponent) else { return nil }
-            attachmentFolders += attachments.map { ($0, made) }
-            for item in rest { _ = plan(item, into: made) }
-            return made
+            return .folder(url, rest.compactMap(read), attachments: attachments)
+        }
+
+        /// What is in a folder, hidden files too (a note may be called ".NET plans"), but not the Finder's own.
+        private func listing(_ folder: URL) -> [URL] {
+            ((try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.isDirectoryKey, .isPackageKey])) ?? [])
+                .filter { !AppleNotesImport.isClutter($0) }
+                .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+        }
+
+        private func make(_ item: Item, in folder: URL) -> URL? {
+            switch item {
+            case .note(let url, let attachments):
+                attachmentFolders += attachments.map { ($0, folder) }
+                return reserve(url, in: folder)
+            case .file(let url):
+                return copy(url, into: folder)
+            case .folder(let url, let items, let attachments):
+                let name = FileOperations.fileName(from: url.lastPathComponent)
+                guard let made = FileOperations.createFolder(in: folder, name: name.isEmpty ? "Folder" : name) else {
+                    problem(url, "couldn’t be made in “\(folder.lastPathComponent)”, with what is in it")
+                    return nil
+                }
+                if FileNode.samePath(folder, target) { added.append(made) }
+                attachmentFolders += attachments.map { ($0, made) }
+                for item in items { _ = make(item, in: made) }
+                return made
+            }
         }
 
         private func isFolder(_ url: URL) -> Bool {
@@ -285,75 +391,127 @@ enum AppleNotesImport {
             return values?.isDirectory == true && values?.isPackage != true
         }
 
-        /// A note's address in `folder`: its name, or its name with a number when a file or another note of the import
-        /// has it.
+        /// A note's address in `folder`: its name, without dots before it, or with a number when a file there or
+        /// another note of the import has it.
         private func reserve(_ note: URL, in folder: URL) -> URL {
-            let name = note.deletingPathExtension().lastPathComponent
-            func address(_ number: Int) -> URL {
-                folder.appendingPathComponent(number < 2 ? name : "\(name) \(number)").appendingPathExtension("md")
-            }
-            var number = 1
-            while reserved.contains(address(number).path) || FileManager.default.fileExists(atPath: address(number).path) { number += 1 }
-            let destination = address(number)
-            reserved.insert(destination.path)
+            let destination = freeAddress(for: note, in: folder)
+            reserved.insert(AppleNotesImport.nameKey(destination))
             notes.append((note, destination))
             destinations[AppleNotesImport.key(note)] = destination
             return destination
         }
 
+        private func freeAddress(for note: URL, in folder: URL) -> URL {
+            let clean = FileOperations.fileName(from: note.deletingPathExtension().lastPathComponent)
+            let name = clean.isEmpty ? "Untitled" : clean
+            func address(_ number: Int) -> URL {
+                folder.appendingPathComponent(number < 2 ? name : "\(name) \(number)").appendingPathExtension("md")
+            }
+            var number = 1
+            while reserved.contains(AppleNotesImport.nameKey(address(number))) || FileManager.default.fileExists(atPath: address(number).path) { number += 1 }
+            return address(number)
+        }
+
         /// A file other than a note, copied as it is, with an extension when Notes wrote it without one.
         @discardableResult
         private func copy(_ file: URL, into folder: URL) -> URL? {
-            let name = file.deletingPathExtension().lastPathComponent
+            let clean = FileOperations.fileName(from: file.deletingPathExtension().lastPathComponent)
             let ext = file.pathExtension.isEmpty ? (isFolder(file) ? nil : AppleNotesImport.sniffedExtension(of: file)) : file.pathExtension
-            let destination = FileOperations.uniqueURL(in: folder, name: name, extension: ext)
+            let destination = FileOperations.uniqueURL(in: folder, name: clean.isEmpty ? "File" : clean, extension: ext)
             var done = false
-            NSFileCoordinator().coordinate(readingItemAt: file, options: [], writingItemAt: destination, options: .forReplacing, error: nil) { from, to in
+            NSFileCoordinator().coordinate(readingItemAt: file, options: [], writingItemAt: destination, options: [], error: nil) { from, to in
                 done = (try? FileManager.default.copyItem(at: from, to: to)) != nil
             }
-            return done ? destination : nil
+            guard done else {
+                problem(file, "couldn’t be copied")
+                return nil
+            }
+            if FileNode.samePath(folder, target) { added.append(destination) }
+            return destination
         }
 
         func writeNotes() {
-            for (source, destination) in notes {
+            for (source, planned) in notes {
+                let plannedKey = planned.path
                 guard let text = FileOperations.read(source, coordinator: NSFileCoordinator()) else {
-                    failed.insert(destination.path)
+                    failed.insert(plannedKey)
+                    problem(source, "couldn’t be read")
                     continue
                 }
                 let title = source.deletingPathExtension().lastPathComponent
-                let converted = AppleNotesImport.convert(text, title: title) { self.target($0, in: source, goingTo: destination) }
+                let converted = AppleNotesImport.convert(text, title: title) { self.linkTarget($0, in: source, goingTo: planned) }
                 let dates = try? FileManager.default.attributesOfItem(atPath: source.path)
-                var done = false
-                NSFileCoordinator().coordinate(writingItemAt: destination, options: .forReplacing, error: nil) { url in
-                    done = (try? Data(converted.utf8).write(to: url, options: .atomic)) != nil
-                    // The dates the note had in Notes, if its export kept them; else when it was exported.
-                    var kept: [FileAttributeKey: Any] = [:]
-                    if let created = dates?[.creationDate] { kept[.creationDate] = created }
-                    if let modified = dates?[.modificationDate] { kept[.modificationDate] = modified }
-                    if done, !kept.isEmpty { try? FileManager.default.setAttributes(kept, ofItemAtPath: url.path) }
+                // A note of the name may have come meanwhile, from iCloud say: it stays, and this one takes the next name.
+                var destination = planned
+                var outcome = write(converted, to: destination, dates: dates)
+                while outcome == .taken {
+                    destination = freeAddress(for: destination, in: destination.deletingLastPathComponent())
+                    reserved.insert(AppleNotesImport.nameKey(destination))
+                    destinations[AppleNotesImport.key(source)] = destination
+                    outcome = write(converted, to: destination, dates: dates)
                 }
-                if done { written += 1 } else { failed.insert(destination.path) }
+                guard outcome == .written else {
+                    failed.insert(plannedKey)
+                    problem(source, "couldn’t be written")
+                    continue
+                }
+                written[plannedKey] = destination
+                if FileNode.samePath(destination.deletingLastPathComponent(), target) { added.append(destination) }
             }
+        }
+
+        private enum Outcome { case written, taken, failed }
+
+        /// Writes a new note, never over a file: when one has the name, it says so.
+        private func write(_ text: String, to url: URL, dates: [FileAttributeKey: Any]?) -> Outcome {
+            var outcome = Outcome.failed
+            NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: nil) { url in
+                do {
+                    try Data(text.utf8).write(to: url, options: .withoutOverwriting)
+                    outcome = .written
+                } catch {
+                    outcome = FileManager.default.fileExists(atPath: url.path) ? .taken : .failed
+                    return
+                }
+                // The dates the note had in Notes, if its export kept them; else when it was exported.
+                var kept: [FileAttributeKey: Any] = [:]
+                if let created = dates?[.creationDate] { kept[.creationDate] = created }
+                if let modified = dates?[.modificationDate] { kept[.modificationDate] = modified }
+                if !kept.isEmpty { try? FileManager.default.setAttributes(kept, ofItemAtPath: url.path) }
+            }
+            return outcome
         }
 
         /// What a link in a note of the export points at: another note of the import, or a file of the export, copied
         /// into the `.assets` of the folder the note goes to.
-        private func target(_ address: String, in note: URL, goingTo destination: URL) -> Target? {
+        private func linkTarget(_ address: String, in note: URL, goingTo destination: URL) -> Target? {
             guard let file = AppleNotesImport.file(address, from: note.deletingLastPathComponent()) else { return nil }
             let key = AppleNotesImport.key(file)
             guard boundaries.contains(where: { key == $0 || key.hasPrefix($0 + "/") }) else { return nil }
-            if let other = destinations[key] { return .note(linkName(other, from: destination)) }
-            guard !isFolder(file), let name = asset(file, in: destination.deletingLastPathComponent()) else { return nil }
+            if let other = destinations[key] { return noteTarget(other, from: destination) }
+            guard !isFolder(file) else { return nil }
+            // Taken care of here, copied or not: it isn't copied again, loose, with the files nothing links to.
             linked.insert(key)
+            guard let name = asset(file, in: destination.deletingLastPathComponent()) else {
+                problem(file, "couldn’t be copied for “\(destination.deletingPathExtension().lastPathComponent)”")
+                return nil
+            }
             return .asset(LinkUpdate.encoded(".assets/" + name), isPicture: AppleNotesImport.isPicture(name))
         }
 
-        /// How `[[…]]` names another note of the import: by its name in the same folder, else with its folder's name
-        /// before it, which finds it wherever else a note of its name is.
-        private func linkName(_ other: URL, from note: URL) -> String {
+        /// Another note of the import: by `[[name]]` in the same folder, where that finds it first, when its name has
+        /// none of the characters a `[[link]]` reads as more than a name; else by its address from the note's folder,
+        /// which finds exactly it, whatever other note of its name there is.
+        private func noteTarget(_ other: URL, from note: URL) -> Target {
             let name = other.deletingPathExtension().lastPathComponent
-            let folder = other.deletingLastPathComponent()
-            return FileNode.samePath(folder, note.deletingLastPathComponent()) ? name : folder.lastPathComponent + "/" + name
+            let here = note.deletingLastPathComponent().standardizedFileURL.pathComponents
+            let there = other.standardizedFileURL.pathComponents
+            var common = 0
+            while common < min(here.count, there.count - 1), here[common] == there[common] { common += 1 }
+            let path = (Array(repeating: "..", count: here.count - common) + there[common...]).joined(separator: "/")
+            let sameFolder = common == here.count && common == there.count - 1
+            let plain = !name.contains { "#|^[]".contains($0) }
+            return .note(wiki: sameFolder && plain ? name : nil, address: LinkUpdate.encoded(path))
         }
 
         /// A file a note links to, in the `.assets` of `folder`: its name there.
@@ -374,24 +532,37 @@ enum AppleNotesImport {
                 destination = assets.appendingPathComponent(name)
             }
             var done = false
-            NSFileCoordinator().coordinate(readingItemAt: file, options: [], writingItemAt: destination, options: .forReplacing, error: nil) { from, to in
+            NSFileCoordinator().coordinate(readingItemAt: file, options: [], writingItemAt: destination, options: [], error: nil) { from, to in
                 done = (try? FileManager.default.copyItem(at: from, to: to)) != nil
             }
             guard done else { return nil }
             copied[id] = name
+            if FileNode.samePath(folder, target) { added.append(destination) }
             return name
         }
 
-        /// The files of an Attachments folder no note linked to come along as files next to the notes, where they can
-        /// be seen, rather than being lost.
+        /// The files of an Attachments folder no note linked to, in it or in folders in it, come along as files next
+        /// to the notes, where they can be seen, rather than being lost.
         func keepUnlinkedFiles() {
             for (folder, destination) in attachmentFolders {
-                let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.isDirectoryKey], options: .skipsHiddenFiles)) ?? []
-                for file in files.sorted(by: { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending })
-                where !linked.contains(AppleNotesImport.key(file)) {
+                let enumerator = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: [.isRegularFileKey])
+                let files = (enumerator?.allObjects as? [URL] ?? [])
+                    .filter { (try? $0.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true && !AppleNotesImport.isClutter($0) }
+                    .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+                for file in files where !linked.contains(AppleNotesImport.key(file)) {
                     copy(file, into: destination)
                 }
             }
+        }
+
+        /// Something that couldn't come over, by where it is in the export.
+        private func problem(_ url: URL, _ why: String) {
+            let path = AppleNotesImport.key(url)
+            let place = boundaries.first { path == $0 || path.hasPrefix($0 + "/") }.map { boundary in
+                (boundary as NSString).lastPathComponent + path.dropFirst(boundary.count)
+            } ?? url.lastPathComponent
+            let line = "\(place): \(why)"
+            if !problems.contains(line) { problems.append(line) }
         }
     }
 }
