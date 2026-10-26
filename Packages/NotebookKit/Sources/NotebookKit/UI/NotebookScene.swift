@@ -49,10 +49,10 @@ public struct NotebookScene: Scene {
                     .keyboardShortcut("p", modifiers: .command)
             }
             CommandGroup(replacing: .newItem) {
-                Button { workspace.newNote() } label: { Label("New Note", systemImage: "square.and.pencil") }
+                Button { inMainWindow { workspace.newNote() } } label: { Label("New Note", systemImage: "square.and.pencil") }
                     .keyboardShortcut("n", modifiers: .command)
                     .disabled(workspace.locations.isEmpty)
-                Button { workspace.newFolder() } label: { Label("New Folder", systemImage: "folder.badge.plus") }
+                Button { inMainWindow { workspace.newFolder() } } label: { Label("New Folder", systemImage: "folder.badge.plus") }
                     .keyboardShortcut("n", modifiers: [.command, .shift])
                     .disabled(workspace.locations.isEmpty)
                 Button { FileWindows.shared.choose() } label: { Label("Open…", systemImage: "arrow.up.forward.square") }
@@ -60,7 +60,7 @@ public struct NotebookScene: Scene {
                 Menu {
                     ForEach(workspace.recentURLs.prefix(10), id: \.self) { url in
                         let kind = FileKind(url: url, isDirectory: false)
-                        Button { workspace.open(url) } label: {
+                        Button { inMainWindow { workspace.open(url) } } label: {
                             Label(kind == .note ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent, systemImage: kind.symbol)
                         }
                     }
@@ -90,14 +90,14 @@ public struct NotebookScene: Scene {
             // The window's own sidebar item, bound to the same state as the toolbar button.
             CommandGroup(replacing: .sidebar) {
                 Button {
-                    withAnimation(Theme.spring) { workspace.isSidebarVisible.toggle() }
+                    inMainWindow { withAnimation(Theme.spring) { workspace.isSidebarVisible.toggle() } }
                 } label: {
                     Label(workspace.isSidebarVisible ? "Hide Sidebar" : "Show Sidebar", systemImage: "sidebar.left")
                 }
                 .keyboardShortcut("s", modifiers: [.command, .control])
                 .disabled(workspace.locations.isEmpty)
                 Button {
-                    withAnimation(Theme.spring) { workspace.isOutlineVisible.toggle() }
+                    inMainWindow { withAnimation(Theme.spring) { workspace.isOutlineVisible.toggle() } }
                 } label: {
                     Label(workspace.isOutlineVisible ? "Hide Outline" : "Show Outline", systemImage: "sidebar.right")
                 }
@@ -124,21 +124,21 @@ public struct NotebookScene: Scene {
                     .keyboardShortcut("0", modifiers: .command)
             }
             CommandMenu("Go") {
-                Button { workspace.search.focus() } label: { Label("Search…", systemImage: "magnifyingglass") }
+                Button { inMainWindow { workspace.search.focus() } } label: { Label("Search…", systemImage: "magnifyingglass") }
                     .keyboardShortcut("f", modifiers: .command)
-                Button { workspace.togglePalette() } label: { Label("Command Palette…", systemImage: "command") }
+                Button { inMainWindow { workspace.togglePalette() } } label: { Label("Command Palette…", systemImage: "command") }
                     .keyboardShortcut("k", modifiers: .command)
                     .disabled(workspace.locations.isEmpty)
                 if settings.showsTodos {
-                    Button { workspace.showTodos() } label: { Label("To-dos", systemImage: "checklist") }
+                    Button { inMainWindow { workspace.showTodos() } } label: { Label("To-dos", systemImage: "checklist") }
                         .keyboardShortcut("r", modifiers: [.command, .shift])
                         .disabled(workspace.locations.isEmpty)
                 }
                 Divider()
-                Button { workspace.goBack() } label: { Label("Back", systemImage: "chevron.backward") }
+                Button { inMainWindow { workspace.goBack() } } label: { Label("Back", systemImage: "chevron.backward") }
                     .keyboardShortcut("[", modifiers: .command)
                     .disabled(!workspace.canGoBack)
-                Button { workspace.goForward() } label: { Label("Forward", systemImage: "chevron.forward") }
+                Button { inMainWindow { workspace.goForward() } } label: { Label("Forward", systemImage: "chevron.forward") }
                     .keyboardShortcut("]", modifiers: .command)
                     .disabled(!workspace.canGoForward)
             }
@@ -182,6 +182,14 @@ public struct NotebookScene: Scene {
         Settings {
             SettingsView(workspace: workspace)
         }
+    }
+
+    /// What the main window shows comes to the front with it, also when a note's own window was in front or the main
+    /// window was closed: a new note made there behind another window seemed not to come.
+    private func inMainWindow(_ action: () -> Void) {
+        // The sidebar is in the main window whatever it shows.
+        if workspace.sidebar?.outline.window?.isKeyWindow != true { workspace.showWindow?() }
+        action()
     }
 
     private func formatButton(_ command: FormatCommand, _ action: Selector, _ key: Character, _ modifiers: EventModifiers, name: String? = nil) -> some View {
