@@ -22,7 +22,9 @@ final class MarkdownTextView: UITextView {
 
     private var isCompact: Bool { bounds.width < 500 }
     private var titleTop: CGFloat { isCompact ? 10 : 28 }
-    var headerHeight: CGFloat { titleTop + titleHeight + 34 }
+    /// The line with the date under the title, as tall as the system's text size makes it.
+    private var metaHeight: CGFloat { max(18, ceil(metaLabel.font.lineHeight) + 2) }
+    var headerHeight: CGFloat { titleTop + titleHeight + 2 + metaHeight + 14 }
     /// The space left and right of the text.
     var sideMargin: CGFloat {
         isCompact ? 20 : max(48, floor((bounds.width - EditorStyle.contentWidth) / 2))
@@ -39,7 +41,7 @@ final class MarkdownTextView: UITextView {
         titleField.adjustsFontSizeToFitWidth = false
         titleField.accessibilityLabel = "Title"
         addSubview(titleField)
-        metaLabel.font = .systemFont(ofSize: 13)
+        metaLabel.font = Self.metaFont()
         metaLabel.textColor = Theme.textTertiary
         metaLabel.adjustsFontForContentSizeCategory = true
         addSubview(metaLabel)
@@ -47,7 +49,7 @@ final class MarkdownTextView: UITextView {
         reminder.contentInsets = .zero
         reminder.imagePadding = 4
         reminder.image = UIImage(systemName: "bell.fill")
-        reminder.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(font: .systemFont(ofSize: 11))
+        reminder.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(font: Self.metaFont(11))
         reminderButton.configuration = reminder
         reminderButton.contentHorizontalAlignment = .leading
         reminderButton.isHidden = true
@@ -65,6 +67,17 @@ final class MarkdownTextView: UITextView {
         headingButton.accessibilityLabel = "Text Style"
         addSubview(headingButton)
         applyTypography()
+        // The note's text follows the system's text size, on top of the size chosen in Settings › Text.
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (view: MarkdownTextView, _: UITraitCollection) in
+            EditorStyle.follow(view.traitCollection.preferredContentSizeCategory)
+            view.reminderButton.configuration?.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(font: Self.metaFont(11))
+            view.setReminder(view.reminderText, isOverdue: view.reminderIsOverdue)
+        }
+    }
+
+    /// The date under the title and the reminder before it: small, as large as the system's text size makes them.
+    private static func metaFont(_ size: CGFloat = 13) -> UIFont {
+        UIFontMetrics(forTextStyle: .footnote).scaledFont(for: .systemFont(ofSize: size))
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -80,6 +93,7 @@ final class MarkdownTextView: UITextView {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
+        if window != nil { EditorStyle.follow(traitCollection.preferredContentSizeCategory) }
         controller?.focusWhenShown()
     }
 
@@ -116,10 +130,11 @@ final class MarkdownTextView: UITextView {
         if !reminderButton.isHidden {
             // Taller than the line, for a fingertip.
             let size = reminderButton.intrinsicContentSize
-            reminderButton.frame = CGRect(x: side, y: titleTop + titleHeight + 2 + 9 - 15, width: size.width, height: 30)
+            let height = max(30, metaHeight + 12)
+            reminderButton.frame = CGRect(x: side, y: titleTop + titleHeight + 2 + (metaHeight - height) / 2, width: size.width, height: height)
             metaStart = reminderButton.frame.maxX + 10
         }
-        metaLabel.frame = CGRect(x: metaStart, y: titleTop + titleHeight + 2, width: max(0, side + width - metaStart), height: 18)
+        metaLabel.frame = CGRect(x: metaStart, y: titleTop + titleHeight + 2, width: max(0, side + width - metaStart), height: metaHeight)
         if laidOutWidth != bounds.width {
             laidOutWidth = bounds.width
             applyTypography()
@@ -133,13 +148,17 @@ final class MarkdownTextView: UITextView {
 
 
     private var knownTopInset: CGFloat = 0
+    private var reminderText: String?
+    private var reminderIsOverdue = false
 
     /// The bell and time of the note's reminder, red once the time has passed; nil for none.
     func setReminder(_ text: String?, isOverdue: Bool) {
+        reminderText = text
+        reminderIsOverdue = isOverdue
         reminderButton.isHidden = text == nil
         var configuration = reminderButton.configuration ?? .plain()
         var title = AttributedString(text ?? "")
-        title.font = .systemFont(ofSize: 13)
+        title.font = Self.metaFont()
         configuration.attributedTitle = title
         configuration.baseForegroundColor = isOverdue ? .systemRed : Theme.accent
         reminderButton.configuration = configuration
