@@ -87,6 +87,26 @@ enum DebugRemote {
             RunLoop.main.add(timer, forMode: .common)
         case "close":
             workspace.closeFile()
+        case "openoutside":
+            // openoutside <path>: what a file handed over by the Files app's Open With or a share does.
+            workspace.openFromOutside(URL(fileURLWithPath: argument))
+        case "insertpicture":
+            // insertpicture [closing]: what a photo from the photo library does, with a red square; `closing` puts it in
+            // as a picker in front closes, as the camera and the scanner do.
+            let picture = UIGraphicsImageRenderer(size: CGSize(width: 40, height: 40)).image { context in
+                UIColor.systemRed.setFill()
+                context.fill(CGRect(x: 0, y: 0, width: 40, height: 40))
+            }
+            guard argument == "closing", let root = editor.textView.window?.rootViewController else { editor.insertPictures([picture]); break }
+            let picker = UIViewController()
+            picker.view.backgroundColor = .systemGray
+            root.topmostPresented.present(picker, animated: true) {
+                picker.dismiss(animated: true)
+                editor.insertPictures([picture])
+            }
+        case "locations":
+            // locations: each location's name and place, as Settings shows them.
+            log("locations: " + workspace.locations.map { "\($0.name) (\($0.place)) \($0.path)" }.joined(separator: " | "))
         case "newnote":
             workspace.newNote(title: argument.isEmpty ? nil : argument)
         case "samplenotes":

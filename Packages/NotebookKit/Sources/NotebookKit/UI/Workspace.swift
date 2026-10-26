@@ -379,7 +379,8 @@ public final class Workspace: NSObject {
                 locations[index].bookmark = bookmark
                 saves = true
             }
-            if let name = survey.name, name != locations[index].name {
+            // On My iPhone is known by its bookmark, which a new location has only now.
+            if let name = Location.placeName(for: locations[index].url, bookmark: locations[index].bookmark) ?? survey.name, name != locations[index].name {
                 locations[index].name = name
                 saves = true
                 reloadsAll = true
@@ -1993,6 +1994,16 @@ extension Workspace: EditorControllerDelegate {
         quickLook(url)
     }
 
+    #if os(iOS)
+    public func editor(_ editor: EditorController, mayWriteIn folder: URL) -> Bool {
+        FolderAccess.mayWrite(in: folder)
+    }
+
+    public func editor(_ editor: EditorController, askToWriteIn folder: URL) async -> Bool {
+        await FolderAccess.ask(for: folder, to: "keep this note's pictures and drawings next to it")
+    }
+    #endif
+
     public func editor(_ editor: EditorController, commitTitle title: String) {
         guard let note else { return }
         let current = note.url.deletingPathExtension().lastPathComponent
@@ -2003,6 +2014,24 @@ extension Workspace: EditorControllerDelegate {
             editor.setTitle(current)
             return
         }
+        #if os(iOS)
+        // A note opened from another app came without its folder, which renaming it needs. The name typed stays
+        // while Notebook asks for it.
+        let folder = note.url.deletingLastPathComponent()
+        if !FolderAccess.mayWrite(in: folder) {
+            let url = note.url
+            Task {
+                let given = await FolderAccess.ask(for: folder, to: "rename this note")
+                if self.note === note {
+                    if given { self.editor(editor, commitTitle: title) } else { editor.setTitle(current) }
+                } else if given {
+                    // Named on the way out (Back), it is renamed all the same.
+                    rename(url, to: wanted)
+                }
+            }
+            return
+        }
+        #endif
         let renaming = rename(note.url, to: wanted, updatingLinks: !note.isNew)
         note.isNew = false
         Task {
