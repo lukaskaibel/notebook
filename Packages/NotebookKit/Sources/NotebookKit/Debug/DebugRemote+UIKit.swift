@@ -286,8 +286,9 @@ enum DebugRemote {
             }
             log("showhidden \(argument): \(workspace.locations.filter(workspace.showsHiddenFolders(in:)).map(\.name))")
         case "activate":
-            // activate <label>: what VoiceOver's double tap does on the button or menu item with that label, in any of
-            // the app's windows: opens a toolbar's menu (More), or a submenu in it, without a touch.
+            // activate <label>: what VoiceOver's double tap does on the view with that label, in any of the app's
+            // windows. UIKit's views only: SwiftUI's and menu items have their labels only while VoiceOver runs (for a
+            // toolbar's menu, menuat).
             var seen: [String] = []
             func find(_ object: NSObject, depth: Int) -> NSObject? {
                 if object.accessibilityLabel == argument, !(object is UIWindow) { return object }
