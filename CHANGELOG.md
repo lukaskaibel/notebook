@@ -65,6 +65,13 @@ versions follow [semantic versioning](https://semver.org).
   version in, rather than closing as if it had been deleted.
 - Leaving a note you took pictures out of no longer downloads the other notes in its folder from iCloud to see whether
   they use those pictures: with one of them still in iCloud, the pictures stay.
+- On iPhone and iPad, On My iPhone (On My iPad) chosen itself as a location was called "File Provider Storage", the
+  name of its folder on disk, on the first screen, in the sidebar and in Settings. It now has the name the Files app
+  gives it, also where you added it before.
+- On iPhone and iPad, a note opened from another app, such as with Share in the Files app, couldn't be renamed or take
+  pictures and drawings when it isn't in one of your locations, since the system gives Notebook only the file. The
+  first time it needs the note's folder, Notebook now asks for it, with the Files app's picker open at that folder, and
+  remembers it after that.
 - On iPhone and iPad, the Files app shows On My iPhone › Notebook (On My iPad › Notebook), the folder Keep Notes on
   This iPhone uses, so its notes can be opened, shared and backed up from there. It was missing.
 - The sidebar on the Mac no longer scrolls back to the open note each time it is saved while you look at another part
