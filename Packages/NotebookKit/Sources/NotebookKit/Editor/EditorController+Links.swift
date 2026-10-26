@@ -87,8 +87,14 @@ extension EditorController {
     }
 
     #if os(macOS)
-    /// The level of the heading the caret is on, in the margin next to it.
+    /// The level of the heading the caret is on, in the margin next to it, and what changed since a version, which
+    /// reaches into the margin.
     func drawMarginMarks(in dirtyRect: NSRect) {
+        if !layoutManager.changeMarks.isEmpty {
+            let origin = textView.textContainerOrigin
+            let glyphs = layoutManager.glyphRange(forBoundingRect: dirtyRect.offsetBy(dx: -origin.x, dy: -origin.y), in: container)
+            layoutManager.drawChangeMarks(in: layoutManager.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil), container: container, origin: origin)
+        }
         guard let (level, marker) = headingMarkLevel,
               let rect = layoutManager.headingMarkRect(at: marker.location, origin: textView.textContainerOrigin),
               rect.intersects(dirtyRect) else { return }

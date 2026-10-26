@@ -23,10 +23,11 @@ fastlane can't do these; they are set by hand.
 | Where | What |
 |---|---|
 | Apps › New App | Platforms **iOS** and **macOS**, name **Notebook – Markdown Notes** (under the icon the app is called Notebook), primary language English (U.S.), bundle ID `com.lukaskbl.Notebook`. |
-| App Privacy | **Data Not Collected.** Notebook has no server, analytics or ads, and nothing of the user's reaches the developer. Place search goes to Apple Maps and hidden folders and reminders to the user's own iCloud key-value store; Apple runs both, and data Apple's own services handle isn't the developer's to declare. |
+| App Privacy | **Data Not Collected.** Notebook has no server, analytics or ads, and nothing of the user's reaches the developer. Place search goes to Apple Maps, hidden folders and reminders to the user's own iCloud key-value store, and earlier versions of notes in iCloud to Notebook's folder in the user's own iCloud; Apple runs all of them, and data Apple's own services handle isn't the developer's to declare. |
 | Pricing and Availability | **Free**, all countries and regions. |
 | Business › Digital Services Act | The account's trader status, which App Store Connect asks for before an app is offered in the EU. Set once for all apps of the account. |
-| Certificates, Identifiers & Profiles › Identifiers › `com.lukaskbl.Notebook` | **iCloud** (key-value storage only, no containers) and **Time Sensitive Notifications**. fastlane turns them on before it fetches the App Store profiles, if they are off. |
+| Certificates, Identifiers & Profiles › Identifiers › `com.lukaskbl.Notebook` | **iCloud** (with CloudKit support) and **Time Sensitive Notifications**. fastlane turns them on before it fetches the App Store profiles, if they are off. |
+| Certificates, Identifiers & Profiles › Identifiers › iCloud Containers | **`iCloud.com.lukaskbl.Notebook`**, description "Notebook": "+" › iCloud Containers › Register. Then, under the App ID `com.lukaskbl.Notebook`, iCloud › Configure › tick the container › Save. Version history keeps the earlier versions of notes in iCloud there. The App Store Connect API can't make a container or give it to an App ID; without it fastlane stops before exporting and says so. A container can't be deleted or renamed. |
 | Certificates, Identifiers & Profiles › Identifiers › `com.lukaskbl.Notebook.Widgets` | The widgets' extension, for iOS and macOS, with no capabilities. fastlane registers it the first time it builds the app, and makes its App Store profiles with the app's. |
 | Users and Access › Integrations | The App Store Connect API key fastlane uses (App Manager or Admin, with access to certificates, identifiers and profiles). |
 

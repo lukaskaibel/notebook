@@ -51,7 +51,8 @@ final class TextRecognizer {
         var reading: PictureText
     }
 
-    private unowned let index: SearchIndex
+    /// Weak, so reading that finishes after its index is gone (in tests) is dropped rather than crashing.
+    private weak var index: SearchIndex?
     private let storeURL: URL?
     private var records: [String: Record] = [:]
     /// What is still to be read, the next last, so taking it is quick with tens of thousands.
@@ -115,7 +116,7 @@ final class TextRecognizer {
         worker = nil
         queue = []
         queued = []
-        index.recognized = [:]
+        index?.recognized = [:]
     }
 
     /// Looks for what to read among files the index found or read again: pictures, the pictures and drawings in
@@ -326,7 +327,7 @@ final class TextRecognizer {
 
     private func publish() {
         guard isEnabled else { return }
-        index.recognized = records.mapValues(\.reading)
+        index?.recognized = records.mapValues(\.reading)
     }
 
     private func save() {
