@@ -150,6 +150,7 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
     func save(quitting: Bool) {
         editor.saveDrawingsNow(waiting: quitting)
         note.update(text: editor.text)
+        note.keepCopyOfChanges()
         if quitting { note.close() } else { note.saveNow() }
     }
 
@@ -251,7 +252,9 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
                 // The notes next to it, which are what its links and theirs find, as they are before it is renamed.
                 (renamed, next) = await Task.detached(priority: .userInitiated) {
                     let targets = LinkTargets.reading(url.deletingLastPathComponent(), deep: false)
-                    return (FileOperations.rename(url, to: name, presenter: note), targets)
+                    let renamed = FileOperations.rename(url, to: name, presenter: note)
+                    if let renamed { NoteHistory.shared.follow(from: url, to: renamed) }
+                    return (renamed, targets)
                 }.value
                 NoteDocument.endMoving(documents, from: url, to: renamed)
             }

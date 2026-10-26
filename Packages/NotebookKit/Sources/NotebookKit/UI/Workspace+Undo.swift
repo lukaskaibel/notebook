@@ -52,6 +52,8 @@ final class FileChange {
         var isFavorite: Bool
         var reminders: [Reminder]
         var hiddenFolders: [String]
+        /// What its versions are under in the History's own Trash (`NoteHistory.trash`).
+        var history: String
     }
 }
 
@@ -214,8 +216,10 @@ extension Workspace {
         let target = (undoing ? change.before : change.after).map(follow)
         var result: URL?
         if change.kind == (undoing ? .make : .trash) {
-            change.remembered = remembered(source)
+            let remembered = remembered(source)
+            change.remembered = remembered
             result = await throwAwayNow(source)
+            if result != nil { NoteHistory.shared.trash(source, as: remembered.history) }
         } else if let target, change.kind == (undoing ? .trash : .make) {
             result = await putBackNow(source, to: target, remembered: change.remembered)
         } else if let target {
@@ -256,6 +260,8 @@ extension Workspace {
             return nil
         }
         showChanges(in: [folder], adding: result.listing.map { [$0] } ?? [])
+        // Its versions come back with it, under the name it has now.
+        if let remembered { NoteHistory.shared.putBack(remembered.history, to: result.url) }
         if let remembered { restore(remembered, at: result.url) }
         if remembered?.openFile == nil { reveal(result.url, select: false) }
         return result.url
@@ -283,7 +289,8 @@ extension Workspace {
             openFile: currentURL.flatMap { FileNode.isSameOrInside($0, url) ? $0 : nil },
             isFavorite: isFavorite(url),
             reminders: reminders.all.filter { isIn($0.note) },
-            hiddenFolders: hidden.keys.filter(isIn)
+            hiddenFolders: hidden.keys.filter(isIn),
+            history: NoteHistory.trashedName()
         )
     }
 
