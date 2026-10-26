@@ -63,6 +63,14 @@ extension EditorController {
     /// renamed or moved. The caret and the scroll position stay where they are. Nothing changes while the text isn't in.
     @discardableResult
     func changeLinks(_ changes: [(range: NSRange, replacement: String)], actionName: String) -> Bool {
+        replace(changes, actionName: actionName)
+    }
+
+    /// Makes several changes, each where it is, as one step of Undo of its own; the selection goes with the text around
+    /// it. What is at `anchor` stays where it is on the screen, found at `movedTo` once the changes are made, else the
+    /// caret. Nothing changes while the text isn't in.
+    @discardableResult
+    func replace(_ changes: [(range: NSRange, replacement: String)], actionName: String, anchor: Int? = nil, movedTo: Int? = nil) -> Bool {
         guard !isWaitingForText, !changes.isEmpty, changes.allSatisfy({ $0.range.upperBound <= storage.length }) else { return false }
         let manager = textView.undoManager
         breakTyping()
@@ -70,7 +78,7 @@ extension EditorController {
         let opens = manager?.groupingLevel == 0
         if opens { manager?.beginUndoGrouping() }
         var selection = self.selection
-        preservingScroll {
+        preservingScroll(anchor: anchor, movedTo: movedTo) {
             // From the last back, so the ranges before stay where they are.
             for change in changes.sorted(by: { $0.range.location > $1.range.location }) {
                 let delta = (change.replacement as NSString).length - change.range.length
@@ -547,10 +555,15 @@ extension EditorController {
 
     // MARK: - Checkboxes
 
+    /// Ticks a task or unticks it, as the Tasks plugin does: a to-do that repeats gets the day it was done, and the
+    /// next one is written above it, in one change Undo takes back.
     func toggleCheckbox(line index: Int) {
-        guard let line = document.lines[safe: index], case .listItem(let item) = line.kind, let box = item.checkbox else { return }
-        let selection = self.selection
-        replace(box, with: item.checked ? "[ ]" : "[x]", select: selection, actionName: item.checked ? "Uncheck" : "Check")
+        guard let line = document.lines[safe: index], case .listItem(let item) = line.kind, item.isTask else { return }
+        let source = nsText.substring(with: line.range)
+        guard let marked = Todos.markingChanges(in: nsText, document: document, line: index, as: item.checked ? .open : .done, today: .today) else { return }
+        // The line clicked stays under the pointer, ticked, as the next one goes in above it.
+        guard replace(marked.changes, actionName: item.checked ? "Uncheck" : "Check", anchor: line.range.location, movedTo: line.range.location + marked.above) else { return }
+        if !item.checked, let next = marked.next { delegate?.editor(self, tickedRepeatingTodo: source, line: index, next: next) }
     }
 
     // MARK: - Formatting

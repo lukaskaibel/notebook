@@ -167,6 +167,7 @@ enum DemoLibrary {
             - [x] Two photos from the booth at the station
             - [ ] Find the old passport
             - €70, by card at the town hall
+        - [ ] Water the plants 🔁 every week \(due(0))
         - [x] Pay the electricity bill
         - [-] Sell the old bike
 

@@ -156,6 +156,16 @@ enum DebugRemote {
                 let rect = editor.layoutManager.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: editor.container)
                 editor.debugTap(at: CGPoint(x: rect.midX + editor.textOrigin.x, y: rect.midY + editor.textOrigin.y))
             }
+        case "doubletapobject":
+            // Two taps on what is drawn at the start of some text, right after each other at the same place on the
+            // screen, as a double tap is, though the note may move under the first.
+            let range = (editor.text as NSString).range(of: argument)
+            guard range.location != NSNotFound, let rect = editor.layoutManager.rect(forObjectAt: range.location, origin: editor.textOrigin) else {
+                return log("no object at: \(argument)")
+            }
+            let onScreen = editor.textView.convert(CGPoint(x: rect.midX, y: rect.midY), to: nil)
+            editor.debugTap(at: CGPoint(x: rect.midX, y: rect.midY))
+            editor.debugTap(at: editor.textView.convert(onScreen, from: nil))
         case "format":
             if let format = FormatCommand.allCases.first(where: { $0.name.lowercased().replacingOccurrences(of: " ", with: "") == argument.lowercased() }) {
                 editor.perform(format)
