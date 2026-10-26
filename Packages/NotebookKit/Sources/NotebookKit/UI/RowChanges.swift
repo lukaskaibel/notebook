@@ -17,6 +17,27 @@ struct RowChanges<ID: Hashable> {
     /// Nil when it would take more than `limit` steps, for a list to show all at once instead: a folder of thousands
     /// sorted another way.
     init?(from old: [ID], to new: [ID], limit: Int = .max) {
+        // The rows the same at the start and at the end take no steps and are left out first: most often nothing moved,
+        // or one row did, and a long list is then only gone through once.
+        var start = 0
+        while start < old.count, start < new.count, old[start] == new[start] { start += 1 }
+        var end = 0
+        while end < old.count - start, end < new.count - start, old[old.count - 1 - end] == new[new.count - 1 - end] { end += 1 }
+        guard start + end < max(old.count, new.count) else {
+            steps = []
+            return
+        }
+        guard let middle = Self(middleOf: Array(old[start..<(old.count - end)]), Array(new[start..<(new.count - end)]), limit: limit) else { return nil }
+        steps = middle.steps.map { step in
+            switch step {
+            case .remove(let index): .remove(index + start)
+            case .move(let from, let to): .move(from + start, to + start)
+            case .insert(let index): .insert(index + start)
+            }
+        }
+    }
+
+    private init?(middleOf old: [ID], _ new: [ID], limit: Int) {
         let newIDs = Set(new)
         let oldIDs = Set(old)
         let gone = old.indices.filter { !newIDs.contains(old[$0]) }

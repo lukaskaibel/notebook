@@ -230,16 +230,24 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
 
     /// Folders whose contents changed, or were read for the first time: then their files fade in below them, and
     /// nothing else in the sidebar moves. Files that came, went or took another place in the order (a note just saved,
-    /// when the newest come first) fade and slide there, as in the Finder. The selected row stays selected, and on
-    /// screen if it was.
+    /// when the newest come first) fade and slide there, as in the Finder. The open note stays selected, and on screen
+    /// if it was.
     func reload(_ nodes: [FileNode]) {
         guard renaming == nil else { heldNodes += nodes; return }
-        let expanded = expandedPaths()
-        let selected = outline.selectedRow
-        let selectedInView = selected >= 0 && NSLocationInRange(selected, outline.rows(in: outline.visibleRect))
+        // The folders open before rows are reloaded, which closes the folders in them, to open them again: gone through
+        // only then, as it means every row, and a note saved in a folder of thousands only moves rows.
+        var expanded: Set<String>?
+        func keepExpansion() {
+            if expanded == nil { expanded = expandedPaths() }
+        }
+        // Where the open note's row (or the folder you chose) was, if it was there yet: whether it is selected doesn't
+        // matter, a ⌘-click or closing its folder takes the selection away.
+        let current = currentNode()
+        let rowBefore = current.map { outline.row(forItem: $0) } ?? -1
+        let placeBefore = rowBefore >= 0 ? outline.rect(ofRow: rowBefore) : nil
+        let wasOnScreen = placeBefore?.intersects(outline.visibleRect) ?? false
         var topChanged = false
         var shown = false
-        var moved = false
         for node in nodes {
             let before = visible[ObjectIdentifier(node)]
             let wasEmpty = before?.isEmpty ?? true
@@ -259,9 +267,10 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
                     }
                     shown = true
                 } else if outline.isItemExpanded(section) {
-                    moved = rearrange(in: section, from: old, to: section.children) || moved
+                    rearrange(in: section, from: old, to: section.children, beforeReloading: keepExpansion)
                     shown = true
                 } else {
+                    keepExpansion()
                     outline.reloadItem(section, reloadChildren: true)
                 }
             } else if outline.row(forItem: node) >= 0 {
@@ -270,40 +279,53 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
                     outline.insertItems(at: IndexSet(integersIn: 0..<children.count), inParent: node, withAnimation: .effectFade)
                     shown = true
                 } else if outline.isItemExpanded(node), let before, !before.isEmpty {
-                    moved = rearrange(in: node, from: before, to: children) || moved
+                    rearrange(in: node, from: before, to: children, beforeReloading: keepExpansion)
                     shown = true
                 } else {
+                    keepExpansion()
                     outline.reloadItem(node, reloadChildren: true)
                     shown = shown || outline.isItemExpanded(node)
                 }
             }
         }
         if topChanged {
+            keepExpansion()
             rebuildTop()
             outline.reloadData()
             expandSections()
         }
         // A folder read ahead of time, still closed, changes nothing on screen.
         guard topChanged || shown || !wantedExpansion.isEmpty || !movedExpansion.isEmpty else { return }
-        restoreExpansion(expanded)
-        // A selected row that shows for the first time (the note open at launch, its folder just read) is scrolled
-        // to; one that was on screen stays there, following its file to its new place; one you scrolled away from is
-        // left where it is.
-        selectCurrent(scrolling: false)
-        let row = outline.selectedRow
-        if row >= 0, selected < 0 || selectedInView {
-            scrollRowToVisible(row, animated: moved && selected >= 0)
+        if expanded != nil || !wantedExpansion.isEmpty || !movedExpansion.isEmpty { restoreExpansion(expanded ?? []) }
+        if let current { selectRow(for: current, scrolling: false) } else { selectCurrent(scrolling: false) }
+        // The open note's row showing for the first time (open at launch, its folder just read) is scrolled to. One that
+        // was on screen and took another place is followed, gliding, only as far as it takes to keep it in view. Any
+        // other change scrolls nothing: not when you are looking at another part of the sidebar, nor to show a row in
+        // full that showed in part.
+        guard let current else { return }
+        let row = outline.row(forItem: current)
+        guard row >= 0 else { return }
+        if rowBefore < 0 {
+            outline.scrollRowToVisible(row)
+        } else if wasOnScreen, outline.rect(ofRow: row).minY != placeBefore?.minY {
+            scrollRowToVisible(row, animated: true)
         }
+    }
+
+    /// The row selectCurrent selects: the folder you chose, else the open file. Nil while To-dos shows.
+    private func currentNode() -> FileNode? {
+        guard !workspace.showsTodos, let url = workspace.selectedFolder ?? workspace.currentURL else { return nil }
+        return workspace.node(for: url, reading: false)
     }
 
     /// Moves, adds and takes away rows so they show a folder's files as they are now: they slide to their new places
     /// and fade in and out, and the rest of the sidebar stays as it is. Too many changes at once show all at once.
-    /// The rows that stay show what changed about their files (in iCloud or not, a folder's look). Says whether any
-    /// row moved.
-    private func rearrange(in parent: AnyObject, from old: [AnyObject], to new: [AnyObject]) -> Bool {
+    /// The rows that stay show what changed about their files (in iCloud or not, a folder's look).
+    private func rearrange(in parent: AnyObject, from old: [AnyObject], to new: [AnyObject], beforeReloading: () -> Void) {
         guard let changes = RowChanges(from: old.map(ObjectIdentifier.init), to: new.map(ObjectIdentifier.init), limit: 200) else {
+            beforeReloading()
             outline.reloadItem(parent, reloadChildren: true)
-            return false
+            return
         }
         isSelectingProgrammatically = true
         if changes.count > 0 {
@@ -317,12 +339,18 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             }
             outline.endUpdates()
         }
-        let came = Set(new.map(ObjectIdentifier.init)).subtracting(old.map(ObjectIdentifier.init))
+        // Only the rows on screen, looked at one by one: a folder can hold thousands of files, and this runs at every
+        // save of a note in it.
+        let came = Set(changes.steps.compactMap { if case .insert(let index) = $0 { ObjectIdentifier(new[index]) } else { nil } })
         let onScreen = outline.rows(in: outline.visibleRect)
-        let rows = IndexSet(new.lazy.filter { !came.contains(ObjectIdentifier($0)) }.map { self.outline.row(forItem: $0) }.filter { NSLocationInRange($0, onScreen) })
+        var rows = IndexSet()
+        for row in onScreen.location..<NSMaxRange(onScreen) {
+            guard let item = outline.item(atRow: row) as AnyObject?, outline.parent(forItem: item) as AnyObject? === parent,
+                  !came.contains(ObjectIdentifier(item)) else { continue }
+            rows.insert(row)
+        }
         if !rows.isEmpty { outline.reloadData(forRowIndexes: rows, columnIndexes: [0]) }
         isSelectingProgrammatically = false
-        return changes.steps.contains { if case .move = $0 { true } else { false } }
     }
 
     private func section(forRoot root: FileNode) -> SidebarEntry? {

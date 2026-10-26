@@ -221,12 +221,12 @@ public final class FileNode: NSObject, Observable {
         return changed
     }
 
-    /// Takes in a folder you just made in this one, so it shows before the folder has been read again: made now, it
-    /// goes where reading the folder will put it, at the top when the newest come first. Says whether it wasn't there yet.
+    /// Takes in a folder you just made in this one, so it shows before the folder has been read again. Says whether
+    /// it wasn't there yet.
     @discardableResult
     func insertFolder(_ url: URL) -> Bool {
         guard let children, !children.contains(where: { Self.samePath($0.url, url) }) else { return false }
-        return update(adding: [Listing(url: url, kind: .folder, modified: .now, created: .now)])
+        return update(adding: [Listing(url: url, kind: .folder)])
     }
 
     /// Takes in what you just did in this folder, so it shows before the folder has been read again: the files that
@@ -333,7 +333,8 @@ public final class FileNode: NSObject, Observable {
             items.append((listing, listing.url.lastPathComponent))
         }
         for folder in linked {
-            let values = try? folder.url.resourceValues(forKeys: [.contentModificationDateKey, .creationDateKey])
+            // Through a URL of its own: the linked folder's is kept, and a URL keeps what it read about its file.
+            let values = try? URL(fileURLWithPath: folder.url.path).resourceValues(forKeys: [.contentModificationDateKey, .creationDateKey])
             items.append((Listing(url: folder.url, kind: .folder, modified: values?.contentModificationDate, created: values?.creationDate, linkedName: folder.name),
                           folder.name))
         }

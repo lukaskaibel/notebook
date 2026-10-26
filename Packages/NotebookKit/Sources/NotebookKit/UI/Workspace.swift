@@ -632,21 +632,21 @@ public final class Workspace: NSObject {
         let folders = pendingFolders
         pendingFolders = []
         var changed: [FileNode] = []
+        var seen = Set<ObjectIdentifier>()
+        func add(_ node: FileNode) {
+            if node.isFolder, node.hasLoadedChildren, seen.insert(ObjectIdentifier(node)).inserted { changed.append(node) }
+        }
         var indexFolders: [URL] = []
         for path in folders {
             let url = URL(fileURLWithPath: path)
             if url.lastPathComponent == ".assets" { continue }
             indexFolders.append(url)
-            if let node = existingNode(for: url), node.isFolder, node.hasLoadedChildren { changed.append(node) }
-        }
-        // A folder's own date changes with what is in it (saving a note puts a new file in its place): where folders are
-        // sorted by date, it may take another place in the folder it is in, which is read again too.
-        let parents = Set(folders.map { URL(fileURLWithPath: $0).deletingLastPathComponent().path }).subtracting(folders)
-        for path in parents {
-            let url = URL(fileURLWithPath: path)
-            guard NotebookSettings.shared.fileOrders.order(of: url).isByDate, let node = existingNode(for: url), node.isFolder, node.hasLoadedChildren,
-                  !changed.contains(node) else { continue }
-            changed.append(node)
+            guard let node = existingNode(for: url), node.isFolder else { continue }
+            add(node)
+            // A folder's own dates change with what is in it (saving a note puts a new file in its place), so the folder
+            // it is in is read again too, whatever the order: they are right when you choose to sort by date. A folder
+            // iCloud Drive links in (Desktop) is in the location's top.
+            if let parent = node.parent { add(parent) }
         }
         read(changed, again: true)
         index.refresh(folders: indexFolders, locations: locations)
@@ -1252,10 +1252,10 @@ public final class Workspace: NSObject {
                 return nil
             }
             let inbox = inbox.map(follow)
-            let made = await Task.detached(priority: .userInitiated) { () -> (url: URL, folder: URL, listing: FileNode.Listing?, madeFolder: Bool)? in
+            let made = await Task.detached(priority: .userInitiated) { () -> (url: URL, folder: URL, listing: FileNode.Listing?, folderListing: FileNode.Listing?)? in
                 let folder = inbox.flatMap { FileManager.default.fileExists(atPath: chosen.path) ? nil : $0 } ?? chosen
                 guard let made = FileOperations.createNote(in: folder, title: title ?? "Untitled", text: text) else { return nil }
-                return (made.url, folder, FileNode.listing(of: made.url), made.madeFolder)
+                return (made.url, folder, FileNode.listing(of: made.url), made.madeFolder ? FileNode.listing(of: folder) ?? FileNode.Listing(url: folder, kind: .folder) : nil)
             }.value
             changeDone(change, to: made?.url)
             guard let made else {
@@ -1265,8 +1265,8 @@ public final class Workspace: NSObject {
             // The Inbox, made for the first note in it, shows too.
             let folder = made.folder
             let parent = folder.deletingLastPathComponent()
-            showChanges(in: made.madeFolder ? [parent, folder] : [folder],
-                        adding: (made.listing.map { [$0] } ?? []) + (made.madeFolder ? [FileNode.Listing(url: folder, kind: .folder)] : []))
+            showChanges(in: made.folderListing != nil ? [parent, folder] : [folder],
+                        adding: (made.listing.map { [$0] } ?? []) + (made.folderListing.map { [$0] } ?? []))
             open(made.url, focusTitle: title == nil)
             // After opening it: a new note left empty for this one goes, with its own New Note.
             if title == nil { newNoteChange = change }
@@ -1300,13 +1300,17 @@ public final class Workspace: NSObject {
         let change = keepForUndo(FileChange(.make, "New Folder"))
         changeFiles { [self] follow in
             let parent = follow(parent)
-            let made = await Task.detached(priority: .userInitiated, operation: { FileOperations.createFolder(in: parent, name: name) }).value
-            changeDone(change, to: made)
-            guard let url = made else {
+            let made = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?)? in
+                FileOperations.createFolder(in: parent, name: name).map { ($0, FileNode.listing(of: $0)) }
+            }.value
+            changeDone(change, to: made?.url)
+            guard let made else {
                 return report("The folder couldn’t be made.", "Notebook can’t write in “\(folderName(parent))”.")
             }
-            // In the sidebar at once, however long reading its folder takes in iCloud.
-            showChanges(in: [parent], adding: [FileNode.Listing(url: url, kind: .folder)])
+            let url = made.url
+            // In the sidebar at once, however long reading its folder takes in iCloud, with its dates: where the newest
+            // come first, it shows at the top straight away, where reading its folder again will keep it.
+            showChanges(in: [parent], adding: [made.listing ?? FileNode.Listing(url: url, kind: .folder, modified: .now, created: .now)])
             // Selected, on the Mac with its name ready to type over. Revealing it reads its folder if it hasn't been.
             #if os(macOS)
             selectedFolder = url
@@ -1484,8 +1488,10 @@ public final class Workspace: NSObject {
         }
         let node = loadedNode(old)
         let kind = listing?.kind ?? node?.kind ?? .other
+        // A file that couldn't be read at its new place keeps the dates it had, and with them its place in a date order.
+        let kept = node.map { FileNode.Listing(url: new, kind: kind, isInCloud: $0.isInCloud, modified: $0.modified, created: $0.created, icon: $0.icon) }
         showChanges(in: [old.deletingLastPathComponent(), new.deletingLastPathComponent()], removing: [old],
-                    adding: [listing ?? FileNode.Listing(url: new, kind: kind)], carrying: node)
+                    adding: [listing ?? kept ?? FileNode.Listing(url: new, kind: kind)], carrying: node)
         // Search reads what is in a folder again only one folder at a time, as files change in it.
         if kind == .folder { index.refresh(folders: [new], deep: [new], locations: locations) }
     }

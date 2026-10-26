@@ -23,7 +23,7 @@ final class FileOrderTests: XCTestCase {
     override func tearDown() async throws {
         orders.set(.name, for: nil)
         NotebookSettings.shared.foldersFirst = true
-        for key in ["NotebookLibrary", "NotebookLibraryName", "expandedFolders", "collapsedSections", "fileOrder"] {
+        for key in ["NotebookLibrary", "NotebookLibraryName", "NotebookICloudDrive", "expandedFolders", "collapsedSections", "fileOrder"] {
             UserDefaults.standard.removeObject(forKey: key)
         }
         window?.close()
@@ -103,18 +103,6 @@ final class FileOrderTests: XCTestCase {
         XCTAssertEqual(root.visibleChildren().map(\.name), ["A", "B"])
     }
 
-    func testAFolderMadeHereGoesToTheTopWhenTheNewestComeFirst() throws {
-        try note("Older", edited: 100)
-        let root = FileNode(url: notes, kind: .folder, parent: nil)
-        try FileManager.default.createDirectory(at: notes.appendingPathComponent("Aaa"), withIntermediateDirectories: true)
-        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -50)], ofItemAtPath: notes.appendingPathComponent("Aaa").path)
-        root.apply(FileNode.list(notes))
-        orders.set(.dateEdited, for: notes)
-        try FileManager.default.createDirectory(at: notes.appendingPathComponent("Zzz"), withIntermediateDirectories: true)
-        XCTAssertTrue(root.insertFolder(notes.appendingPathComponent("Zzz")))
-        XCTAssertEqual(root.visibleChildren().map(\.name), ["Zzz", "Aaa", "Older"], "where reading the folder again puts it")
-    }
-
     // MARK: - Steps for a list
 
     func testRowChangesTurnOneOrderIntoTheOther() throws {
@@ -137,6 +125,11 @@ final class FileOrderTests: XCTestCase {
     }
 
     func testANoteThatMovesToTheTopIsOneStep() throws {
+        let long = (0..<1000).map { "row \($0)" }
+        var moved = long
+        moved.insert(moved.remove(at: 600), at: 400)
+        XCTAssertEqual(try XCTUnwrap(RowChanges(from: long, to: moved)).steps, [.move(600, 400)], "the rows around it left alone")
+        XCTAssertEqual(try XCTUnwrap(RowChanges(from: long, to: long + ["new"])).steps, [.insert(1000)])
         XCTAssertEqual(try XCTUnwrap(RowChanges(from: ["a", "b", "c", "d"], to: ["d", "a", "b", "c"])).steps, [.move(3, 0)])
         XCTAssertEqual(try XCTUnwrap(RowChanges(from: ["a", "b", "c", "d"], to: ["b", "c", "d", "a"])).steps, [.move(0, 3)])
         XCTAssertEqual(try XCTUnwrap(RowChanges(from: ["a", "b"], to: ["a", "b"])).steps, [])
@@ -229,6 +222,96 @@ final class FileOrderTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(400))
         XCTAssertEqual(sidebar.scrollView.contentView.bounds.origin, scrolled, "the sidebar jumped to the selected note")
         XCTAssertEqual(selectedName(sidebar), "Note 29")
+
+        // Nothing selected (a ⌘-click took the selection away): the open note saved again, moving, doesn't scroll back.
+        sidebar.outline.deselectAll(nil)
+        try "# Note 29\n\nMore again.\n".write(to: last, atomically: false, encoding: .utf8)
+        await workspace.readAgain(notes)
+        XCTAssertEqual(names(sidebar).prefix(3), ["Notes", "Note 29", "Note 10"])
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertEqual(sidebar.scrollView.contentView.bounds.origin, scrolled, "the sidebar jumped back to the open note")
+    }
+
+    /// A row showing in part at the edge stays as it is when its note is saved without moving: no nudge into full view.
+    func testASaveDoesntNudgeARowShowingInPart() async throws {
+        for index in 0..<30 { try note(String(format: "Note %02d", index), edited: 100) }
+        let (workspace, sidebar) = try await makeSidebar(height: 220)
+        let open = notes.appendingPathComponent("Note 05.md")
+        workspace.open(open)
+        try await until("Note 05 selected") { self.selectedName(sidebar) == "Note 05" }
+        // Half of its row below the bottom edge.
+        let rect = sidebar.outline.rect(ofRow: sidebar.outline.selectedRow)
+        let clip = sidebar.scrollView.contentView
+        clip.setBoundsOrigin(NSPoint(x: 0, y: clip.bounds.minY + (rect.midY - sidebar.outline.visibleRect.maxY)))
+        sidebar.scrollView.reflectScrolledClipView(clip)
+        let place = clip.bounds.origin
+        XCTAssertTrue(isOnScreen(sidebar.outline.selectedRow, in: sidebar))
+        try "# Note 05\n\nMore.\n".write(to: open, atomically: false, encoding: .utf8)
+        await workspace.readAgain(notes)
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertEqual(clip.bounds.origin, place)
+    }
+
+    /// New Folder while the newest come first: the folder shows at the top at once, with its name to type over, and
+    /// stays there when its folder has been read again (on iCloud Drive that takes a while).
+    func testANewFolderShowsAtTheTopAtOnce() async throws {
+        try note("Older", edited: 100)
+        let archive = notes.appendingPathComponent("Archive")
+        try FileManager.default.createDirectory(at: archive, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -500)], ofItemAtPath: archive.path)
+        orders.set(.dateEdited, for: notes)
+        NotebookSettings.shared.foldersFirst = false
+        let (workspace, sidebar) = try await makeSidebar()
+        XCTAssertEqual(names(sidebar), ["Notes", "Older", "Archive"])
+        workspace.reader.delay = 1
+        workspace.newFolder(in: notes)
+        try await until("the new folder shows") { self.names(sidebar).contains("New Folder") }
+        XCTAssertEqual(names(sidebar), ["Notes", "New Folder", "Older", "Archive"], "it showed at the bottom first")
+        XCTAssertFalse(workspace.reader.isIdle, "shown before its folder was read again")
+        try await until("its folder was read again", seconds: 8) { workspace.reader.isIdle }
+        sidebar.endRenaming()
+        XCTAssertEqual(names(sidebar), ["Notes", "New Folder", "Older", "Archive"])
+    }
+
+    /// While sorted by name, a folder's own date still follows what is saved in it, so that choosing Date Edited
+    /// afterwards puts it where it belongs. Changes come from the file system, as from the Finder or iCloud.
+    func testFolderDatesStayRightWhileSortedByName() async throws {
+        try note("First", edited: 3000)
+        let archive = base.appendingPathComponent("Archive")
+        try FileManager.default.createDirectory(at: archive, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -1000)], ofItemAtPath: archive.path)
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -2000)], ofItemAtPath: notes.path)
+        let (workspace, sidebar) = try await makeSidebar()
+        XCTAssertEqual(names(sidebar), ["Archive", "Notes", "First"])
+        try "# New\n".write(to: notes.appendingPathComponent("New.md"), atomically: true, encoding: .utf8)
+        try await until("the folder's new date read") { (workspace.node(for: self.notes, reading: false)?.modified?.timeIntervalSinceNow ?? -100) > -60 }
+        orders.set(.dateEdited, for: notes)
+        XCTAssertEqual(names(sidebar), ["Notes", "New", "First", "Archive"])
+    }
+
+    /// The same for a folder iCloud Drive links in (Desktop): its date is in the location's top.
+    func testALinkedFoldersDateFollowsToo() async throws {
+        let desktop = base.appendingPathComponent("Desktop")
+        let drive = base.appendingPathComponent("Mobile Documents/com~apple~CloudDocs")
+        try FileManager.default.createDirectory(at: desktop, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: drive.appendingPathComponent("Papers"), withIntermediateDirectories: true)
+        let link = drive.appendingPathComponent("Desktop")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: desktop)
+        XCTAssertEqual(lchflags(link.path, UInt32(UF_HIDDEN)), 0)
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -2000)], ofItemAtPath: desktop.path)
+        UserDefaults.standard.set(drive.path, forKey: "NotebookICloudDrive")
+        UserDefaults.standard.set(drive.path, forKey: "NotebookLibrary")
+        let workspace = Workspace()
+        workspace.start()
+        func desktopNode() -> FileNode? {
+            guard let root = workspace.locations.first.flatMap(workspace.root(for:)), root.hasLoadedChildren else { return nil }
+            return root.loadedChildren().first { $0.isLinked && $0.name == "Desktop" }
+        }
+        try await until("iCloud Drive was read, with Desktop") { workspace.hasReadLocations && workspace.reader.isIdle && desktopNode() != nil }
+        let node = try XCTUnwrap(desktopNode())
+        XCTAssertLessThan(try XCTUnwrap(node.modified).timeIntervalSinceNow, -1000)
+        try "# Note\n".write(to: desktop.appendingPathComponent("Note.md"), atomically: true, encoding: .utf8)
+        try await until("Desktop's new date read") { (node.modified?.timeIntervalSinceNow ?? -100) > -60 }
     }
 
     /// Choosing another order sorts the open folders again, keeping the same rows and the selection.
