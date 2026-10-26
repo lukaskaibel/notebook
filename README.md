@@ -482,9 +482,9 @@ Choose the **Notebook** scheme, then **My Mac** or an iPhone or iPad simulator a
 build needs no Apple developer account: without a team, Xcode signs it to run on your Mac and in the Simulator. To run
 it on your own iPhone or iPad, or to sign with your own team, create `Config/Local.xcconfig` with `DEVELOPMENT_TEAM =
 <your team ID>`; it isn't checked in. With a team of your own, give the app an identifier of yours there too,
-`NOTEBOOK_BUNDLE_IDENTIFIER = com.example.Notebook`; the widgets' extension takes it with `.Widgets` after it. A local build keeps hidden folders and reminders on the device; only the App
-Store build, signed with a team, has the iCloud entitlement that takes them to your other devices, and the one for Time
-Sensitive notifications.
+`NOTEBOOK_BUNDLE_IDENTIFIER = com.example.Notebook`; the widgets' extension takes it with `.Widgets` after it. A local
+build keeps hidden folders and reminders on the device; only the App Store build, signed with a team, has the iCloud
+entitlement that takes them to your other devices, and the one for Time Sensitive notifications.
 
 ### Adding your notes
 
