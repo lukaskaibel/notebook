@@ -15,6 +15,13 @@ versions follow [semantic versioning](https://semver.org).
   new note in your default folder, named after the page or the first line, or go at the end of the note you opened
   last. Pictures and files go into the note's `.assets` folder, as when you add them in a note. Notebook writes them
   into your notes as soon as it's open; when that note is open in Notebook, they go in as one step of Undo.
+- Sort the notes and files in a folder by date edited or date created, newest first, as well as by name: View › Sort By
+  on the Mac, Sort By in the ⋯ menu on iPhone and iPad, where it says how a folder is sorted now, in Settings › Sidebar
+  (Settings › Files on iPhone and iPad), and in ⌘K. The order goes for every folder, the sidebar and the lists alike;
+  Keep Folders on Top stays a choice of its own, next to it. When the newest come first, the note you write in moves to
+  the top of its folder once what you typed is saved, and its folder moves up among the others, as in the Finder: the
+  row slides there and stays selected, and the sidebar goes with it if it was on screen. On iPhone and iPad a note's
+  date in a list is the one it is sorted by.
 - To-dos that repeat, as with Obsidian's Tasks plugin: tick off a to-do with `🔁 every week` (or `every weekday`,
   `every 2 weeks on Friday`, `every month on the last`, `every year`, `… when done` and the other rules Tasks reads), in
   the note, in To-dos or in its notification, and the next one is written above it with its dates moved on, while the
@@ -22,6 +29,38 @@ versions follow [semantic versioning](https://semver.org).
   start dates keep their distances, a day the next month doesn't have becomes its last day (31 January, every month,
   is next due on 28 February), and its reminder moves to the next one. One Undo takes both back, and unticking it in
   To-dos while it still shows ticked does too; unticking it in the note doesn't make another.
+- Import from Apple Notes, on the Mac, iPhone and iPad. Export notes from Notes as Markdown first: on the Mac, select
+  the notes of a folder and choose File › Export as › Markdown; on iPhone and iPad, Share › Export as Markdown, one note
+  at a time. Then choose File › Import from Apple Notes… in Notebook, or Import from Apple Notes in the ⋯ menu, and pick
+  the folder Notes made. Its notes come into the folder you're in, each with its pictures and files in the `.assets`
+  folder next to it, so they move with it, as Notebook's own do. Files Notes wrote without an extension get one, links
+  between the notes you exported keep finding them, the title Notes repeats as the first line goes, and the folders you
+  put the exports in come along. Notes' export itself is only read, nothing in your folders is written over, what
+  couldn't come over is listed, and one Undo takes the whole import back.
+
+### Changed
+
+- Notes are saved in the background, on the Mac, iPhone and iPad: a slow disk, or iCloud holding a note while it puts
+  in another device's version, no longer makes the window wait when you pause typing, leave a note or switch apps.
+  What you type meanwhile is saved right after. A note you have just left is still written, and quitting, renaming,
+  moving or putting it in the Trash waits for it, so what you typed goes along.
+
+### Fixed
+
+- A note open in the main window and in a window of its own no longer makes Notebook hang as you type in one of them.
+  Each window now shows what was typed in the other, and quitting with both open quits.
+- Leaving a note a moment after another device changed the same lines no longer loses what you typed since the last
+  save. Notebook can't ask any more, so it keeps both: the note keeps the other device's version, and what you typed
+  goes into a copy next to it, named after your Mac or device, such as "Gift ideas (Anna's iPhone)". The same goes for
+  closing a note's own window on the Mac and for quitting.
+- A note whose file another app replaces with a new version, the way some apps save, stays open and takes the new
+  version in, rather than closing as if it had been deleted.
+- Leaving a note you took pictures out of no longer downloads the other notes in its folder from iCloud to see whether
+  they use those pictures: with one of them still in iCloud, the pictures stay.
+- On iPhone and iPad, the Files app shows On My iPhone › Notebook (On My iPad › Notebook), the folder Keep Notes on
+  This iPhone uses, so its notes can be opened, shared and backed up from there. It was missing.
+- The sidebar on the Mac no longer scrolls back to the open note each time it is saved while you look at another part
+  of it.
 
 ## [1.0.0] – not released yet
 

@@ -360,6 +360,9 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   follow, as they do when you move it or rename or move its folder. New notes go into the folder you're in; made
   anywhere else, they go to the default folder you choose in Settings, an Inbox at the top of your first location
   until you do. One you leave empty goes away again.
+- **Moving from Apple Notes.** Export notes from Notes as Markdown, then Import from Apple Notes brings them in,
+  each with its pictures and files next to it and its links to the others working, in the folders you exported them
+  into. See [Moving from Apple Notes](#moving-from-apple-notes).
 - **A new note from anywhere.** New Note is in Shortcuts, Spotlight and Siri ("New note in Notebook"), a widget for the
   Home Screen, the Lock Screen and the Mac's desktop, and a control for Control Center, the Lock Screen and the iPhone's
   Action button: Notebook opens with a new note in the default folder, the caret in its title. In a shortcut of your
@@ -376,6 +379,11 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   Option-drag copies. The New Folder button next to a location's name makes a folder at its top, New Folder in a
   folder's menu one inside it, named in place as in the Finder. Deleting moves to the Trash, never further, and Undo
   (⌘Z) puts it back, as it takes back a rename, a move or a new file. Favourites sit at the top of the sidebar.
+- **Sorted by name or by date.** View › Sort By, or Sort By in the ⋯ menu on iPhone and iPad, sorts every folder's
+  notes and files by name, as the Finder does, or newest first by when they were last edited or made, as Notes does.
+  Sorted by date, the note you write in moves to the top of its folder once it is saved, still selected; Keep Folders
+  on Top keeps folders above the files either way. The dates come with the folder as it is read, so a large folder
+  sorts at once.
 - **iPhone and iPad.** The same editor, search and file handling, with screens made for each: one folder per screen
   on the iPhone, the sidebar on the iPad. Pick iCloud Drive or any folder in the Files app's picker, or keep notes on
   the device, in On My iPhone › Notebook. A bar above the keyboard, whose tools you choose, formats, links and adds
@@ -468,7 +476,13 @@ Notes are often open on more than one Mac, or in more than one app. Notebook wat
 sidebar. If a note changes elsewhere while you haven't typed, it reloads quietly, and your caret and scroll position
 stay where they were. If both sides changed, Notebook merges the two line by line, before every save as well, so it never
 writes over a change it hasn't seen. Only when both changed the same lines does it ask: keep this version, use the
-other one, or keep both as two files. Conflicts that iCloud Drive reports are handled the same way.
+other one, or keep both as two files. Conflicts that iCloud Drive reports are handled the same way. If you have left
+the note by then, or quit, there is no one to ask, so Notebook keeps both: what you typed goes into a copy next to the
+note, named after your Mac or device, such as "Groceries (Anna's iPhone)".
+
+Notes are saved in the background, so a slow disk or iCloud holding a note never makes the window wait. What you typed
+in a note you have just left is still written, and Notebook doesn't quit before it is. A note open in the main window
+and in a window of its own is one note: what you type in either shows in the other.
 
 Notes in iCloud Drive that aren't downloaded yet are fetched so that search finds them; other files that live only in
 iCloud show a cloud in the sidebar and download when you open them. A note that isn't on your Mac, iPhone or iPad yet
@@ -523,6 +537,35 @@ For development, a Debug build run with the arguments `-NotebookLibrary /tmp/Not
 (Product › Scheme › Edit Scheme › Arguments) writes the same notes to that folder and shows only them, for that run,
 with a hidden folder and a reminder. In the Simulator, use `-NotebookLibrary ~/Documents/Sample`, which is in the app's
 own folder there.
+
+### Moving from Apple Notes
+
+Notes exports Markdown itself, and Notebook brings that in:
+
+1. **Export from Notes.** On the Mac, open a folder in Notes, select its notes (⌘A) and choose File › Export as ›
+   Markdown; Notes asks where, and makes a folder there, named Archive unless you name it. Notes has no command that
+   exports everything at once, so do it folder by folder; to keep your folders, save each export into a folder of the
+   same name, for example `From Notes/Work`, `From Notes/Recipes`. On iPhone and iPad, open a note, tap Share › Export as
+   Markdown and save it to Files; that is one note at a time.
+2. **Import into Notebook.** Choose **File › Import from Apple Notes…** (on iPhone and iPad, **Import from Apple Notes**
+   in the ⋯ menu) and pick the folder Notes made, or the folder you saved the exports into. On the Mac the panel says
+   where the notes will go: the folder selected in the sidebar, else the one of the note you have open, else the default
+   folder. On the iPhone they go into the folder whose ⋯ menu you used, or from the first screen into the default
+   folder; on the iPad, into the folder of the note you have open, else the default folder.
+
+Each folder you pick becomes a folder, with the folders in it; the folder Notes makes for a single note becomes just the
+note. Notes puts the pictures and files of all the notes it exports in one Attachments folder; the import puts each
+note's own into the `.assets` folder next to it, as Notebook does with yours, so they move with the note, and gives
+those Notes wrote without an extension one. Links between the notes you exported keep finding them: `[[links]]` to
+notes in the same folder, relative Markdown links to the others. The title Notes repeats as each note's first line goes,
+since the file's name is the title, and a file no note links to comes along as a file next to the notes rather than
+being left behind. Notes' export is only read, nothing already in your folders is written over, and what couldn't come
+over, such as a picture that couldn't be read, is listed when the import is done. Undo (⌘Z) takes everything the
+import added back to the Trash.
+
+What comes over is what Notes' export has: headings, bold and italic, lists, checklists, links and attachments, but no
+colours or fonts, and #tags as plain text. Each note keeps the dates of the file Notes wrote, which may be when you
+exported it rather than when you wrote it.
 
 ## Using it
 
@@ -655,7 +698,8 @@ Packages/NotebookKit/
     Drawing/                 Drawings: the strokes file and its picture, and drawing them in notes
     Files/                   Locations, the file tree read in the background, file operations, saving, watching, the
                              three-way merge, the hidden folders and reminders kept in iCloud's key-value store,
-                             folders' symbols and colours kept where the Finder keeps them, and the sample notes
+                             folders' symbols and colours kept where the Finder keeps them, the sample notes, and
+                             Import from Apple Notes
     Index/                   Search: the index of every file and how it is kept between launches, the corpus a
                              search goes through on every core, the text read in pictures, scans and drawings, and
                              how [[links]] resolve and follow files renamed or moved; the to-dos of every note, and
@@ -666,7 +710,7 @@ Packages/NotebookKit/
     UI/iOS/                  The iPhone's and iPad's screens: folders, the sidebar, the note, search and Settings
     Debug/                   The debug remotes (Debug builds only)
   Tests/                     Parser, editor, merge, smoothness, search index, Spotlight, link, drawing, reminder,
-                             to-do, folder look and app icon tests
+                             to-do, folder look, app icon and Apple Notes import tests
 Config/                      Build settings, Info.plist and entitlements
 Design/                      The icon, the README pictures, the social preview, and the App Store screenshots and
                              what is set in App Store Connect (app-store.md)
