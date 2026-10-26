@@ -35,11 +35,17 @@ enum FileOperations {
         }
         var candidate = make(name)
         var counter = 2
-        while FileManager.default.fileExists(atPath: candidate.path) {
+        while exists(candidate) {
             candidate = make("\(name) \(counter)")
             counter += 1
         }
         return candidate
+    }
+
+    /// A file there, also one iCloud hasn't brought down to this iPhone or iPad yet, which shows as ".name.icloud".
+    static func exists(_ url: URL) -> Bool {
+        FileManager.default.fileExists(atPath: url.path)
+            || FileManager.default.fileExists(atPath: url.deletingLastPathComponent().appendingPathComponent("." + url.lastPathComponent + ".icloud").path)
     }
 
     /// A file name from a title: the characters files can't have become dashes.

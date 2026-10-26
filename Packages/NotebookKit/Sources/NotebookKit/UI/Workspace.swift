@@ -306,8 +306,11 @@ public final class Workspace: NSObject {
             locations = LocationStore.load()
             hidden = HiddenFolders()
             reminders = Reminders()
-            // Versions a year old go, also those of notes not written in since; not while the app is starting.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 30) { NoteHistory.shared.tidyUp() }
+            // Versions a year old go, also those of notes not written in since, and those of notes gone from the
+            // locations go to the History's Trash; not while the app is starting.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
+                NoteHistory.shared.tidyUp(notesIn: self?.locations.map(\.url) ?? [])
+            }
         }
         // What the History does by itself, as it sets aside copies a new note isn't to have, says which device did it.
         _ = NoteHistory.thisDevice
