@@ -76,6 +76,8 @@ public struct Location: Identifiable, Codable, Equatable, Sendable {
         if url.path == iCloudDrivePath || isICloudDriveRoot(url) { return "iCloud Drive" }
         #if os(iOS)
         if onDeviceFolders(url, bookmark: bookmark)?.isEmpty == true { return onDeviceName }
+        // Notebook's own folder, Keep Notes on This iPhone: "Documents" on disk, which you never named.
+        if url.resolvingSymlinksInPath().path == Workspace.onDeviceFolder.resolvingSymlinksInPath().path { return onDeviceName }
         #endif
         return nil
     }

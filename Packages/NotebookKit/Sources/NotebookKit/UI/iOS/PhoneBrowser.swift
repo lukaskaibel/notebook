@@ -167,7 +167,9 @@ struct HomeScreen: View {
                         }
                     }
                 }
-                let recents = Array(workspace.recentURLs.prefix(3))
+                // With the note you are in: going back to this screen doesn't put its row in at the end and push the
+                // list down.
+                let recents = Array(workspace.recentURLs(includingOpen: true).prefix(3))
                 if !recents.isEmpty {
                     Section("Recent") {
                         ForEach(recents, id: \.self) { url in

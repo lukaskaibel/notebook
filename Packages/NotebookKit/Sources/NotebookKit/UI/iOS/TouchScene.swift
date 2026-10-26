@@ -151,7 +151,7 @@ struct TouchWelcomeView: View {
                     .resizable()
                     .frame(width: 96, height: 96)
                     .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .padding(.top, 56)
+                    .padding(.top, 36)
                     .padding(.bottom, 20)
                     .accessibilityHidden(true)
                 Text("Your notes live in your folders")
@@ -168,13 +168,15 @@ struct TouchWelcomeView: View {
                     point("magnifyingglass", "Find anything", "Search finds names, notes, PDFs and text in pictures.")
                     point("icloud", "On every device", "iCloud Drive keeps your iPhone, iPad and Mac in step.")
                 }
-                .padding(.bottom, 40)
+                .padding(.bottom, 24)
             }
             .frame(maxWidth: 480)
             .padding(.horizontal, 28)
             .frame(maxWidth: .infinity)
         }
-        .safeAreaInset(edge: .bottom) {
+        // A bar, as the system's are: what scrolls under the buttons fades out instead of showing through them.
+        .scrollEdgeEffectStyle(.soft, for: .bottom)
+        .safeAreaBar(edge: .bottom) {
             VStack(spacing: 12) {
                 Button { picksFolder = true } label: {
                     Label("Choose a Folder", systemImage: "folder")

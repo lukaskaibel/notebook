@@ -1101,8 +1101,13 @@ public final class Workspace: NSObject {
     }
 
     /// The files opened last, newest first, without the one that is open: for File › Open Recent and search.
-    var recentURLs: [URL] {
-        recents.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) && $0 != currentURL }
+    var recentURLs: [URL] { recentURLs(includingOpen: false) }
+
+    /// What you opened last, newest first. Without the open note, which a menu or search has no need to offer, unless
+    /// it is `includingOpen`: the iPhone's first screen shows it while you are in it, so the screen you go back to has
+    /// its row already, rather than putting it in once you are there.
+    func recentURLs(includingOpen: Bool) -> [URL] {
+        recents.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) && (includingOpen || $0 != currentURL) }
     }
 
     func clearRecents() {
