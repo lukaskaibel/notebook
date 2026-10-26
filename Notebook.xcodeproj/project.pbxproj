@@ -61,7 +61,7 @@
 		F10000000000000000000080 /* NotebookShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NotebookShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		F10000000000000000000092 /* Share.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Share.xcconfig; sourceTree = "<group>"; };
 		F10000000000000000000093 /* Share-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Share-Info.plist"; sourceTree = "<group>"; };
-		F10000000000000000000094 /* Share-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Share-macOS.entitlements"; sourceTree = "<group>"; };
+		F10000000000000000000094 /* AppGroup-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "AppGroup-macOS.entitlements"; sourceTree = "<group>"; };
 		F10000000000000000000095 /* AppGroup.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AppGroup.entitlements; sourceTree = "<group>"; };
 		F10000000000000000000072 /* Widgets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Widgets.xcconfig; sourceTree = "<group>"; };
 		F10000000000000000000073 /* Widgets-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Widgets-Info.plist"; sourceTree = "<group>"; };
@@ -166,7 +166,7 @@
 				F10000000000000000000074 /* Extension-macOS.entitlements */,
 				F10000000000000000000092 /* Share.xcconfig */,
 				F10000000000000000000093 /* Share-Info.plist */,
-				F10000000000000000000094 /* Share-macOS.entitlements */,
+				F10000000000000000000094 /* AppGroup-macOS.entitlements */,
 				F10000000000000000000095 /* AppGroup.entitlements */,
 			);
 			path = Config;

@@ -14,7 +14,7 @@ Permissions, each asked for only when first needed:
 • Camera (iPhone and iPad): when the user takes a photo or scans a document into a note from the bar above the keyboard.
 • Contacts: none. Home and Work, as a reminder's place, can be picked from the user's own card with the system's contact picker, which gives the app only the address tapped.
 
-Widgets and controls: New Note is a widget (Home Screen, Lock Screen, the Mac's desktop) and a control (Control Center, Lock Screen, Action button). Each only opens Notebook with a new note in the default folder; the widgets show nothing of the user's notes.
+Widgets and controls: New Note is a widget (Home Screen, Lock Screen, the Mac's desktop) and a control (Control Center, Lock Screen, Action button), which open Notebook with a new note in the default folder. The Today widget shows the to-dos due today and the overdue ones (try it on the sample notes), and its circles tick them; the Note widget shows a note picked under Edit Widget. The app keeps what these two show in its App Group, on the device.
 
 Share extension: "Notebook" in the share sheet of other apps (try a page in Safari or a photo in Photos) takes text, links, pictures and PDFs into a new note in the default folder or at the end of the note opened last. The extension leaves them in the app's App Group, and the app writes them into the user's folder the next time it is open.
 

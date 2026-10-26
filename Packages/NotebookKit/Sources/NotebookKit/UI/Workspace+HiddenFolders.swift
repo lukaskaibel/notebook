@@ -63,6 +63,8 @@ extension Workspace {
         }
         updateHiddenPaths()
         sidebarReloadAll()
+        // A note shown in a widget, or offered there, in a folder hidden now isn't.
+        publishWidgetNotes()
         spotlight?.setNeedsUpdate()
     }
 
