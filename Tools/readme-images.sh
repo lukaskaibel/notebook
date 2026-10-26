@@ -116,6 +116,12 @@ for theme in dark light; do
   # folders with a look of their own around it. Travel is far enough down for the popover to fit in the window.
   say "customize Travel"; sleep 1.5; shot "customize-$theme"
   say "customize close"; sleep 0.5
+  # Browse All Versions… over the Kyoto trip, with the sample version from the iPhone two days ago picked and Show
+  # Changes on: what was added since on green, what was taken out on red, a + or − in the margin.
+  say "open Travel/Kyoto trip.md" "wait 1" "browseversions"; sleep 1.5
+  say "pickversion 2"; sleep 1.2
+  say "showchanges 1"; sleep 1.5; shot "versions-$theme"
+  say "closeversions"; sleep 0.5
   # To-dos: every open to-do of the sample notes, by when it's due.
   say "showtodos"; sleep 1.5; shot "todos-$theme"
   # The dry cleaning edited in place: the line for notes, its points, and the capsules for its day, time and place
