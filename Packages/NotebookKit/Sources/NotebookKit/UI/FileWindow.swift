@@ -220,6 +220,10 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
         Workspace.shared.askForTodoReminder(in: editor, url: url, line: line, part: part)
     }
 
+    func editor(_ editor: EditorController, tickedRepeatingTodo source: String, line: Int, next: String) {
+        Workspace.shared.repeatingTodoTicked(in: url, line: line, source: source, next: next)
+    }
+
     func editor(_ editor: EditorController, quickLook url: URL) {
         QuickLookPanel.shared.show(url)
     }
