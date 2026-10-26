@@ -209,15 +209,49 @@ final class SharedNotesTests: XCTestCase {
     func testANoteThatCantBeWrittenLeavesNothingAndIsToldAboutOnce() async throws {
         let note = try share(text: "A thought.", files: ["Torii.jpg", "Tickets.pdf"])
         try FileManager.default.removeItem(at: outbox.appendingPathComponent(note.id.uuidString).appendingPathComponent("Torii.jpg"))
-        await makeWorkspace().takeSharedNotes()
+        let workspace = makeWorkspace()
+        await workspace.takeSharedNotes()
         XCTAssertFalse(FileManager.default.fileExists(atPath: inbox.path), "the Inbox made for it stayed")
         XCTAssertEqual(SharedNotes.waiting().map(\.note.id), [note.id])
+        // Not while Notebook is in the background, as after a launch at login: once it comes to the front.
+        if !NSApp.isActive {
+            try await Task.sleep(for: .milliseconds(200))
+            XCTAssertNil(window?.attachedSheet, "told while in the background")
+            workspace.showReportsWaiting()
+        }
         try await until("the alert") { window?.attachedSheet != nil }
         if let sheet = window?.attachedSheet { window?.endSheet(sheet) }
-        await makeWorkspace().takeSharedNotes()
+        let again = makeWorkspace()
+        await again.takeSharedNotes()
+        again.showReportsWaiting()
         try await Task.sleep(for: .milliseconds(300))
         XCTAssertNil(window?.attachedSheet, "told about twice")
         XCTAssertEqual(SharedNotes.waiting().map(\.note.id), [note.id])
+    }
+
+    /// A note of the same name that arrives while the shared one is written, from iCloud say, isn't written over:
+    /// the shared one takes another name.
+    func testANoteArrivingMeanwhileIsntWrittenOver() async throws {
+        try FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
+        try share(text: "Shared")
+        let arriving = inbox.appendingPathComponent("Kyoto.md")
+        let holding = DispatchSemaphore(value: 0), held = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            // Held while Notebook picks the name and waits to write it; it arrives just before Notebook writes.
+            NSFileCoordinator().coordinate(writingItemAt: arriving, options: [], error: nil) { url in
+                held.signal()
+                holding.wait()
+                try? "From iCloud\n".write(to: url, atomically: true, encoding: .utf8)
+            }
+        }
+        await withCheckedContinuation { continuation in DispatchQueue.global().async { held.wait(); continuation.resume() } }
+        let workspace = makeWorkspace()
+        let taking = Task { await workspace.takeSharedNotes() }
+        try await Task.sleep(for: .milliseconds(500))
+        holding.signal()
+        await taking.value
+        XCTAssertEqual(try read(arriving), "From iCloud\n")
+        XCTAssertEqual(try read(inbox.appendingPathComponent("Kyoto 2.md")), "Shared\n")
     }
 
     /// A folder Notebook made is taken back only while it is empty: a file put in meanwhile keeps it.
