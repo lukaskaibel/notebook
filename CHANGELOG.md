@@ -45,6 +45,8 @@ versions follow [semantic versioning](https://semver.org).
   pictures and drawings when it isn't in one of your locations, since the system gives Notebook only the file. The
   first time it needs the note's folder, Notebook now asks for it, with the Files app's picker open at that folder, and
   remembers it after that.
+- On iPhone and iPad, the Files app shows On My iPhone › Notebook (On My iPad › Notebook), the folder Keep Notes on
+  This iPhone uses, so its notes can be opened, shared and backed up from there. It was missing.
 
 ## [1.0.0] – not released yet
 
