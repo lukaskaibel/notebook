@@ -391,6 +391,11 @@ enum DebugRemote {
         case "samplenotes":
             // samplenotes <folder>: what Try Sample Notes… does once a folder is chosen.
             workspace?.addSampleNotes(in: URL(fileURLWithPath: argument, isDirectory: true))
+        case "importnotes":
+            // importnotes <path>[|<path>…]: what Import from Apple Notes… does once Notes' export is chosen.
+            guard let workspace, let folder = workspace.folderForNewNote else { log("importnotes: nowhere to import to"); break }
+            workspace.importFromAppleNotes(argument.split(separator: "|").map { URL(fileURLWithPath: String($0)) }, into: folder)
+            log("importnotes into \(folder.path)")
         case "storeasset":
             // storeasset <file>|picture: what pasting a file, or a picture, into the open note puts in its .assets.
             guard let editor else { log("storeasset: no note open"); break }
@@ -531,7 +536,8 @@ enum DebugRemote {
                 }
             }
         case "set":
-            // set <setting> <value>: face, size, spacing, width, headings, onlynotes, dim, foldersfirst, deleteempty.
+            // set <setting> <value>: face, size, spacing, width, headings, onlynotes, dim, foldersfirst, order (name, dateEdited,
+            // dateCreated), deleteempty.
             let bits = argument.split(separator: " ").map(String.init)
             guard bits.count == 2 else { break }
             let settings = NotebookSettings.shared
@@ -544,6 +550,7 @@ enum DebugRemote {
             case "onlynotes": settings.showsOnlyNotes = bits[1] == "1"
             case "dim": settings.dimsOtherFiles = bits[1] == "1"
             case "foldersfirst": settings.foldersFirst = bits[1] == "1"
+            case "order": if let order = FileOrder(rawValue: bits[1]) { settings.fileOrders.set(order, for: workspace?.folderInView) }
             case "deleteempty": settings.deletesEmptyNewNotes = bits[1] == "1"
             default: break
             }
@@ -696,6 +703,39 @@ enum DebugRemote {
                 click(at: CGPoint(x: frame.midX, y: content.bounds.height - frame.midY))
                 // SwiftUI opens the menu a moment later.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { NotificationCenter.default.removeObserver(observer) }
+            }
+        case "mainmenu":
+            // mainmenu <Menu> [> <Item>] [seconds]: opens a menu of the menu bar in the window, at its top left, as if
+            // dropped down from the menu bar (which a window in the background hasn't got), and closes it after a few
+            // seconds, for a picture of it. With an item, that item's submenu instead, where it opens next to the menu.
+            // A menu opened this way takes no clicks or pointer moves sent to it; Accessibility can highlight an item.
+            var bits = argument.components(separatedBy: " > ")
+            let seconds = bits.last?.split(separator: " ").last.flatMap { Double($0) }
+            if seconds != nil { bits[bits.count - 1] = bits[bits.count - 1].split(separator: " ").dropLast().joined(separator: " ") }
+            guard let window, let content = window.contentView, let menu = NSApp.mainMenu?.item(withTitle: bits[0])?.submenu else { log("mainmenu: no \(argument)"); break }
+            menu.delegate?.menuNeedsUpdate?(menu)
+            menu.update()
+            var shown = menu
+            var point = NSPoint(x: 90, y: 60)
+            if bits.count > 1 {
+                guard let index = menu.items.firstIndex(where: { $0.title == bits[1] }), let submenu = menu.items[index].submenu else { log("mainmenu: no submenu \(argument)"); break }
+                submenu.delegate?.menuNeedsUpdate?(submenu)
+                submenu.update()
+                shown = submenu
+                // Where it opens next to the menu: at the right of the menu, its first item level with the item.
+                point.x += menu.size.width - 6
+                point.y += menu.items[..<index].reduce(CGFloat(0)) { height, item in height + (item.isHidden ? 0 : item.isSeparatorItem ? 11 : 24) }
+            }
+            if !content.isFlipped { point.y = content.bounds.height - point.y }
+            let observer = NotificationCenter.default.addObserver(forName: NSMenu.didBeginTrackingNotification, object: shown, queue: nil) { _ in
+                MainActor.assumeIsolated { log("mainmenu: open") }
+                let close = Timer(timeInterval: seconds ?? 3, repeats: false) { _ in MainActor.assumeIsolated { shown.cancelTracking() } }
+                RunLoop.main.add(close, forMode: .common)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                shown.popUp(positioning: nil, at: point, in: content)
+                NotificationCenter.default.removeObserver(observer)
+                log("mainmenu: closed")
             }
         case "toolbarmenu", "headingmenu":
             // toolbarmenu <label> [seconds]: opens a toolbar item's menu for real; headingmenu [seconds]: the menu of the

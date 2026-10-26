@@ -311,7 +311,7 @@ enum FileOperations {
     }
 
     /// A name for a picture or file in an `.assets` folder that neither it nor, for a drawing, its strokes have there.
-    private static func freeAssetName(for name: String, in folder: URL) -> String {
+    static func freeAssetName(for name: String, in folder: URL) -> String {
         let base = (name as NSString).deletingPathExtension
         let ext = (name as NSString).pathExtension
         var counter = 2
