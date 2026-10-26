@@ -37,6 +37,10 @@ advertising, and it collects nothing about you.
 - **Home and Work**, once you choose them for reminders, are kept in the app's preferences and, in the App Store build,
   in iCloud's key-value store, for your other devices: each an address and its coordinates. Choosing one from Contacts
   opens Apple's own contact picker; Notebook sees only the address you tap and has no access to your contacts.
+- **What you share to Notebook** from another app's share sheet (text, a link, pictures, files) waits in a folder that
+  Notebook and its share extension share on your device, until Notebook has written it into your notes, and is then
+  deleted. For the share sheet to offer them, the name of your default folder and the place of the note you opened
+  last are kept there too.
 - **The search index** of file names, the text of notes and PDFs, and the words Notebook reads in pictures, scanned
   pages and handwriting is kept in the app's caches on each device, so search is ready the moment the app opens. Each
   device builds its own from your files, and it never leaves the device.
