@@ -7,6 +7,10 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- New Note as a widget and a control: the widget on the Home Screen and the Lock Screen of iPhone and iPad and on the
+  Mac's desktop, the control in Control Center, on the Lock Screen and on the iPhone's Action button. A tap opens
+  Notebook with a new note in your default folder and the caret in its title, as New Note in Shortcuts does. The
+  widget shows Notebook's icon and the pencil in its ink; on the Lock Screen it is the pencil alone, or with its name.
 - Import from Apple Notes, on the Mac, iPhone and iPad. Export notes from Notes as Markdown first: on the Mac, select
   the notes of a folder and choose File › Export as › Markdown; on iPhone and iPad, Share › Export as Markdown, one note
   at a time. Then choose File › Import from Apple Notes… in Notebook, or Import from Apple Notes in the ⋯ menu, and pick

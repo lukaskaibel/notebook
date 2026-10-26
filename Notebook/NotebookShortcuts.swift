@@ -1,4 +1,5 @@
 import AppIntents
+import NotebookCapture
 import NotebookKit
 
 /// New Note, in Shortcuts and Spotlight without setting anything up, for Siri, and for the Action button on iPhone.
@@ -17,7 +18,7 @@ struct NotebookShortcuts: AppShortcutsProvider {
     }
 }
 
-/// The intents are in NotebookKit; Shortcuts learns of them through the app.
+/// The intents are in NotebookKit and NotebookCapture; Shortcuts learns of them through the app.
 struct NotebookIntents: AppIntentsPackage {
     static var includedPackages: [any AppIntentsPackage.Type] { [NotebookKitIntents.self] }
 }

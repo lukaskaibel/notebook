@@ -1,3 +1,4 @@
+import NotebookCapture
 import XCTest
 @testable import NotebookKit
 
@@ -100,9 +101,15 @@ final class NewNoteIntentTests: XCTestCase {
         XCTAssertTrue(workspace.locations.isEmpty)
     }
 
-    /// The intent itself, as Shortcuts runs it in the app: the app's own workspace makes the note.
+    /// The intent itself, as Shortcuts or a widget runs it in the app: the app's own workspace makes the note.
     func testTheIntentMakesTheNoteInTheApp() async throws {
         XCTAssertEqual(NewNoteIntent.supportedModes, .foreground(.immediate), "it has to open the app to show the note")
+        NewNoteIntent.makeNote = nil
+        do {
+            _ = try await NewNoteIntent(text: "Nowhere").perform()
+            XCTFail("made a note without the app")
+        } catch {}
+        QuickCapture.start()
         _ = try await NewNoteIntent(text: "From a shortcut").perform()
         let made = inbox.appendingPathComponent("Untitled.md")
         XCTAssertEqual(try String(contentsOf: made, encoding: .utf8), "From a shortcut")
