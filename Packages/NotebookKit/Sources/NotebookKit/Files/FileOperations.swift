@@ -14,9 +14,9 @@ enum FileOperations {
     #endif
 
     /// A slow iCloud, for trying out that nothing waits for a change to files: in Debug builds, with
-    /// `-NotebookSlowWrites <seconds>`, each one waits that long first. One on the main thread isn't slowed down but
-    /// logged, to find any that shouldn't be there.
-    private static func debugWait(_ what: String, _ url: URL) {
+    /// `-NotebookSlowWrites <seconds>`, each one, and each save of a note, waits that long first. One on the main thread
+    /// isn't slowed down but logged, to find any that shouldn't be there.
+    static func debugWait(_ what: String, _ url: URL) {
         #if DEBUG
         if Thread.isMainThread {
             mainThreadWrites.withLock { $0 += 1 }
@@ -305,13 +305,20 @@ enum FileOperations {
     }
 
     /// Pictures and files in a folder's `.assets` that no note in the folder uses any more, among `candidates`,
-    /// go to the Trash.
+    /// go to the Trash. Only notes on this device are read: with one there still in iCloud, which would have to come
+    /// down for it, they all stay.
     static func cleanUpAssets(in folder: URL, candidates: Set<String>) {
         guard !candidates.isEmpty else { return }
-        let notes = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
+        let keys: [URLResourceKey] = [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey]
+        let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: keys)) ?? []
         var used = Set<String>()
-        for note in notes where note.pathExtension.lowercased() == "md" {
-            guard let text = NoteDocument.read(note) else { continue }
+        for file in files {
+            // A note not on this device, as iCloud used to show it: ".Groceries.md.icloud".
+            if file.lastPathComponent.hasPrefix("."), file.lastPathComponent.lowercased().hasSuffix(".md.icloud") { return }
+            guard file.pathExtension.lowercased() == "md" else { continue }
+            if let values = try? file.resourceValues(forKeys: Set(keys)), values.isUbiquitousItem == true,
+               values.ubiquitousItemDownloadingStatus != .current { return }
+            guard let text = NoteDocument.read(file) else { continue }
             used.formUnion(assetNames(in: text))
         }
         for name in withDrawingStrokes(candidates).subtracting(withDrawingStrokes(used)) {

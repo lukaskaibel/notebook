@@ -5,6 +5,26 @@ versions follow [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Changed
+
+- Notes are saved in the background, on the Mac, iPhone and iPad: a slow disk, or iCloud holding a note while it puts
+  in another device's version, no longer makes the window wait when you pause typing, leave a note or switch apps.
+  What you type meanwhile is saved right after. A note you have just left is still written, and quitting, renaming,
+  moving or putting it in the Trash waits for it, so what you typed goes along.
+
+### Fixed
+
+- A note open in the main window and in a window of its own no longer makes Notebook hang as you type in one of them.
+  Each window now shows what was typed in the other, and quitting with both open quits.
+- Leaving a note a moment after another device changed the same lines no longer loses what you typed since the last
+  save. Notebook can't ask any more, so it keeps both: the note keeps the other device's version, and what you typed
+  goes into a copy next to it, named after your Mac or device, such as "Gift ideas (Anna's iPhone)". The same goes for
+  closing a note's own window on the Mac and for quitting.
+- A note whose file another app replaces with a new version, the way some apps save, stays open and takes the new
+  version in, rather than closing as if it had been deleted.
+- Leaving a note you took pictures out of no longer downloads the other notes in its folder from iCloud to see whether
+  they use those pictures: with one of them still in iCloud, the pictures stay.
+
 ## [1.0.0] – not released yet
 
 The first version: notes as Markdown files in your own folders, on the Mac, iPhone and iPad. While it was being built,

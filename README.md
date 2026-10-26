@@ -452,7 +452,13 @@ Notes are often open on more than one Mac, or in more than one app. Notebook wat
 sidebar. If a note changes elsewhere while you haven't typed, it reloads quietly, and your caret and scroll position
 stay where they were. If both sides changed, Notebook merges the two line by line, before every save as well, so it never
 writes over a change it hasn't seen. Only when both changed the same lines does it ask: keep this version, use the
-other one, or keep both as two files. Conflicts that iCloud Drive reports are handled the same way.
+other one, or keep both as two files. Conflicts that iCloud Drive reports are handled the same way. If you have left
+the note by then, or quit, there is no one to ask, so Notebook keeps both: what you typed goes into a copy next to the
+note, named after your Mac or device, such as "Groceries (Anna's iPhone)".
+
+Notes are saved in the background, so a slow disk or iCloud holding a note never makes the window wait. What you typed
+in a note you have just left is still written, and Notebook doesn't quit before it is. A note open in the main window
+and in a window of its own is one note: what you type in either shows in the other.
 
 Notes in iCloud Drive that aren't downloaded yet are fetched so that search finds them; other files that live only in
 iCloud show a cloud in the sidebar and download when you open them. A note that isn't on your Mac, iPhone or iPad yet

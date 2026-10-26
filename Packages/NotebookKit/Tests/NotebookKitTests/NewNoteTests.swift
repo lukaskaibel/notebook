@@ -50,9 +50,10 @@ final class NewNoteTests: XCTestCase {
         }
     }
 
-    /// Everything asked for has been written.
+    /// Everything asked for has been written, notes left too.
     private func settle(_ workspace: Workspace) async {
         await workspace.changeFiles { _ in }.value
+        await NoteDocument.allWritten()
     }
 
     private func exists(_ url: URL) -> Bool { FileManager.default.fileExists(atPath: url.path) }
@@ -99,6 +100,7 @@ final class NewNoteTests: XCTestCase {
         _ = await workspace.newNote(in: papers).value
         typeText("Milk", in: workspace)
         workspace.saveAll()
+        await NoteDocument.allWritten()
         XCTAssertEqual(try String(contentsOf: untitled, encoding: .utf8), "Milk")
         let textView = workspace.editor.textView
         textView.setSelectedRange(NSRange(location: 0, length: 4))
