@@ -36,6 +36,8 @@ final class VersionBrowser: Identifiable {
     private(set) var changes: VersionChanges?
     @ObservationIgnored private var reading = 0
     @ObservationIgnored private var comparing = 0
+    /// The comparison under way, called off when another is asked for.
+    @ObservationIgnored private var comparison: Task<Void, Never>?
 
     init(note: URL, history: NoteHistory = .shared, current: @escaping () -> String, restore: @escaping (String) -> Void) {
         self.note = note
@@ -59,6 +61,9 @@ final class VersionBrowser: Identifiable {
         let attempt = reading
         text = nil
         changes = nil
+        // What another version's comparison finds isn't this one's.
+        comparing += 1
+        comparison?.cancel()
         isUnreadable = false
         guard let version = selected else { return }
         Task {
@@ -75,12 +80,13 @@ final class VersionBrowser: Identifiable {
     private func updateChanges() {
         comparing += 1
         let attempt = comparing
+        comparison?.cancel()
         guard showsChanges, let text else {
             changes = nil
             return
         }
         let now = current()
-        Task.detached(priority: .userInitiated) { [weak self] in
+        comparison = Task.detached(priority: .userInitiated) { [weak self] in
             let found = VersionChanges.between(text, now)
             await self?.take(found, attempt)
         }

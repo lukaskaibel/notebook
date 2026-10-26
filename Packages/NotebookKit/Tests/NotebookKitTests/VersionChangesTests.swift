@@ -82,6 +82,37 @@ final class VersionChangesTests: XCTestCase {
         }
     }
 
+    func testPastTheLimitTheLinesBothHaveOnceHoldTheRestTogether() {
+        let version = (1...3000).map { "- [ ] Item \($0)" }
+        var now = version
+        for index in stride(from: 0, to: 3000, by: 5) { now[index] = "- [x] Item \(index + 1)" }
+        let start = Date()
+        let changes = VersionChanges.between(version.joined(separator: "\n"), now.joined(separator: "\n"))
+        XCTAssertEqual(changes.addedLines, 600)
+        XCTAssertEqual(changes.removedLines, 600)
+        XCTAssertLessThan(Date().timeIntervalSince(start), 2)
+    }
+
+    /// With almost no room for the shortest edit, the lines both have once hold it together, and it still turns the old
+    /// lines into the new ones.
+    func testTheEditPastTheLimitIsStillRight() {
+        var generator = SystemRandomNumberGenerator()
+        for _ in 0..<300 {
+            let old = (0..<Int.random(in: 0...20, using: &generator)).map { _ in Substring(String(Int.random(in: 0...12, using: &generator))) }
+            let new = (0..<Int.random(in: 0...20, using: &generator)).map { _ in Substring(String(Int.random(in: 0...12, using: &generator))) }
+            let hunks = VersionChanges.lineHunks(old, new, limit: 1)
+            var rebuilt: [Substring] = []
+            var position = 0
+            for hunk in hunks {
+                rebuilt += old[position..<hunk.range.lowerBound]
+                rebuilt += hunk.lines
+                position = hunk.range.upperBound
+            }
+            rebuilt += old[position...]
+            XCTAssertEqual(rebuilt, new, "\(old) → \(new)")
+        }
+    }
+
     func testPlacesFoundBothWays() {
         let changes = VersionChanges.between("one\ntwo\nthree\n", "one\nnew\ntwo\nthree\n")
         XCTAssertEqual(changes.text, "one\nnew\ntwo\nthree\n")

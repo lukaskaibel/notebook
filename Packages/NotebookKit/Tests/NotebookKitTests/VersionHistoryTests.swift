@@ -304,6 +304,39 @@ final class VersionHistoryTests: XCTestCase {
         try await until("and let it go") { browser == nil }
     }
 
+    func testAnotherVersionsChangesNeverShowForTheOnePicked() async throws {
+        let (workspace, _) = try await makeWindow()
+        history.keep("# Draft\n\nOne.\n", of: draft, at: Date() - 600, device: "Mac")
+        history.keep("# Draft\n\nTwo.\n", of: draft, at: Date() - 300, device: "Mac")
+        let browser = VersionBrowser(note: draft, current: { "# Draft\n\nNow.\n" }) { _ in }
+        await browser.load()
+        browser.showsChanges = true
+        // The older picked, then at once the newer: the older's comparison mustn't land.
+        browser.selection = browser.versions?.last?.url
+        browser.selection = browser.versions?.first?.url
+        try await until("the newer's changes") { browser.changes != nil }
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(browser.changes?.text, "# Draft\n\nTwo.\nNow.\n")
+        _ = workspace
+    }
+
+    func testRevertToFollowsTheNoteWindowWhileItsSheetIsUp() async throws {
+        _ = try await makeWindow()
+        let controller = FileWindowController(url: draft)
+        let window = try XCTUnwrap(controller.window)
+        controller.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification, object: window))
+        XCTAssertTrue(Workspace.shared.keyFileNote === controller.noteDocument)
+        let sheet = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 100), styleMask: [.titled], backing: .buffered, defer: false)
+        window.beginSheet(sheet, completionHandler: nil)
+        try await until("the sheet is up") { window.attachedSheet != nil }
+        controller.windowDidResignKey(Notification(name: NSWindow.didResignKeyNotification, object: window))
+        XCTAssertTrue(Workspace.shared.keyFileNote === controller.noteDocument, "the sheet's window is still the one")
+        window.endSheet(sheet)
+        controller.windowDidResignKey(Notification(name: NSWindow.didResignKeyNotification, object: window))
+        XCTAssertNil(Workspace.shared.keyFileNote)
+        window.close()
+    }
+
     func testRevertToFollowsTheNoteWindowYouAreIn() async throws {
         let (workspace, manager) = try await makeWindow()
         _ = try await openAndType(workspace, manager, "Typed.")

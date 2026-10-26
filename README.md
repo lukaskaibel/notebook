@@ -300,7 +300,8 @@ with Show Changes, Restore and Copy; the iPad shows the list and the version sid
 Each version is a plain copy of the note's Markdown. Those of notes in iCloud go into Notebook's own iCloud folder, so
 they reach your other Macs, iPhones and iPads; those of notes anywhere else stay on the device. Notebook keeps every
 version from the last hour, then one an hour for a day, one a day for a month and one a week for a year. Versions
-follow a note you rename or move in Notebook, and stay when you delete it, so Undo or Put Back finds them again.
+follow a note you rename or move in Notebook, and go to the Trash with it, so Undo or Put Back brings them back; a new
+note given its name starts without them.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/versions-dark.webp">
@@ -467,11 +468,12 @@ Desktop and Documents in iCloud, other apps' iCloud folders) are in Notebook's o
 its `Documents`, so iCloud Drive doesn't show a Notebook folder; on a Mac it is
 `~/Library/Mobile Documents/iCloud~com~lukaskbl~Notebook/History`. They go by the note's place in iCloud, which is the
 same on every device, one file per version named after when and on what it was taken:
-`com~apple~CloudDocs/Travel/Kyoto trip.md/2026-10-24 at 19.05.00 +0200 (iPhone 3f9a2c).md`, where the letters, picked at
-random, tell your devices apart. The versions of notes anywhere else, and of every note in builds from source, which
-have no iCloud, are kept the same way in the app's Application Support folder, on that device only. Each device thins
-the versions it took, so a clock set wrong on one can't take away the others', and a version goes when it is a year
-old, apart from the newest one each device took of a note that is still there. Settings › your name › iCloud › Storage on iPhone and
+`com~apple~CloudDocs/Travel/Kyoto trip.md/2026-10-24 at 19.05.00 +0200 (iPhone 3f9a2c).md`, where the letters tell your
+devices apart. The versions of notes anywhere else, and of every note in builds from source, which have no iCloud, are
+kept the same way in the app's Application Support folder, on that device only. Each device thins the versions it took,
+so a clock set wrong on one can't take away the others'. A version goes when it is a year old, apart from the newest
+one each device took of a note; those of a note you delete in Notebook go to the History's own Trash and, a year
+later, all of them. Settings › your name › iCloud › Storage on iPhone and
 iPad, or System Settings › your name › iCloud › Manage on the Mac, shows how much Notebook keeps in iCloud, and can
 delete it.
 

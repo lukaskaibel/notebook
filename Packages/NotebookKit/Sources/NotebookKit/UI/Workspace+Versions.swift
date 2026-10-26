@@ -22,7 +22,8 @@ extension Workspace {
 
     func versionTarget() -> VersionTarget? {
         #if os(macOS)
-        if let key = NSApp.keyWindow, let controller = key.windowController as? FileWindowController {
+        // A sheet over a note's window, the versions', says nothing of its own: the window under it is the one.
+        if let key = NSApp.keyWindow.map({ $0.sheetParent ?? $0 }), let controller = key.windowController as? FileWindowController {
             guard controller.isLoaded else { return nil }
             return VersionTarget(note: controller.noteDocument, editor: controller.editor, window: key) { [weak controller] in
                 controller?.window?.isVisible == true

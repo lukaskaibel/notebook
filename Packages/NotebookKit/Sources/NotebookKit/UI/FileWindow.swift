@@ -146,7 +146,8 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
     }
 
     func windowDidResignKey(_ notification: Notification) {
-        if Workspace.shared.keyFileNote === note { Workspace.shared.keyFileNote = nil }
+        // To a sheet over it, such as the versions', it is still the window you are working in.
+        if window?.attachedSheet == nil, Workspace.shared.keyFileNote === note { Workspace.shared.keyFileNote = nil }
     }
 
     func windowWillClose(_ notification: Notification) {
