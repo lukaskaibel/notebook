@@ -19,6 +19,11 @@ versions follow [semantic versioning](https://semver.org).
   row slides there and stays selected, and the sidebar goes with it if it was on screen. On iPhone and iPad a note's
   date in a list is the one it is sorted by.
 
+### Fixed
+
+- The sidebar on the Mac no longer scrolls back to the open note each time it is saved while you look at another part
+  of it.
+
 ## [1.0.0] – not released yet
 
 The first version: notes as Markdown files in your own folders, on the Mac, iPhone and iPad. While it was being built,
