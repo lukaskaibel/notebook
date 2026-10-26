@@ -53,7 +53,7 @@ final class FileChange {
         var reminders: [Reminder]
         var hiddenFolders: [String]
         /// What its versions are under in the History's own Trash (`NoteHistory.trash`).
-        var history = NoteHistory.trashedName()
+        var history: String
     }
 }
 
@@ -289,7 +289,8 @@ extension Workspace {
             openFile: currentURL.flatMap { FileNode.isSameOrInside($0, url) ? $0 : nil },
             isFavorite: isFavorite(url),
             reminders: reminders.all.filter { isIn($0.note) },
-            hiddenFolders: hidden.keys.filter(isIn)
+            hiddenFolders: hidden.keys.filter(isIn),
+            history: NoteHistory.trashedName()
         )
     }
 

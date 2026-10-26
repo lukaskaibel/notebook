@@ -111,6 +111,25 @@ final class NewNoteTests: XCTestCase {
         XCTAssertEqual(notes(in: papers), ["Draft.md"])
     }
 
+    /// What was typed and taken away again isn't among the versions of the next note of its name.
+    func testANewNoteEmptiedAgainTakesItsVersionsAlong() async throws {
+        let workspace = try await makeWorkspace()
+        _ = await workspace.newNote(in: papers).value
+        typeText("Milk", in: workspace)
+        workspace.saveAll()
+        await NoteDocument.allWritten()
+        let kept = await NoteHistory.shared.versions(of: untitled)
+        XCTAssertEqual(kept.count, 1)
+        let textView = workspace.editor.textView
+        textView.setSelectedRange(NSRange(location: 0, length: 4))
+        textView.deleteBackward(nil)
+        workspace.open(draft)
+        await settle(workspace)
+        XCTAssertEqual(notes(in: papers), ["Draft.md"])
+        let left = await NoteHistory.shared.versions(of: untitled)
+        XCTAssertEqual(left, [])
+    }
+
     func testANewNoteWithTextStays() async throws {
         let workspace = try await makeWorkspace()
         _ = await workspace.newNote(in: papers).value

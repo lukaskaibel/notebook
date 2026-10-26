@@ -138,6 +138,32 @@ final class VersionHistoryTests: XCTestCase {
         XCTAssertEqual(others, [])
     }
 
+    func testANoteOpenInAWindowOfItsOwnTakesWhatWasTypedToTheTrash() async throws {
+        let (workspace, manager) = try await makeWindow()
+        // Open in a window of its own, as a note window has it, while the sidebar throws it away.
+        let own = NoteDocument(url: draft)
+        own.update(text: "# Draft\n\nTyped in its own window.\n")
+        _ = await workspace.trash(draft).value
+        own.close()
+        await own.saved()
+        let gone = await versions(of: draft)
+        XCTAssertEqual(gone, [], "nothing written where it was")
+        try await undo(workspace, manager)
+        let back = await versions(of: draft)
+        XCTAssertEqual(back, ["# Draft\n\nTyped in its own window.\n", "# Draft\n\nFirst words.\n"])
+    }
+
+    func testANoteMadeWhereVersionsWereLeftStartsWithoutThem() async throws {
+        let (workspace, _) = try await makeWindow()
+        // A note thrown away in the Finder left its versions.
+        let untitled = papers.appendingPathComponent("Untitled.md")
+        history.keep("# Thrown away in the Finder\n", of: untitled)
+        let made = await workspace.newNote(in: papers).value
+        XCTAssertEqual(made, untitled)
+        let none = await versions(of: untitled)
+        XCTAssertEqual(none, [])
+    }
+
     func testADuplicateStartsWithoutVersions() async throws {
         let (workspace, _) = try await makeWindow()
         history.keep("# Draft\n\nAn earlier version.\n", of: draft)
@@ -321,6 +347,19 @@ final class VersionCopyTests: XCTestCase {
         XCTAssertEqual(same.count, 2)
         again.close()
         await again.saved()
+    }
+
+    func testRevertToKnowsWhetherTheTextIsAsItOpened() async throws {
+        let note = try open("one\n")
+        note.update(text: "one\ntwo\n")
+        XCTAssertTrue(note.isChangedSinceOpening)
+        // As long, and something else.
+        note.update(text: "owt\n")
+        XCTAssertTrue(note.isChangedSinceOpening)
+        note.update(text: "one\n")
+        XCTAssertFalse(note.isChangedSinceOpening)
+        note.close()
+        await note.saved()
     }
 
     func testCopiesWaitForARenameAndGoWhereTheNoteWent() async throws {
