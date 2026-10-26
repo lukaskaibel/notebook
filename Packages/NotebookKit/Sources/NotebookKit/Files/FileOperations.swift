@@ -63,15 +63,17 @@ enum FileOperations {
     }
 
     /// Copies a file into a folder's `.assets`, under a name not taken there, in a coordinated write. Where it went,
-    /// or nil when it couldn't be copied.
+    /// or nil when it couldn't be copied; then a `.assets` made for it goes again.
     static func storeAsset(copying url: URL, in folder: URL) -> URL? {
         let assets = folder.appendingPathComponent(".assets", isDirectory: true)
+        let madeAssets = !FileManager.default.fileExists(atPath: assets.path)
         try? FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
         let destination = uniqueAssetURL(named: url.lastPathComponent, in: assets)
         var copied = false
         NSFileCoordinator().coordinate(readingItemAt: url, options: [], writingItemAt: destination, options: .forReplacing, error: nil) { from, to in
             copied = (try? FileManager.default.copyItem(at: from, to: to)) != nil
         }
+        if !copied, madeAssets { removeEmptyFolder(assets) }
         return copied ? destination : nil
     }
 
@@ -83,10 +85,14 @@ enum FileOperations {
                 try? FileManager.default.removeItem(at: url)
             }
         }
-        for assets in Set(urls.map { $0.deletingLastPathComponent() }) {
-            if (try? FileManager.default.contentsOfDirectory(atPath: assets.path))?.isEmpty == true {
-                try? FileManager.default.removeItem(at: assets)
-            }
+        for assets in Set(urls.map { $0.deletingLastPathComponent() }) { removeEmptyFolder(assets) }
+    }
+
+    /// Deletes a folder Notebook just made, in a coordinated delete, only if it is still empty: whether it is and
+    /// deleting it are one step (`rmdir`), so a file another app or device puts in meanwhile keeps it, and itself.
+    static func removeEmptyFolder(_ folder: URL) {
+        NSFileCoordinator().coordinate(writingItemAt: folder, options: .forDeleting, error: nil) { folder in
+            _ = rmdir(folder.path)
         }
     }
 

@@ -6,16 +6,21 @@ import UniformTypeIdentifiers
 /// goes, a new note in the default folder or the end of the note opened last.
 struct ShareView: View {
     let content: SharedContent
+    /// While it is being saved the sheet can't be closed: a note kept though cancelled, or its files gone.
+    let saving: (_ isSaving: Bool) -> Void
     let done: (_ kept: Bool) -> Void
 
     @State private var title = ""
     @State private var appendsToLastNote = false
     @State private var problem: String?
     @State private var isSaving = false
+    /// False once a failed Save lost some of the files: then only sharing again helps.
+    @State private var canSave = true
     private let places = SharedNotes.places
 
-    init(content: SharedContent, done: @escaping (_ kept: Bool) -> Void) {
+    init(content: SharedContent, saving: @escaping (_ isSaving: Bool) -> Void, done: @escaping (_ kept: Bool) -> Void) {
         self.content = content
+        self.saving = saving
         self.done = done
     }
 
@@ -26,9 +31,9 @@ struct ShareView: View {
                 .navigationTitle("Notebook")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Cancel", role: .cancel) { done(false) } }
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel", role: .cancel) { done(false) }.disabled(isSaving) }
                     ToolbarItem(placement: .confirmationAction) {
-                        if isSaving { ProgressView() } else { Button("Save", action: save).disabled(!content.isLoaded) }
+                        if isSaving { ProgressView() } else { Button("Save", action: save).disabled(!content.isLoaded || !canSave) }
                     }
                 }
         }
@@ -41,10 +46,11 @@ struct ShareView: View {
                 Spacer()
                 Button("Cancel", role: .cancel) { done(false) }
                     .keyboardShortcut(.cancelAction)
+                    .disabled(isSaving)
                 if isSaving { ProgressView().controlSize(.small) }
                 Button("Save", action: save)
                     .keyboardShortcut(.defaultAction)
-                    .disabled(!content.isLoaded || isSaving)
+                    .disabled(!content.isLoaded || isSaving || !canSave)
             }
             .padding()
         }
@@ -90,6 +96,7 @@ struct ShareView: View {
             }
         }
         .formStyle(.grouped)
+        .onChange(of: isSaving) { saving(isSaving) }
     }
 
     private func save() {
@@ -101,8 +108,10 @@ struct ShareView: View {
                 done(true)
             } catch {
                 isSaving = false
+                canSave = content.filesAreThere
                 problem = SharedNotes.folder == nil ? "This build of Notebook has no App Group to keep it in."
-                    : "Notebook couldn’t keep it: \(error.localizedDescription)"
+                    : canSave ? "Notebook couldn’t keep it: \(error.localizedDescription)"
+                    : "Notebook couldn’t keep it: \(error.localizedDescription) Cancel and share it again."
             }
         }
     }

@@ -49,21 +49,25 @@ public enum SharedNotes {
 
     /// Leaves a note for the app, moving its files there under the names it gives them: they are copies of the
     /// extension's own, and moved they take no time and no room twice. Whole or not at all: it is written under a
-    /// name the app passes over and then renamed. Not on the main thread: a file on another volume is copied.
+    /// name the app passes over and then renamed; when that fails, the files moved go back where they were, for Save
+    /// to be tried again. Not on the main thread: a file on another volume is copied.
     public static func add(_ note: SharedNote, moving files: [(url: URL, name: String)]) throws {
         guard let folder else { throw CocoaError(.featureUnsupported) }
         let manager = FileManager.default
         let writing = folder.appendingPathComponent(note.id.uuidString + partial, isDirectory: true)
         try manager.createDirectory(at: writing, withIntermediateDirectories: true)
+        var moved: [(url: URL, name: String)] = []
         do {
             for file in files {
                 try manager.moveItem(at: file.url, to: writing.appendingPathComponent(file.name))
+                moved.append(file)
             }
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
             try encoder.encode(note).write(to: writing.appendingPathComponent(manifest), options: .atomic)
             try manager.moveItem(at: writing, to: folder.appendingPathComponent(note.id.uuidString, isDirectory: true))
         } catch {
+            for file in moved { try? manager.moveItem(at: writing.appendingPathComponent(file.name), to: file.url) }
             try? manager.removeItem(at: writing)
             throw error
         }
@@ -104,6 +108,16 @@ public enum SharedNotes {
         decoder.dateDecodingStrategy = .iso8601
         return decoder
     }
+
+    /// Whether this is the first time the app couldn't write the note: it is told about once, and keeps waiting.
+    public static func failedFirstTime(_ note: SharedNote) -> Bool {
+        guard let folder else { return false }
+        let mark = folder.appendingPathComponent(note.id.uuidString, isDirectory: true).appendingPathComponent(failed)
+        guard !FileManager.default.fileExists(atPath: mark.path) else { return false }
+        return FileManager.default.createFile(atPath: mark.path, contents: Data())
+    }
+
+    private static let failed = ".failed"
 
     /// Forgets a note once the app has written it.
     public static func remove(_ note: SharedNote) {
