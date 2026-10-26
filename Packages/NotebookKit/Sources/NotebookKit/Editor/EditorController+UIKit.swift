@@ -385,9 +385,11 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     func handleTap(_ hit: Hit, at point: CGPoint) {
         switch hit {
         case .checkbox(let line):
-            // A double tap ticks once.
-            if let last = lastCheckboxTap, Date.now.timeIntervalSince(last.time) < 0.4, hypot(point.x - last.point.x, point.y - last.point.y) < 24 { return }
-            lastCheckboxTap = (.now, point)
+            // A double tap ticks once: its second tap is where the first was on the screen, though the note may have
+            // moved under it (a to-do that repeats keeps the ticked line under the finger).
+            let onScreen = textView.convert(point, to: nil)
+            if let last = lastCheckboxTap, Date.now.timeIntervalSince(last.time) < 0.4, hypot(onScreen.x - last.point.x, onScreen.y - last.point.y) < 24 { return }
+            lastCheckboxTap = (.now, onScreen)
             UISelectionFeedbackGenerator().selectionChanged()
             toggleCheckbox(line: line)
         case .link(let kind):

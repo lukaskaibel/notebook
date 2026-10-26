@@ -31,7 +31,8 @@ enum ReminderTimeParser {
         // "friday at", while the time is still to come.
         while let last = words.last, ["at", "@", "on"].contains(last) { words.removeLast() }
         guard !words.isEmpty else { return [] }
-        let reader = Reader(now: now, calendar: calendar, keepsDays: days)
+        // Days and years typed are the Gregorian calendar's, as the dates in notes are, whichever calendar shows.
+        let reader = Reader(now: now, calendar: calendar.gregorian, keepsDays: days)
         var found = reader.countdowns(words)
         // The whole text as a day or a time. A number is more likely a time ("9") than a day of the month, unless it
         // is a day that is asked for.

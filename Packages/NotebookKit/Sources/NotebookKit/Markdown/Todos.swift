@@ -76,6 +76,8 @@ extension Calendar {
         var gregorian = Calendar(identifier: .gregorian)
         gregorian.timeZone = timeZone
         gregorian.locale = locale
+        gregorian.firstWeekday = firstWeekday
+        gregorian.minimumDaysInFirstWeek = minimumDaysInFirstWeek
         return gregorian
     }
 }

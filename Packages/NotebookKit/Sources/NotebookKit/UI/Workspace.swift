@@ -56,6 +56,10 @@ public final class Workspace: NSObject {
     /// To-dos that repeat, ticked in To-dos or from a notification, by the line they were ticked to (`takeBackTick`).
     @ObservationIgnored var todoTicks: [String: TodoTick] = [:]
     #if DEBUG
+    /// What `remindOfNext` was asked for, for tests: the next one's line, and whether as it will be.
+    @ObservationIgnored var remindedOfNext: [(source: String, asItWillBe: Bool)] = []
+    #endif
+    #if DEBUG
     /// The sample notes' reminders, shown but never scheduled: a run on the sample notes leaves no notification behind.
     @ObservationIgnored var unscheduledReminders = Set<UUID>()
     #endif

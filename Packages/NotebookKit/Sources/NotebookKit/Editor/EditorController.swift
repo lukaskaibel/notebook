@@ -167,7 +167,8 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     /// The editor's own record of changes, for undo (`EditorUndo+UIKit`).
     let undoStack = EditorUndoManager()
     var openStep: UndoStep?
-    /// The last tap on a checkbox: a second one right after it, at the same place, is a double tap, not an untick.
+    /// The last tap on a checkbox, and where it was in the window: a second one right after it, at the same place, is
+    /// a double tap, not an untick.
     var lastCheckboxTap: (time: Date, point: CGPoint)?
     var isReplayingUndo = false
     /// The text as it was before the last change, which tells what a change removed.

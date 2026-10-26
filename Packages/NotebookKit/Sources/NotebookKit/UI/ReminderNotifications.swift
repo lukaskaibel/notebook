@@ -231,7 +231,7 @@ final class ReminderNotifications: NSObject, UNUserNotificationCenterDelegate {
     /// notification in when this returns, since from the Lock Screen the app has only this moment.
     func finishTodo(_ todo: TodoReference, identifier: String, workspace: Workspace) async {
         withdrawTodo(identifier)
-        await workspace.setTodoDone(todo, true)?.value
+        await workspace.setTodoDone(todo, true, fromNotification: true)?.value
     }
 
     /// A to-do's notifications put in now, as the to-dos' own scheduling makes them a moment later: for the next one of

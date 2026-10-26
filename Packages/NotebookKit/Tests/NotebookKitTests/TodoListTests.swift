@@ -132,7 +132,7 @@ final class TodoListTests: XCTestCase {
         let before = try XCTUnwrap(workspace.todoJobs().first { $0.source == water.todo.source })
         XCTAssertEqual(workspace.todoJobIdentifiers(of: water.reference), [before.identifier])
         // The next one's notification, put in at once, is named as the to-dos' own scheduling names it later.
-        let nextJob = try XCTUnwrap(workspace.todoJob(for: TodoReference(url: plants, line: 0, source: "- [ ] Water the plants 🔁 every week ⏰ 2099-01-12 18:00")))
+        let nextJob = try XCTUnwrap(workspace.todoJob(for: TodoReference(url: plants, line: 0, source: "- [ ] Water the plants 🔁 every week ⏰ 2099-01-12 18:00"), asItWillBe: true))
 
         await workspace.setTodoDone(water.reference, true)?.value
         XCTAssertEqual(try String(contentsOf: plants, encoding: .utf8), repeatingTicked)
@@ -164,6 +164,51 @@ final class TodoListTests: XCTestCase {
         // Ticked again: one next one.
         await workspace.setTodoDone(water.reference, true)?.value
         XCTAssertEqual(try String(contentsOf: plants, encoding: .utf8), repeatingTicked)
+    }
+
+    func testTheNextOnesReminderComesOnceTheTickIsWritten() async throws {
+        try repeating.write(to: plants, atomically: true, encoding: .utf8)
+        let workspace = try await makeWorkspace()
+        let water = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Water the plants" })
+        let next = "- [ ] Water the plants 🔁 every week ⏰ 2099-01-12 18:00"
+        // Changed on another device before the tick is written: nothing is ticked, and the reminders stay as they are.
+        let elsewhere = repeating.replacingOccurrences(of: "Water the plants", with: "Water the ferns")
+        try elsewhere.write(to: plants, atomically: true, encoding: .utf8)
+        await workspace.setTodoDone(water.reference, true, fromNotification: true)?.value
+        XCTAssertEqual(try String(contentsOf: plants, encoding: .utf8), elsewhere)
+        XCTAssertTrue(workspace.remindedOfNext.isEmpty)
+        // Written: the next one's reminder, from its notification as it will be before To-dos lists it.
+        try repeating.write(to: plants, atomically: true, encoding: .utf8)
+        await workspace.setTodoDone(water.reference, true, fromNotification: true)?.value
+        XCTAssertEqual(try String(contentsOf: plants, encoding: .utf8), repeatingTicked)
+        XCTAssertEqual(workspace.remindedOfNext.map(\.source), [next])
+        XCTAssertEqual(workspace.remindedOfNext.map(\.asItWillBe), [true])
+    }
+
+    func testTickingInTheEditorRemindsOfTheNextOneAsListed() async throws {
+        try repeating.write(to: plants, atomically: true, encoding: .utf8)
+        let workspace = try await makeWorkspace()
+        workspace.open(plants)
+        try await until { workspace.note?.isLoaded == true }
+        workspace.editor.toggleCheckbox(line: 0)
+        XCTAssertEqual(workspace.editor.text, repeatingTicked)
+        XCTAssertEqual(workspace.remindedOfNext.map(\.source), ["- [ ] Water the plants 🔁 every week ⏰ 2099-01-12 18:00"])
+        XCTAssertEqual(workspace.remindedOfNext.map(\.asItWillBe), [false], "only what To-dos lists, as the to-dos' own scheduling")
+    }
+
+    func testTheNextOnesNotificationAsItWillBe() async throws {
+        let workspace = try await makeWorkspace()
+        let next = "- [ ] Water the plants 🔁 every week ⏰ 2099-01-12 18:00"
+        XCTAssertNil(workspace.todoJob(for: TodoReference(url: plants, line: 0, source: next)), "To-dos doesn't list it yet")
+        let job = try XCTUnwrap(workspace.todoJob(for: TodoReference(url: plants, line: 0, source: next), asItWillBe: true))
+        XCTAssertEqual(job.identifier, Workspace.todoIdentifier(path: plants.path, source: next, notes: ""))
+        XCTAssertEqual(job.title, "Water the plants")
+        XCTAssertEqual(job.noteName, "Plants")
+        XCTAssertNil(workspace.todoJob(for: TodoReference(url: base.appendingPathComponent("Elsewhere.md"), line: 0, source: next), asItWillBe: true),
+                     "not in a location")
+        workspace.setHidden(library.appendingPathComponent("Archive"), true)
+        try await until { !workspace.todos.items.contains { $0.todo.text == "Something old" } }
+        XCTAssertNil(workspace.todoJob(for: TodoReference(url: hidden, line: 0, source: next), asItWillBe: true), "in a hidden folder")
     }
 
     func testATodoWhoseNextOneSaysTheSame() async throws {
