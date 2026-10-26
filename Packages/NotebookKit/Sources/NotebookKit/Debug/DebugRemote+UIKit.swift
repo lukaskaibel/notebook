@@ -295,6 +295,55 @@ enum DebugRemote {
                 withAnimation { workspace.showHiddenFolders(argument[argument.index(after: space)...] == "1", in: location) }
             }
             log("showhidden \(argument): \(workspace.locations.filter(workspace.showsHiddenFolders(in:)).map(\.name))")
+        case "activate":
+            // activate <label>: what VoiceOver's double tap does on the view with that label, in any of the app's
+            // windows. UIKit's views only: SwiftUI's and menu items have their labels only while VoiceOver runs (for a
+            // toolbar's menu, menuat).
+            var seen: [String] = []
+            func find(_ object: NSObject, depth: Int) -> NSObject? {
+                if object.accessibilityLabel == argument, !(object is UIWindow) { return object }
+                if let label = object.accessibilityLabel, !label.isEmpty { seen.append("\(type(of: object)):\(label)") }
+                guard depth < 40 else { return nil }
+                if let view = object as? UIView {
+                    for subview in view.subviews { if let found = find(subview, depth: depth + 1) { return found } }
+                }
+                for case let element as NSObject in object.accessibilityElements ?? [] where !(element is UIView) {
+                    if let found = find(element, depth: depth + 1) { return found }
+                }
+                return nil
+            }
+            let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).reversed()
+            if let found = windows.lazy.compactMap({ find($0, depth: 0) }).first {
+                log("activate \(argument): \(type(of: found)) \(found.accessibilityActivate())")
+            } else {
+                log("activate \(argument): nothing, only \(seen.prefix(60))")
+            }
+        case "menuat":
+            // menuat <x> <y>: opens the menu of the button with one at that point of the window (a toolbar's ⋯), as a tap
+            // would, without a touch: the Simulator's touches need someone to allow them first.
+            let point = CGPoint(x: numbers.first ?? 0, y: numbers.count > 1 ? numbers[1] : 0)
+            var buttons: [UIView] = []
+            func collect(_ view: UIView) {
+                if view.interactions.contains(where: { $0 is UIContextMenuInteraction }) { buttons.append(view) }
+                view.subviews.forEach(collect)
+            }
+            let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
+            windows.forEach(collect)
+            let selector = NSSelectorFromString("_presentMenuAtLocation:")
+            guard let button = buttons.last(where: { $0.convert($0.bounds, to: nil).contains(point) }),
+                  let interaction = button.interactions.first(where: { $0 is UIContextMenuInteraction }) as? UIContextMenuInteraction,
+                  interaction.responds(to: selector) else {
+                log("menuat \(argument): none of \(buttons.map { "\(type(of: $0)) \($0.convert($0.bounds, to: nil))" })"); break
+            }
+            typealias Present = @convention(c) (AnyObject, Selector, CGPoint) -> Void
+            unsafeBitCast(interaction.method(for: selector), to: Present.self)(interaction, selector, CGPoint(x: button.bounds.midX, y: button.bounds.midY))
+            log("menuat \(argument): \(type(of: button))")
+        case "order":
+            // order <name|dateEdited|dateCreated> [foldersfirst 1|0]: what Sort By and Keep Folders on Top in the ⋯ menus do.
+            let bits = argument.split(separator: " ").map(String.init)
+            if let order = bits.first.flatMap(FileOrder.init(rawValue:)) { withAnimation { NotebookSettings.shared.fileOrders.set(order, for: workspace.folderInView) } }
+            if bits.count == 3, bits[1] == "foldersfirst" { NotebookSettings.shared.foldersFirst = bits[2] == "1" }
+            log("order \(NotebookSettings.shared.fileOrders.order(of: workspace.folderInView).rawValue) foldersFirst=\(NotebookSettings.shared.foldersFirst)")
         case "rows":
             // rows [folder]: the folders and files a list shows for a folder (a location's top without one), hidden ones marked.
             guard let folder = url(argument) ?? workspace.locations.first?.url else { break }

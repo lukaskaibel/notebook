@@ -11,6 +11,13 @@ versions follow [semantic versioning](https://semver.org).
   Mac's desktop, the control in Control Center, on the Lock Screen and on the iPhone's Action button. A tap opens
   Notebook with a new note in your default folder and the caret in its title, as New Note in Shortcuts does. The
   widget shows Notebook's icon and the pencil in its ink; on the Lock Screen it is the pencil alone, or with its name.
+- Sort the notes and files in a folder by date edited or date created, newest first, as well as by name: View › Sort By
+  on the Mac, Sort By in the ⋯ menu on iPhone and iPad, where it says how a folder is sorted now, in Settings › Sidebar
+  (Settings › Files on iPhone and iPad), and in ⌘K. The order goes for every folder, the sidebar and the lists alike;
+  Keep Folders on Top stays a choice of its own, next to it. When the newest come first, the note you write in moves to
+  the top of its folder once what you typed is saved, and its folder moves up among the others, as in the Finder: the
+  row slides there and stays selected, and the sidebar goes with it if it was on screen. On iPhone and iPad a note's
+  date in a list is the one it is sorted by.
 - To-dos that repeat, as with Obsidian's Tasks plugin: tick off a to-do with `🔁 every week` (or `every weekday`,
   `every 2 weeks on Friday`, `every month on the last`, `every year`, `… when done` and the other rules Tasks reads), in
   the note, in To-dos or in its notification, and the next one is written above it with its dates moved on, while the
@@ -40,6 +47,8 @@ versions follow [semantic versioning](https://semver.org).
   they use those pictures: with one of them still in iCloud, the pictures stay.
 - On iPhone and iPad, the Files app shows On My iPhone › Notebook (On My iPad › Notebook), the folder Keep Notes on
   This iPhone uses, so its notes can be opened, shared and backed up from there. It was missing.
+- The sidebar on the Mac no longer scrolls back to the open note each time it is saved while you look at another part
+  of it.
 
 ## [1.0.0] – not released yet
 

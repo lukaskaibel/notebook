@@ -90,9 +90,10 @@ public struct NotebookScene: Scene {
                 .keyboardShortcut("i", modifiers: [.command, .control])
                 .disabled(workspace.locations.isEmpty || workspace.showsTodos)
                 Divider()
+                SortByPicker(folder: workspace.folderInView)
+                Toggle(isOn: $settings.foldersFirst) { Label("Keep Folders on Top", systemImage: "folder") }
                 Toggle(isOn: $settings.showsOnlyNotes) { Label("Show Only Notes", systemImage: "doc.text") }
                 Toggle(isOn: $settings.dimsOtherFiles) { Label("Dim Files That Aren’t Notes", systemImage: "sun.min") }
-                Toggle(isOn: $settings.foldersFirst) { Label("Keep Folders on Top", systemImage: "folder") }
                 // The Finder's shortcut for its hidden files.
                 Button { workspace.toggleAllHiddenFolders() } label: {
                     Label(workspace.showsAllHiddenFolders ? "Hide Hidden Folders" : "Show Hidden Folders",
