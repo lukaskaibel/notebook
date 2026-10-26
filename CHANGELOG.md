@@ -11,6 +11,13 @@ versions follow [semantic versioning](https://semver.org).
   Mac's desktop, the control in Control Center, on the Lock Screen and on the iPhone's Action button. A tap opens
   Notebook with a new note in your default folder and the caret in its title, as New Note in Shortcuts does. The
   widget shows Notebook's icon and the pencil in its ink; on the Lock Screen it is the pencil alone, or with its name.
+- Sort the notes and files in a folder by date edited or date created, newest first, as well as by name: View › Sort By
+  on the Mac, Sort By in the ⋯ menu on iPhone and iPad, where it says how a folder is sorted now, in Settings › Sidebar
+  (Settings › Files on iPhone and iPad), and in ⌘K. The order goes for every folder, the sidebar and the lists alike;
+  Keep Folders on Top stays a choice of its own, next to it. When the newest come first, the note you write in moves to
+  the top of its folder once what you typed is saved, and its folder moves up among the others, as in the Finder: the
+  row slides there and stays selected, and the sidebar goes with it if it was on screen. On iPhone and iPad a note's
+  date in a list is the one it is sorted by.
 - To-dos that repeat, as with Obsidian's Tasks plugin: tick off a to-do with `🔁 every week` (or `every weekday`,
   `every 2 weeks on Friday`, `every month on the last`, `every year`, `… when done` and the other rules Tasks reads), in
   the note, in To-dos or in its notification, and the next one is written above it with its dates moved on, while the
@@ -18,6 +25,14 @@ versions follow [semantic versioning](https://semver.org).
   start dates keep their distances, a day the next month doesn't have becomes its last day (31 January, every month,
   is next due on 28 February), and its reminder moves to the next one. One Undo takes both back, and unticking it in
   To-dos while it still shows ticked does too; unticking it in the note doesn't make another.
+- Import from Apple Notes, on the Mac, iPhone and iPad. Export notes from Notes as Markdown first: on the Mac, select
+  the notes of a folder and choose File › Export as › Markdown; on iPhone and iPad, Share › Export as Markdown, one note
+  at a time. Then choose File › Import from Apple Notes… in Notebook, or Import from Apple Notes in the ⋯ menu, and pick
+  the folder Notes made. Its notes come into the folder you're in, each with its pictures and files in the `.assets`
+  folder next to it, so they move with it, as Notebook's own do. Files Notes wrote without an extension get one, links
+  between the notes you exported keep finding them, the title Notes repeats as the first line goes, and the folders you
+  put the exports in come along. Notes' export itself is only read, nothing in your folders is written over, what
+  couldn't come over is listed, and one Undo takes the whole import back.
 - Version history: Notebook keeps earlier versions of your notes as you write. It keeps the note as it was when you
   start changing it, a version every ten minutes while you write, and one when you stop. On the Mac, File › Revert To ›
   Browse All Versions… shows them by day next to the one you pick, as the note looks. Show Changes marks what was added
@@ -50,6 +65,10 @@ versions follow [semantic versioning](https://semver.org).
   version in, rather than closing as if it had been deleted.
 - Leaving a note you took pictures out of no longer downloads the other notes in its folder from iCloud to see whether
   they use those pictures: with one of them still in iCloud, the pictures stay.
+- On iPhone and iPad, the Files app shows On My iPhone › Notebook (On My iPad › Notebook), the folder Keep Notes on
+  This iPhone uses, so its notes can be opened, shared and backed up from there. It was missing.
+- The sidebar on the Mac no longer scrolls back to the open note each time it is saved while you look at another part
+  of it.
 
 ## [1.0.0] – not released yet
 

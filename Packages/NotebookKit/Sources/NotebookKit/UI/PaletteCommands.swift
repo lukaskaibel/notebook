@@ -142,6 +142,14 @@ extension Workspace {
             list.append(PaletteCommand(id: "new-folder", title: "New Folder", symbol: "folder.badge.plus", section: new, keys: ["⇧", "⌘", "N"]) {
                 actions.newFolder()
             })
+            list.append(PaletteCommand(id: "import-apple-notes", title: "Import from Apple Notes…", symbol: "square.and.arrow.down.on.square", section: new,
+                                       keywords: ["markdown", "export", "move", "notes"]) { [self] in
+                #if os(macOS)
+                chooseAppleNotesExport()
+                #else
+                appleNotesImportFolder = selectedFolder ?? folderForNewNote
+                #endif
+            })
         }
         list.append(PaletteCommand(id: "add-location", title: "Add Location…", symbol: "plus.rectangle.on.folder", section: new,
                                    keywords: ["icloud", "folder", "open"]) {
@@ -189,6 +197,13 @@ extension Workspace {
                                    section: view, keywords: ["sidebar", "filter"]) {
             settings.showsOnlyNotes.toggle()
         })
+        let folder = folderInView
+        for order in FileOrder.allCases where order != settings.fileOrders.order(of: folder) {
+            list.append(PaletteCommand(id: "sort-\(order.rawValue)", title: "Sort by \(order.title)", symbol: "arrow.up.arrow.down", section: view,
+                                       keywords: ["order", "sidebar", "newest", "recent"]) {
+                settings.fileOrders.set(order, for: folder)
+            })
+        }
         list.append(PaletteCommand(id: "bigger", title: "Bigger Text", symbol: "textformat.size.larger", section: view, keys: ["⌘", "+"],
                                    keywords: ["zoom", "font", "size"]) {
             settings.changeTextSize(by: 1)

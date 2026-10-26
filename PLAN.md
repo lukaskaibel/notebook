@@ -330,5 +330,4 @@ Das meiste davon lässt sich später ergänzen, ohne das Dateiformat zu ändern.
 
 - **Import aus Apple Notes:** Reicht der Markdown-Export, den Notes seit iOS und macOS 26 selbst hat, oder lohnt sich ein
   kleines Werkzeug, das alle Notizen samt Ordnern auf einmal holt?
-- **Sortierung im Baum:** nach Name oder nach Änderungsdatum, Ordner zuerst?
 - **Typografie des Dokuments:** SF Pro oder New York, Lesebreite (Vorschlag: etwa 680 pt, mittig)

@@ -103,6 +103,11 @@ struct SidebarSettings: View {
                 Toggle("Show only notes", isOn: $settings.showsOnlyNotes)
                 Toggle("Dim files that aren’t notes", isOn: $settings.dimsOtherFiles)
                     .disabled(settings.showsOnlyNotes)
+                Picker("Sort by", selection: Binding(get: { settings.fileOrders.order(of: nil) }, set: { settings.fileOrders.set($0, for: nil) })) {
+                    ForEach(FileOrder.allCases) { order in
+                        Text(order.title).tag(order)
+                    }
+                }
                 Toggle("Keep folders on top", isOn: $settings.foldersFirst)
             } footer: {
                 Text("PDFs, pictures and other files still open from search and from links in your notes.")

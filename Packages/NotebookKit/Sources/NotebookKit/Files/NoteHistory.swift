@@ -41,7 +41,7 @@ final class NoteHistory: @unchecked Sendable {
         var date: Date
         /// "Mac", "iPhone" or "iPad".
         var device: String
-        /// Which Mac, iPhone or iPad, as its name says it: a few random letters each device picks once.
+        /// Which Mac, iPhone or iPad, as its name says it: a few letters each device has.
         var deviceID: String?
         /// On this device, or still in iCloud only: reading it waits for it to come down.
         var isDownloaded = true
@@ -151,9 +151,15 @@ final class NoteHistory: @unchecked Sendable {
         #endif
     }
 
-    /// Picked at random the first time, and kept. It says nothing about the device.
+    /// Made from the identifier iPhone and iPad give the app on each device, which a backup brings along to no other
+    /// device; on a Mac, picked at random the first time and kept. It says nothing about the device.
     @MainActor
     static var deviceID: String {
+        #if os(iOS)
+        if let vendor = UIDevice.current.identifierForVendor {
+            return SHA256.hash(data: Data(vendor.uuidString.utf8)).prefix(3).map { String(format: "%02x", $0) }.joined()
+        }
+        #endif
         let key = "historyDeviceID"
         if let id = UserDefaults.standard.string(forKey: key), id.count == 6 { return id }
         let id = String(format: "%06x", UInt32.random(in: 0..<0x1000000))
@@ -203,6 +209,11 @@ final class NoteHistory: @unchecked Sendable {
         // Each device thins the copies it took itself: one whose clock is set wrong can't take away the others'. Its
         // time is the copy's, when that is later.
         thin(copies.filter { Self.isTaken($0, by: device) }, now: max(when, Date()))
+    }
+
+    /// A copy's device as its name says it: "iPhone 3f9a2c", or "iPhone" in a name without letters.
+    static func label(of copy: Version) -> String {
+        copy.deviceID.map { "\(copy.device) \($0)" } ?? copy.device
     }
 
     /// Whether a copy's name says it was taken on `device` ("Mac 3f9a2c").
@@ -277,9 +288,9 @@ final class NoteHistory: @unchecked Sendable {
         return removed
     }
 
-    /// Thins the copies of every note, also of those not written in for a long time and of those thrown away, which
-    /// keep theirs for Undo and Put Back: what is a year old goes. In the background, at most once a day; a day written
-    /// down by a clock set ahead doesn't hold it up. `device` is this device's name in copies.
+    /// Thins the copies of every note, also of those not written in for a long time and of those thrown away: what is a
+    /// year old goes. In the background, at most once a day; a day written down by a clock set ahead doesn't hold it up.
+    /// `device` is this device's name in copies.
     @MainActor
     func tidyUp(defaults: UserDefaults = .standard, device: String? = nil) {
         let key = "historyTidiedUp"
@@ -288,60 +299,62 @@ final class NoteHistory: @unchecked Sendable {
         defaults.set(now, forKey: key)
         let device = device ?? Self.thisDevice
         queue.async { [self] in
-            for root in roots() { tidyUp(root, root: root, now: Date(), device: device) }
+            for root in roots() { tidyUp(root, inTrash: false, now: Date(), device: device) }
         }
     }
 
     /// Thins each note's copies under a folder and takes away the folders left empty. True when it is empty itself.
-    /// This device's copies are thinned as when it writes them. Another device's go only once their note is gone too and
-    /// they are a year old: that device thins its own, and a clock here set wrong can't take them away.
+    /// - This device's copies are thinned as when it writes them.
+    /// - Another device's go when they are a year old, all but its newest: that device thins the rest itself, and a clock
+    ///   here set years ahead can't take a note's history away. A device not used any more, or set up again, leaves only
+    ///   its newest copy of each note.
+    /// - The copies of a note thrown away, in the History's own Trash, go when they are a year old, all of them.
     @discardableResult
-    private func tidyUp(_ folder: URL, root: URL, now: Date, device: String) -> Bool {
-        let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+    private func tidyUp(_ folder: URL, inTrash: Bool, now: Date, device: String) -> Bool {
+        let manager = FileManager.default
+        let names = (try? manager.contentsOfDirectory(atPath: folder.path)) ?? []
         var copies: [Version] = []
         var left = names.count
         for name in names {
             let url = folder.appendingPathComponent(name)
             if let copy = Self.version(named: name, in: folder) {
                 copies.append(copy)
-            } else if Self.isFolder(url), tidyUp(url, root: root, now: now, device: device) {
-                try? FileManager.default.removeItem(at: url)
+            } else if name == Self.leftoversName {
+                // What stayed in iCloud and has gone since isn't looked for any more.
+                if !keepLeftovers(listedIn: folder) { left -= 1 }
+            } else if Self.isFolder(url), tidyUp(url, inTrash: inTrash || isTrash(url), now: now, device: device) {
+                try? manager.removeItem(at: url)
                 left -= 1
             }
         }
-        guard !copies.isEmpty else { return left == 0 }
-        let isGone = !noteExists(for: folder, in: root)
-        let own = copies.filter { Self.isTaken($0, by: device) }
-        var removed = thin(own, now: now, keepsNewest: !isGone)
-        if isGone, let year = Self.calendar.date(byAdding: Self.keptFor.negated, to: now) {
-            for copy in copies where !Self.isTaken(copy, by: device) && copy.date < year {
+        guard !copies.isEmpty, let year = Self.calendar.date(byAdding: Self.keptFor.negated, to: now) else { return left == 0 }
+        var removed = 0
+        if inTrash {
+            for copy in copies where copy.date < year {
                 Self.remove(copy.url)
                 removed += 1
+            }
+        } else {
+            removed += thin(copies.filter { Self.isTaken($0, by: device) }, now: now)
+            let others = Dictionary(grouping: copies.filter { !Self.isTaken($0, by: device) }) { Self.label(of: $0) }
+            for theirs in others.values {
+                let newest = theirs.max { $0.date < $1.date }
+                for copy in theirs where copy.date < year && copy != newest {
+                    Self.remove(copy.url)
+                    removed += 1
+                }
             }
         }
         return left - removed == 0
     }
 
-    /// Whether the note whose copies are in a folder is still where they say: one thrown away, or renamed outside
-    /// Notebook, is not.
-    private func noteExists(for folder: URL, in root: URL) -> Bool {
-        let relative = String(folder.path.dropFirst(root.path.count).drop { $0 == "/" })
-        var path = "/" + relative
-        if let cloud = cloudRoot(), root.path == cloud.path {
-            path = (iCloudDrive as NSString).deletingLastPathComponent + path
-        } else {
-            #if os(iOS)
-            if relative == "Notebook" || relative.hasPrefix("Notebook/") {
-                path = NSHomeDirectory() + relative.dropFirst("Notebook".count)
-            }
-            #endif
-        }
-        return FileManager.default.fileExists(atPath: path)
-    }
-
     /// The History folders there are: in iCloud and on this device.
     private func roots() -> [URL] {
         [cloudRoot(), local].compactMap { $0 }
+    }
+
+    private func isTrash(_ folder: URL) -> Bool {
+        folder.lastPathComponent == Self.trashName && roots().contains { $0.path == folder.deletingLastPathComponent().path }
     }
 
     /// Removes the copies of a note, or of every note in a folder: for sample notes made again where others were.
@@ -355,46 +368,62 @@ final class NoteHistory: @unchecked Sendable {
 
     // MARK: - Following notes
 
-    /// A note or folder Notebook renamed or moved: its copies go along, to the right store for where it went. Copies
-    /// there already, of a note thrown away before whose name it takes now, are set aside, apart from them, and come
-    /// back when the name is free again, for Put Back to find.
+    /// A note or folder Notebook renamed or moved: its copies go along, to the right store for where it went, and are
+    /// put together with any there already.
     func follow(from old: URL, to new: URL) {
         let old = old.standardizedFileURL
         let new = new.standardizedFileURL
         queue.async { [self] in
             let target = folders(for: new).write
-            let sources = folders(for: old).all.filter { $0.path != target.path && FileManager.default.fileExists(atPath: $0.path) }
-            if !sources.isEmpty, FileManager.default.fileExists(atPath: target.path), !sources.contains(where: { Self.isSameItem($0, target) }) {
-                setAside(target)
-            }
-            for source in sources {
-                if isInICloud(source) == isInICloud(target) { move(source, to: target) } else { transfer(source, to: target) }
-                bringBack(source)
+            for source in folders(for: old).all where source.path != target.path && FileManager.default.fileExists(atPath: source.path) {
+                carry(source, to: target)
                 removeEmptyFolders(from: source.deletingLastPathComponent())
             }
             newest = [:]
         }
     }
 
-    /// Copies of another note, thrown away, that had the name a note now takes: they go beside it as ".Name.md 1234",
-    /// which lists no versions and is thinned on its own.
-    private func setAside(_ folder: URL) {
-        let parent = folder.deletingLastPathComponent()
-        let aside = parent.appendingPathComponent(".\(folder.lastPathComponent) \(Int(Date().timeIntervalSince1970 * 1000))", isDirectory: true)
-        move(folder, to: aside)
+    /// Where a note's copies go while it is in the Trash: `.Trash/<name>` in the store they are in.
+    static let trashName = ".Trash"
+
+    /// A name for the copies of a note going to the Trash, under which Undo or Put Back brings them back.
+    static func trashedName() -> String {
+        "\(Int(Date().timeIntervalSince1970)) \(UUID().uuidString.prefix(8))"
     }
 
-    /// Copies set aside where a note's name is free again: the newest set back under it.
-    private func bringBack(_ folder: URL) {
-        let manager = FileManager.default
-        guard !manager.fileExists(atPath: folder.path) else { return }
-        let parent = folder.deletingLastPathComponent()
-        let prefix = ".\(folder.lastPathComponent) "
-        let aside = ((try? manager.contentsOfDirectory(atPath: parent.path)) ?? []).filter {
-            $0.hasPrefix(prefix) && Int($0.dropFirst(prefix.count)) != nil
+    /// A note or folder Notebook put in the Trash: its copies go into the History's own Trash, under `name`. There they
+    /// wait for Undo or Put Back (`putBack`), and go when they are a year old. A note made later under its name starts
+    /// without them.
+    func trash(_ url: URL, as name: String) {
+        let url = url.standardizedFileURL
+        queue.async { [self] in
+            for source in folders(for: url).all where FileManager.default.fileExists(atPath: source.path) {
+                let root = isInICloud(source) ? cloudRoot() ?? local : local
+                move(source, to: root.appendingPathComponent(Self.trashName).appendingPathComponent(name, isDirectory: true))
+                removeEmptyFolders(from: source.deletingLastPathComponent())
+            }
+            newest = [:]
         }
-        guard let newest = aside.max(by: { Int($0.dropFirst(prefix.count))! < Int($1.dropFirst(prefix.count))! }) else { return }
-        move(parent.appendingPathComponent(newest), to: folder)
+    }
+
+    /// The copies of a note or folder put back from the Trash, to where it is now: its own name, or another.
+    func putBack(_ name: String, to url: URL) {
+        let url = url.standardizedFileURL
+        queue.async { [self] in
+            let target = folders(for: url).write
+            for root in roots() {
+                let trashed = root.appendingPathComponent(Self.trashName).appendingPathComponent(name, isDirectory: true)
+                guard FileManager.default.fileExists(atPath: trashed.path) else { continue }
+                carry(trashed, to: target)
+                removeEmptyFolders(from: trashed.deletingLastPathComponent())
+            }
+            newest = [:]
+        }
+    }
+
+    /// Moves copies to another place in their store, or takes them to the other.
+    private func carry(_ source: URL, to target: URL) {
+        if isInICloud(source) == isInICloud(target) { move(source, to: target) } else { transfer(source, to: target) }
     }
 
     private func isInICloud(_ url: URL) -> Bool {
@@ -402,19 +431,29 @@ final class NoteHistory: @unchecked Sendable {
         return url.path == cloud.path || url.path.hasPrefix(cloud.path + "/")
     }
 
+    /// The file in a note's folder on this device that says where in iCloud copies of it stayed, which iCloud hadn't
+    /// brought down when the note left iCloud: a path a line, from the History folder there on. Its versions are looked
+    /// for there too, and they join the rest when the note goes back into iCloud.
+    static let leftoversName = ".in iCloud"
+
     /// Takes copies from iCloud to this device's store or the other way, one by one: a copy is written there, then
     /// removed here. One iCloud hasn't brought down yet would only take its placeholder along, and iCloud would then
-    /// remove the copy everywhere: it stays where it is and is asked for, and goes after a year.
+    /// remove the copy everywhere: it stays where it is, is asked for, and the note's folder says where.
     private func transfer(_ source: URL, to target: URL) {
         let manager = FileManager.default
         if Self.isFolder(source) {
             for name in (try? manager.contentsOfDirectory(atPath: source.path)) ?? [] {
-                if Self.realName(of: name) != name {
+                if name == Self.leftoversName {
+                    // Back into iCloud: what stayed there joins the rest.
+                    for leftovers in leftovers(listedIn: source) where leftovers.path != target.path { move(leftovers, to: target) }
+                    try? manager.removeItem(at: source.appendingPathComponent(name))
+                } else if Self.realName(of: name) != name {
                     try? manager.startDownloadingUbiquitousItem(at: source.appendingPathComponent(Self.realName(of: name)))
-                    continue
+                } else {
+                    transfer(source.appendingPathComponent(name), to: target.appendingPathComponent(name))
                 }
-                transfer(source.appendingPathComponent(name), to: target.appendingPathComponent(name))
             }
+            if isInICloud(source), !isInICloud(target), !Self.copies(in: source).isEmpty { list(source, asLeftoversIn: target) }
             if ((try? manager.contentsOfDirectory(atPath: source.path)) ?? []).isEmpty { try? manager.removeItem(at: source) }
             return
         }
@@ -435,6 +474,34 @@ final class NoteHistory: @unchecked Sendable {
         if written { Self.remove(source) }
     }
 
+    /// The folders in iCloud a note's folder here says copies of it stayed in.
+    private func leftovers(listedIn folder: URL) -> [URL] {
+        guard let cloud = cloudRoot(),
+              let text = try? String(contentsOf: folder.appendingPathComponent(Self.leftoversName), encoding: .utf8) else { return [] }
+        return text.split(separator: "\n").map { cloud.appendingPathComponent(String($0), isDirectory: true) }
+    }
+
+    private func list(_ leftovers: URL, asLeftoversIn folder: URL) {
+        guard let cloud = cloudRoot() else { return }
+        let path = String(leftovers.path.dropFirst(cloud.path.count).drop { $0 == "/" })
+        var paths = self.leftovers(listedIn: folder).map { String($0.path.dropFirst(cloud.path.count).drop { $0 == "/" }) }
+        guard !paths.contains(path) else { return }
+        paths.append(path)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try? paths.joined(separator: "\n").write(to: folder.appendingPathComponent(Self.leftoversName), atomically: true, encoding: .utf8)
+    }
+
+    /// Keeps only the lines of a folder's leftovers list whose folders are still there; false when none is.
+    private func keepLeftovers(listedIn folder: URL) -> Bool {
+        let file = folder.appendingPathComponent(Self.leftoversName)
+        let there = leftovers(listedIn: folder).filter { FileManager.default.fileExists(atPath: $0.path) }
+        guard there.isEmpty else { return true }
+        // Without iCloud the list can't be checked, and stays.
+        guard cloudRoot() != nil else { return true }
+        try? FileManager.default.removeItem(at: file)
+        return false
+    }
+
     /// Moves a folder of copies, or one copy, within one store, and puts it together with one there already.
     private func move(_ source: URL, to target: URL) {
         let manager = FileManager.default
@@ -450,6 +517,10 @@ final class NoteHistory: @unchecked Sendable {
             return
         }
         guard Self.isFolder(source), Self.isFolder(target) else {
+            if source.lastPathComponent == Self.leftoversName {
+                // Two lists of what stayed in iCloud: one with the lines of both.
+                for leftovers in leftovers(listedIn: source.deletingLastPathComponent()) { list(leftovers, asLeftoversIn: target.deletingLastPathComponent()) }
+            }
             // A copy of the same name there is the same copy: taken in the same second on the same device.
             Self.remove(source)
             return
@@ -476,13 +547,14 @@ final class NoteHistory: @unchecked Sendable {
 
     // MARK: - Versions
 
-    /// A note's copies, newest first, from their names alone: nothing is read or brought down from iCloud. Copies iCloud
-    /// hasn't brought down yet say so.
+    /// A note's copies, newest first, from their names alone: nothing is read or brought down from iCloud. Those that
+    /// stayed in iCloud when it left are among them. Copies iCloud hasn't brought down yet say so.
     func versions(of note: URL) async -> [Version] {
         let note = note.standardizedFileURL
         return await withCheckedContinuation { continuation in
             queue.async { [self] in
-                let copies = folders(for: note).all.flatMap(Self.copies(in:)).map { copy in
+                let folders = folders(for: note).all
+                let copies = (folders + folders.flatMap(leftovers(listedIn:))).flatMap(Self.copies(in:)).map { copy in
                     var copy = copy
                     copy.isDownloaded = Self.isDownloaded(copy.url)
                     return copy

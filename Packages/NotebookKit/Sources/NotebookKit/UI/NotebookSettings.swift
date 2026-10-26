@@ -106,10 +106,13 @@ public final class NotebookSettings {
         didSet { changedSidebar("dimsOtherFiles", dimsOtherFiles) }
     }
 
-    /// Folders come before files in each folder; otherwise everything is sorted by name together.
+    /// Folders come before files in each folder; otherwise they are sorted in with the files.
     public var foldersFirst: Bool {
         didSet { changedSidebar("foldersFirst", foldersFirst) }
     }
+
+    /// How the files in each folder are sorted: by name, or newest first by when they were edited or made.
+    public let fileOrders = FileOrders()
 
     /// How a heading shows that it is one while you edit it: a level tag in the margin, its `#`s showing with a keyboard
     /// and while they are typed, or only its `#`s, in the text, on every keyboard.

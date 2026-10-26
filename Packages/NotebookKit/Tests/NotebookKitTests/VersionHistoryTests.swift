@@ -111,17 +111,32 @@ final class VersionHistoryTests: XCTestCase {
         XCTAssertEqual(followed.count, 1)
     }
 
-    func testVersionsStayWhenTheNoteGoesToTheTrashForUndoToFind() async throws {
+    func testVersionsGoToTheTrashWithTheNoteAndComeBackWithUndo() async throws {
         let (workspace, manager) = try await makeWindow()
         history.keep("# Draft\n\nAn earlier version.\n", of: draft)
         let trashed = await workspace.trash(draft).value
         XCTAssertTrue(trashed)
-        let stayed = await versions(of: draft)
-        XCTAssertEqual(stayed.count, 1)
+        let gone = await versions(of: draft)
+        XCTAssertEqual(gone, [], "a note made under its name starts without them")
         try await undo(workspace, manager)
         XCTAssertTrue(FileManager.default.fileExists(atPath: draft.path))
         let back = await versions(of: draft)
         XCTAssertEqual(back.count, 1)
+    }
+
+    func testVersionsComeBackUnderTheNameANotePutBackGets() async throws {
+        let (workspace, manager) = try await makeWindow()
+        history.keep("# Draft\n\nAn earlier version.\n", of: draft)
+        _ = await workspace.trash(draft).value
+        // Its name is taken meanwhile: Undo puts it back as "Draft 2".
+        try "# Draft\n\nAnother note.\n".write(to: draft, atomically: true, encoding: .utf8)
+        try await undo(workspace, manager)
+        let second = papers.appendingPathComponent("Draft 2.md")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: second.path))
+        let its = await versions(of: second)
+        XCTAssertEqual(its.count, 1)
+        let others = await versions(of: draft)
+        XCTAssertEqual(others, [])
     }
 
     // MARK: - Bringing a version back (#121, #122)
