@@ -454,6 +454,11 @@ struct FileAlerts: ViewModifier {
                     .presentationDetents([.medium, .large])
             }
             .sheet(item: $workspace.moving) { file in MoveSheet(workspace: workspace, url: file.url) }
+            .sheet(item: $workspace.versionBrowser) { browser in
+                // On the iPad as large as a page, for the versions and the one picked side by side.
+                VersionHistorySheet(browser: browser, source: workspace.editor)
+                    .presentationSizing(.page)
+            }
             .alert(deleteTitle, isPresented: Binding(get: { workspace.deleting != nil }, set: { if !$0 { workspace.deleting = nil } })) {
                 Button("Cancel", role: .cancel) { workspace.deleting = nil }
                 Button("Delete", role: .destructive) {

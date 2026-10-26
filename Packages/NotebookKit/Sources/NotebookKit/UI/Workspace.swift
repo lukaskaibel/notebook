@@ -17,7 +17,10 @@ public final class Workspace: NSObject {
     public private(set) var currentURL: URL?
     /// The To-dos list is shown on the right, in place of a file.
     public private(set) var showsTodos = false
-    public private(set) var note: NoteDocument?
+    public private(set) var note: NoteDocument? {
+        // Versions of the note left aren't restored into the next.
+        didSet { if note !== oldValue { closeVersions() } }
+    }
     @ObservationIgnored public let editor = EditorController()
     let index = SearchIndex()
 
@@ -127,6 +130,8 @@ public final class Workspace: NSObject {
     @ObservationIgnored var showWindow: (() -> Void)?
 
     #if os(macOS)
+    /// The note in its own window that you are working in, for Revert To; nil while it's the main window.
+    var keyFileNote: NoteDocument?
     @ObservationIgnored weak var sidebar: SidebarController?
     /// Remind Me… while it is open, so another one takes its place.
     @ObservationIgnored weak var reminderPopover: NSPopover?
@@ -166,6 +171,8 @@ public final class Workspace: NSObject {
     var folderIconRequest: FolderIconRequest?
     /// A file or folder to move, in the sheet that asks where to.
     var moving: MovingFile?
+    /// The open note's earlier versions, in the Version History sheet.
+    var versionBrowser: VersionBrowser?
     /// What each note looked like when you went on from it, shown while the screen of the note you go on to slides
     /// over it, and while you swipe back to it. There is only one editor, and it is on the screen in front.
     @ObservationIgnored var pageSnapshots: [URL: UIView] = [:]
@@ -279,8 +286,16 @@ public final class Workspace: NSObject {
             // A folder given on the command line (tests, screenshots): used for this run, not remembered.
             temporaryLocations = true
             let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true).standardizedFileURL
+            // Its notes' earlier versions stay with it on this device, apart from those of your own notes.
+            if let store = SearchIndex.storeURL(library: url.path, name: "History", in: .cachesDirectory) {
+                NoteHistory.shared.keepOnDevice(in: store.appendingPathComponent("History.noindex", isDirectory: true))
+            }
             #if DEBUG
-            if UserDefaults.standard.bool(forKey: "NotebookDemo") { DemoLibrary.create(at: url) }
+            if UserDefaults.standard.bool(forKey: "NotebookDemo"), DemoLibrary.create(at: url) {
+                // Versions of earlier sample notes at the same place go with them.
+                NoteHistory.shared.forget(url)
+                DemoLibrary.keepVersions(at: url)
+            }
             // YES: next to the library; a path: there, such as On My iPhone for the UI tests.
             if let export = UserDefaults.standard.string(forKey: "NotebookDemoExport"), export != "NO" {
                 let path = (export as NSString).expandingTildeInPath
@@ -296,7 +311,14 @@ public final class Workspace: NSObject {
             locations = LocationStore.load()
             hidden = HiddenFolders()
             reminders = Reminders()
+            // Versions a year old go, also those of notes not written in since, and those of notes gone from the
+            // locations go to the History's Trash; not while the app is starting.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
+                NoteHistory.shared.tidyUp(notesIn: self?.locations.map(\.url) ?? [])
+            }
         }
+        // What the History does by itself, as it sets aside copies a new note isn't to have, says which device did it.
+        _ = NoteHistory.thisDevice
         #if DEBUG
         if temporaryLocations, UserDefaults.standard.bool(forKey: "NotebookDemo"), let library = locations.first {
             for path in DemoLibrary.hiddenFolders { hidden.set(hiddenKey(for: library.url.appendingPathComponent(path)), hidden: true) }
@@ -483,7 +505,8 @@ public final class Workspace: NSObject {
     func addSampleNotes(in folder: URL) {
         let url = folder.appendingPathComponent("Sample Notes", isDirectory: true)
         Task {
-            await Task.detached(priority: .userInitiated) { DemoLibrary.create(at: url) }.value
+            let made = await Task.detached(priority: .userInitiated) { DemoLibrary.create(at: url) }.value
+            if made { DemoLibrary.keepVersions(at: url) }
             addLocation(url)
         }
     }
@@ -946,6 +969,8 @@ public final class Workspace: NSObject {
                     #endif
                 }.value
                 if thrownAway {
+                    // Copies of what was typed and taken away again go too.
+                    NoteHistory.shared.trash(url, as: NoteHistory.trashedName())
                     forgetRecent(url)
                     showChanges(in: [url.deletingLastPathComponent()], removing: [url])
                 }
@@ -968,9 +993,10 @@ public final class Workspace: NSObject {
         guard isLeftEmpty(note), !named else { return }
         note.close()
         let url = note.url
+        let history = NoteHistory.trashedName()
         let done = DispatchSemaphore(value: 0)
         DispatchQueue.global(qos: .userInitiated).async {
-            _ = FileOperations.trash(url)
+            if FileOperations.trash(url) { NoteHistory.shared.trash(url, as: history) }
             done.signal()
         }
         _ = done.wait(timeout: .now() + 1)
@@ -1402,6 +1428,8 @@ public final class Workspace: NSObject {
         let result = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?)? in
             let renamed = fileName ? FileOperations.rename(url, toFileName: name, presenter: document) : FileOperations.rename(url, to: name, presenter: document)
             guard let renamed else { return nil }
+            // Its earlier versions go along, before the note saves or keeps a copy under its new name.
+            NoteHistory.shared.follow(from: url, to: renamed)
             return (renamed, FileNode.listing(of: renamed))
         }.value
         guard let renamed = result?.url else {
@@ -1454,6 +1482,7 @@ public final class Workspace: NSObject {
             let ext = (name as NSString).pathExtension
             let destination = FileOperations.uniqueURL(in: folder, name: (name as NSString).deletingPathExtension, extension: ext.isEmpty ? nil : ext)
             guard let moved = FileOperations.move(url, to: destination, presenter: document) else { return nil }
+            NoteHistory.shared.follow(from: url, to: moved)
             // Its pictures come along before it shows there, when they can.
             let assets = isHere ? FileOperations.copyAssets(of: moved, from: source, renaming: !undoing) : nil
             return (moved, FileNode.listing(of: moved), assets)
@@ -1564,6 +1593,7 @@ public final class Workspace: NSObject {
                     let accessing = url.startAccessingSecurityScopedResource()
                     defer { if accessing { url.stopAccessingSecurityScopedResource() } }
                     guard (try? FileManager.default.copyItem(at: url, to: destination)) != nil else { return nil }
+                    NoteHistory.shared.made(destination)
                     return (destination, FileNode.listing(of: destination))
                 }
             }.value
@@ -1646,8 +1676,11 @@ public final class Workspace: NSObject {
         let change = keepForUndo(FileChange(.trash, "Move to Trash", from: url))
         return changeFiles { [self] follow in
             let url = follow(url)
-            change.remembered = remembered(url)
+            let remembered = remembered(url)
+            change.remembered = remembered
             let trashed = await trashNow(url)
+            // Its versions wait in the History's Trash, for Undo, and a note made under its name starts without them.
+            if trashed.done { NoteHistory.shared.trash(url, as: remembered.history) }
             // Moved to the Trash with nowhere to say it went, it can't be put back.
             changeDone(change, from: url, to: trashed.place)
             if !trashed.done { beep() }
@@ -1690,8 +1723,10 @@ public final class Workspace: NSObject {
             let url = follow(url)
             let known = rememberedForDeleting.flatMap { $0.path == url.path ? $0 : nil }
             rememberedForDeleting = nil
-            change.remembered = known ?? remembered(url)
+            let remembered = known ?? remembered(url)
+            change.remembered = remembered
             let deleted = await deleteNow(url)
+            if deleted.done { NoteHistory.shared.trash(url, as: remembered.history) }
             changeDone(change, from: url, to: deleted.place)
             if !deleted.done { beep() }
         }
@@ -1805,8 +1840,14 @@ public final class Workspace: NSObject {
         #endif
         // Not as the app quits, which wouldn't wait for it: the next launch reads what changed.
         if !quitting { index.keepChanges() }
+        defer {
+            // Versions are written in the background; the app waits for them a moment at most as it quits.
+            if quitting { NoteHistory.shared.waitUntilWritten(timeout: 1) }
+        }
         guard let note else { return }
         note.update(text: editor.text)
+        // You stopped writing for now: what you wrote is kept as a version.
+        note.keepCopyOfChanges()
         #if os(macOS)
         if quitting { trashAsQuitting(note) }
         #endif

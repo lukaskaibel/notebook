@@ -109,6 +109,11 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     /// True while the note's text is still on its way (from iCloud): its title shows, and nothing can be typed or
     /// changed until it is loaded with its text.
     public private(set) var isWaitingForText = false
+    /// Shows a note without letting it be changed: an earlier version of it, in Version History. Its text can still be
+    /// selected and copied.
+    public var isReadOnly = false {
+        didSet { updateEditability() }
+    }
     private var isApplyingStyle = false
     /// True while the editor changes the text itself, so its own changes aren't taken for typing.
     var isPerformingEdit = false
@@ -298,9 +303,18 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     /// Takes in a new version of the text from disk (changed elsewhere, or merged with it). Only the part that
     /// differs is replaced, as an edit that can be undone, so the caret and the scroll position stay where they are.
     public func reload(text: String) {
+        guard let change = change(to: text) else { return }
+        preservingScroll {
+            replace(change.range, with: change.replacement, select: change.caret, actionName: "Change from Another Device")
+        }
+    }
+
+    /// What turns the text into `text`: the part between what the two share at the start and at the end, and where
+    /// the caret goes. Nil when they are the same.
+    func change(to text: String) -> (range: NSRange, replacement: String, caret: NSRange)? {
         let old = storage.string as NSString
         let new = text as NSString
-        guard old as String != text else { return }
+        guard old as String != text else { return nil }
         var prefix = 0
         let limit = min(old.length, new.length)
         while prefix < limit, old.character(at: prefix) == new.character(at: prefix) { prefix += 1 }
@@ -312,9 +326,13 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         let delta = (replacement as NSString).length - range.length
         var caret = selection
         if selection.location >= range.upperBound { caret.location += delta } else if selection.location > range.location { caret = NSRange(location: range.location + (replacement as NSString).length, length: 0) }
-        preservingScroll {
-            replace(range, with: replacement, select: caret, actionName: "Change from Another Device")
-        }
+        return (range, replacement, caret)
+    }
+
+    /// Marks what changed since an earlier version in it: Show Changes in Version History.
+    func showChanges(_ marks: [VersionChanges.Mark]) {
+        layoutManager.changeMarks = marks
+        textNeedsDisplay()
     }
 
     /// Notes up to a few thousand words are laid out whole, so nothing below the window ever changes size by
@@ -814,6 +832,18 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
             return layoutManager.extraLineFragmentRect.minY + textOrigin.y
         }
         return layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil).minY + textOrigin.y
+    }
+
+    /// Puts other text in where you are: the line at the top of what shows, found in the new text by `map`, stays where
+    /// it was, rather than the text starting again at its top. Show Changes, turned on and off.
+    func load(text: String, folder: URL?, title: String, meta: String, keepingPlace map: (Int) -> Int) {
+        guard isInWindow, storage.length > 0 else { return load(text: text, folder: folder, title: title, meta: meta) }
+        let index = firstVisibleCharacter()
+        let offset = yPosition(of: index) - visibleRect.minY
+        load(text: text, folder: folder, title: title, meta: meta)
+        let mapped = min(max(0, map(index)), storage.length)
+        layoutManager.ensureLayout(forCharacterRange: NSRange(location: 0, length: min(storage.length, mapped + 1)))
+        setScrollTop(max(-topInset, yPosition(of: mapped) - offset))
     }
 
     private func firstVisibleCharacter() -> Int {

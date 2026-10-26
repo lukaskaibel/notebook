@@ -11,7 +11,7 @@ final class SearchController: NSObject, NSTextSuggestionsDelegate, NSSearchField
     typealias SuggestionItemType = SearchResult
 
     let field = ToolbarSearchField()
-    private unowned let workspace: Workspace
+    private weak var workspace: Workspace?
     let session: SearchSession
     /// The menu's request for what was typed last, answered when its results are there.
     private var respond: ((ItemResponse) -> Void)?
@@ -112,6 +112,7 @@ final class SearchController: NSObject, NSTextSuggestionsDelegate, NSSearchField
 
     func run(_ result: SearchResult) {
         leave()
+        guard let workspace else { return }
         workspace.open(result)
         // Into what you picked, so you type there.
         if workspace.note != nil { field.window?.makeFirstResponder(workspace.editor.textView) }
@@ -122,7 +123,7 @@ final class SearchController: NSObject, NSTextSuggestionsDelegate, NSSearchField
         field.stringValue = ""
         session.clear()
         respond = nil
-        field.window?.makeFirstResponder(workspace.note != nil ? workspace.editor.textView : nil)
+        field.window?.makeFirstResponder(workspace?.note != nil ? workspace?.editor.textView : nil)
     }
 
     /// Return with no result chosen opens the best one, as the first suggestion would.

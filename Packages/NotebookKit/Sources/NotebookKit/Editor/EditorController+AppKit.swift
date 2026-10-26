@@ -104,9 +104,9 @@ extension EditorController: NSTextViewDelegate, NSTextFieldDelegate {
     /// Nothing can be selected or typed while the note's text is on its way, in the note or its title.
     func updateEditability() {
         let editable = !isWaitingForText
-        textView.isEditable = editable
+        textView.isEditable = editable && !isReadOnly
         textView.isSelectable = editable
-        textView.titleField.isEditable = editable
+        textView.titleField.isEditable = editable && !isReadOnly
         textView.titleField.isSelectable = editable
     }
 
