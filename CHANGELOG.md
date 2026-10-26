@@ -76,6 +76,8 @@ versions follow [semantic versioning](https://semver.org).
   This iPhone uses, so its notes can be opened, shared and backed up from there. It was missing.
 - The sidebar on the Mac no longer scrolls back to the open note each time it is saved while you look at another part
   of it.
+- On iPhone and iPad, a note fades out under the bars at the top and bottom as you scroll, as in Notes, rather than
+  running sharp under the toolbar's buttons and stopping at a hard line under the title.
 
 ## [1.0.0] – not released yet
 

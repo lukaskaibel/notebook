@@ -318,11 +318,29 @@ final class EditorContainer: UIView {
         view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         addSubview(view)
         editor.endMove()
+        becomeContentScrollView()
     }
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
         claim()
+    }
+
+    /// The bars blur and fade what scrolls under them, as in Notes, only over the scroll view their screen names, and
+    /// SwiftUI names none for a text view of UIKit's: without this the toolbar's buttons sit on sharp text and the
+    /// navigation bar draws a hard edge.
+    private func becomeContentScrollView() {
+        let textView = editor.textView
+        textView.topEdgeEffect.style = .soft
+        textView.bottomEdgeEffect.style = .soft
+        var responder: UIResponder? = self
+        while let next = responder?.next {
+            if let controller = next as? UIViewController, controller.parent is UINavigationController {
+                controller.setContentScrollView(textView, for: [.top, .bottom])
+                return
+            }
+            responder = next
+        }
     }
 
     /// The screen with the editor goes, often before the next one takes the editor: the keyboard is kept for it.
