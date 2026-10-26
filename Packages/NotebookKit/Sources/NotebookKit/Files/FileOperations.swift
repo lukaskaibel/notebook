@@ -14,9 +14,9 @@ enum FileOperations {
     #endif
 
     /// A slow iCloud, for trying out that nothing waits for a change to files: in Debug builds, with
-    /// `-NotebookSlowWrites <seconds>`, each one waits that long first. One on the main thread isn't slowed down but
-    /// logged, to find any that shouldn't be there.
-    private static func debugWait(_ what: String, _ url: URL) {
+    /// `-NotebookSlowWrites <seconds>`, each one, and each save of a note, waits that long first. One on the main thread
+    /// isn't slowed down but logged, to find any that shouldn't be there.
+    static func debugWait(_ what: String, _ url: URL) {
         #if DEBUG
         if Thread.isMainThread {
             mainThreadWrites.withLock { $0 += 1 }
@@ -61,6 +61,30 @@ enum FileOperations {
             written = (try? Data(text.utf8).write(to: url, options: .atomic)) != nil
         }
         return written ? (url, madeFolder) : nil
+    }
+
+    /// A new note under a name no other file has, even with another made in the folder at the same moment: the name is
+    /// taken by creating the file, and when that finds one there, the next ("Groceries (Anna’s iPhone) 2"). Nil when it
+    /// couldn't be written, as when the folder is gone.
+    static func createNoteWithoutOverwriting(in folder: URL, title: String, text: String) -> URL? {
+        debugWait("made a note in", folder)
+        let name = fileName(from: title).isEmpty ? "Untitled" : fileName(from: title)
+        for _ in 0..<1000 {
+            let url = uniqueURL(in: folder, name: name, extension: "md")
+            var taken = false
+            var written = false
+            NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: nil) { url in
+                do {
+                    try Data(text.utf8).write(to: url, options: .withoutOverwriting)
+                    written = true
+                } catch CocoaError.fileWriteFileExists {
+                    taken = true
+                } catch {}
+            }
+            if written { return url }
+            if !taken { return nil }
+        }
+        return nil
     }
 
     @discardableResult
@@ -305,13 +329,20 @@ enum FileOperations {
     }
 
     /// Pictures and files in a folder's `.assets` that no note in the folder uses any more, among `candidates`,
-    /// go to the Trash.
+    /// go to the Trash. Only notes on this device are read: with one there still in iCloud, which would have to come
+    /// down for it, they all stay.
     static func cleanUpAssets(in folder: URL, candidates: Set<String>) {
         guard !candidates.isEmpty else { return }
-        let notes = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
+        let keys: [URLResourceKey] = [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey]
+        let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: keys)) ?? []
         var used = Set<String>()
-        for note in notes where note.pathExtension.lowercased() == "md" {
-            guard let text = NoteDocument.read(note) else { continue }
+        for file in files {
+            // A note not on this device, as iCloud used to show it: ".Groceries.md.icloud".
+            if file.lastPathComponent.hasPrefix("."), file.lastPathComponent.lowercased().hasSuffix(".md.icloud") { return }
+            guard file.pathExtension.lowercased() == "md" else { continue }
+            if let values = try? file.resourceValues(forKeys: Set(keys)), values.isUbiquitousItem == true,
+               values.ubiquitousItemDownloadingStatus != .current { return }
+            guard let text = NoteDocument.read(file) else { continue }
             used.formUnion(assetNames(in: text))
         }
         for name in withDrawingStrokes(candidates).subtracting(withDrawingStrokes(used)) {
