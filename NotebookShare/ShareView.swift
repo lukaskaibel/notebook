@@ -11,6 +11,7 @@ struct ShareView: View {
     @State private var title = ""
     @State private var appendsToLastNote = false
     @State private var problem: String?
+    @State private var isSaving = false
     private let places = SharedNotes.places
 
     init(content: SharedContent, done: @escaping (_ kept: Bool) -> Void) {
@@ -26,7 +27,9 @@ struct ShareView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Cancel", role: .cancel) { done(false) } }
-                    ToolbarItem(placement: .confirmationAction) { Button("Save", action: save).disabled(!content.isLoaded) }
+                    ToolbarItem(placement: .confirmationAction) {
+                        if isSaving { ProgressView() } else { Button("Save", action: save).disabled(!content.isLoaded) }
+                    }
                 }
         }
         .onChange(of: content.isLoaded, initial: true) { title = content.suggestedTitle }
@@ -38,9 +41,10 @@ struct ShareView: View {
                 Spacer()
                 Button("Cancel", role: .cancel) { done(false) }
                     .keyboardShortcut(.cancelAction)
+                if isSaving { ProgressView().controlSize(.small) }
                 Button("Save", action: save)
                     .keyboardShortcut(.defaultAction)
-                    .disabled(!content.isLoaded)
+                    .disabled(!content.isLoaded || isSaving)
             }
             .padding()
         }
@@ -90,12 +94,16 @@ struct ShareView: View {
 
     private func save() {
         let destination: SharedNote.Destination = appendsToLastNote ? places?.lastNote.map { .endOf(path: $0) } ?? .newNote : .newNote
-        do {
-            try content.keep(as: title, at: destination)
-            done(true)
-        } catch {
-            problem = SharedNotes.folder == nil ? "This build of Notebook has no App Group to keep it in."
-                : "Notebook couldn’t keep it: \(error.localizedDescription)"
+        isSaving = true
+        Task {
+            do {
+                try await content.keep(as: title, at: destination)
+                done(true)
+            } catch {
+                isSaving = false
+                problem = SharedNotes.folder == nil ? "This build of Notebook has no App Group to keep it in."
+                    : "Notebook couldn’t keep it: \(error.localizedDescription)"
+            }
         }
     }
 

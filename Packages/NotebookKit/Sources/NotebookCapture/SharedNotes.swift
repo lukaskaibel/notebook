@@ -40,16 +40,17 @@ public enum SharedNotes {
     private static let partial = ".partial"
     private static let manifest = "note.json"
 
-    /// Leaves a note for the app, with copies of its files under the names it gives them. Whole or not at all: it is
-    /// written under a name the app passes over and then renamed.
-    public static func add(_ note: SharedNote, files: [(url: URL, name: String)]) throws {
+    /// Leaves a note for the app, moving its files there under the names it gives them: they are copies of the
+    /// extension's own, and moved they take no time and no room twice. Whole or not at all: it is written under a
+    /// name the app passes over and then renamed. Not on the main thread: a file on another volume is copied.
+    public static func add(_ note: SharedNote, moving files: [(url: URL, name: String)]) throws {
         guard let folder else { throw CocoaError(.featureUnsupported) }
         let manager = FileManager.default
         let writing = folder.appendingPathComponent(note.id.uuidString + partial, isDirectory: true)
         try manager.createDirectory(at: writing, withIntermediateDirectories: true)
         do {
             for file in files {
-                try manager.copyItem(at: file.url, to: writing.appendingPathComponent(file.name))
+                try manager.moveItem(at: file.url, to: writing.appendingPathComponent(file.name))
             }
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
@@ -65,14 +66,36 @@ public enum SharedNotes {
     /// The notes waiting, oldest first, with the folder their files are in.
     public static func waiting() -> [(note: SharedNote, files: URL)] {
         guard let folder, let names = try? FileManager.default.contentsOfDirectory(atPath: folder.path) else { return [] }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let decoder = decoder
         return names.filter { !$0.hasSuffix(partial) && !$0.hasPrefix(".") }.compactMap { name in
             let files = folder.appendingPathComponent(name, isDirectory: true)
             guard let data = try? Data(contentsOf: files.appendingPathComponent(manifest)),
                   let note = try? decoder.decode(SharedNote.self, from: data) else { return nil }
             return (note, files)
         }.sorted { $0.note.date < $1.note.date }
+    }
+
+    /// What a share extension stopped while leaving (a `.partial` folder an hour old) or what can't be read (a day
+    /// old, in case it is still being written by something newer): what is left in the folder is deleted, as
+    /// everything shared is once written.
+    public static func removeLeftovers(now: Date = .now) {
+        guard let folder, let names = try? FileManager.default.contentsOfDirectory(atPath: folder.path) else { return }
+        let manager = FileManager.default
+        for name in names where !name.hasPrefix(".") {
+            let item = folder.appendingPathComponent(name, isDirectory: true)
+            let made = (try? item.resourceValues(forKeys: [.creationDateKey]))?.creationDate ?? now
+            let manifest = item.appendingPathComponent(manifest)
+            let readable = (try? Data(contentsOf: manifest)).map { (try? decoder.decode(SharedNote.self, from: $0)) != nil } ?? false
+            if name.hasSuffix(partial) ? made < now.addingTimeInterval(-3600) : !readable && made < now.addingTimeInterval(-86400) {
+                try? manager.removeItem(at: item)
+            }
+        }
+    }
+
+    private static var decoder: JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
     }
 
     /// Forgets a note once the app has written it.

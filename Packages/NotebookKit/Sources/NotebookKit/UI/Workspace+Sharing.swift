@@ -12,34 +12,43 @@ extension Workspace {
         start()
         await surveyed()
         guard !locations.isEmpty else { return }
-        let waiting = await Task.detached(priority: .userInitiated) { SharedNotes.waiting() }.value
+        let waiting = await Task.detached(priority: .userInitiated) {
+            SharedNotes.removeLeftovers()
+            return SharedNotes.waiting()
+        }.value
         for shared in waiting where await write(shared.note, files: shared.files) {
             await Task.detached(priority: .utility) { SharedNotes.remove(shared.note) }.value
         }
     }
 
-    /// The places the share extension offers, as they are now: the default folder and the note opened last.
+    /// The places the share extension offers, as they are now: the default folder and the note opened last. Only a
+    /// note: text added to the end of a PDF or a picture would ruin it.
     func publishSharePlaces() {
         guard let folder = defaultFolder else {
             SharedNotes.places = nil
             return
         }
-        let last = currentURL.flatMap { $0.pathExtension == "md" ? $0 : nil } ?? recents.first.map { URL(fileURLWithPath: $0) }
+        let last = ([currentURL].compactMap { $0 } + recents.map { URL(fileURLWithPath: $0) }).first(where: Self.isNote)
         SharedNotes.places = SharedNotes.Places(defaultFolder: folder.lastPathComponent, lastNote: last?.path)
+    }
+
+    nonisolated static func isNote(_ url: URL) -> Bool {
+        FileKind(url: url, isDirectory: false) == .note
     }
 
     private func write(_ note: SharedNote, files: URL) async -> Bool {
         if case .endOf(let path) = note.destination {
             let url = URL(fileURLWithPath: path)
             let exists = await Task.detached { FileManager.default.fileExists(atPath: url.path) }.value
-            // Gone since, or no longer in a location: a note of its own instead.
-            if exists, location(containing: url) != nil { return await append(note, files: files, to: url) }
+            // Gone since, no longer in a location, or not a note at all: a note of its own instead.
+            if exists, Self.isNote(url), location(containing: url) != nil { return await append(note, files: files, to: url) }
         }
         return await newNote(note, files: files)
     }
 
     /// A new note in the default folder, or in the Inbox when the folder chosen for it is gone from the disk, as New
-    /// Note does. It shows in the sidebar and isn't opened: whatever is open stays.
+    /// Note does. It shows in the sidebar and isn't opened: whatever is open stays. All or nothing: without every one of
+    /// its files, or when the note can't be made, nothing stays behind and it waits for the next time.
     private func newNote(_ note: SharedNote, files: URL) async -> Bool {
         guard let chosen = defaultFolder else { return false }
         let inbox = inboxFolder
@@ -51,9 +60,14 @@ extension Workspace {
                 let folder = inbox.flatMap { manager.fileExists(atPath: chosen.path) ? nil : $0 } ?? chosen
                 let madeFolder = !manager.fileExists(atPath: folder.path)
                 if madeFolder { try? manager.createDirectory(at: folder, withIntermediateDirectories: true) }
-                let embeds = Self.storeShared(note.files, from: files, in: folder)
+                func undo(_ stored: [URL]) -> (url: URL, folder: URL, listing: FileNode.Listing?, madeFolder: Bool)? {
+                    FileOperations.removeStoredAssets(stored)
+                    if madeFolder, (try? manager.contentsOfDirectory(atPath: folder.path))?.isEmpty == true { try? manager.removeItem(at: folder) }
+                    return nil
+                }
+                guard let stored = Self.storeShared(note.files, from: files, in: folder) else { return undo([]) }
                 guard let made = FileOperations.createNote(in: folder, title: note.title ?? "Untitled",
-                                                           text: Self.sharedMarkdown(note.text, embeds) + "\n") else { return nil }
+                                                           text: Self.sharedMarkdown(note.text, stored.markdown) + "\n") else { return undo(stored.urls) }
                 return (made.url, folder, FileNode.listing(of: made.url), madeFolder)
             }.value
         }.value
@@ -64,28 +78,38 @@ extension Workspace {
         return true
     }
 
-    /// At the end of a note, after a blank line. Open in an editor, the text goes in there as one step of Undo and is
-    /// saved with what was typed; otherwise into the file, read and written in one go.
+    /// At the end of a note, after a blank line. Its files are copied first, off the main thread, as in iCloud that
+    /// can take a while; only then is the note looked for in an editor, since meanwhile another may have been opened
+    /// in its place or its window closed. Open, the text goes in there as one step of Undo and is saved at once;
+    /// otherwise into the file, read and written in one go. All or nothing, as for a new note.
     private func append(_ note: SharedNote, files: URL, to url: URL) async -> Bool {
-        let folder = url.deletingLastPathComponent()
-        if let editor = editorShowing(url) {
-            let embeds = await Task.detached(priority: .userInitiated) { Self.storeShared(note.files, from: files, in: folder) }.value
-            guard editor.appendAtEnd(Self.sharedMarkdown(note.text, embeds), actionName: "Add Shared") else { return false }
-            saveNote(showing: url)
-            return true
-        }
-        let written = await changeFiles { follow -> Bool in
+        let written = await changeFiles { [self] follow -> Bool in
             let url = follow(url)
-            return await Task.detached(priority: .userInitiated) {
-                let embeds = Self.storeShared(note.files, from: files, in: url.deletingLastPathComponent())
-                let addition = Self.sharedMarkdown(note.text, embeds)
-                return FileOperations.rewrite(url) { text in
-                    let end = Self.sharedEnd(addition, after: text as NSString)
-                    return (text as NSString).replacingCharacters(in: NSRange(location: end.kept, length: (text as NSString).length - end.kept), with: end.tail)
-                } != nil
-            }.value
+            let folder = url.deletingLastPathComponent()
+            guard let stored = await Task.detached(priority: .userInitiated, operation: { Self.storeShared(note.files, from: files, in: folder) }).value else {
+                return false
+            }
+            let addition = Self.sharedMarkdown(note.text, stored.markdown)
+            if let editor = editorShowing(url) {
+                if editor.appendAtEnd(addition, actionName: "Add Shared") {
+                    saveNote(showing: url)
+                    return true
+                }
+            } else {
+                let rewritten = await Task.detached(priority: .userInitiated) {
+                    FileOperations.rewrite(url) { text in
+                        let end = Self.sharedEnd(addition, after: text as NSString)
+                        return (text as NSString).replacingCharacters(in: NSRange(location: end.kept, length: (text as NSString).length - end.kept), with: end.tail)
+                    } != nil
+                }.value
+                if rewritten {
+                    readAgain([folder])
+                    return true
+                }
+            }
+            await Task.detached(priority: .utility) { FileOperations.removeStoredAssets(stored.urls) }.value
+            return false
         }.value
-        if written { readAgain([folder]) }
         return written
     }
 
@@ -105,12 +129,21 @@ extension Workspace {
     }
 
     /// Copies the files shared into the folder's `.assets` under names not taken there, and gives each one's
-    /// Markdown: a picture shows, any other file is its card.
-    nonisolated static func storeShared(_ names: [String], from source: URL, in folder: URL) -> [String] {
-        names.compactMap { name in
+    /// Markdown (a picture shows, any other file is its card) and where it went. Every one or none: when one can't be
+    /// copied, those copied already are taken back.
+    nonisolated static func storeShared(_ names: [String], from source: URL, in folder: URL) -> (markdown: [String], urls: [URL])? {
+        var markdown: [String] = []
+        var urls: [URL] = []
+        for name in names {
             let file = source.appendingPathComponent(name)
-            guard let stored = FileOperations.storeAsset(copying: file, in: folder) else { return nil }
-            return MarkdownStyler.isImageFile(file) ? "![](\(stored))" : "![\(name)](\(stored))"
+            guard let stored = FileOperations.storeAsset(copying: file, in: folder) else {
+                FileOperations.removeStoredAssets(urls)
+                return nil
+            }
+            let path = FileOperations.markdownPath(stored.lastPathComponent)
+            markdown.append(MarkdownStyler.isImageFile(file) ? "![](\(path))" : "![\(name)](\(path))")
+            urls.append(stored)
         }
+        return (markdown, urls)
     }
 }
