@@ -7,6 +7,10 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- New Note as a widget and a control: the widget on the Home Screen and the Lock Screen of iPhone and iPad and on the
+  Mac's desktop, the control in Control Center, on the Lock Screen and on the iPhone's Action button. A tap opens
+  Notebook with a new note in your default folder and the caret in its title, as New Note in Shortcuts does. The
+  widget shows Notebook's icon and the pencil in its ink; on the Lock Screen it is the pencil alone, or with its name.
 - Sort the notes and files in a folder by date edited or date created, newest first, as well as by name: View › Sort By
   on the Mac, Sort By in the ⋯ menu on iPhone and iPad, where it says how a folder is sorted now, in Settings › Sidebar
   (Settings › Files on iPhone and iPad), and in ⌘K. The order goes for every folder, the sidebar and the lists alike;
