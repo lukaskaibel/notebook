@@ -18,6 +18,13 @@ versions follow [semantic versioning](https://semver.org).
   the top of its folder once what you typed is saved, and its folder moves up among the others, as in the Finder: the
   row slides there and stays selected, and the sidebar goes with it if it was on screen. On iPhone and iPad a note's
   date in a list is the one it is sorted by.
+- To-dos that repeat, as with Obsidian's Tasks plugin: tick off a to-do with `🔁 every week` (or `every weekday`,
+  `every 2 weeks on Friday`, `every month on the last`, `every year`, `… when done` and the other rules Tasks reads), in
+  the note, in To-dos or in its notification, and the next one is written above it with its dates moved on, while the
+  one you ticked gets the day it was done, `✅ 2026-10-26`, as Tasks writes them. Its due date, time, scheduled and
+  start dates keep their distances, a day the next month doesn't have becomes its last day (31 January, every month,
+  is next due on 28 February), and its reminder moves to the next one. One Undo takes both back, and unticking it in
+  To-dos while it still shows ticked does too; unticking it in the note doesn't make another.
 
 ### Fixed
 

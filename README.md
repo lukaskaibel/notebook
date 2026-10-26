@@ -231,6 +231,16 @@ Obsidian's other plugins write too, and keeps their way when a date changes: the
 plugin's other fields, such as how important a to-do is (`⏫`), how it repeats (`🔁 every week`) and when it is
 scheduled (`⏳ 2026-10-26`), show as grey pills and stay as they are.
 
+A to-do repeats as it does with the Tasks plugin: write `🔁` and a rule after it, such as `every day`, `every weekday`,
+`every 2 weeks`, `every Monday`, `every month on the 1st`, `every month on the last Friday` or `every year`, and `when
+done` at the end to count from the day you tick it rather than from its date. Ticking it off, in the note, in To-dos or
+in its notification, writes the next one on the line above, open, and marks the one you ticked with the day,
+`✅ 2026-10-26`, as Tasks writes them, so the note goes on the same in Obsidian. Its dates move
+on together: the day it is due (`📅`) or its time (`⏰`), and when it is scheduled (`⏳`) or starts (`🛫`), each as far
+from the next day as it was. `every month` from 31 January is 28 February, as in Tasks. The lines under it stay with the
+one that is done. One Undo takes both back, and so does unticking it in To-dos while it still shows ticked; its
+reminder moves to the next one.
+
 A checkbox can hold more than a space or an x, as in Obsidian: `[/]` is in progress and shows a half-filled circle,
 `[-]` is cancelled, grey and struck through, and the marks Obsidian's themes draw, such as `[!]`, `[?]`, `[*]` or `[>]`,
 show their sign in the circle. As in the Tasks plugin, all but done and cancelled are still to do. Right-click a to-do
@@ -238,7 +248,7 @@ in To-dos to mark it in progress or cancelled.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/todos-dark.webp">
-  <img alt="To-dos selected at the top of the sidebar, with 3 next to it. The list shows Overdue with Return the library books from yesterday in red; Today with Pick up the dry cleaning at 5:30 PM, its two notes under it, and Send the map to Mia at 7:00 PM; Tomorrow with the note Questions for Dr. Weber and Market shopping, with its sub-to-dos Tomatoes and basil, Burrata and Bags, ticked, under it; then Next 7 Days and Later. Each row has a circle to tick it and the note it is in" src="Design/screenshots/todos-light.webp">
+  <img alt="To-dos selected at the top of the sidebar, with 4 next to it. The list shows Overdue with Return the library books from yesterday in red; Today with Water the plants, every week, Pick up the dry cleaning at 5:30 PM, its two notes under it, and Send the map to Mia at 7:00 PM; Tomorrow with the note Questions for Dr. Weber and Market shopping, with its sub-to-dos Tomatoes and basil, Burrata and Bags, ticked, under it; then Next 7 Days and Later. Each row has a circle to tick it and the note it is in" src="Design/screenshots/todos-light.webp">
 </picture>
 
 <picture>
@@ -248,7 +258,7 @@ in To-dos to mark it in progress or cancelled.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/todo-reminder-dark.webp">
-  <img alt="The note Errands, its to-dos followed by pills: Yesterday in red, Today 5:30 PM, the pharmacy at Rosenthaler Platz and a day next month on Renew the passport, which is half done, with a sub-to-do ticked and one not under it; Sell the old bike is cancelled, grey and struck through. Remind Me is open for Buy plasters, with Date and Time off and Location on: the pharmacy on a map with the circle around it, and Arriving or Leaving" src="Design/screenshots/todo-reminder-light.webp">
+  <img alt="The note Errands, its to-dos followed by pills: Yesterday in red, Today 5:30 PM, the pharmacy at Rosenthaler Platz and a day next month on Renew the passport, which is half done, with a sub-to-do ticked and one not under it; every week and Today on Water the plants; Sell the old bike is cancelled, grey and struck through. Remind Me is open for Buy plasters, with Date and Time off and Location on: the pharmacy on a map with the circle around it, and Arriving or Leaving" src="Design/screenshots/todo-reminder-light.webp">
 </picture>
 
 ### Remind me of a note
@@ -385,7 +395,8 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   the lines indented under it as its sub-to-dos and notes. Tick them off there, edit them in place as in Reminders with
   a line for notes and dates typed in a few words ("thursday in 3 weeks"), open their note, or drag them to another day. A to-do takes a date, a time and a place, written after its words where
   other apps read them too, and shows them as pills; Obsidian's Tasks, Reminder, Kanban and Dataview dates and its
-  `[/]` and `[-]` checkboxes are understood. Settings turns To-dos off.
+  `[/]` and `[-]` checkboxes are understood. A to-do with the Tasks plugin's `🔁 every week` makes the next one when
+  you tick it, as the plugin does. Settings turns To-dos off.
 - **Reminders.** Remind Me… brings a note or a to-do back at a time you choose, picked or typed in a few words ("friday
   evening", "in 3 weeks"), or when you arrive at or leave a place, with a notification of its first points or the
   to-do's notes that gets through a Focus. A note's reminder follows it when you rename or move it in Notebook, goes
@@ -438,6 +449,7 @@ The list of the notes Spotlight has is kept in the app's own folder on each devi
 | To-do's place | `📍 [Pharmacy](https://maps.apple.com/?ll=52.53,13.4&q=Pharmacy)`, `📍 Leaving [Home](…)` | A pill with the place's name |
 | A to-do's notes | Lines indented under it | Shown under the to-do in To-dos, sub-to-dos with circles to tick, and in its notification |
 | Tasks' other fields | `⏫`, `🔁 every week`, `⏳ 2026-10-26`, `[priority:: high]` | Grey pills: "High", "every week", "Scheduled Monday" |
+| A repeating to-do, ticked | `- [ ] Water the plants 🔁 every week 📅 2026-11-02` above `- [x] Water the plants 🔁 every week 📅 2026-10-26 ✅ 2026-10-26` | The next one, open, and the one done, ticked |
 | Highlight | `==text==` | A yellow highlight |
 | Callout | `> [!tip] Title` | A coloured box with a symbol |
 | Maths | `$x^2$`, `$$ … $$` | A typeset formula |
@@ -618,8 +630,7 @@ Planned, and not built yet:
   at the end of the note opened last.
 - **Reminders when a calendar event starts,** and on the iPhone a Live Activity that keeps the note on the Lock Screen.
   A reminder set on another device reaches an iPhone or iPad the next time Notebook runs there or gets time in the
-  background. Reminders don't repeat, and a Mac doesn't remind you at places. A to-do with the Tasks plugin's
-  `🔁 every week` shows how it repeats, but ticking it off doesn't make the next one yet, as the plugin does.
+  background. Reminders of notes don't repeat, and a Mac doesn't remind you at places.
 - Footnotes are styled but don't jump to their text.
 - On iPhone and iPad there is no Settings › App Icon (iOS only switches between icons built into the app), no PNG
   export and no window of its own for a single file.
