@@ -23,20 +23,27 @@ public struct TickTodoIntent: AppIntent {
         let toggled = WidgetData.toggleTick(row)
         let names = (row.notifications ?? []).flatMap { [$0, $0 + ".place"] }
         guard !names.isEmpty else { return .result() }
+        // The extension's notification center is the app's: the ones waiting are kept, to give back on an untick.
         let center = UNUserNotificationCenter.current()
         if toggled.ticked {
-            // The extension shares the app's notifications: the ones waiting are kept, to give back on an untick.
             let waiting = await center.pendingNotificationRequests().filter { names.contains($0.identifier) }
             center.removePendingNotificationRequests(withIdentifiers: names)
             center.removeDeliveredNotifications(withIdentifiers: names)
-            if !waiting.isEmpty, let kept = try? NSKeyedArchiver.archivedData(withRootObject: waiting, requiringSecureCoding: true) {
-                WidgetData.keepWithdrawn(kept, for: row.id)
-            }
-        } else if let kept = toggled.withdrawn,
-                  let requests = try? NSKeyedUnarchiver.unarchivedArrayOfObjects(ofClass: UNNotificationRequest.self, from: kept) {
-            for request in requests where Self.isToCome(request) { try? await center.add(request) }
+            if !waiting.isEmpty, let kept = Self.archived(waiting) { WidgetData.keepWithdrawn(kept, for: row.id) }
+        } else if let kept = toggled.withdrawn {
+            for request in Self.requests(from: kept) where Self.isToCome(request) { try? await center.add(request) }
         }
         return .result()
+    }
+
+    static func archived(_ requests: [UNNotificationRequest]) -> Data? {
+        try? NSKeyedArchiver.archivedData(withRootObject: requests, requiringSecureCoding: true)
+    }
+
+    /// The notifications archived. Not with `unarchivedArrayOfObjects(ofClass:)`: on these it raises, which ends the
+    /// extension.
+    static func requests(from data: Data) -> [UNNotificationRequest] {
+        (try? NSKeyedUnarchiver.unarchivedObject(ofClasses: [NSArray.self, UNNotificationRequest.self], from: data)) as? [UNNotificationRequest] ?? []
     }
 
     /// Whether a notification given back would still come: a time that hasn't passed, or a place.

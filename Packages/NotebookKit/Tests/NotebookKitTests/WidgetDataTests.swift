@@ -1,4 +1,5 @@
-import NotebookCapture
+@testable import NotebookCapture
+import UserNotifications
 import XCTest
 @testable import NotebookKit
 
@@ -137,6 +138,33 @@ final class WidgetDataTests: XCTestCase {
         XCTAssertTrue(WidgetData.ticks.isEmpty)
         await workspace.takeWidgetTicks()
         XCTAssertEqual(try read(errands), before)
+    }
+
+    /// An untick gives back what the tick took back.
+    func testAnUntickGivesBackTheNotifications() {
+        let row = WidgetData.TodoRow(kind: .todo, text: "Call", path: "/Errands.md", note: "Errands", line: 3, source: "- [ ] Call", due: .now, hasTime: true)
+        XCTAssertTrue(WidgetData.toggleTick(row).ticked)
+        WidgetData.keepWithdrawn(Data([1, 2, 3]), for: row.id)
+        XCTAssertEqual(WidgetData.ticks.first?.withdrawn, Data([1, 2, 3]))
+        let untick = WidgetData.toggleTick(row)
+        XCTAssertFalse(untick.ticked)
+        XCTAssertEqual(untick.withdrawn, Data([1, 2, 3]))
+    }
+
+    /// The notifications a tick takes back are kept whole, to come back on an untick.
+    func testWithdrawnNotificationsAreKeptWhole() throws {
+        let content = UNMutableNotificationContent()
+        content.title = "Call the bank"
+        content.body = "Errands"
+        content.sound = .default
+        content.userInfo = ["path": "/Errands.md", "line": 3]
+        let when = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: .now.addingTimeInterval(3600))
+        let request = UNNotificationRequest(identifier: "todo.1", content: content, trigger: UNCalendarNotificationTrigger(dateMatching: when, repeats: false))
+        let back = TickTodoIntent.requests(from: try XCTUnwrap(TickTodoIntent.archived([request])))
+        XCTAssertEqual(back.map(\.identifier), ["todo.1"])
+        XCTAssertEqual(back.first?.content.title, "Call the bank")
+        XCTAssertEqual((back.first?.trigger as? UNCalendarNotificationTrigger)?.dateComponents, when)
+        XCTAssertEqual(TickTodoIntent.requests(from: Data("not an archive".utf8)).count, 0)
     }
 
     /// A tick that can't be written now waits, its notification kept away meanwhile, and is written the next time.
