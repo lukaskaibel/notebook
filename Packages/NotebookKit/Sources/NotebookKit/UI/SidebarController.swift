@@ -448,11 +448,14 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     }
 
     /// Scrolls a row into view, as little as it takes; with `animated`, gliding there, with rows that slide to new places.
+    /// In a window nobody sees (behind others, or the display asleep) it is there at once: an animation only moves on
+    /// while the screen is drawn.
     private func scrollRowToVisible(_ row: Int, animated: Bool) {
         let clip = scrollView.contentView
         let rect = outline.rect(ofRow: row)
         let shown = outline.visibleRect
-        guard animated, rect.minY < shown.minY || rect.maxY > shown.maxY else { return outline.scrollRowToVisible(row) }
+        guard animated, outline.window?.occlusionState.contains(.visible) == true,
+              rect.minY < shown.minY || rect.maxY > shown.maxY else { return outline.scrollRowToVisible(row) }
         let y = rect.minY < shown.minY ? clip.bounds.minY - (shown.minY - rect.minY) : clip.bounds.minY + (rect.maxY - shown.maxY)
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.25
