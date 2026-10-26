@@ -317,6 +317,38 @@ final class NoteDocumentTests: XCTestCase {
         XCTAssertEqual(Set(copies(of: url).values), ["one, in the first\ntwo\n", "one, in the second\ntwo\n"])
     }
 
+    /// Asked about a conflict, then put in the Trash elsewhere, then left: the copy goes where the note was, not after it
+    /// into the Trash.
+    func testAConflictLeftAfterTheNoteWentToTheTrashKeepsTheCopyWhereItWas() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("notebook-notes-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        folders.append(folder)
+        let url = folder.appendingPathComponent("Trashed \(UUID().uuidString.prefix(8)).md")
+        try "one\ntwo\n".write(to: url, atomically: true, encoding: .utf8)
+        let note = NoteDocument(url: url)
+        var deleted = false
+        note.onDelete = { deleted = true }
+        note.update(text: "one mine\ntwo\n")
+        await writeElsewhere("one theirs\ntwo\n", to: url)
+        try await until("asked") { note.conflict != nil }
+        let trashed = await Task.detached { FileOperations.moveToTrash(url) }.value
+        let place = try XCTUnwrap(trashed.place)
+        let trash = place.deletingLastPathComponent()
+        let base = url.deletingPathExtension().lastPathComponent
+        defer {
+            try? FileManager.default.removeItem(at: place)
+            for name in (try? FileManager.default.contentsOfDirectory(atPath: trash.path)) ?? [] where name.hasPrefix(base + " (") {
+                try? FileManager.default.removeItem(at: trash.appendingPathComponent(name))
+            }
+        }
+        try await until("told it went") { deleted }
+        note.close()
+        await NoteDocument.allWritten()
+        XCTAssertEqual(Array(copies(of: url).values), ["one mine\ntwo\n"])
+        let inTrash = ((try? FileManager.default.contentsOfDirectory(atPath: trash.path)) ?? []).filter { $0.hasPrefix(base + " (") }
+        XCTAssertEqual(inTrash, [], "a copy went into the Trash")
+    }
+
     /// Copies of one note made at the same moment each take a name of their own.
     func testCopiesMadeAtOnceTakeANameEach() throws {
         let (note, url) = makeNote("")
@@ -398,27 +430,81 @@ final class NoteDocumentTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path), "written back")
     }
 
-    /// A file replaced by one that can't be read: still there, so it is no deletion, and saving goes on once it can.
-    func testAnUnreadableReplacementDoesNotStopSaving() async throws {
-        let (note, url) = makeNote("one\n")
-        var deleted = false
-        note.onDelete = { deleted = true }
+    /// Replaces the file with one that can't be read, as another app saving it would.
+    private func replaceWithUnreadable(_ text: String, at url: URL) async {
         await Task.detached {
             NSFileCoordinator().coordinate(writingItemAt: url, options: .forReplacing, error: nil) { url in
-                try? Data("one\n".utf8).write(to: url, options: .atomic)
+                try? Data(text.utf8).write(to: url, options: .atomic)
                 try? FileManager.default.setAttributes([.posixPermissions: 0o200], ofItemAtPath: url.path)
             }
         }.value
-        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path) }
+    }
+
+    private func makeReadable(_ url: URL) {
+        try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path)
+    }
+
+    /// The note open twice, renamed by its case only ("groceries" to "Groceries"), as from the sidebar: the rename's
+    /// write is a deletion notice to the other note, as the disk takes both names for one file. That note stays open,
+    /// and what is typed in it meanwhile is written under the new name.
+    func testACaseOnlyRenameKeepsTheOtherNoteOpen() async throws {
+        let (first, old) = makeNote("one\n")
+        let second = NoteDocument(url: old)
+        var deleted = false
+        first.onDelete = { deleted = true }
+        second.onDelete = { deleted = true }
+        slow(writes: 0.3)
+        let documents = await NoteDocument.beginMoving(old)
+        second.update(text: "one\ntyped during the rename\n")
+        let renamed = await Task.detached { FileOperations.rename(old, to: "note", presenter: first) }.value
+        let new = try XCTUnwrap(renamed)
+        XCTAssertEqual(new.lastPathComponent, "note.md")
+        NoteDocument.endMoving(documents, from: old, to: new)
+        try await Task.sleep(for: .milliseconds(1500))
+        await NoteDocument.allWritten()
+        XCTAssertFalse(deleted, "closed as if deleted")
+        XCTAssertEqual(onDisk(new), "one\ntyped during the rename\n")
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: new.deletingLastPathComponent().path).filter { $0.hasSuffix(".md") }, ["note.md"])
+        first.close()
+        second.close()
+    }
+
+    /// A file replaced by one that can't be read: still there, so no deletion, and not written over while it can't be
+    /// read to see what it says. Once it can, saving goes on.
+    func testAnUnreadableFileIsNotWrittenOver() async throws {
+        let (note, url) = makeNote("one\n")
+        var deleted = false
+        note.onDelete = { deleted = true }
+        await replaceWithUnreadable("one\n", at: url)
+        defer { makeReadable(url) }
         try await Task.sleep(for: .milliseconds(300))
         await note.saved()
         XCTAssertFalse(deleted)
         note.update(text: "one\ntwo\n")
         note.saveNow()
         await note.saved()
-        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path)
+        makeReadable(url)
+        XCTAssertEqual(onDisk(url), "one\n", "written over unseen")
+        XCTAssertTrue(note.hasUnsavedChanges)
+        note.saveNow()
+        await note.saved()
         XCTAssertEqual(onDisk(url), "one\ntwo\n")
         note.close()
+    }
+
+    /// Left while its file can't be read: what was typed is kept as a copy, and the file stays as it is.
+    func testANoteLeftWhileItsFileCantBeReadKeepsACopy() async throws {
+        let (note, url) = makeNote("one\n")
+        await replaceWithUnreadable("theirs\n", at: url)
+        defer { makeReadable(url) }
+        try await Task.sleep(for: .milliseconds(300))
+        await note.saved()
+        note.update(text: "one\nmine\n")
+        note.close()
+        await NoteDocument.allWritten()
+        makeReadable(url)
+        XCTAssertEqual(onDisk(url), "theirs\n")
+        XCTAssertEqual(Array(copies(of: url).values), ["one\nmine\n"])
     }
 
     /// A note left while it is still written, then put in the Trash: what was typed goes along, and the note doesn't

@@ -64,6 +64,8 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     @ObservationIgnored private let isDeleted = Mutex(false)
     /// Where the file was when it was said to be deleted: what `checkDeletion` looks at.
     @ObservationIgnored private var noticedAt: URL?
+    /// Where the file was before it went (into the Trash, say), for a copy kept after that.
+    @ObservationIgnored private var deletedFrom: URL?
     @ObservationIgnored private var isPresenting = true
     /// Where notes are read and written. The coordinated reads and writes wait for iCloud without holding a thread.
     private nonisolated static let fileQueue: OperationQueue = {
@@ -268,8 +270,10 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         /// It is still where it was when it was said to be deleted (at `at`): replaced, and says this now (nil when it
         /// can't be read).
         case replaced(String?, modified: Date?, at: URL)
-        /// It was deleted, or put in the Trash.
-        case deleted
+        /// It was deleted from here, or put in the Trash.
+        case deleted(from: URL)
+        /// It is there but can't be read, so it isn't written over.
+        case unreadable
         /// A conflict was settled: what it says now, the base this note's text goes over.
         case settled(String)
         /// What was typed here went into a copy next to the note, which says this.
@@ -337,16 +341,21 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         case .read(let disk, let modified):
             takeIn(disk, modified: modified)
             if !isClosed { checkForConflictVersions() }
-        case .replaced(_, _, let original) where !FileNode.samePath(url, original):
+        case .replaced(_, _, let original) where !Self.sameFile(url, original):
             // Moved away as it went, as into the Trash.
+            deletedFrom = original
             if !isClosed { onDelete?() }
         case .replaced(let disk, let modified, _):
             isDeleted.withLock { $0 = false }
             if let disk, isLoaded { takeIn(disk, modified: modified) }
             // What was typed here meanwhile, held until it was known, is written now.
             if hasUnsavedChanges { wantsSave = true }
-        case .deleted:
+        case .deleted(let original):
+            deletedFrom = original
             if !isClosed { onDelete?() }
+        case .unreadable:
+            // Kept until the file can be read again, or as a copy once no one can wait for that.
+            if isClosed { keepBoth() }
         case .settled(let disk):
             // The choice is made: what is on disk now is the base, and this note's text goes over it.
             savedText = disk
@@ -382,9 +391,12 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     nonisolated private func write(_ mine: String, over base: String, at url: URL) -> Outcome {
         FileOperations.debugWait("saved", url)
         guard !isDeleted.withLock({ $0 }) else { return .failed }
-        // Never written over a change made elsewhere. (Gone without a word, it is written again.)
-        if let disk = (try? Data(contentsOf: url)).flatMap(Self.decode), disk != base {
-            return .changed(disk, modified: Self.modificationDate(url))
+        // Never written over a change made elsewhere, nor over what can't be read to see. (Gone without a word, it is
+        // written again.)
+        if let disk = (try? Data(contentsOf: url)).flatMap(Self.decode) {
+            if disk != base { return .changed(disk, modified: Self.modificationDate(url)) }
+        } else if FileManager.default.fileExists(atPath: url.path) {
+            return .unreadable
         }
         guard FileOperations.write(Data(mine.utf8), to: url) else { return .failed }
         return .written(mine, modified: Self.modificationDate(url))
@@ -413,7 +425,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         work { finish in
             // Even when the coordinator fails, the file itself says whether it is still there.
             NSFileCoordinator().coordinate(with: [intent], queue: Self.fileQueue) { _ in
-                guard FileManager.default.fileExists(atPath: original.path) else { return finish(.deleted) }
+                guard FileManager.default.fileExists(atPath: original.path) else { return finish(.deleted(from: original)) }
                 let disk = (try? Data(contentsOf: original)).flatMap(Self.decode)
                 finish(.replaced(disk, modified: Self.modificationDate(original), at: original))
             }
@@ -456,6 +468,8 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     /// read. Nothing is saved before that.
     private func settle(_ settling: Settling) {
         let url = url
+        // Where it was, when it was said to be deleted before now: a copy goes there, not after the file into the Trash.
+        let origin = deletedFrom ?? noticedAt
         let intent = NSFileAccessIntent.readingIntent(with: url, options: .withoutChanges)
         work { finish in
             if case .resolved(let copying) = settling {
@@ -474,7 +488,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
                 NSFileCoordinator(filePresenter: self).coordinate(with: [intent], queue: Self.fileQueue) { error in
                     let disk = error == nil ? (try? Data(contentsOf: intent.url)).flatMap(Self.decode) : nil
                     // Next to where the note is now, or, said to be deleted (and maybe moved into the Trash), where it was.
-                    let note = self.isDeleted.withLock { $0 } ? url : intent.url
+                    let note = origin ?? (self.isDeleted.withLock { $0 } ? url : intent.url)
                     // Written once the note is let go of.
                     Self.fileQueue.addOperation {
                         guard disk != mine else { return finish(.keptBoth(mine)) }
@@ -586,6 +600,11 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         for document in documents {
             document.endMove(to: new.map { Workspace.relocated(document.url, from: url, to: $0) })
         }
+    }
+
+    /// The same file by path, as the Mac's disks take it: "groceries.md" and "Groceries.md" are one file.
+    nonisolated static func sameFile(_ a: URL, _ b: URL) -> Bool {
+        HiddenFolders.withoutPrivate(a.standardizedFileURL.path).compare(HiddenFolders.withoutPrivate(b.standardizedFileURL.path), options: .caseInsensitive) == .orderedSame
     }
 
     private static func isBeingWritten(_ url: URL) -> Bool {
