@@ -2142,6 +2142,10 @@ public final class Workspace: NSObject {
         keyFileWindow = nil
         if keyFileNote != nil { keyFileNote = nil }
         if isOtherWindowInFront { isOtherWindowInFront = false }
+        // Then as AppKit has it, in case the main window didn't come to the front after all.
+        DispatchQueue.main.async {
+            if let window = NSApp.mainWindow { FileWindows.becameMain(window) }
+        }
     }
 
     /// The main window is the one you are working in: open, with no note's own window or Settings in front of it.

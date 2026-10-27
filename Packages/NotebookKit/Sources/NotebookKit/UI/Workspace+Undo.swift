@@ -134,15 +134,18 @@ extension Workspace {
     /// there. With that window closed, Notebook's own, until it opens again (`moveUndoToMainWindow`).
     var mainUndoManager: UndoManager {
         guard isMainWindowOpen else { return ownUndoManager }
-        return (sidebar?.outline.window ?? editor.textView.window)?.undoManager ?? ownUndoManager
+        // The window itself when neither the sidebar nor the note is in it (sidebar away, To-dos or a PDF showing).
+        let window = sidebar?.outline.window ?? editor.textView.window ?? NSApp.windows.first { $0.isVisible && isMainWindow($0) }
+        return window?.undoManager ?? ownUndoManager
     }
 
     /// The main window opened again: what was kept for Undo while it was closed (a note trashed in its own window)
     /// goes to its undo manager, where ⌘Z finds it, oldest first so the newest is undone first.
     func moveUndoToMainWindow() {
         let manager = mainUndoManager
-        guard manager !== ownUndoManager else { return }
-        for change in fileUndoLog.done(in: ownUndoManager) {
+        let waiting = fileUndoLog.done(in: ownUndoManager)
+        guard manager !== ownUndoManager, !waiting.isEmpty else { return }
+        for change in waiting {
             ownUndoManager.removeAllActions(withTarget: change)
             change.manager = manager
             let opens = manager.groupingLevel == 0
@@ -151,6 +154,8 @@ extension Workspace {
             manager.setActionName(change.name)
             if opens { manager.endUndoGrouping() }
         }
+        // What is typed next is a step of its own, above them, as after `keepForUndo`.
+        editor.textView.breakUndoCoalescing()
     }
     #endif
 
