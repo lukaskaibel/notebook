@@ -152,7 +152,7 @@ struct PadBrowser: View {
                 .onChange(of: query, initial: true) { _, query in workspace.searchSession.update(query) }
                 .searchFocused($isSearchFocused)
                 .onSubmit(of: .search) {
-                    if let first = workspace.searchSession.sections.first?.items.first { workspace.open(first.result) }
+                    if let first = SearchSection.firstToOpen(in: workspace.searchSession.sections) { workspace.open(first.result) }
                 }
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
