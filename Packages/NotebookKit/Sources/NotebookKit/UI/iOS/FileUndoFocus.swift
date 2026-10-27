@@ -48,6 +48,8 @@ final class FileUndoView: UIView {
             return super.motionEnded(motion, with: event)
         }
         while let presented = presenter.presentedViewController { presenter = presented }
+        // Not over an alert: one at a time (`FileAlerts` turns shaking off while its alerts ask).
+        guard !(presenter is UIAlertController) else { return }
         let undoes = manager.canUndo
         let alert = UIAlertController(title: undoes ? manager.undoMenuItemTitle : manager.redoMenuItemTitle, message: nil, preferredStyle: .alert)
         // The focus comes back here once the alert has gone, for the next shake.

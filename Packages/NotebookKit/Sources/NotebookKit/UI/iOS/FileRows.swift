@@ -471,6 +471,11 @@ struct FileAlerts: ViewModifier {
             } message: { problem in
                 Text(problem.message)
             }
+            // No Undo alert over these, which a shake would bring up: they take the focus, and UIKit offers the files'
+            // Undo from the window behind them.
+            .onChange(of: workspace.deleting != nil || workspace.problem != nil) { _, asks in
+                UIApplication.shared.applicationSupportsShakeToEdit = !asks
+            }
     }
 
     private var deleteTitle: String {

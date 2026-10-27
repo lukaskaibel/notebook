@@ -137,6 +137,35 @@ final class DeleteFlowUITests: XCTestCase {
         pause(3)
     }
 
+    /// Opened from Recent on the first screen and deleted with its ⋯ menu: the screen goes back to the first screen, whose
+    /// Recent doesn't show the note on the way, while the slow disk is still moving it.
+    func testDeleteANoteOpenedFromRecent() throws {
+        try XCTSkipIf(isPad, "the iPad has no first screen")
+        launch(slowWrites: 2)
+        tap("Inbox")
+        tap("Errands")
+        waitForNote()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.navigationBars["Inbox"].waitForExistence(timeout: 5), app.debugDescription)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.navigationBars["Notebook"].waitForExistence(timeout: 5), app.debugDescription)
+        assertShown("Errands", within: 5)
+        pause()
+        tap("Errands")
+        waitForNote()
+        pause()
+        let more = app.buttons.matching(NSPredicate(format: "label == %@", "More")).allElementsBoundByIndex.filter(isOnScreen)
+        XCTAssertFalse(more.isEmpty, app.debugDescription)
+        more.max { $0.frame.minX < $1.frame.minX }?.tap()
+        pause(0.5)
+        tap("Delete")
+        XCTAssertTrue(app.navigationBars["Notebook"].waitForExistence(timeout: 3), app.debugDescription)
+        // Its page, sliding away, may still say its name; the disk takes 2 s.
+        assertGone("Errands", within: 1.2)
+        pause(3)
+        assertGone("Errands", within: 0.1)
+    }
+
     /// Shaken right after a delete, as in Notes: Undo Move to Trash, and its Undo brings the note back.
     func testShakeToUndoADelete() throws {
         launch(slowWrites: 0)
@@ -155,7 +184,8 @@ final class DeleteFlowUITests: XCTestCase {
         pause(2)
     }
 
-    /// Where a place has no Recently Deleted, Notebook asks first: Cancel brings the row back, Delete deletes it.
+    /// Where a place has no Recently Deleted, Notebook asks first: Cancel brings the row back, Delete deletes it. A shake
+    /// meanwhile doesn't put an Undo alert over the question.
     func testWithoutRecentlyDeletedItAsks() throws {
         launch(slowWrites: 0, recentlyDeleted: false)
         tap("Inbox")
@@ -178,6 +208,17 @@ final class DeleteFlowUITests: XCTestCase {
         assertGone("Errands", within: 0.1)
         pause(2)
         assertGone("Errands", within: 0.1)
+
+        // Shaken while it asks again, with a delete to undo: no Undo alert over the question.
+        row("Shared link").press(forDuration: 1.2)
+        tap("Delete")
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10), app.debugDescription)
+        shake()
+        Thread.sleep(forTimeInterval: 2)
+        XCTAssertFalse(app.alerts.buttons["Undo"].exists, app.debugDescription)
+        XCTAssertEqual(app.alerts.count, 1, app.debugDescription)
+        cancel.tap()
+        assertShown("Shared link", within: 3)
     }
 
     // MARK: -
