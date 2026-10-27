@@ -589,8 +589,14 @@ extension Workspace {
 
     /// A to-do's notification's name: from its note, its line and its notes, so a to-do changed is a new notification.
     nonisolated static func todoIdentifier(path: String, source: String, notes: String, occurrence: Int = 0) -> String {
-        // File events can name a note "/private/var/…" that was "/var/…".
-        ReminderNotifications.todoPrefix + hash(HiddenFolders.withoutPrivate(path) + "\n" + source + "\n" + notes + "\n\(occurrence)")
+        // File events can name a note "/private/var/…" that was "/var/…". A note in the app's own folder is named from
+        // there, as an update of the app moves the folder: a place that reminded you doesn't remind you again after one.
+        #if os(iOS)
+        let path = lastingPath(path, documents: documentsPath)
+        #else
+        let path = HiddenFolders.withoutPrivate(path)
+        #endif
+        return ReminderNotifications.todoPrefix + hash(path + "\n" + source + "\n" + notes + "\n\(occurrence)")
     }
 
     /// The same on every launch, unlike `hashValue`.

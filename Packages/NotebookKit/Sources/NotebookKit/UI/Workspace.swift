@@ -394,6 +394,12 @@ public final class Workspace: NSObject {
         for survey in surveys {
             guard let index = locations.firstIndex(where: { $0.id == survey.id }) else { continue }
             if survey.url.path != locations[index].path {
+                #if os(iOS)
+                // In the app's Documents folder, which an update moved.
+                if let former = Self.formerDocuments(moved: locations[index].path, to: survey.url.path, documents: Self.documentsPath) {
+                    follow(movedDocuments: former)
+                }
+                #endif
                 // Moved since last time: the bookmark found it.
                 locations[index].path = survey.url.path
                 roots[survey.id] = FileNode(url: locations[index].url, kind: .folder, parent: nil)
@@ -929,50 +935,93 @@ public final class Workspace: NSObject {
     }
     #endif
 
-    /// Where a file kept by its path is now. On iPhone and iPad the app's own folder moves with each update of the
-    /// app, and the notes kept in it move along: their place in it stays the same. Anything else stays where it was.
+    /// Where a file kept by its path is now. On iPhone and iPad iOS gives the app a new folder with each update of the
+    /// app and moves the notes in its Documents along: what was in one of this device's earlier Documents folders is in
+    /// the same place in the one now. Anything else stays where it was: another app's folder, or another device's.
     nonisolated static func rerooted(_ path: String) -> String {
         #if os(iOS)
-        rerooted(path, into: onDeviceFolder.standardizedFileURL.path)
+        rerooted(path, from: formerDocuments, into: documentsPath)
         #else
         path
         #endif
     }
 
-    /// `path`, in an app's folder that is gone, in the same place in `documents`, the app's `Documents` now, if
-    /// something is there.
-    nonisolated static func rerooted(_ path: String, into documents: String) -> String {
-        guard !FileManager.default.fileExists(atPath: path), let container = path.range(of: "/Data/Application/"),
-              let folder = path.range(of: "/Documents", range: container.upperBound..<path.endIndex),
-              folder.upperBound == path.endIndex || path[folder.upperBound] == "/" else { return path }
-        let moved = documents + path[folder.upperBound...]
-        return FileManager.default.fileExists(atPath: moved) ? moved : path
+    /// `path`, when it is in one of the folders `former`, in the same place in `documents`; otherwise as it is.
+    nonisolated static func rerooted(_ path: String, from former: [String], into documents: String) -> String {
+        let plain = HiddenFolders.withoutPrivate(path)
+        for folder in former.map(HiddenFolders.withoutPrivate) where plain == folder || plain.hasPrefix(folder + "/") {
+            return documents + plain.dropFirst(folder.count)
+        }
+        return path
+    }
+
+    /// The earlier Documents folder a location was in, when the bookmark found it at `new` in this device's `documents`
+    /// where it was at `old`: in the same place in an app's Documents folder.
+    nonisolated static func formerDocuments(moved old: String, to new: String, documents: String) -> String? {
+        let old = HiddenFolders.withoutPrivate(old), new = HiddenFolders.withoutPrivate(new), documents = HiddenFolders.withoutPrivate(documents)
+        guard new == documents || new.hasPrefix(documents + "/") else { return nil }
+        let inside = new.dropFirst(documents.count)
+        guard old.hasSuffix(inside) else { return nil }
+        let folder = String(old.dropLast(inside.count))
+        // …/Data/Application/<an app's folder>/Documents
+        let inApps = folder.range(of: "/Data/Application/").map { folder[$0.upperBound...].split(separator: "/") }
+        guard folder != documents, let inApps, inApps.count == 2, inApps[1] == "Documents" else { return nil }
+        return folder
+    }
+
+    /// `path` as it stays when an update of the app moves its Documents folder (`documents`): from there, when it is in
+    /// it.
+    nonisolated static func lastingPath(_ path: String, documents: String) -> String {
+        let plain = HiddenFolders.withoutPrivate(path), documents = HiddenFolders.withoutPrivate(documents)
+        guard plain == documents || plain.hasPrefix(documents + "/") else { return plain }
+        return "Documents" + plain.dropFirst(documents.count)
     }
 
     #if os(iOS)
-    /// After an update of the app: the favourites, files opened last and default folder in Notebook's own folder, and
-    /// the folders hidden and notes with reminders in it, kept by their paths, follow it where iOS moved it.
+    /// The app's Documents folder, where it is while the app runs.
+    nonisolated static let documentsPath = onDeviceFolder.standardizedFileURL.path
+
+    /// This device's Documents folders before the updates of the app that moved it, the last one first. Kept in this
+    /// device's settings only: another iPhone or iPad has folders of its own.
+    nonisolated static var formerDocuments: [String] {
+        UserDefaults.standard.stringArray(forKey: "formerDocuments") ?? []
+    }
+
+    /// At launch: the Documents folder isn't where it was last time when an update of the app moved it. Before 1.1
+    /// nothing kept where it was, and a location in it says it once its bookmark finds it (`surveyed`).
     private func followMovedFolder() {
-        let favorites = favorites.map(Self.rerooted), recents = recents.map(Self.rerooted)
-        if favorites != self.favorites {
-            self.favorites = favorites
+        let documents = Self.documentsPath
+        let last = UserDefaults.standard.string(forKey: "documentsFolder")
+        UserDefaults.standard.set(documents, forKey: "documentsFolder")
+        if let last { follow(movedDocuments: last) }
+    }
+
+    /// What is kept by path in `former`, an earlier Documents folder of this device, follows it to the one now: the
+    /// favourites, the files opened last, the default folder and the folders open in the sidebar, and the folders hidden
+    /// and notes with reminders, which iCloud keeps for every device. Without looking at the disk.
+    private func follow(movedDocuments former: String) {
+        let documents = Self.documentsPath
+        guard HiddenFolders.withoutPrivate(former) != HiddenFolders.withoutPrivate(documents), !Self.formerDocuments.contains(former) else { return }
+        UserDefaults.standard.set(Array(([former] + Self.formerDocuments).prefix(8)), forKey: "formerDocuments")
+        let moved = { (path: String) in Self.rerooted(path, from: [former], into: documents) }
+        if favorites.contains(where: { moved($0) != $0 }) {
+            favorites = favorites.map(moved)
             UserDefaults.standard.set(favorites, forKey: "favorites")
         }
-        if recents != self.recents {
-            self.recents = recents
+        if recents.contains(where: { moved($0) != $0 }) {
+            recents = recents.map(moved)
             UserDefaults.standard.set(recents, forKey: "recents")
         }
-        if let folder = chosenDefaultFolder, Self.rerooted(folder) != folder {
-            chosenDefaultFolder = Self.rerooted(folder)
+        if let folder = chosenDefaultFolder, moved(folder) != folder {
+            chosenDefaultFolder = moved(folder)
             UserDefaults.standard.set(chosenDefaultFolder, forKey: "defaultFolder")
         }
-        for key in hidden.keys {
-            let moved = HiddenFolders.withoutPrivate(Self.rerooted(key))
-            if moved != key { hidden.move(key, to: moved) }
+        if let expanded = UserDefaults.standard.stringArray(forKey: "expandedFolders"), expanded.contains(where: { moved($0) != $0 }) {
+            UserDefaults.standard.set(expanded.map(moved), forKey: "expandedFolders")
         }
-        for reminder in reminders.all {
-            let moved = HiddenFolders.withoutPrivate(Self.rerooted(reminder.note))
-            if moved != reminder.note { reminders.move(reminder.note, to: moved) }
+        for folder in Set([former, HiddenFolders.withoutPrivate(former)]) {
+            hidden.move(folder, to: HiddenFolders.withoutPrivate(documents))
+            reminders.move(folder, to: HiddenFolders.withoutPrivate(documents))
         }
     }
     #endif
