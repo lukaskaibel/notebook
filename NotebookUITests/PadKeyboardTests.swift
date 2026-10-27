@@ -18,11 +18,7 @@ final class PadKeyboardTests: XCTestCase {
 
     func testFormatShortcutsFromTheKeyboard() throws {
         try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "the menu bar's shortcuts are the iPad's")
-        app = XCUIApplication()
-        // A `~` is the app's home in the Simulator.
-        app.launchArguments = ["-NotebookLibrary", "~/Documents/UITests-\(UUID().uuidString)", "-NotebookLibraryName", "Library", "-NotebookDemo", "YES",
-                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
-        app.launch()
+        launch()
 
         tap("Personal")
         tap("Weekend")
@@ -43,6 +39,37 @@ final class PadKeyboardTests: XCTestCase {
         app.typeKey("b", modifierFlags: [.command, .shift])
         waitForValue(note, containing: "\nGroceries")
         waitForValue(note, lacking: "- Groceries")
+    }
+
+    /// What ⌘K shows next to its commands works from the keyboard too: the outline, a new folder, Settings.
+    func testMenuShortcutsFromTheKeyboard() throws {
+        try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "the menu bar's shortcuts are the iPad's")
+        launch()
+        tap("Personal")
+        tap("Weekend")
+        XCTAssertTrue(app.textViews["Note"].firstMatch.waitForExistence(timeout: 10), app.debugDescription)
+
+        app.typeKey("i", modifierFlags: [.command, .control])
+        XCTAssertTrue(app.buttons["Hide Outline"].waitForExistence(timeout: 10), app.debugDescription)
+        app.typeKey("i", modifierFlags: [.command, .control])
+        XCTAssertTrue(app.buttons["Show Outline"].waitForExistence(timeout: 10), app.debugDescription)
+
+        app.typeKey("n", modifierFlags: [.command, .shift])
+        let newFolder = app.alerts["New Folder"]
+        XCTAssertTrue(newFolder.waitForExistence(timeout: 10), app.debugDescription)
+        newFolder.buttons["Cancel"].tap()
+
+        app.typeKey(",", modifierFlags: .command)
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10), app.debugDescription)
+        tap("Done")
+    }
+
+    /// The app on fresh sample notes in its own home folder (a `~` is the app's home in the Simulator).
+    private func launch() {
+        app = XCUIApplication()
+        app.launchArguments = ["-NotebookLibrary", "~/Documents/UITests-\(UUID().uuidString)", "-NotebookLibraryName", "Library", "-NotebookDemo", "YES",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
     }
 
     /// A row of the sidebar, a button or anything else, by its name.

@@ -113,9 +113,21 @@ extension Workspace {
                 })
             }
             #endif
+            #if os(macOS)
             list.append(PaletteCommand(id: "trash", title: "Move to Trash", symbol: "trash", section: section, keys: ["⌘", "⌫"], keywords: ["delete", "remove"]) { [self] in
                 trash(url)
             })
+            #else
+            // As the ⋯ menu says it: there is no Trash here, and no ⌘⌫, which deletes text in a note.
+            if isLoaded {
+                list.append(PaletteCommand(id: "print", title: "Print…", symbol: "printer", section: section, keys: ["⌘", "P"]) { [self] in
+                    NoteExporter.print(editor, title: currentTitle)
+                })
+            }
+            list.append(PaletteCommand(id: "trash", title: "Delete", symbol: "trash", section: section, keywords: ["trash", "remove"]) { [self] in
+                moveToTrash(url)
+            })
+            #endif
         }
 
         if note?.isLoaded == true {
@@ -245,7 +257,7 @@ extension Workspace {
             actions.openSettings(nil)
         })
         #else
-        list.append(PaletteCommand(id: "settings", title: "Settings", symbol: "gearshape", section: settingsSection, keywords: ["preferences"]) {
+        list.append(PaletteCommand(id: "settings", title: "Settings", symbol: "gearshape", section: settingsSection, keys: ["⌘", ","], keywords: ["preferences"]) {
             actions.openSettings(nil)
         })
         #endif

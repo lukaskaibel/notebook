@@ -30,10 +30,12 @@ struct PadBrowser: View {
         .overlay {
             PaletteHost(workspace: workspace, actions: PaletteActions(
                 openSettings: { _ in showsSettings = true },
-                newFolder: { newFolderIn = workspace.selectedFolder ?? workspace.folderForNewNote ?? workspace.locations.first?.url },
+                newFolder: { newFolderIn = newFolderParent },
                 addLocation: { addsLocation = true }
             ), top: 80)
         }
+        .onChange(of: workspace.newFolderRequest) { _, _ in newFolderIn = newFolderParent }
+        .onChange(of: workspace.settingsRequest) { _, _ in showsSettings = true }
         .modifier(FileAlerts(workspace: workspace, newFolderIn: $newFolderIn))
         .modifier(AppleNotesImporter(workspace: workspace))
         .sheet(isPresented: $showsSettings) { TouchSettings(workspace: workspace) }
@@ -70,6 +72,11 @@ struct PadBrowser: View {
         }
     }
 
+    /// Where New Folder makes one: in the folder you are in.
+    private var newFolderParent: URL? {
+        workspace.selectedFolder ?? workspace.folderForNewNote ?? workspace.locations.first?.url
+    }
+
     private var splitView: some View {
         NavigationSplitView(columnVisibility: $workspace.columnVisibility) {
             PadSidebar(workspace: workspace, query: query, newFolderIn: $newFolderIn)
@@ -83,7 +90,7 @@ struct PadBrowser: View {
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
-                            Button { newFolderIn = workspace.selectedFolder ?? workspace.folderForNewNote ?? workspace.locations.first?.url } label: {
+                            Button { newFolderIn = newFolderParent } label: {
                                 Label("New Folder", systemImage: "folder.badge.plus")
                             }
                             Button { addsLocation = true } label: { Label("Add Location", systemImage: "plus.rectangle.on.folder") }

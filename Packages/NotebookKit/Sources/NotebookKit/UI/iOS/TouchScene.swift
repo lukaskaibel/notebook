@@ -78,15 +78,29 @@ struct TouchRootView: View {
     }
 }
 
-/// The iPad's menu bar and keyboard shortcuts, as on the Mac. Bold and italic are the text view's own (⌘B, ⌘I).
+/// The iPad's menu bar and keyboard shortcuts, as on the Mac, so that what ⌘K shows next to a command works here too.
+/// Bold and italic are the text view's own (⌘B, ⌘I).
 struct TouchCommands: Commands {
     let workspace: Workspace
 
     var body: some Commands {
+        CommandGroup(replacing: .appSettings) {
+            Button { workspace.settingsRequest += 1 } label: { Label("Settings…", systemImage: "gearshape") }
+                .keyboardShortcut(",", modifiers: .command)
+                .disabled(workspace.locations.isEmpty)
+        }
         CommandGroup(replacing: .newItem) {
             Button { workspace.newNote() } label: { Label("New Note", systemImage: "square.and.pencil") }
                 .keyboardShortcut("n", modifiers: .command)
                 .disabled(workspace.locations.isEmpty)
+            Button { workspace.newFolderRequest += 1 } label: { Label("New Folder", systemImage: "folder.badge.plus") }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+                .disabled(workspace.locations.isEmpty)
+        }
+        CommandGroup(replacing: .printItem) {
+            Button { NoteExporter.print(workspace.editor, title: workspace.currentTitle) } label: { Label("Print…", systemImage: "printer") }
+                .keyboardShortcut("p", modifiers: .command)
+                .disabled(workspace.note?.isLoaded != true)
         }
         // The system's own reach only what has the focus; these reach the changes to files too (`Workspace+Undo`).
         CommandGroup(replacing: .undoRedo) {
@@ -95,14 +109,29 @@ struct TouchCommands: Commands {
             Button { workspace.redo() } label: { Label("Redo", systemImage: "arrow.uturn.forward") }
                 .keyboardShortcut("z", modifiers: [.command, .shift])
         }
-        // The Finder's shortcut for its hidden files, as on the Mac.
+        // After the system's Show Sidebar (⌃⌘S), as on the Mac.
         CommandGroup(after: .sidebar) {
+            Button {
+                withAnimation(Theme.spring) { workspace.isOutlineVisible.toggle() }
+            } label: {
+                Label(workspace.isOutlineVisible ? "Hide Outline" : "Show Outline", systemImage: "sidebar.right")
+            }
+            .keyboardShortcut("i", modifiers: [.command, .control])
+            .disabled(workspace.currentURL == nil || workspace.showsTodos)
+            // The Finder's shortcut for its hidden files.
             Button { withAnimation { workspace.toggleAllHiddenFolders() } } label: {
                 Label(workspace.showsAllHiddenFolders ? "Hide Hidden Folders" : "Show Hidden Folders",
                       systemImage: workspace.showsAllHiddenFolders ? "eye.slash" : "eye")
             }
             .keyboardShortcut(".", modifiers: [.command, .shift])
             .disabled(!workspace.hasHiddenFolders)
+            Divider()
+            Button { NotebookSettings.shared.changeTextSize(by: 1) } label: { Label("Bigger", systemImage: "textformat.size.larger") }
+                .keyboardShortcut("+", modifiers: .command)
+            Button { NotebookSettings.shared.changeTextSize(by: -1) } label: { Label("Smaller", systemImage: "textformat.size.smaller") }
+                .keyboardShortcut("-", modifiers: .command)
+            Button { NotebookSettings.shared.typography.size = Typography().size } label: { Label("Actual Size", systemImage: "textformat.size") }
+                .keyboardShortcut("0", modifiers: .command)
         }
         CommandMenu("Go") {
             Button { workspace.searchRequest += 1 } label: { Label("Search", systemImage: "magnifyingglass") }

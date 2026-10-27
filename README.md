@@ -369,7 +369,7 @@ hold it for everything else.
 
 The iPad has the Mac's layout: the sidebar with its folders opening in place, the note next to it, and the outline in
 an inspector. In portrait the sidebar steps aside once you have picked a note. With a keyboard, the Mac's shortcuts
-work, the menu bar has New Note, Go and Format, and the marks show next to the caret as on the Mac. Drag pictures from Photos into a note, or files onto a folder in
+work, the menu bar has the Mac's File, View, Go and Format menus, and the marks show next to the caret as on the Mac. Drag pictures from Photos into a note, or files onto a folder in
 the sidebar. A window as narrow as a phone gets the iPhone's screens.
 
 <picture>
@@ -690,8 +690,8 @@ point at it; in To-dos, right-click a row to move it to another day, mark it in 
 note. As you point at a location's name, a folder with a plus comes up next to it for a new folder at its top, and, when
 the location has hidden folders, an eye that shows them.
 
-On an iPad with a keyboard, ⌘N, ⌘Z and ⇧⌘Z, ⌘F, ⌘K, ⇧⌘R, ⌘[ and ⌘], ⌃⌘I, ⇧⌘. and the shortcuts for writing work as
-on the Mac. On iPhone and iPad:
+On an iPad with a keyboard, ⌘N, ⇧⌘N, ⌘Z and ⇧⌘Z, ⌘F, ⌘K, ⇧⌘R, ⌘[ and ⌘], ⌃⌘S, ⌃⌘I, ⇧⌘., ⌘+, ⌘− and ⌘0, ⌘P, ⌘, and
+the shortcuts for writing work as on the Mac. On iPhone and iPad:
 
 | Gesture | Action |
 | --- | --- |

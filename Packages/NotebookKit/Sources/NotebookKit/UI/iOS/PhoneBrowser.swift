@@ -53,6 +53,7 @@ struct PhoneBrowser: View {
         }
         .modifier(FileAlerts(workspace: workspace, newFolderIn: $newFolderIn))
         .modifier(AppleNotesImporter(workspace: workspace))
+        .onChange(of: workspace.newFolderRequest) { _, _ in newFolderIn = workspace.folderForNewNote ?? workspace.locations.first?.url }
         .onAppear {
             // Back where you were: in the note you had open, with its folders behind it.
             if let url = workspace.currentURL, path.isEmpty { path = folders(to: url) + [Page(url: url, isFolder: false)] }

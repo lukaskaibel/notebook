@@ -144,7 +144,6 @@ struct DocumentScreen: View {
                 } label: {
                     Label(workspace.isOutlineVisible ? "Hide Outline" : "Show Outline", systemImage: "sidebar.right")
                 }
-                .keyboardShortcut("i", modifiers: [.command, .control])
             }
         }
         // While drawing, the tool picker takes the bottom of the screen.
