@@ -12,6 +12,8 @@ struct PadBrowser: View {
     @FocusState private var isSearchFocused: Bool
     /// Wide enough for the sidebar next to the page: an iPad in landscape, or a large window.
     @State private var isWide = true
+    /// The width was seen once: the sidebar is set for it without sliding, as the window first appears.
+    @State private var hasMeasured = false
     @Bindable private var settings = NotebookSettings.shared
 
     var body: some View {
@@ -20,10 +22,21 @@ struct PadBrowser: View {
         // room for both, the sidebar makes way for the page instead, as Files' does.
         splitView
             // Room for the sidebar, a column of text and the outline: an iPad in landscape. In portrait, even the
-            // 13-inch one's, the text would get too narrow with all three.
-            .onGeometryChange(for: Bool.self) { $0.size.width >= 1100 } action: { wide in
+            // 13-inch one's, the text would get too narrow with all three. Narrowing, it goes a little below that, so
+            // a Stage Manager window dragged about the edge doesn't take the sidebar away and back again each time.
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+                let wide = width >= (hasMeasured && isWide ? 1060 : 1100)
+                guard !hasMeasured || wide != isWide else { return }
                 isWide = wide
-                withAnimation { fitSidebar() }
+                if hasMeasured {
+                    withAnimation { fitSidebar() }
+                } else {
+                    // The note open at launch, or the window coming back from phone width, has no sidebar to slide off.
+                    hasMeasured = true
+                    var still = Transaction()
+                    still.disablesAnimations = true
+                    withTransaction(still) { fitSidebar() }
+                }
             }
         .overlay {
             PaletteHost(workspace: workspace, actions: PaletteActions(
