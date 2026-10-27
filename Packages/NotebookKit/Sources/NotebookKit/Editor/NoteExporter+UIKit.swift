@@ -43,8 +43,16 @@ public enum NoteExporter {
     public static func pdfData(for editor: EditorController, title: String) async -> Data? {
         let width = paper.width - margin * 2
         let copy = await layOut(editor, width: width)
+        // At the size Settings › Text gives, whatever the system's text size is.
+        return EditorStyle.unscaled { draw(copy, title: title, width: width) }
+    }
+
+    private static func draw(_ copy: Copy, title: String, width: CGFloat) -> Data? {
         let layoutManager = copy.editor.layoutManager
         let container = copy.editor.container
+        // A picture or diagram that came in while the copy waited set its lines again, at the screen's size.
+        copy.editor.restyle(lines: Array(copy.editor.document.lines.indices))
+        layoutManager.invalidateLayout(forCharacterRange: NSRange(location: 0, length: copy.editor.storage.length), actualCharacterRange: nil)
         layoutManager.ensureLayout(for: container)
 
         let titleFont = EditorStyle.face(26, weight: .bold)
@@ -128,16 +136,18 @@ public enum NoteExporter {
         copy.textView.overrideUserInterfaceStyle = .light
         copy.container.widthTracksTextView = false
         copy.container.size = CGSize(width: width, height: .greatestFiniteMagnitude)
-        copy.load(text: editor.text, folder: editor.folder, title: "", meta: "")
+        EditorStyle.unscaled { copy.load(text: editor.text, folder: editor.folder, title: "", meta: "") }
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         for _ in 0..<80 {
             // Drawing asks for the pictures and diagrams, which load in the background.
-            copy.layoutManager.ensureLayout(for: copy.container)
-            let used = copy.layoutManager.usedRect(for: copy.container)
-            _ = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1), format: format).image { _ in
-                let glyphs = copy.layoutManager.glyphRange(forBoundingRect: CGRect(x: 0, y: 0, width: width, height: used.height + 1), in: copy.container)
-                copy.layoutManager.drawGlyphs(forGlyphRange: glyphs, at: .zero)
+            EditorStyle.unscaled {
+                copy.layoutManager.ensureLayout(for: copy.container)
+                let used = copy.layoutManager.usedRect(for: copy.container)
+                _ = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1), format: format).image { _ in
+                    let glyphs = copy.layoutManager.glyphRange(forBoundingRect: CGRect(x: 0, y: 0, width: width, height: used.height + 1), in: copy.container)
+                    copy.layoutManager.drawGlyphs(forGlyphRange: glyphs, at: .zero)
+                }
             }
             if !ImageStore.shared.isBusy, !ThumbnailStore.shared.isBusy, !DiagramStore.isBusy, !DrawingStore.shared.isBusy { break }
             try? await Task.sleep(for: .milliseconds(50))

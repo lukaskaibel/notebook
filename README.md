@@ -345,7 +345,8 @@ The window is built from the system's own pieces: a source-list sidebar, a toolb
 share menu, an inspector, Settings, alerts, PDFKit, AVKit and Quick Look. It follows the system's light or dark
 appearance. The inspector shows a note's outline, with the section you're reading marked and a word count; a click on
 a heading scrolls there. In Settings › Text you pick the typeface (San Francisco, New York, Rounded or Monospaced,
-each shown in itself), the size, the line spacing and the line width. The icon is a leather notebook, and Settings › App Icon makes it yours:
+each shown in itself), the size, the line spacing and the line width; on iPhone and iPad the system's text size makes
+notes larger or smaller on top of that, as it does the text of other apps (not in a PDF or printout). The icon is a leather notebook, and Settings › App Icon makes it yours:
 pick the leather, the elastic band, the ribbon and the background, and the Dock shows your notebook while the app is
 open. Links, the caret and folders are in ink blue to go with it, or in the accent colour you chose in System Settings.
 
@@ -418,8 +419,8 @@ screens.
   turns. Pick iCloud Drive or any folder in the Files app's picker, or keep notes on
   the device, in On My iPhone › Notebook. A bar above the keyboard, whose tools you choose, formats, links and adds
   photos, scans and files, with buttons for where the caret is on its left; Aa opens the Format panel as in Notes.
-  Deleting moves to Recently Deleted; where a place has none, Notebook asks before it deletes, and Undo (⌘Z) still
-  brings it back while Notebook is open.
+  Deleting moves to Recently Deleted, and the file leaves the list at once, as in Notes; where a place has none,
+  Notebook asks before it deletes, and Undo (shake, or ⌘Z) still brings it back while Notebook is open.
 - **Hidden folders.** Right-click a folder you don't want to see, such as one another app keeps in iCloud Drive, and
   choose Hide Folder, or on iPhone and iPad touch and hold it. It leaves the sidebar, search and Move To, and stays
   hidden on your other Macs, iPhones and iPads through iCloud. The eye next to the location's name, or ⇧⌘., shows

@@ -29,11 +29,17 @@ enum HiddenMode: Int {
 @MainActor
 enum EditorStyle {
     private(set) static var typography = Typography()
+    /// How much the system's text size (Display & Brightness › Text Size, or Larger Text) makes the note's larger or
+    /// smaller on iPhone and iPad, as it does the text of Apple's apps: 1 at the standard size, and on the Mac. The size
+    /// chosen in Settings › Text is the size at the standard one.
+    private(set) static var textScale: CGFloat = 1
 
-    static var bodySize: CGFloat { typography.size }
-    static var lineHeight: CGFloat { (typography.size * typography.spacing.factor).rounded() }
-    static var codeSize: CGFloat { (typography.size * 0.87).rounded() }
+    static var bodySize: CGFloat { (typography.size * textScale).rounded() }
+    static var lineHeight: CGFloat { (bodySize * typography.spacing.factor).rounded() }
+    static var codeSize: CGFloat { (bodySize * 0.87).rounded() }
     static var codeLineHeight: CGFloat { (codeSize * typography.spacing.factor * 0.96).rounded(.down) }
+    /// Maths on lines of its own, larger than the text around it: 19 points at the size each platform starts with.
+    static var displayMathSize: CGFloat { (bodySize * 19 / Typography().size).rounded() }
     static var contentWidth: CGFloat { typography.width.points }
     static let listIndent: CGFloat = 24
     /// A checklist's circle, as in Notes: big enough for a fingertip on iPhone and iPad, a little smaller next to the
@@ -57,10 +63,50 @@ enum EditorStyle {
 
     static func apply(_ typography: Typography) {
         self.typography = typography
-        body = face(typography.size)
-        mono = .monospacedSystemFont(ofSize: codeSize, weight: .regular)
-        inlineMono = .monospacedSystemFont(ofSize: (typography.size * 0.88).rounded(), weight: .regular)
+        #if os(iOS)
+        // Before there is a window to ask, at launch, the app's own traits know the text size.
+        if let scale = scale(for: UITraitCollection.current.preferredContentSizeCategory) { textScale = scale }
+        #endif
+        makeFonts()
     }
+
+    private static func makeFonts() {
+        body = face(bodySize)
+        mono = .monospacedSystemFont(ofSize: codeSize, weight: .regular)
+        inlineMono = .monospacedSystemFont(ofSize: (bodySize * 0.88).rounded(), weight: .regular)
+    }
+
+    #if os(iOS)
+    /// The system's text size is `category`, which changed or which a view in a window has just told: a note is set
+    /// again at the size it makes, as when the size changes in Settings › Text.
+    static func follow(_ category: UIContentSizeCategory) {
+        guard let scale = scale(for: category), scale != textScale else { return }
+        textScale = scale
+        makeFonts()
+        NotificationCenter.default.post(name: .notebookTypographyChanged, object: nil)
+    }
+
+    /// Runs `body` with the sizes Settings › Text gives, as if the system's text size were the standard one: a PDF or a
+    /// printout of a note doesn't change with the size of the text on the screen. Nothing else runs meanwhile.
+    static func unscaled<T>(_ body: () -> T) -> T {
+        let scale = textScale
+        guard scale != 1 else { return body() }
+        textScale = 1
+        makeFonts()
+        defer {
+            textScale = scale
+            makeFonts()
+        }
+        return body()
+    }
+
+    /// As much as the system's text size scales body text; nil while it isn't known.
+    private static func scale(for category: UIContentSizeCategory) -> CGFloat? {
+        guard category != .unspecified else { return nil }
+        let traits = UITraitCollection(preferredContentSizeCategory: category)
+        return UIFontMetrics(forTextStyle: .body).scaledValue(for: 100, compatibleWith: traits) / 100
+    }
+    #endif
 
     /// The chosen typeface at a size and weight: San Francisco, New York, SF Rounded or SF Mono.
     static func face(_ size: CGFloat, weight: NSFont.Weight = .regular) -> NSFont {

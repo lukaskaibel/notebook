@@ -125,7 +125,7 @@ extension Workspace {
                 })
             }
             list.append(PaletteCommand(id: "trash", title: "Delete", symbol: "trash", section: section, keywords: ["trash", "remove"]) { [self] in
-                moveToTrash(url)
+                trash(url)
             })
             #endif
         }

@@ -29,6 +29,8 @@ final class FileChange {
     var links: LinkFollowing?
     /// What Notebook knew about a file it put in the Trash, for the file to come back with.
     var remembered: Remembered?
+    /// Deleted for good once you agreed to it, where there is no Recently Deleted: Redo does it again without asking.
+    var forGood = false
     /// The undo manager it is kept in.
     weak var manager: UndoManager?
     /// When it was done or undone last, counted with the changes to the note's text (`UndoOrder`).
@@ -151,9 +153,20 @@ extension Workspace {
         editor.textView.breakUndoCoalescing()
         #else
         editor.openStep = nil
+        // Once the swipe or menu that asked is done, and a note it closed has gone.
+        takeUndoFocusIfFree()
         #endif
         return change
     }
+
+    #if os(iOS)
+    /// Shake to Undo and ⌘Z for the changes to files and to-dos, where nothing being typed or drawn in has the focus:
+    /// after a change in a list, or in To-dos once the keyboard has gone (`FileUndoFocus`). A moment later, once what
+    /// asked is done with the focus.
+    func takeUndoFocusIfFree() {
+        DispatchQueue.main.async { [weak self] in self?.fileUndoView?.takeFocusIfFree() }
+    }
+    #endif
 
     /// A change to files was written: where the file went, or nil when it couldn't be (or needn't be: a move to where
     /// it is), which leaves nothing to undo.
@@ -238,7 +251,7 @@ extension Workspace {
         if change.kind == (undoing ? .make : .trash) {
             let remembered = remembered(source)
             change.remembered = remembered
-            result = await throwAwayNow(source)
+            result = await throwAwayNow(source, asking: change.kind == .trash && !change.forGood ? remembered : nil)
             if result != nil { NoteHistory.shared.trash(source, as: remembered.history) }
         } else if let target, change.kind == (undoing ? .trash : .make) {
             result = await putBackNow(source, to: target, remembered: change.remembered)
@@ -251,14 +264,23 @@ extension Workspace {
     }
 
     /// To the Trash, or on iPhone and iPad, where a place has no Recently Deleted, deleted for good (as it was when
-    /// you deleted it, or made a moment ago), waiting for Undo out of sight. Where it went.
-    private func throwAwayNow(_ url: URL) async -> URL? {
+    /// you deleted it, or made a moment ago), waiting for Undo out of sight. Where it went. `asking`, for Redo of Move
+    /// to Trash: deleted for good only once you say so, as the first time, with what Notebook knew about it.
+    private func throwAwayNow(_ url: URL, asking: FileChange.Remembered? = nil) async -> URL? {
         let trashed = await trashNow(url)
         if trashed.done {
             if trashed.place == nil { beep() }
             return trashed.place
         }
         #if os(iOS)
+        if let asking, FileManager.default.fileExists(atPath: url.path) {
+            // Redo can't bring it again then: "Delete immediately?" keeps its own Undo.
+            rememberedForDeleting[url.path] = asking
+            beginLeaving(url)
+            deleteQuestions.ask(url)
+            beep()
+            return nil
+        }
         if let place = await deleteNow(url).place { return place }
         #endif
         beep()
