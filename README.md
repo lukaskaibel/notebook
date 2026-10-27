@@ -215,8 +215,11 @@ a day in the month, a time of day, Current Location, Home, Work or a place you u
 arriving or leaving. On iPhone and iPad the same buttons are in a bar of glass above the keyboard, across the screen
 as the bar in a note is: a grey symbol until it is set, then the value on a tint of the accent colour, as the pills in a
 note show it; a line in and out while you're in one; and on its own at the right, the button that hides the keyboard
-and is done. They open the same in a popover (a sheet on the iPhone); a tap on the date or place under the to-do does
-too.
+and is done. A tap on the day, the time or the place turns the bar into a field to type it in, with the keyboard still
+up, and the choices rise above it on glass; tap one or press Return, or × to leave it as it was, and the keyboard goes
+back to the to-do. Choose a Day… shows a month to tap, and Home or Work, until you've chosen their address, a page for
+it, each with the way back at the top. A tap on the date or place under the to-do opens the same. While you edit a
+to-do it stays where it is, even with another day; it moves to that day's group when you're done.
 
 Home and Work are there as in Reminders. Apps can't read the Home and Work that Apple Maps shows, so the first time you
 tap one you choose its address: on iPhone and iPad from your own card in Contacts, which is where Maps has them, or

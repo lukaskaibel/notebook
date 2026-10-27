@@ -162,8 +162,9 @@ struct TodosView: View {
     private func touch(_ list: some View, proxy: ScrollViewProxy) -> some View {
         list
         .onScrollGeometryChange(for: ClosedRange<CGFloat>.self) { geometry in
+            // The container is what shows between the bars, and above the keyboard: its insets are already left out.
             let top = geometry.contentOffset.y + geometry.contentInsets.top
-            return top...max(top, geometry.contentOffset.y + geometry.containerSize.height - geometry.contentInsets.bottom)
+            return top...top + max(0, geometry.containerSize.height)
         } action: { _, area in
             shown = area
             reveal(proxy)
@@ -186,13 +187,13 @@ struct TodosView: View {
         // Shaken, Undo, as in Reminders: nothing in To-dos takes the focus but a to-do being edited.
         .onAppear { workspace.takeUndoFocusIfFree() }
         // Reminders' buttons above the keyboard: a date, a time, a place, and sub-to-dos. They come as the editing
-        // begins, a moment before the keyboard, fading in as they rise with it; not over the keyboard of a popover's
-        // field, which is in this view too.
+        // begins, a moment before the keyboard, fading in as they rise with it. A date, a time or a place is typed in
+        // the bar too, its choices over the list.
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            let shows = editing.map { !$0.isEnded && $0.picking == nil } ?? false
+            let shows = editing.map { !$0.isEnded } ?? false
             ZStack {
                 if let editing, shows {
-                    TodoKeyboardBar(editing: editing, focus: focus) { endEditing() }
+                    TodoKeyboardBar(editing: editing, focus: focus, room: pickerRoom) { endEditing() }
                         .transition(.opacity)
                 }
             }
@@ -280,13 +281,27 @@ struct TodosView: View {
                 byKind[kind] = TodoSection(kind: kind, rows: [])
             }
         }
-        // A to-do just added stays at the end of its group while it is edited, where New To-do was.
-        if let editing, editing.added != nil, let id = rowID(of: editing, in: Array(byKind.values)) {
-            for (kind, section) in byKind {
-                guard let index = section.rows.firstIndex(where: { $0.id == id }) else { continue }
-                var rows = section.rows
-                rows.append(rows.remove(at: index))
-                byKind[kind]?.rows = rows
+        // The to-do being edited stays where it was while it is, as in Reminders: a day set from its buttons moves it
+        // into its group once it is done, and the list doesn't move under the keyboard meanwhile. One just added stays
+        // at the end of its group, where New To-do was.
+        if let editing, let home = editing.home, let id = rowID(of: editing, in: Array(byKind.values)) {
+            var edited: TodoRow?
+            for kind in Array(byKind.keys) {
+                guard let index = byKind[kind]?.rows.firstIndex(where: { $0.id == id }) else { continue }
+                edited = byKind[kind]?.rows.remove(at: index)
+                if byKind[kind]?.rows.isEmpty == true, !isDragging { byKind[kind] = nil }
+            }
+            if let edited {
+                var rows = byKind[home.kind]?.rows ?? []
+                if editing.added != nil {
+                    rows.append(edited)
+                } else {
+                    // After the row that was above it then: its own id changes with its line.
+                    let ids = rows.map(\.id)
+                    let above = home.order.prefix { $0 != editing.rowID }.reversed().lazy.compactMap { ids.firstIndex(of: $0) }.first
+                    rows.insert(edited, at: above.map { $0 + 1 } ?? 0)
+                }
+                byKind[home.kind] = TodoSection(kind: home.kind, rows: rows)
             }
         }
         return TodoSection.Kind.allCases.compactMap { byKind[$0] }
@@ -330,9 +345,30 @@ struct TodosView: View {
     /// The to-do being edited above the keyboard and the bar over it, scrolled up only when they cover it.
     private func reveal(_ proxy: ScrollViewProxy) {
         guard let editing, let frame = editingFrame, let shown else { return }
-        // What shows ends at the bar above the keyboard.
-        guard frame.maxY > shown.upperBound - 16 || frame.minY < shown.lowerBound else { return }
-        withAnimation(Theme.spring) { proxy.scrollTo(editing.rowID, anchor: UnitPoint(x: 0.5, y: 0.25)) }
+        // What shows ends at the bar above the keyboard. Scrolled into sight, the row is further in than it needs to
+        // be, so it isn't scrolled again by a fraction of a point.
+        let gap: CGFloat = 16
+        let covered = frame.maxY > shown.upperBound - gap / 2 || frame.minY < shown.lowerBound
+        #if DEBUG
+        DebugTodos.trace("reveal frame \(frame.minY)...\(frame.maxY) shown \(shown) covered \(covered)")
+        #endif
+        guard covered else { return }
+        // As little as it takes, as the keyboard scrolls a field into sight: its bottom a little above the bar, or its
+        // top a little under the top. A point at the same part of the row and of what shows meets there.
+        let room = shown.upperBound - shown.lowerBound - frame.height
+        let part = room <= gap ? 0 : frame.minY < shown.lowerBound ? gap / room : (room - gap) / room
+        withAnimation(Theme.spring) { proxy.scrollTo(editing.rowID, anchor: UnitPoint(x: 0.5, y: part)) }
+    }
+
+    /// How tall the choices of a picker above the keyboard can be: up to the to-do being edited, so it stays in sight,
+    /// unless that leaves too little room; never higher than the list.
+    private var pickerRoom: CGFloat {
+        guard let shown else { return 300 }
+        // The choices start a gap above the bar.
+        let bottom = shown.upperBound - 10
+        let full = bottom - shown.lowerBound - 12
+        guard let frame = editingFrame else { return full }
+        return min(full, max(240, bottom - frame.maxY - 12))
     }
     #endif
 
@@ -356,6 +392,11 @@ struct TodosView: View {
         closing = nil
         let session = TodoEditing(workspace: workspace, item: item)
         session.added = added
+        if let added {
+            session.home = (added, [])
+        } else if let section = shownSections.first(where: { $0.rows.contains { $0.id == TodoRow.todo(item).id } }) {
+            session.home = (section.kind, section.rows.map(\.id))
+        }
         session.move(to: .title, caret: offset)
         editing = session
     }
@@ -474,6 +515,8 @@ struct TodosView: View {
             editing?.focus = new
             editing?.focusMoved(to: new)
             editing?.hasHadKeyboard = true
+            // Back from the picker above the keyboard: it goes now that the to-do has the keyboard.
+            editing?.closePicker()
             return
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
@@ -882,7 +925,6 @@ struct TodoRowView: View {
                 }
                 #else
                 meta
-                    .modifier(TodoPickPopover(editing: editing?.isEnded == false ? editing : nil))
                 #endif
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1054,7 +1096,7 @@ struct TodoRowView: View {
         #if os(macOS)
         isPicking = true
         #else
-        // Being edited: the popover for what was tapped, as from the bar above the keyboard.
+        // Being edited: the picker above the keyboard for what was tapped, as from the bar there.
         if let editing, !editing.isEnded { return editing.pick(kind) }
         switch row {
         case .todo(let item): workspace.askForTodoReminder(item.reference)

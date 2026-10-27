@@ -36,6 +36,8 @@ import UserNotifications
 ///     todopicktype <text>                        types in the open dropdown's field
 ///     todopickkey down|up|return|escape|focus    a key in the open dropdown, or the keyboard into its field
 ///     todopicker                                 what the open dropdown shows
+///     todofocus title|<line>                     the keyboard into the words of the to-do being edited, or a line under them
+///     todotrace                                  what To-dos noted since the last time (scrolling to the edited to-do)
 @MainActor
 enum DebugTodos {
     /// Asks To-dos to edit a to-do: `item` and `offset` in its user info.
@@ -53,6 +55,15 @@ enum DebugTodos {
     /// The to-do To-dos is editing, and where its keyboard is.
     static weak var session: TodoEditing?
     static var focus: TodoFocus?
+    /// What the open typed picker shows, on iPhone and iPad.
+    static var pickerState = "none"
+    private static var traces: [String] = []
+
+    /// Notes something for `todotrace`.
+    static func trace(_ text: String) {
+        traces.append(text)
+        if traces.count > 200 { traces.removeFirst() }
+    }
 
     static func run(_ command: String, _ argument: String, workspace: Workspace, log: @escaping (String) -> Void) -> Bool {
         func find(_ words: String) -> TodoList.Item? {
@@ -211,7 +222,21 @@ enum DebugTodos {
         case "todopicker":
             guard let panel = Dropdown.debugPanel else { log("todopicker: none open"); break }
             log("todopicker at \(panel.frame.integral) under \(panel.anchor.integral), key \(panel.isKeyWindow), first responder \(panel.firstResponder.map { String(describing: type(of: $0)) } ?? "none")")
+        #else
+        case "todopicker":
+            log("todopicker \(session.map { "\($0.picking.map { "\($0)" } ?? "closed"), choosing \($0.isChoosing)" } ?? "no session"): \(pickerState)")
         #endif
+        case "todofocus":
+            guard let session, !session.isEnded else { log("todofocus: nothing edited"); break }
+            if let index = Int(argument), session.lines.indices.contains(index) {
+                session.move(to: .line(session.lines[index].id), caret: 0)
+            } else {
+                session.move(to: .title)
+            }
+            log("todofocus \(argument)")
+        case "todotrace":
+            log("todotrace:\n" + traces.joined(separator: "\n"))
+            traces = []
         case "showstodos":
             NotebookSettings.shared.showsTodos = argument == "1"
             log("showstodos \(NotebookSettings.shared.showsTodos), showing \(workspace.showsTodos)")
