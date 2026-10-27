@@ -608,6 +608,25 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         workspace.openOnItsOwn(url)
     }
 
+    /// What shows once the file of a row goes to the Trash, as Notes shows the next note: the next file in its folder,
+    /// or else the one before it. Folders are passed over.
+    func nextFile(after row: Int) -> URL? {
+        guard row >= 0, let item = outline.item(atRow: row) else { return nil }
+        let parent = outline.parent(forItem: item)
+        let index = outline.childIndex(forItem: item)
+        guard index >= 0 else { return nil }
+        for other in Array(index + 1 ..< outline.numberOfChildren(ofItem: parent)) + Array((0..<index).reversed()) {
+            if let node = outline.child(other, ofItem: parent) as? FileNode, !node.isFolder { return node.url }
+        }
+        return nil
+    }
+
+    /// Tab: the keyboard to the note that is open, with the caret where it was. False when no note is open to type in.
+    func focusNote() -> Bool {
+        guard workspace.note?.isLoaded == true, !workspace.showsTodos, let window = outline.window else { return false }
+        return window.makeFirstResponder(workspace.editor.textView)
+    }
+
     func url(at row: Int) -> URL? {
         guard row >= 0 else { return nil }
         let item = outline.item(atRow: row)
@@ -743,7 +762,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         add(menu, "Show in Finder", "folder") { [weak self] in self?.workspace.revealInFinder(url) }
         if !isLinked {
             menu.addItem(.separator())
-            add(menu, "Move to Trash", "trash") { [weak self] in self?.workspace.trash(url) }
+            add(menu, "Move to Trash", "trash") { [weak self] in self?.workspace.trash(url, next: self?.nextFile(after: row)) }
         }
     }
 
@@ -821,7 +840,8 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     }
 }
 
-/// Keys the Finder has: Return renames, ⌘⌫ moves to the Trash, Space shows Quick Look.
+/// Keys the Finder has: Return renames, ⌘⌫ moves to the Trash, Space shows Quick Look. Tab goes on into the note, as it
+/// goes from the list to the note in Notes and Mail.
 final class SidebarOutlineView: NSOutlineView {
     weak var controller: SidebarController?
 
@@ -869,13 +889,14 @@ final class SidebarOutlineView: NSOutlineView {
     }
 
     override func keyDown(with event: NSEvent) {
-        guard let controller, let url = controller.selectedURL else { super.keyDown(with: event); return }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if event.keyCode == 48, flags.isEmpty, let controller, controller.focusNote() { return }
+        guard let controller, let url = controller.selectedURL else { super.keyDown(with: event); return }
         switch (event.keyCode, flags) {
         case (36, []), (76, []):
             controller.beginRenaming(url)
         case (51, .command):
-            controller.workspace.trash(url)
+            controller.workspace.trash(url, next: controller.nextFile(after: selectedRow))
         case (49, []):
             if FileKind(url: url, isDirectory: false) == .note { super.keyDown(with: event) } else { controller.workspace.quickLook(url) }
         default:

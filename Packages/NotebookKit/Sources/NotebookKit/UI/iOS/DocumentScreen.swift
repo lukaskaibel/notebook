@@ -250,7 +250,9 @@ struct FormatMenu: View {
         }
         .popover(isPresented: $isShown) {
             FormatPanelView(editor: editor) { isShown = false }
-                .frame(width: 390)
+                // Room for Title, Heading, Subheading and Body side by side in every typeface, SF Mono's the widest;
+                // at 390 Body was cut off.
+                .frame(width: 460)
                 .presentationCompactAdaptation(.popover)
         }
     }
