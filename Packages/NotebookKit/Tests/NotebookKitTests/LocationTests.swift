@@ -148,6 +148,25 @@ final class LocationTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: plan.path))
     }
 
+    /// The lookup at launch also follows the locations' bookmarks, which finds where they moved and can take a while:
+    /// what waits on the lookups waits on it, also when one for a location added meanwhile is done first.
+    func testWaitingForTheLookupWaitsForTheBookmarks() async throws {
+        Workspace.bookmarkLookupDelay = 0.8
+        defer { Workspace.bookmarkLookupDelay = 0 }
+        let workspace = try await makeWorkspace(settled: false)
+        let elsewhere = base.appendingPathComponent("Elsewhere")
+        try make(elsewhere)
+        workspace.openFolder(elsewhere)
+        var waited = false
+        workspace.whenSurveyed { waited = true }
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertTrue(workspace.isSurveying)
+        XCTAssertFalse(waited, "done before the bookmarks were followed")
+        try await settle(workspace)
+        XCTAssertTrue(waited)
+        XCTAssertEqual(workspace.locations.map(\.name), ["Library", "iCloud Drive", "Elsewhere"])
+    }
+
     func testOpeningAFolderAddsItOnlyWhenNoLocationHasIt() async throws {
         let workspace = try await makeWorkspace()
         XCTAssertEqual(workspace.locations.map(\.name), ["Library", "iCloud Drive"])

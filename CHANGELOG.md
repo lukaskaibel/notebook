@@ -59,6 +59,11 @@ versions follow [semantic versioning](https://semver.org).
     a year.
   - **Merges and conflicts:** before a change from elsewhere is merged in or a conflict is settled, both texts are
     kept, so the one you didn't keep can be brought back.
+- Delete a to-do in To-dos, as in Reminders: swipe it to the left on iPhone and iPad and tap Delete, or swipe it all
+  the way across; on the Mac, click beside its words to select it and press Delete, and ↑, ↓ and Return move the
+  selection and edit; and Delete in its menu everywhere. Its line goes from its note with the lines under it, and one
+  Undo puts them back where they were.
+- Shake the iPhone in To-dos to undo what you did to a to-do last, a deletion, a tick or a new date, as in Reminders.
 
 - The Mac's Edit menu has what Notes' has for writing. Edit › Find finds in the note you're in, in a find bar under the
   toolbar: Find (⌘F), Find and Replace (⇧⌘F), Find Next and Previous (⌘G, ⇧⌘G), Use Selection for Find and Jump to
@@ -75,6 +80,7 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Changed
 
+- To-dos on iPhone and iPad follows the text size you choose in Settings, as Reminders does.
 - On iPhone and iPad, a note's text follows the system's text size (Display & Brightness › Text Size, or Larger Text in
   Accessibility), as the text of Notes and other apps does: the size you chose in Settings › Text is the size at the
   standard text size, and the note is larger or smaller from there. The title, headings, checkboxes, maths and the line
@@ -84,6 +90,12 @@ versions follow [semantic versioning](https://semver.org).
   in another device's version, no longer makes the window wait when you pause typing, leave a note or switch apps.
   What you type meanwhile is saved right after. A note you have just left is still written, and quitting, renaming,
   moving or putting it in the Trash waits for it, so what you typed goes along.
+- Search and ⌘K find names loosely, as Spotlight does, and put the best first: by the starts of their words ("kytr"
+  finds Kyoto trip), and with a letter or two wrong ("ryokna" finds Getting to the ryokan, "seting" finds Settings).
+  In a big library, names that only have the letters typed somewhere in them ("kyo" in Workout family notes) no longer
+  crowd the files above the notes with the words in them: they come last, under Similar Names, and such commands
+  under Similar Commands. Suggestions for a link after [[ take only names with what was typed in them, so they keep
+  up as you type in any library.
 - On iPhone and iPad, the bar above the keyboard has the size of Notes': its symbols are as big as Notes' tools, its
   glass is 48 points tall and sits 12 points above the keyboard, and on an iPhone a page holds one more tool. The note
   fades out under it, as under Notes', while the line you write stays clear above the fade. On an iPad with a keyboard
@@ -94,6 +106,20 @@ versions follow [semantic versioning](https://semver.org).
 
 - A picture no longer goes to the Trash when its link in the note changes case, say after editing the note in another
   app: the Mac's disk finds the picture whatever the case, and now Notebook does too.
+- A to-do ticked in To-dos stays in its place for the three seconds it shows ticked, rather than jumping to the end of
+  its group.
+- VoiceOver reads a to-do's date, place and repeat in To-dos as words, such as "Overdue, Yesterday", rather than the
+  names of their symbols, "Calendar" and "Notifications".
+- On iPhone and iPad, after Notebook is updated, the notes kept in its own folder (On My iPhone › Notebook) keep their
+  favourites, reminders, hidden folders and places in Recent, and the default folder stays chosen. iOS moves an app's
+  folder with each update, and Notebook looked for them where they had been. A reminder's notification from before the
+  update opens its note, the note you left open opens again, and text shared to the end of the last note goes there.
+  From the next update on, a to-do that has reminded you at a place doesn't do it again.
+- On the iPhone, Checklist in the bar at the bottom of a note you haven't tapped into starts a new to-do at the end of
+  the note, as in Notes, rather than making its first paragraph a to-do; and a photo, scan or file from Attach goes at
+  the end of the note rather than above its first line. On the iPad, and on a large iPhone held sideways, a style from
+  Aa in the toolbar of such a note is for its last line, where Attach adds. A picker you cancel leaves the note as it
+  was.
 - Maths on a line of its own grows and shrinks with the size chosen in Settings › Text, as maths within a line does.
   It stayed at one size.
 - On iPhone and iPad, a note fades out under the bars at the top and bottom as you scroll, as in Notes, rather than
@@ -149,7 +175,10 @@ versions follow [semantic versioning](https://semver.org).
   portrait, the sidebar left lying over the note, dimming it. Turned to portrait with a note open, the sidebar now
   slides out of the way, and back in when you turn the iPad to landscape; put away by hand, it stays away. Opened in
   portrait with a note, Notebook shows the note without it. Shown in portrait, it sits next to the note rather than
-  over it.
+  over it. Turned while you write, the note stays in front with the keyboard up, as in Notes; before, the keyboard went
+  down.
+- In the iPad's sidebar, VoiceOver says whether a folder is open or closed ("Personal, collapsed"), as Files does, and
+  calls the sidebar's ⋯ "More for Notebook", so it isn't mistaken for the note's More next to it.
 - On iPhone and iPad, the folder Keep Notes on This iPhone uses is called On My iPhone (On My iPad) on the first screen,
   in search and in Settings, also where you chose it before. It was called "Documents", its folder's name on disk.
 - On iPhone and iPad, a list no longer says "No additional text" under notes Notebook hasn't read yet, as on the first

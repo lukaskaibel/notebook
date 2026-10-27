@@ -14,7 +14,7 @@ enum PaletteMode: Hashable {
 }
 
 /// One row of ⌘K.
-private struct PaletteRow: Identifiable {
+struct PaletteRow: Identifiable {
     enum Action {
         case result(SearchResult)
         case command(PaletteCommand)
@@ -134,7 +134,7 @@ struct CommandPalette: View {
 
     private func configure() {
         if case .move = mode {
-            search.limits = SearchCorpus.Limits(files: 0, folders: 30, headings: 0, texts: 0, pictures: 0)
+            search.limits = SearchCorpus.Limits(files: 0, folders: 30, headings: 0, texts: 0, pictures: 0, others: 0)
             search.offersNewNote = false
         } else {
             search.limits = SearchCorpus.Limits(files: 6, folders: 4, headings: 4, texts: 8, pictures: 4)
@@ -267,41 +267,66 @@ struct CommandPalette: View {
         let commands = workspace.paletteCommands(actions)
         if trimmed.hasPrefix(">") {
             let filter = trimmed.dropFirst().trimmingCharacters(in: .whitespaces)
-            return matching(commands, filter).map { commandRow($0, section: filter.isEmpty ? $0.section : "Commands") }
+            return Self.matching(commands, filter).map { Self.commandRow($0, section: filter.isEmpty ? $0.section : "Commands") }
         }
         guard !trimmed.isEmpty else {
             // What you opened last, then every command, by what it is for.
-            return resultRows(search.query.isEmpty ? search.sections : []) + commands.map { commandRow($0, section: $0.section) }
+            return Self.resultRows(search.query.isEmpty ? shown(search.sections) : []) + commands.map { Self.commandRow($0, section: $0.section) }
         }
         // The results that go with what was typed: while they are on their way, the last ones stay.
-        let results = search.sections
-        let found = matching(commands, trimmed).prefix(8).map { commandRow($0, section: "Commands") }
-        // A command named like what was typed comes first; otherwise after the files and folders.
+        return Self.rows(for: trimmed, commands: commands, results: shown(search.sections))
+    }
+
+    /// Without what was just deleted, which search finds until it has read the folder again.
+    private func shown(_ sections: [SearchSection]) -> [SearchSection] {
+        sections.map { section in
+            var section = section
+            section.items = section.items.filter { item in item.result.url.map { !workspace.isThrownAway($0) } ?? true }
+            return section
+        }
+    }
+
+    /// What ⌘K lists for what was typed: the files and folders, the commands named like it (first when one starts
+    /// with it), the rest of what search found, then commands and names only a bit like it, and New Note.
+    static func rows(for trimmed: String, commands: [PaletteCommand], results: [SearchSection]) -> [PaletteRow] {
         let folded = SearchIndex.fold(trimmed)
+        // Commands only a bit like what was typed go last, as names do: "del" has its letters in Show Hidden Folders.
+        // Two letters are in order in most of them.
+        let scored = scoredMatching(commands, trimmed)
+        let found = scored.filter { $0.score >= FuzzyMatch.goodScore }.prefix(8).map { commandRow($0.command, section: "Commands") }
+        let similar = SearchCorpus.Query.letters(in: folded) < SearchCorpus.Query.lettersForSimilar ? []
+            : scored.filter { $0.score < FuzzyMatch.goodScore }.prefix(3).map { commandRow($0.command, section: SearchSection.similarCommands) }
+        // A command named like what was typed comes first; otherwise after the files and folders.
         let commandFirst = found.first.map { row in
             SearchIndex.fold(row.title).split(separator: " ").contains { $0.hasPrefix(folded) }
         } ?? false
         let names = results.filter { $0.title == "Files" || $0.title == "Folders" }
-        let rest = results.filter { $0.title != "Files" && $0.title != "Folders" }
-        return commandFirst ? found + resultRows(results) : resultRows(names) + found + resultRows(rest)
+        let rest = results.filter { $0.title != "Files" && $0.title != "Folders" && $0.title != nil }
+        // New Note, at the very end.
+        let new = results.filter { $0.title == nil }
+        let first = commandFirst ? found + resultRows(names) : resultRows(names) + found
+        return first + resultRows(rest) + similar + resultRows(new)
     }
 
-    private func matching(_ commands: [PaletteCommand], _ filter: String) -> [PaletteCommand] {
+    private static func matching(_ commands: [PaletteCommand], _ filter: String) -> [PaletteCommand] {
         guard !filter.isEmpty else { return commands }
-        return commands.compactMap { command in command.score(filter).map { (command, $0) } }
-            .sorted { $0.1 > $1.1 }
-            .map(\.0)
+        return scoredMatching(commands, filter).map(\.command)
     }
 
-    private func commandRow(_ command: PaletteCommand, section: String) -> PaletteRow {
+    /// The commands that match, best first.
+    private static func scoredMatching(_ commands: [PaletteCommand], _ filter: String) -> [(command: PaletteCommand, score: Int)] {
+        commands.compactMap { command in command.score(filter).map { (command, $0) } }
+            .sorted { $0.1 > $1.1 }
+    }
+
+    private static func commandRow(_ command: PaletteCommand, section: String) -> PaletteRow {
         PaletteRow(id: "command:" + command.id, section: section, title: command.title, symbol: command.symbol,
                    tint: Color.theme(Theme.textSecondary), keys: command.keys, action: .command(command))
     }
 
-    private func resultRows(_ sections: [SearchSection]) -> [PaletteRow] {
+    private static func resultRows(_ sections: [SearchSection]) -> [PaletteRow] {
         sections.flatMap { section in
-            // Without what was just deleted, which search finds until it has read the folder again.
-            section.items.filter { item in item.result.url.map { !workspace.isThrownAway($0) } ?? true }.map { item in
+            section.items.map { item in
                 // By section too: a scanned PDF can be found by its text and by its pictures.
                 PaletteRow(id: (section.title ?? "") + "/" + Self.id(of: item.result), section: section.title, title: item.title, snippet: item.snippet,
                            matches: item.matches, detail: item.snippet == nil ? item.place : nil, symbol: item.image,
@@ -310,7 +335,7 @@ struct CommandPalette: View {
         }
     }
 
-    private func tint(of item: SearchItem) -> Color {
+    private static func tint(of item: SearchItem) -> Color {
         guard let kind = item.kind else { return Color.theme(Theme.accent) }
         if item.symbol != nil { return Color.theme(Theme.textSecondary) }
         switch kind {
@@ -363,10 +388,16 @@ struct CommandPalette: View {
 
     // MARK: - Keys
 
-    /// The row the arrow keys are on: the one chosen, while it is there, else the first.
+    /// The row the arrow keys are on: the one chosen, while it is there, else the one Return runs.
     private func currentID(_ rows: [PaletteRow]) -> String? {
         if hasChosen, let selected, rows.contains(where: { $0.id == selected }) { return selected }
-        return rows.first?.id
+        return Self.defaultRow(in: rows)?.id
+    }
+
+    /// The row Return runs before the arrow keys choose one: the first, but not one only a bit like what was typed,
+    /// so with only those New Note makes the note.
+    static func defaultRow(in rows: [PaletteRow]) -> PaletteRow? {
+        rows.first { !SearchSection.isSimilar($0.section) } ?? rows.first
     }
 
     private func move(_ delta: Int, _ rows: [PaletteRow]) {

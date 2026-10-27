@@ -147,10 +147,12 @@ GitHub's and Obsidian's `> [!note]` style get their colour and symbol.
 The search field in the toolbar (⌥⌘F) finds notes, files and folders by name, the headings in notes, and words in notes
 and PDFs, with the page they're on. It also reads the words in pictures, in scanned PDFs and in the handwriting of
 drawings, so a photographed receipt or a scanned letter turns up too. Type several words in any order; notes that have
-them together come first. A result opens where it was found: the note scrolled to the words with them selected (they
+them together come first. Names are found loosely too, best first: by the first letters of their words ("kytr" for
+Kyoto trip) or with a letter wrong ("ryokna" for the ryokan); names that only have the letters somewhere in them come
+last, under Similar Names. A result opens where it was found: the note scrolled to the words with them selected (they
 bounce as Find does in Safari), a PDF at its page, a heading, or the picture in a note. Return opens the first match,
-and the last suggestion is always a new note with what you typed as its name. With an empty field, it lists what you
-opened last.
+and the last suggestion is always a new note with what you typed as its name; with nothing but similar names found,
+Return makes that note. With an empty field, it lists what you opened last.
 
 Search runs in the background on every core, a few milliseconds a letter even in a whole iCloud Drive, so typing never
 waits for it; the results stay until the new ones are there. Notebook keeps what it has read between launches, so search
@@ -184,9 +186,11 @@ Reminders does: what is overdue, then today's, tomorrow's, the next seven days',
 each with the lines indented under it (its sub-to-dos, points and notes) and the note it is in. Notes with a reminder
 are in the list too, and the number next to To-dos counts what is due today or overdue. Tick a to-do off in the list,
 or a sub-to-do under it, and it is ticked in its note; a to-do stays three seconds, ticked, before it fades away, in case
-you want to untick it. Click the note's name to open the note at it. Drag a to-do into
-another group, or choose Today, Tomorrow, This Weekend or Next Week in its menu, and its date moves; Undo (⌘Z) puts it
-back. If you keep your to-dos in another app, turn off Show To-dos in Settings › Sidebar (on iPhone and iPad, in
+you want to untick it, and it stays in its place meanwhile. Click the note's name to open the note at it. Drag a to-do
+into another group, or choose Today, Tomorrow, This Weekend or Next Week in its menu, and its date moves; Undo (⌘Z, or
+shaking the iPhone) puts it back. To delete a to-do, swipe it to the left on iPhone and iPad and tap Delete, or swipe it
+all the way across, as in Reminders; on the Mac, click beside its words to select it and press Delete. Delete is in its
+menu too. Its line goes from its note with the lines under it, and Undo puts them back where they were. If you keep your to-dos in another app, turn off Show To-dos in Settings › Sidebar (on iPhone and iPad, in
 Settings): the list goes, and Notebook doesn't remind you of to-dos either.
 
 Click a to-do's words to change them where they are, as in Reminders. A Notes line slides in under them, in smaller
@@ -687,16 +691,25 @@ Editing a to-do in To-dos:
 | `[ ] ` or `- ` at the start of a line | A sub-to-do or a point |
 | Delete at the start of a line | A sub-to-do or point becomes words; words join the line above |
 | ↑ and ↓ at either end of a line | The line above or below |
-| Return on its words, Escape, a click outside it | Done |
+| Return on its words, Escape, a click outside it | Done; after Return or Escape the to-do stays selected |
 | Typing in its date, time or location dropdown | What it could mean, the first lit; ↑ and ↓ light another, Return takes it, Escape closes |
+
+A to-do selected in To-dos on the Mac, by a click beside its words:
+
+| Shortcut | Action |
+| --- | --- |
+| Delete | Delete it from its note, with the lines under it, and select the next |
+| ↑ and ↓ | Select the to-do above or below |
+| Return | Edit it |
+| Escape | Select none |
 
 In the sidebar: a double-click opens a note in a window of its own and any other file in its own app, as in the Finder;
 Return renames, ⌘⌫ moves to the Trash and opens the next file, Space opens a file in Quick Look, and Tab goes into the
 note. Right-click a file or folder for everything else, including Open in New Window, New Folder, Copy Link, which
 copies a `[[link]]` to it, Remind Me…, Customize Folder… and Hide Folder. In a note, right-click a to-do for Remind Me…,
 or click the bell that comes up after it as you point at it; in To-dos, right-click a row to move it to another day,
-mark it in progress or cancelled, or open its note. As you point at a location's name, a folder with a plus comes up
-next to it for a new folder at its top, and, when the location has hidden folders, an eye that shows them.
+mark it in progress or cancelled, open its note, or delete it. As you point at a location's name, a folder with a plus
+comes up next to it for a new folder at its top, and, when the location has hidden folders, an eye that shows them.
 
 On an iPad with a keyboard, ⌘N, ⇧⌘N, ⌘Z and ⇧⌘Z, ⌘K, ⇧⌘R, ⌘[ and ⌘], ⌃⌘S, ⌃⌘I, ⇧⌘., ⌘+, ⌘− and ⌘0, ⌘P and the
 shortcuts for writing work as on the Mac. While you type in a note, ⌘F finds in it and ⌥⌘F is the system's Find and
@@ -713,7 +726,9 @@ Replace; otherwise ⌥⌘F searches. On iPhone and iPad:
 | Tap a to-do's pill | Its date or its place, to type or tap, as in To-dos |
 | Tap the bell above the keyboard in a to-do | Remind Me: its date, time and place |
 | Tap a to-do's words in To-dos | Edit it, with a Notes line under it; the bar above the keyboard opens its day, time and place to type or tap, adds a sub-to-do and moves a line in or out |
-| Touch and hold a row in To-dos, or drag it | Today, Tomorrow, This Weekend, Next Week, Remind Me…, or another group |
+| Touch and hold a row in To-dos, or drag it | Today, Tomorrow, This Weekend, Next Week, Remind Me…, Delete, or another group |
+| Swipe a to-do in To-dos to the left | Delete; all the way across deletes it at once |
+| Shake the iPhone in To-dos | Undo or Redo what you last did to a to-do |
 | Tap a drawing | Draw in it |
 | While drawing: one finger, two fingers | Draw, scroll (where only Apple Pencil draws, a finger scrolls) |
 | While drawing on the iPhone: Undo at the top, or touch and hold it | Take back the last stroke, or Redo |

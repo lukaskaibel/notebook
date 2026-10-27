@@ -36,11 +36,12 @@ struct PadBrowser: View {
     private static let wide: CGFloat = 1100
     private static let narrow: CGFloat = 1060
 
-    /// The width of the window Notebook is in, the active one's when there are more.
+    /// The width of the window Notebook is in, when that is sure: there is one window, or all are as wide. A view
+    /// can't tell which window it is in before it is laid out, and a new one next to another, active one could be
+    /// made for the other's width; it then waits for its first measure.
     private static var windowWidth: CGFloat? {
-        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        let scene = scenes.first { $0.activationState == .foregroundActive } ?? (scenes.count == 1 ? scenes.first : nil)
-        return scene.map { $0.effectiveGeometry.coordinateSpace.bounds.width }
+        let widths = Set(UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.effectiveGeometry.coordinateSpace.bounds.width })
+        return widths.count == 1 ? widths.first : nil
     }
 
     var body: some View {
@@ -151,7 +152,7 @@ struct PadBrowser: View {
                 .onChange(of: query, initial: true) { _, query in workspace.searchSession.update(query) }
                 .searchFocused($isSearchFocused)
                 .onSubmit(of: .search) {
-                    if let first = workspace.searchSession.sections.first?.items.first { workspace.open(first.result) }
+                    if let first = SearchSection.firstToOpen(in: workspace.searchSession.sections) { workspace.open(first.result) }
                 }
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -172,7 +173,8 @@ struct PadBrowser: View {
                             ShowHiddenFoldersMenu(workspace: workspace)
                             Button { showsSettings = true } label: { Label("Settings", systemImage: "gearshape") }
                         } label: {
-                            Label("More", systemImage: "ellipsis")
+                            // Not More, which the note's ⋯ next to it is.
+                            Label("More for Notebook", systemImage: "ellipsis")
                         }
                     }
                     ToolbarItem(placement: .topBarTrailing) {
@@ -214,7 +216,7 @@ struct PadSidebar: View {
     let query: String
     @Binding var newFolderIn: URL?
     @Environment(\.isSearching) private var isSearching
-    @State private var expanded = Set(UserDefaults.standard.stringArray(forKey: "expandedFolders") ?? [])
+    @State private var expanded = Set((UserDefaults.standard.stringArray(forKey: "expandedFolders") ?? []).map(Workspace.rerooted))
     @State private var collapsedSections = Set(UserDefaults.standard.stringArray(forKey: "collapsedSections") ?? [])
 
     var body: some View {
@@ -254,6 +256,8 @@ struct PadSidebar: View {
                 }
             }
             .onChange(of: expanded) { _, expanded in UserDefaults.standard.set(Array(expanded), forKey: "expandedFolders") }
+            // Read before an update's move was known: the folders open follow it.
+            .onReceive(NotificationCenter.default.publisher(for: Workspace.documentsMoved)) { _ in expanded = Set(expanded.map(Workspace.rerooted)) }
             .onChange(of: workspace.revealRequest?.id) { _, _ in
                 guard let request = workspace.revealRequest else { return }
                 reveal(request.url)
@@ -321,6 +325,8 @@ struct FolderTree: View {
                         .onTapGesture { withAnimation(.snappy) { toggle(node.url.path) } }
                         .fileDragAndDrop(node.url, isFolder: true, workspace: workspace)
                         .contextMenu { FileActions(workspace: workspace, url: node.url) { newFolderIn = $0 } }
+                        // VoiceOver reads the row, arrow and all, as one: "Personal, collapsed", as Files does.
+                        .accessibilityValue(expanded.contains(node.url.path) ? "expanded" : "collapsed")
                 }
                 .id(node.url)
             } else {

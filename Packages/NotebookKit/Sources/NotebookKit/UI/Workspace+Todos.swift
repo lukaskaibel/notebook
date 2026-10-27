@@ -365,6 +365,15 @@ extension Workspace {
         todoRewrites[Self.rewriteKey(todo)] = changed
     }
 
+    /// Whether what is asked for comes from To-dos: it shows in this window, and on the Mac no other window is in front.
+    private var isInTodos: Bool {
+        #if os(macOS)
+        showsTodos && (NSApp.keyWindow == nil || NSApp.keyWindow === sidebar?.outline.window)
+        #else
+        showsTodos
+        #endif
+    }
+
     /// The editor that shows a note with its text in: this window's, or on the Mac a window of its own.
     func editorShowing(_ url: URL) -> EditorController? {
         let target = url.standardizedFileURL
@@ -421,7 +430,7 @@ extension Workspace {
     /// shows in place of a to-do it lists, when not the to-do's line after the change. Without `rewrites`, what the
     /// to-do's line said stays the to-do's (`current(_:)`): a line that says the same is there again.
     /// `outcome` is told once what became of the change, and then there is no beep when it couldn't be made.
-    private func changeTodo(_ todo: TodoReference, to source: String, line: Int? = nil, shows: (todo: TodoReference, source: String, under: [String]?)? = nil,
+    private func changeTodo(_ todo: TodoReference, to source: String, line: Int? = nil, shows: (todo: TodoReference, source: String?, under: [String]?)? = nil,
                             rewrites: Bool = true, actionName: String, edit: @escaping TodoLinesEdit, under: [String]?,
                             now: Bool = false, outcome: (@MainActor (TodoChangeOutcome) -> Void)? = nil,
                             whenWritten: (@MainActor () async -> Void)? = nil,
@@ -445,6 +454,9 @@ extension Workspace {
             }
             if rewrites { rewrote(todo, to: changed) }
             todos.patch(shown.todo, to: shown.source, under: shown.under)
+            // A note open in a window of its own on the Mac keeps the edit's Undo there: the window this was asked
+            // from undoes it too, as one step.
+            if editor !== self.editor, isInTodos { keepTodoChangeForUndo(actionName) { undo(changed) } }
             // From a notification the app may only have a moment: the note is written now, not after a pause.
             saveNote(showing: todo.url)
             outcome?(.written)
@@ -452,41 +464,63 @@ extension Workspace {
         }
         if rewrites { rewrote(todo, to: changed) }
         todos.patch(shown.todo, to: shown.source, under: shown.under)
-        let manager = fileUndoManager
-        let target = TodoUndoTarget()
-        // The undo manager closes the group of an event once the event is handled; outside one (a notification's action)
-        // the change gets a group of its own.
-        let opens = manager.groupingLevel == 0
-        if opens { manager.beginUndoGrouping() }
-        // The undo manager doesn't keep its targets: the action does.
-        manager.registerUndo(withTarget: target) { [target] _ in
-            withExtendedLifetime(target) { undo(changed) }
-        }
-        manager.setActionName(actionName)
-        if opens { manager.endUndoGrouping() }
+        let kept = keepTodoChangeForUndo(actionName) { undo(changed) }
         guard !now else {
             let written = Self.write(todo, edit: edit)
             if written.change == nil { todos.unpatch(shown.todo) }
             outcome?(written.outcome)
             return nil
         }
-        let url = todo.url
+        return writeTodoChange(in: todo.url, { Self.write(todo, edit: edit).outcome }, failed: { [weak self] in
+            // Changed or gone meanwhile, here or on another device: the list shows it as it is now, and there is
+            // nothing to undo.
+            kept.forget()
+            guard let self else { return }
+            if todoRewrites[Self.rewriteKey(todo)] == changed { todoRewrites[Self.rewriteKey(todo)] = nil }
+            todos.unpatch(shown.todo)
+        }, outcome: outcome, whenWritten: whenWritten)
+    }
+
+    /// Keeps a change to a note's file for Undo as it is asked for, before it is written: Undo pressed at once waits
+    /// for it, and `undo` takes it back.
+    private func keepTodoChangeForUndo(_ actionName: String, undo: @escaping () -> Void) -> TodoUndoTarget {
+        let manager = fileUndoManager
+        let target = TodoUndoTarget(manager: manager)
+        // The undo manager closes the group of an event once the event is handled; outside one (a notification's action)
+        // the change gets a group of its own.
+        let opens = manager.groupingLevel == 0
+        if opens { manager.beginUndoGrouping() }
+        // The undo manager doesn't keep its targets: the action does.
+        manager.registerUndo(withTarget: target) { [target] _ in
+            withExtendedLifetime(target) { undo() }
+        }
+        manager.setActionName(actionName)
+        if opens { manager.endUndoGrouping() }
+        #if os(iOS)
+        // Shake to Undo and ⌘Z reach it, as they reach a change to files.
+        takeUndoFocusIfFree()
+        #endif
+        return target
+    }
+
+    /// Writes a change to a note's file off the main thread, after the changes asked for before it, and has search
+    /// read the note again. `failed` when it couldn't be made; `outcome` is told what became of it, and then there is
+    /// no beep.
+    private func writeTodoChange(in url: URL, _ write: @escaping @Sendable () -> TodoChangeOutcome, failed: @escaping () -> Void,
+                                 outcome: (@MainActor (TodoChangeOutcome) -> Void)? = nil,
+                                 whenWritten: (@MainActor () async -> Void)?) -> Task<Void, Never> {
         let previous = lastTodoWrite
         let task = Task { [weak self] in
             await previous?.value
-            let written = await Task.detached(priority: .userInitiated) { Self.write(todo, edit: edit) }.value
+            let written = await Task.detached(priority: .userInitiated) { write() }.value
             guard let self else {
-                outcome?(written.outcome)
+                outcome?(written)
                 return
             }
             index.refresh(folders: [url.deletingLastPathComponent()], locations: locations)
-            // Changed or gone meanwhile, here or on another device: the list shows it as it is now, and there is nothing
-            // to undo.
-            guard written.change != nil else {
-                manager.removeAllActions(withTarget: target)
-                if todoRewrites[Self.rewriteKey(todo)] == changed { todoRewrites[Self.rewriteKey(todo)] = nil }
-                todos.unpatch(shown.todo)
-                if let outcome { return outcome(written.outcome) }
+            guard written == .written else {
+                failed()
+                if let outcome { return outcome(written) }
                 return beep()
             }
             outcome?(.written)
@@ -494,6 +528,51 @@ extension Workspace {
         }
         lastTodoWrite = task
         return task
+    }
+
+    // MARK: - Deleting a to-do
+
+    /// Deletes a to-do and the lines under it from its note, as Reminders deletes a reminder with its subtasks: in the
+    /// editor that shows the note, as an edit, or else in its file. To-dos lets it go at once, and Undo puts the lines
+    /// back where they were.
+    @discardableResult
+    func deleteTodo(_ todo: TodoReference) -> Task<Void, Never>? {
+        let todo = current(todo)
+        let removed = TodoRemoval.Kept()
+        return changeTodo(todo, to: todo.source, shows: (todo, nil, nil), rewrites: false, actionName: "Delete To-do", edit: { text, document, index in
+            guard let deleting = Todos.deleting(in: text, document: document, line: index) else { return nil }
+            removed.set(deleting.removal)
+            return (deleting.range, "")
+        }, under: nil, undo: { [weak self] _ in
+            self?.restoreTodo(todo, removed: removed)
+        })
+    }
+
+    /// Puts a deleted to-do back where it was, with Undo; Redo deletes it again. What was taken out is known once the
+    /// deletion is written, which this waits for.
+    @discardableResult
+    private func restoreTodo(_ todo: TodoReference, removed: TodoRemoval.Kept) -> Task<Void, Never>? {
+        let edit: @Sendable (NSString, MarkdownDocument) -> (range: NSRange, replacement: String)? = { text, document in
+            removed.value.map { Todos.restoring($0, in: text, document: document) }
+        }
+        todos.unpatch(todo)
+        if let editor = editorShowing(todo.url) {
+            // Any line will do: what goes back finds its own place.
+            guard editor.editTodoLines(line: 0, actionName: "Delete To-do", edit: { text, document, _ in edit(text, document) }) else {
+                beep()
+                return nil
+            }
+            saveNote(showing: todo.url)
+            // Redo deletes it again. The editor keeps its edit with its own Undo (on iPhone and iPad, or a note in a
+            // window of its own), not the one this Undo came from, unless they are one (the main window's note).
+            if editor.textView.undoManager !== fileUndoManager {
+                keepTodoChangeForUndo("Delete To-do") { [weak self] in self?.deleteTodo(todo) }
+            }
+            return nil
+        }
+        let kept = keepTodoChangeForUndo("Delete To-do") { [weak self] in self?.deleteTodo(todo) }
+        let url = todo.url
+        return writeTodoChange(in: url, { Self.write(url, edit: edit) }, failed: { kept.forget() }, whenWritten: nil)
     }
 
     /// Writes the note an editor shows, now.
@@ -537,6 +616,20 @@ extension Workspace {
         return result
     }
 
+    /// Makes a change to a note's file that isn't found by a to-do's line, such as a deleted to-do put back.
+    nonisolated private static func write(_ url: URL, edit: (NSString, MarkdownDocument) -> (range: NSRange, replacement: String)?) -> TodoChangeOutcome {
+        var outcome = TodoChangeOutcome.failed
+        var error: NSError?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: .forMerging, error: &error) { url in
+            guard FileManager.default.fileExists(atPath: url.path) else { return outcome = .notThere }
+            guard let data = try? Data(contentsOf: url), let text = NoteDocument.decode(data) else { return }
+            let string = text as NSString
+            guard let change = edit(string, MarkdownParser.parse(string)) else { return outcome = .notThere }
+            if FileOperations.write(Data(string.replacingCharacters(in: change.range, with: change.replacement).utf8), to: url) { outcome = .written }
+        }
+        return outcome
+    }
+
     // MARK: - Going to a to-do
 
     /// Opens a to-do's note with the caret at the end of its words; from a notification once the locations are known.
@@ -545,6 +638,8 @@ extension Workspace {
         start()
         whenSurveyed { [weak self] in
             guard let self else { return }
+            // From a notification shown before an update of the app, which moved its folder: known now.
+            let todo = Self.rerooted(todo)
             guard FileManager.default.fileExists(atPath: todo.url.path) else { return beep() }
             showWindow?()
             #if os(macOS)
@@ -589,8 +684,14 @@ extension Workspace {
 
     /// A to-do's notification's name: from its note, its line and its notes, so a to-do changed is a new notification.
     nonisolated static func todoIdentifier(path: String, source: String, notes: String, occurrence: Int = 0) -> String {
-        // File events can name a note "/private/var/…" that was "/var/…".
-        ReminderNotifications.todoPrefix + hash(HiddenFolders.withoutPrivate(path) + "\n" + source + "\n" + notes + "\n\(occurrence)")
+        // File events can name a note "/private/var/…" that was "/var/…". A note in the app's own folder is named from
+        // there, as an update of the app moves the folder: a place that reminded you doesn't remind you again after one.
+        #if os(iOS)
+        let path = lastingPath(path, documents: documentsPath)
+        #else
+        let path = HiddenFolders.withoutPrivate(path)
+        #endif
+        return ReminderNotifications.todoPrefix + hash(path + "\n" + source + "\n" + notes + "\n\(occurrence)")
     }
 
     /// The same on every launch, unlike `hashValue`.
@@ -602,7 +703,29 @@ extension Workspace {
 }
 
 /// What Undo keeps a change to a to-do's file under, to take it out again if the change couldn't be written.
-private final class TodoUndoTarget {}
+private final class TodoUndoTarget {
+    let manager: UndoManager
+
+    init(manager: UndoManager) {
+        self.manager = manager
+    }
+
+    /// Nothing to undo: the change wasn't written.
+    func forget() {
+        manager.removeAllActions(withTarget: self)
+    }
+}
+
+extension TodoRemoval {
+    /// What deleting a to-do took out, once that is written: in a file off the main thread.
+    final class Kept: @unchecked Sendable {
+        private let lock = NSLock()
+        private var removal: TodoRemoval?
+
+        var value: TodoRemoval? { lock.withLock { removal } }
+        func set(_ value: TodoRemoval) { lock.withLock { removal = value } }
+    }
+}
 
 /// What became of a change to a to-do, for what waits on it (a tick from a widget): written; nothing to change (done
 /// already); not there to change (gone, changed since, or its note gone); or not written now, to be tried again.

@@ -44,7 +44,7 @@ final class AppleNotesImportUITests: XCTestCase {
         try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "the sidebar's ⋯ menu is the iPad's")
         XCUIDevice.shared.orientation = .landscapeLeft
         try launch()
-        tap("More")
+        tap("More for Notebook")
         shot("1-menu")
         tap("Import from Apple Notes")
         try pickExport()

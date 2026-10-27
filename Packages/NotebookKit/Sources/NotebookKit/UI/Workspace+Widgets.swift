@@ -109,7 +109,7 @@ extension Workspace {
     /// next to its line is that to-do ticked) isn't ticked again: when the next one says what it said, it would be
     /// found in its place.
     private func writeWidgetTick(_ row: WidgetData.TodoRow) async -> (outcome: TodoChangeOutcome, todo: TodoReference?) {
-        let url = URL(fileURLWithPath: Self.widgetPath(row.path))
+        let url = URL(fileURLWithPath: Self.rerooted(row.path))
         let todo = TodoReference(url: url, line: row.line, source: row.source)
         let modified = await Task.detached(priority: .userInitiated) {
             (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate?.timeIntervalSinceReferenceDate
@@ -134,7 +134,7 @@ extension Workspace {
 
     /// Whether a to-do ticked in a widget that wasn't there to tick was done meanwhile: its note has it ticked.
     private func isDoneElsewhere(_ row: WidgetData.TodoRow) async -> Bool {
-        let url = URL(fileURLWithPath: Self.widgetPath(row.path))
+        let url = URL(fileURLWithPath: Self.rerooted(row.path))
         let shown = editorShowing(url)?.text
         return await Task.detached(priority: .utility) {
             guard let text = shown ?? NoteDocument.read(url) else { return false }
@@ -153,7 +153,7 @@ extension Workspace {
     /// The notifications of to-dos ticked in a widget and not written yet don't come back meanwhile.
     func withoutWidgetTicks(_ jobs: [ReminderNotifications.TodoJob]) -> [ReminderNotifications.TodoJob] {
         guard !widgets.ticks.isEmpty else { return jobs }
-        let ticked = widgets.ticks.map { (url: URL(fileURLWithPath: Self.widgetPath($0.path)), source: $0.source) }
+        let ticked = widgets.ticks.map { (url: URL(fileURLWithPath: Self.rerooted($0.path)), source: $0.source) }
         return jobs.filter { job in !ticked.contains { $0.source == job.source && FileNode.samePath($0.url, URL(fileURLWithPath: job.path)) } }
     }
 
@@ -198,7 +198,7 @@ extension Workspace {
         enum Look: Sendable { case read(place: String, made: Int?), hidden, gone }
         var asked: [String: (kept: String?, path: String, look: Look)] = [:]
         for id in chosen ?? Set(kept.keys) {
-            let path = Self.widgetPath(kept[id]?.path ?? WidgetData.notePath(id: id))
+            let path = Self.rerooted(kept[id]?.path ?? WidgetData.notePath(id: id))
             let url = URL(fileURLWithPath: path)
             // Gone, then a note at its path again: it must be the one chosen, made when it was, not a new one there.
             let made = kept[id]?.missing == .gone ? WidgetData.noteCreated(id: id) : nil
@@ -407,19 +407,6 @@ extension Workspace {
         return runs.filter { !$0.text.isEmpty }
     }
 
-    /// Where a file written down for a widget is now. On iPhone and iPad the app's own folder moves with each update
-    /// of the app, and a note kept on the device moves with it: its place in that folder stays the same.
-    nonisolated static func widgetPath(_ path: String) -> String {
-        #if os(iOS)
-        guard !FileManager.default.fileExists(atPath: path), let container = path.range(of: "/Data/Application/"),
-              let documents = path.range(of: "/Documents/", range: container.upperBound..<path.endIndex) else { return path }
-        let moved = onDeviceFolder.standardizedFileURL.path + "/" + path[documents.upperBound...]
-        return FileManager.default.fileExists(atPath: moved) ? moved : path
-        #else
-        return path
-        #endif
-    }
-
     // MARK: - Opening
 
     /// Opens what a tap in a widget asks for: To-dos, a to-do in its note, or a note chosen in a widget.
@@ -433,12 +420,12 @@ extension Workspace {
             whenSurveyed { [weak self] in self?.showTodos() }
         case "todo":
             guard let path = query["path"], let source = query["source"] else { return true }
-            let todo = TodoReference(url: URL(fileURLWithPath: Self.widgetPath(path)), line: Int(query["line"] ?? "") ?? 0, source: source)
+            let todo = TodoReference(url: URL(fileURLWithPath: Self.rerooted(path)), line: Int(query["line"] ?? "") ?? 0, source: source)
             openTodo(todo, fromNotification: true)
         case "note":
             guard let id = query["id"] else { return true }
             let note = widgetNotes[id]
-            let path = Self.widgetPath(note?.path ?? WidgetData.notePath(id: id))
+            let path = Self.rerooted(note?.path ?? WidgetData.notePath(id: id))
             start()
             // One in a folder you hid stays closed, as the widget doesn't show it.
             guard note?.missing != .hidden else { return true }
