@@ -42,8 +42,8 @@ enum FuzzyMatch {
     private static let afterSpace: Int32 = 10
     private static let afterMark: Int32 = 9
     private static let letterAndNumber: Int32 = 7
-    /// Less for a letter inside a word after letters skipped, which fzf doesn't have: "note" in Nothing to declare,
-    /// its "e" deep in a word, is only a bit like it.
+    /// Less for a letter inside a word after letters skipped in words before, which fzf doesn't have: "note" in Nothing
+    /// to declare, its "e" deep in another word, is only a bit like it, while "prj" is Project's.
     private static let insideAfterGap: Int32 = -12
     private static let none = Int32.min / 2
 
@@ -139,7 +139,8 @@ enum FuzzyMatch {
         var i = 0
         while i < m {
             let wanted = wordBase[i]
-            var gapped = none
+            // The same, with only letters of one word skipped: no less for the letter inside it.
+            var gapped = none, gappedInWord = none
             best = none
             j = start
             while j < n {
@@ -147,6 +148,12 @@ enum FuzzyMatch {
                 if i > 0, j >= 2 {
                     let extended = gapped &+ gapExtension, started = previous[j &- 2] &+ gapStart
                     gapped = extended > started ? extended : started
+                    if isWordByte(base[j &- 1]) {
+                        let extendedInWord = gappedInWord &+ gapExtension
+                        gappedInWord = extendedInWord > started ? extendedInWord : started
+                    } else {
+                        gappedInWord = none
+                    }
                 }
                 if base[j] != wanted {
                     current[j] = none
@@ -168,7 +175,8 @@ enum FuzzyMatch {
                         run = previousRun[j &- 1] > bonus ? previousRun[j &- 1] : bonus
                         afterPrevious = previous[j &- 1] &+ letter &+ (run > together ? run : together)
                     }
-                    let afterGap = gapped > none ? gapped &+ letter &+ bonus &+ (bonus == 0 ? insideAfterGap : 0) : none
+                    var afterGap = gapped > none ? gapped &+ letter &+ bonus &+ (bonus == 0 ? insideAfterGap : 0) : none
+                    if gappedInWord > none, gappedInWord &+ letter &+ bonus > afterGap { afterGap = gappedInWord &+ letter &+ bonus }
                     if afterPrevious > none, afterPrevious >= afterGap {
                         current[j] = afterPrevious
                         currentRun[j] = run

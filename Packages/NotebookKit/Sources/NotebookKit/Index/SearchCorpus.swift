@@ -154,8 +154,9 @@ final class SearchCorpus: Sendable {
         }
 
         var isOneWord: Bool { words.count == 1 }
-        /// How many letters it has, whatever their bytes.
-        var letterCount: Int { folded.unicodeScalars.count }
+        /// How many letters it has, whatever their bytes, without the spaces.
+        var letterCount: Int { Self.letters(in: folded) }
+        static func letters(in text: String) -> Int { text.unicodeScalars.filter { !$0.properties.isWhitespace }.count }
         /// From this many letters on, names and commands only a bit like it are listed too, last.
         static let lettersForSimilar = 3
     }

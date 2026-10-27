@@ -58,6 +58,25 @@ struct SearchSection: Identifiable {
 
     var id: String { title ?? "new" }
 
+    /// The titles of the sections of what is only a bit like what was typed, last.
+    static let similarNames = "Similar Names"
+    static let similarCommands = "Similar Commands"
+    static func isSimilar(_ title: String?) -> Bool { title == similarNames || title == similarCommands }
+    var isSimilar: Bool { Self.isSimilar(title) }
+
+    /// What Return opens: the first result, but not a name only a bit like what was typed, for which New Note makes
+    /// the note.
+    static func firstToOpen(in sections: [SearchSection]) -> SearchItem? {
+        sections.first { !$0.isSimilar && !$0.items.isEmpty }?.items.first
+    }
+
+    /// The sections for a menu that highlights its first item: New Note before the names only a bit like what was
+    /// typed when nothing else was found, so it is the one highlighted, as Return makes it.
+    static func highlightingWhatReturnOpens(_ sections: [SearchSection]) -> [SearchSection] {
+        guard sections.first(where: { !$0.items.isEmpty })?.isSimilar == true else { return sections }
+        return sections.filter { $0.title == nil } + sections.filter { $0.title != nil }
+    }
+
     /// With nothing typed: what was opened last.
     @MainActor
     static func recent(in workspace: Workspace, limit: Int = 6) -> [SearchSection] {
@@ -116,7 +135,7 @@ struct SearchSection: Identifiable {
         }
         // Last: names with the letters typed, not much like it, for when nothing above is what you were looking for.
         if !results.others.isEmpty {
-            sections.append(SearchSection(title: "Similar Names", items: results.others.map { item in
+            sections.append(SearchSection(title: similarNames, items: results.others.map { item in
                 SearchItem(result: .file(item.url), title: item.name, place: item.place, kind: item.kind, isInCloud: item.isInCloud)
             }))
         }

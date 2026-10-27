@@ -294,8 +294,8 @@ struct CommandPalette: View {
         // Two letters are in order in most of them.
         let scored = scoredMatching(commands, trimmed)
         let found = scored.filter { $0.score >= FuzzyMatch.goodScore }.prefix(8).map { commandRow($0.command, section: "Commands") }
-        let similar = folded.unicodeScalars.count < SearchCorpus.Query.lettersForSimilar ? []
-            : scored.filter { $0.score < FuzzyMatch.goodScore }.prefix(3).map { commandRow($0.command, section: "Similar Commands") }
+        let similar = SearchCorpus.Query.letters(in: folded) < SearchCorpus.Query.lettersForSimilar ? []
+            : scored.filter { $0.score < FuzzyMatch.goodScore }.prefix(3).map { commandRow($0.command, section: SearchSection.similarCommands) }
         // A command named like what was typed comes first; otherwise after the files and folders.
         let commandFirst = found.first.map { row in
             SearchIndex.fold(row.title).split(separator: " ").contains { $0.hasPrefix(folded) }
@@ -388,10 +388,16 @@ struct CommandPalette: View {
 
     // MARK: - Keys
 
-    /// The row the arrow keys are on: the one chosen, while it is there, else the first.
+    /// The row the arrow keys are on: the one chosen, while it is there, else the one Return runs.
     private func currentID(_ rows: [PaletteRow]) -> String? {
         if hasChosen, let selected, rows.contains(where: { $0.id == selected }) { return selected }
-        return rows.first?.id
+        return Self.defaultRow(in: rows)?.id
+    }
+
+    /// The row Return runs before the arrow keys choose one: the first, but not one only a bit like what was typed,
+    /// so with only those New Note makes the note.
+    static func defaultRow(in rows: [PaletteRow]) -> PaletteRow? {
+        rows.first { !SearchSection.isSimilar($0.section) } ?? rows.first
     }
 
     private func move(_ delta: Int, _ rows: [PaletteRow]) {

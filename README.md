@@ -151,8 +151,8 @@ them together come first. Names are found loosely too, best first: by the first 
 Kyoto trip) or with a letter wrong ("ryokna" for the ryokan); names that only have the letters somewhere in them come
 last, under Similar Names. A result opens where it was found: the note scrolled to the words with them selected (they
 bounce as Find does in Safari), a PDF at its page, a heading, or the picture in a note. Return opens the first match,
-and the last suggestion is always a new note with what you typed as its name. With an empty field, it lists what you
-opened last.
+and the last suggestion is always a new note with what you typed as its name; with nothing but similar names found,
+Return makes that note. With an empty field, it lists what you opened last.
 
 Search runs in the background on every core, a few milliseconds a letter even in a whole iCloud Drive, so typing never
 waits for it; the results stay until the new ones are there. Notebook keeps what it has read between launches, so search

@@ -126,8 +126,44 @@ final class SearchTests: XCTestCase {
         XCTAssertNil(quality("plan", "place to stay"))
         XCTAssertNil(quality("work", "world cup"))
         XCTAssertNil(quality("test", "tesla"))
-        XCTAssertLessThan(quality("note", "nothing to declare") ?? 0, FuzzyMatch.good, "its e deep inside a word, after letters skipped")
+        XCTAssertLessThan(quality("note", "nothing to declare") ?? 0, FuzzyMatch.good, "its e deep inside another word")
         XCTAssertGreaterThanOrEqual(quality("gttr", "getting to the ryokan") ?? 0, FuzzyMatch.good, "at the starts of words, however far")
+        // Letters skipped inside one word: an abbreviation of it.
+        XCTAssertGreaterThanOrEqual(quality("prj", "project plan") ?? 0, FuzzyMatch.good)
+        XCTAssertGreaterThanOrEqual(quality("wkly", "weekly review") ?? 0, FuzzyMatch.good)
+        XCTAssertGreaterThanOrEqual(quality("bday", "birthday") ?? 0, FuzzyMatch.good)
+        XCTAssertGreaterThanOrEqual(quality("grcy", "grocery list") ?? 0, FuzzyMatch.good)
+        XCTAssertGreaterThanOrEqual(fuzzyScore("sb", "Show Sidebar") ?? 0, FuzzyMatch.goodScore, "s-ide-b-ar")
+    }
+
+    /// Return opens the first result, but not a name only a bit like what was typed: with only those, it makes the
+    /// note, as before there were Similar Names. ⌘K's first row and the Mac's highlighted suggestion are that too.
+    func testReturnMakesTheNoteWhenOnlySimilarNamesAreFound() async throws {
+        try write("Work/Summary workout launch 23.md", "Done.\n")
+        let index = try await makeIndex()
+        let query = try XCTUnwrap(SearchCorpus.Query("ryokan"))
+        var sections = SearchSection.sections(for: try search(index, "ryokan"), query: query)
+        XCTAssertEqual(sections.map(\.title), [SearchSection.similarNames, nil], "summa-ry-, w-o-r-k-out, l-a-u-n-ch")
+        XCTAssertEqual(SearchSection.firstToOpen(in: sections)?.result, .newNote("ryokan"))
+        XCTAssertEqual(SearchSection.highlightingWhatReturnOpens(sections).map(\.title), [nil, SearchSection.similarNames])
+        let commands = [PaletteCommand(id: "hidden", title: "Show Hidden Folders", symbol: "eye", section: "") {}]
+        XCTAssertNil(CommandPalette.defaultRow(in: CommandPalette.rows(for: "del", commands: commands, results: [
+            SearchSection(title: SearchSection.similarNames, items: [SearchItem(result: .file(library.appendingPathComponent("Idea.md")), title: "Idea")]),
+            SearchSection(title: nil, items: [SearchItem(result: .newNote("del"), title: "New Note “del”")]),
+        ]))?.section, "New Note, not a Similar Name or Similar Command")
+        XCTAssertNil(CommandPalette.defaultRow(in: CommandPalette.rows(for: "ryokan", commands: [], results: sections))?.section)
+
+        // With something that has what was typed, that comes first, as before.
+        try write("Travel/Getting to the ryokan.md", "By train.\n")
+        let again = try await makeIndex()
+        sections = SearchSection.sections(for: try search(again, "ryokan"), query: query)
+        XCTAssertEqual(SearchSection.firstToOpen(in: sections)?.title, "Getting to the ryokan")
+        XCTAssertEqual(SearchSection.highlightingWhatReturnOpens(sections).map(\.title), sections.map(\.title))
+    }
+
+    func testLettersAreCountedWithoutSpaces() throws {
+        XCTAssertEqual(try XCTUnwrap(SearchCorpus.Query("a b")).letterCount, 2)
+        XCTAssertEqual(try XCTUnwrap(SearchCorpus.Query("日本 語")).letterCount, 3)
     }
 
     /// Letters of more than one byte are whole letters: a typo is a wrong letter, not a wrong byte; a word of four
