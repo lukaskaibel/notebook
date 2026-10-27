@@ -99,6 +99,10 @@ versions follow [semantic versioning](https://semver.org).
   move onto the first page or off it slide there, rather than showing twice for a moment. The bar also comes up with
   the keyboard already as it should be for where you tap, and goes away with it as it was, rather than its buttons
   popping in after it or shrinking away as it leaves.
+- In the Mac's sidebar, Tab now goes on into the note that is open, with the caret where it was, as Tab goes from the
+  list to the note in Notes and Mail. Moving a file to the Trash from the sidebar opens the next file in its folder, or
+  the one before it at the end, as Notes shows the next note; before, the note opened before it came back, wherever it
+  was, and the sidebar jumped there. VoiceOver calls the outline next to the note "Outline", not "Sidebar".
 
 ## [1.0.0] – not released yet
 
