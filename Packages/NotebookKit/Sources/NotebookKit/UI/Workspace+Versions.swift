@@ -43,7 +43,7 @@ extension Workspace {
     /// window's.
     var revertNote: NoteDocument? {
         #if os(macOS)
-        keyFileNote ?? note
+        keyFileNote ?? (isMainWindowInFront ? note : nil)
         #else
         note
         #endif

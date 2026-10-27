@@ -76,7 +76,7 @@ final class MoveToSubmenu: NSMenu, NSMenuDelegate {
 
     private static func attach(in menu: NSMenu, workspace: Workspace) {
         for item in menu.items where item.title == "Move To" && item.submenu != nil && !(item.submenu is MoveToSubmenu) {
-            item.submenu = MoveToSubmenu(workspace: workspace) { [weak workspace] in workspace?.currentURL }
+            item.submenu = MoveToSubmenu(workspace: workspace) { [weak workspace] in workspace?.fileInFront }
         }
     }
 

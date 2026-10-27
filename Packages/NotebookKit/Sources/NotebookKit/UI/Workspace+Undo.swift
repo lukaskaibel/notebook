@@ -56,6 +56,8 @@ final class FileChange {
         var hiddenFolders: [String]
         /// What its versions are under in the History's own Trash (`NoteHistory.trash`).
         var history: String
+        /// The notes that were open in windows of their own, which open again.
+        var windows: [URL] = []
     }
 }
 
@@ -81,6 +83,9 @@ final class FileUndoLog {
 
     /// The change Undo takes back next, and the one Redo makes again.
     var nextUndo: FileChange? { done.last }
+
+    /// What can be undone in an undo manager, oldest first.
+    func done(in manager: UndoManager) -> [FileChange] { done.filter { $0.manager === manager } }
     var nextRedo: FileChange? { undone.last }
 
     func kept(_ change: FileChange) {
@@ -114,18 +119,46 @@ extension Workspace {
     /// first, whichever it is. Without a window (tests), Notebook's own.
     var fileUndoManager: UndoManager {
         #if os(macOS)
-        let window = sidebar?.outline.window ?? editor.textView.window
+        // A note's own window you are working in keeps what was done from it (Duplicate, Move To, a rename), so ⌘Z
+        // there takes it back.
+        if let manager = keyFileWindow?.window?.undoManager { return manager }
+        return mainUndoManager
         #else
         let window = editor.textView.window ?? UIApplication.shared.connectedScenes.lazy.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first
-        #endif
         return window?.undoManager ?? ownUndoManager
+        #endif
     }
+
+    #if os(macOS)
+    /// The main window's: where a change that closes a note's own window (its Trash) is kept, as the note comes back
+    /// there. With that window closed, Notebook's own, until it opens again (`moveUndoToMainWindow`).
+    var mainUndoManager: UndoManager {
+        guard isMainWindowOpen else { return ownUndoManager }
+        return (sidebar?.outline.window ?? editor.textView.window)?.undoManager ?? ownUndoManager
+    }
+
+    /// The main window opened again: what was kept for Undo while it was closed (a note trashed in its own window)
+    /// goes to its undo manager, where ⌘Z finds it, oldest first so the newest is undone first.
+    func moveUndoToMainWindow() {
+        let manager = mainUndoManager
+        guard manager !== ownUndoManager else { return }
+        for change in fileUndoLog.done(in: ownUndoManager) {
+            ownUndoManager.removeAllActions(withTarget: change)
+            change.manager = manager
+            let opens = manager.groupingLevel == 0
+            if opens { manager.beginUndoGrouping() }
+            manager.registerUndo(withTarget: change) { [weak self] change in self?.undo(change) }
+            manager.setActionName(change.name)
+            if opens { manager.endUndoGrouping() }
+        }
+    }
+    #endif
 
     /// Keeps a change to files for Undo as it is asked for, before it is written: Undo pressed at once waits for it
     /// (`changeFiles`). It is a step of its own, unless a group is open for it (`undoTogether`).
     @discardableResult
-    func keepForUndo(_ change: FileChange) -> FileChange {
-        let manager = fileUndoManager
+    func keepForUndo(_ change: FileChange, in manager: UndoManager? = nil) -> FileChange {
+        let manager = manager ?? fileUndoManager
         change.manager = manager
         // The undo manager closes the group of an event once the event is handled, and one opened outside an event
         // (a note made for a link, from a task) only after the next, which would take that event's changes in.
@@ -312,7 +345,7 @@ extension Workspace {
     func remembered(_ url: URL) -> FileChange.Remembered {
         let key = hiddenKey(for: url)
         func isIn(_ other: String) -> Bool { other == key || other.hasPrefix(key + "/") }
-        return FileChange.Remembered(
+        var remembered = FileChange.Remembered(
             key: key,
             path: url.path,
             openFile: currentURL.flatMap { FileNode.isSameOrInside($0, url) ? $0 : nil },
@@ -321,6 +354,10 @@ extension Workspace {
             hiddenFolders: hidden.keys.filter(isIn),
             history: NoteHistory.trashedName()
         )
+        #if os(macOS)
+        remembered.windows = FileWindows.shared.urls(atOrInside: url)
+        #endif
+        return remembered
     }
 
     private func restore(_ remembered: FileChange.Remembered, at url: URL) {
@@ -341,6 +378,11 @@ extension Workspace {
         if let file = remembered.openFile {
             open(Self.relocated(file, from: URL(fileURLWithPath: remembered.path), to: url))
         }
+        #if os(macOS)
+        for file in remembered.windows {
+            FileWindows.shared.open(Self.relocated(file, from: URL(fileURLWithPath: remembered.path), to: url))
+        }
+        #endif
     }
 }
 

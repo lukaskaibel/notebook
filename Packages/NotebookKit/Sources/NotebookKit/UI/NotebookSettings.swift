@@ -147,6 +147,25 @@ public final class NotebookSettings {
         didSet { UserDefaults.standard.set(deletesEmptyNewNotes, forKey: "deletesEmptyNewNotes") }
     }
 
+    #if os(macOS)
+    /// Spelling in notes, as Edit › Spelling and Grammar sets it for every note: underlined as you type, grammar with
+    /// it, and corrected as you go.
+    public var checksSpelling: Bool {
+        didSet { changedSpelling("checksSpelling", checksSpelling) }
+    }
+    public var checksGrammar: Bool {
+        didSet { changedSpelling("checksGrammar", checksGrammar) }
+    }
+    public var correctsSpelling: Bool {
+        didSet { changedSpelling("correctsSpelling", correctsSpelling) }
+    }
+
+    private func changedSpelling(_ key: String, _ value: Bool) {
+        UserDefaults.standard.set(value, forKey: key)
+        NotificationCenter.default.post(name: .notebookSpellingChanged, object: nil)
+    }
+    #endif
+
     #if os(iOS)
     /// The tools in the bar above the keyboard, in their order. Kept with the tools there were then, so that tools
     /// that come with a later version join a bar you changed (`writingBar(_:known:standard:)`).
@@ -188,6 +207,11 @@ public final class NotebookSettings {
         readsTextInPictures = defaults.object(forKey: "readsTextInPictures") as? Bool ?? true
         deletesEmptyNewNotes = defaults.object(forKey: "deletesEmptyNewNotes") as? Bool ?? true
         showsTodos = defaults.object(forKey: "showsTodos") as? Bool ?? true
+        #if os(macOS)
+        checksSpelling = defaults.object(forKey: "checksSpelling") as? Bool ?? true
+        checksGrammar = defaults.bool(forKey: "checksGrammar")
+        correctsSpelling = defaults.bool(forKey: "correctsSpelling")
+        #endif
         #if os(iOS)
         if let saved = defaults.stringArray(forKey: "writingBarTools") {
             let known = defaults.stringArray(forKey: "writingBarKnownTools") ?? Self.firstWritingTools
@@ -234,4 +258,5 @@ public extension NotebookSettings {
 public extension Notification.Name {
     static let notebookTypographyChanged = Notification.Name("NotebookTypographyChanged")
     static let notebookSidebarOptionsChanged = Notification.Name("NotebookSidebarOptionsChanged")
+    static let notebookSpellingChanged = Notification.Name("NotebookSpellingChanged")
 }

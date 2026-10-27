@@ -325,8 +325,9 @@ final class VersionHistoryTests: XCTestCase {
         _ = FileWindows.shared
         let controller = FileWindowController(url: draft)
         let window = try XCTUnwrap(controller.window)
+        // The window you work in is AppKit's main window, which a sheet over it leaves as it is.
         func becameKey(_ window: NSWindow?) {
-            NotificationCenter.default.post(name: NSWindow.didBecomeKeyNotification, object: window)
+            NotificationCenter.default.post(name: NSWindow.didBecomeMainNotification, object: window)
         }
         becameKey(window)
         XCTAssertTrue(Workspace.shared.keyFileNote === controller.noteDocument)
