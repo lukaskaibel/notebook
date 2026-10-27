@@ -21,8 +21,21 @@
 	<string>Notebook reminds you of a note or a to-do when you arrive at or leave a place you chose, and finds where you are for Current Location.</string>
 	<key>NSLocationUsageDescription</key>
 	<string>Notebook finds where you are when you choose Current Location for a reminder.</string>
+	<key>NotebookAppGroup</key>
+	<string>$(NOTEBOOK_APP_GROUP)</string>
 	<key>CoreSpotlightContinuation</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>Widgets</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>notebook-widget</string>
+			</array>
+		</dict>
+	</array>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>UIFileSharingEnabled</key>

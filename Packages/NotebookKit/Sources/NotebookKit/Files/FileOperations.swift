@@ -42,6 +42,60 @@ enum FileOperations {
         return candidate
     }
 
+    /// A name in `.assets` that no file there has, nor a drawing's strokes: "Photo.jpg", "Photo 2.jpg", …
+    static func uniqueAssetURL(named name: String, in assets: URL) -> URL {
+        let base = (name as NSString).deletingPathExtension
+        let ext = (name as NSString).pathExtension
+        var candidate = assets.appendingPathComponent(name)
+        var counter = 2
+        while FileManager.default.fileExists(atPath: candidate.path) || FileManager.default.fileExists(atPath: DrawingFile.strokesURL(for: candidate).path) {
+            candidate = assets.appendingPathComponent(ext.isEmpty ? "\(base) \(counter)" : "\(base) \(counter).\(ext)")
+            counter += 1
+        }
+        return candidate
+    }
+
+    /// A path in `.assets` for Markdown: spaces and brackets encoded so the link holds together everywhere.
+    static func markdownPath(_ name: String) -> String {
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
+        return ".assets/" + (name.addingPercentEncoding(withAllowedCharacters: allowed) ?? name)
+    }
+
+    /// Copies a file into a folder's `.assets`, under a name not taken there, in a coordinated write. Where it went,
+    /// or nil when it couldn't be copied; then a `.assets` made for it goes again.
+    static func storeAsset(copying url: URL, in folder: URL) -> URL? {
+        let assets = folder.appendingPathComponent(".assets", isDirectory: true)
+        let madeAssets = !FileManager.default.fileExists(atPath: assets.path)
+        try? FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
+        let destination = uniqueAssetURL(named: url.lastPathComponent, in: assets)
+        var copied = false
+        NSFileCoordinator().coordinate(readingItemAt: url, options: [], writingItemAt: destination, options: .forReplacing, error: nil) { from, to in
+            copied = (try? FileManager.default.copyItem(at: from, to: to)) != nil
+        }
+        if !copied, madeAssets { removeEmptyFolder(assets) }
+        return copied ? destination : nil
+    }
+
+    /// Takes back copies made a moment ago that nothing uses, in coordinated deletes, and the `.assets` folder they
+    /// were the first files in. Only for files Notebook itself just put there: anything else goes to the Trash.
+    static func removeStoredAssets(_ urls: [URL]) {
+        for url in urls {
+            NSFileCoordinator().coordinate(writingItemAt: url, options: .forDeleting, error: nil) { url in
+                try? FileManager.default.removeItem(at: url)
+            }
+        }
+        for assets in Set(urls.map { $0.deletingLastPathComponent() }) { removeEmptyFolder(assets) }
+    }
+
+    /// Deletes a folder Notebook just made, in a coordinated delete, only if it is still empty: whether it is and
+    /// deleting it are one step (`rmdir`), so a file another app or device puts in meanwhile keeps it, and itself.
+    static func removeEmptyFolder(_ folder: URL) {
+        NSFileCoordinator().coordinate(writingItemAt: folder, options: .forDeleting, error: nil) { folder in
+            _ = rmdir(folder.path)
+        }
+    }
+
     /// A file there, also one iCloud hasn't brought down to this iPhone or iPad yet, which shows as ".name.icloud".
     static func exists(_ url: URL) -> Bool {
         FileManager.default.fileExists(atPath: url.path)

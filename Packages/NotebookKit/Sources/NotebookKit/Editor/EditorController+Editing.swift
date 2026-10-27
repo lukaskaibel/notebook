@@ -25,6 +25,15 @@ extension EditorController {
         return true
     }
 
+    /// Puts text at the end of the note, after its last line and a blank one, as one step of Undo of its own:
+    /// something shared to the note from another app. The caret and the scroll position stay where they are.
+    @discardableResult
+    func appendAtEnd(_ addition: String, actionName: String) -> Bool {
+        let end = Workspace.sharedEnd(addition, after: nsText)
+        // Made as a link's change is: one step, the caret and the scroll position kept.
+        return changeLinks([(NSRange(location: end.kept, length: storage.length - end.kept), end.tail)], actionName: actionName)
+    }
+
     /// Puts other text in the note's place, an earlier version's, as one step of Undo of its own. Only the part that
     /// differs is replaced, so the caret and the scroll position stay where they can. Nothing changes while the text
     /// isn't in.

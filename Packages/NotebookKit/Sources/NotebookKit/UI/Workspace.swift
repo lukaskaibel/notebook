@@ -51,6 +51,13 @@ public final class Workspace: NSObject {
     @ObservationIgnored var dueTimer: Timer?
     /// The to-dos' notifications, scheduled a moment after the to-dos changed.
     @ObservationIgnored var todoScheduling: DispatchWorkItem?
+    /// What was last written for the widgets, and the writing (`Workspace+Widgets`).
+    @ObservationIgnored let widgets = WidgetKeeping()
+    #if os(macOS)
+    /// Reports waiting for Notebook to come to the front (`reportInFront`).
+    @ObservationIgnored var reportsWaiting: [(title: String, message: String)] = []
+    @ObservationIgnored var reportsObserver: NSObjectProtocol?
+    #endif
     /// The last change to a to-do's file, which the next waits for, and what to-dos' lines became (`current(_:)`).
     @ObservationIgnored var lastTodoWrite: Task<Void, Never>?
     /// The to-do being edited in To-dos, whose words are written with the notes when the app goes away.
@@ -498,6 +505,8 @@ public final class Workspace: NSObject {
         nameLocations()
         if !temporaryLocations { LocationStore.save(locations) }
         locationsChanged()
+        // Its notes leave the widgets, and Edit Widget.
+        publishWidgetNotes()
     }
 
     #if os(macOS)
@@ -1175,6 +1184,7 @@ public final class Workspace: NSObject {
         hiddenFolderMoved(from: old, to: new)
         reminderMoved(from: old, to: new)
         defaultFolderMoved(from: old, to: new)
+        widgetNoteMoved(from: old, to: new)
         favorites = favorites.map(fix)
         recents = recents.map(fix)
         history = history.map(fix)
@@ -1771,6 +1781,7 @@ public final class Workspace: NSObject {
         defaultFolderMoved(from: url, to: nil)
         favorites.removeAll { HiddenFolders.withoutPrivate($0) == HiddenFolders.withoutPrivate(url.path) }
         if !temporaryLocations { UserDefaults.standard.set(favorites, forKey: "favorites") }
+        widgetNoteThrownAway(url)
         showChanges(in: [url.deletingLastPathComponent()], removing: [url])
     }
 
@@ -1909,6 +1920,34 @@ public final class Workspace: NSObject {
         problem = Problem(title: title, message: message)
         #endif
     }
+
+    /// Something that couldn't be done that nobody asked for just now, as what was shared to Notebook while it was
+    /// closed: told once Notebook is in front, never as an alert of its own while it runs in the background without a
+    /// window, as after a launch at login.
+    func reportInFront(_ title: String, _ message: String) {
+        #if os(macOS)
+        guard NSApp.isActive else {
+            reportsWaiting.append((title, message))
+            if reportsObserver == nil {
+                reportsObserver = NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+                    // Once its window is up.
+                    DispatchQueue.main.async { MainActor.assumeIsolated { self?.showReportsWaiting() } }
+                }
+            }
+            return
+        }
+        #endif
+        report(title, message)
+    }
+
+    #if os(macOS)
+    /// What waited for Notebook to come to the front.
+    func showReportsWaiting() {
+        let waiting = reportsWaiting
+        reportsWaiting = []
+        for (title, message) in waiting { report(title, message) }
+    }
+    #endif
 
     /// Opens the folders down to a file in the sidebar, and selects it there: once they have been read, then `done`.
     func reveal(_ url: URL, select: Bool, then done: (() -> Void)? = nil) {
