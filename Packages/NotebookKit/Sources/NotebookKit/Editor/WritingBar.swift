@@ -205,6 +205,8 @@ final class WritingBar: UIView {
     static let height = WritingBarLayout.height
     static let spacing = WritingBarLayout.spacing
     static let caretSpacing = WritingBarLayout.caretSpacing
+    /// How far above its glass the note fades out under the bar, which the line being written keeps clear of.
+    static let fadeReach: CGFloat = 24
 
     static func barWidth(for available: CGFloat) -> CGFloat {
         WritingBarLayout.barWidth(for: available)
@@ -226,6 +228,11 @@ final class WritingBar: UIView {
         host.view.frame = bounds
         host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         addSubview(host.view)
+        // The note fades out under the bar, as under Notes', rather than running sharp up to its glass.
+        let edge = UIScrollEdgeElementContainerInteraction()
+        edge.scrollView = editor.textView
+        edge.edge = .bottom
+        host.view.addInteraction(edge)
         // Touch and hold the bar to change it. SwiftUI's context menu doesn't come up in the keyboard's window.
         addInteraction(UIContextMenuInteraction(delegate: self))
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardChanged), name: HardwareKeyboard.didChange, object: nil)

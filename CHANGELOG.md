@@ -67,9 +67,10 @@ versions follow [semantic versioning](https://semver.org).
   What you type meanwhile is saved right after. A note you have just left is still written, and quitting, renaming,
   moving or putting it in the Trash waits for it, so what you typed goes along.
 - On iPhone and iPad, the bar above the keyboard has the size of Notes': its symbols are as big as Notes' tools, its
-  glass is 48 points tall and sits 12 points above the keyboard, and on an iPhone a page holds one more tool. On an
-  iPad with a keyboard attached it steps aside, as Notes' does, leaving the keyboard's own shortcuts; Format,
-  attachments and the pencil are in the toolbar at the top. It comes back with the touch keyboard.
+  glass is 48 points tall and sits 12 points above the keyboard, and on an iPhone a page holds one more tool. The note
+  fades out under it, as under Notes', while the line you write stays clear above the fade. On an iPad with a keyboard
+  attached it steps aside, as Notes' does, leaving the keyboard's own shortcuts; Format, attachments and the pencil are
+  in the toolbar at the top. It comes back with the touch keyboard.
 
 ### Fixed
 

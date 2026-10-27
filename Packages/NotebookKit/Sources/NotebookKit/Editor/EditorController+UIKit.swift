@@ -436,8 +436,10 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         // The bar and the keyboard's shortcuts came up without the touch keyboard, which only a keyboard with keys does.
         if isOnScreen, !HardwareKeyboard.shared.isTouchKeyboardShown { HardwareKeyboard.shared.shortcutsCameAlone() }
         let overlap = hiding ? 0 : max(0, frame.maxY - keyboard.minY - textView.safeAreaInsets.bottom)
-        guard textView.contentInset.bottom != overlap else { return }
-        textView.contentInset.bottom = overlap
+        // The line being written stays above where the note fades out under the bar.
+        let fade = overlap > 0 && (textView.inputAccessoryView as? WritingBar)?.isTucked == false ? WritingBar.fadeReach : 0
+        guard textView.contentInset.bottom != overlap + fade else { return }
+        textView.contentInset.bottom = overlap + fade
         textView.verticalScrollIndicatorInsets.bottom = overlap
         if overlap > 0, isFocused {
             DispatchQueue.main.async { [weak self] in self?.scrollCaretIntoView() }
