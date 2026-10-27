@@ -38,8 +38,13 @@ ICLOUD_CONTAINER = "iCloud.#{APP_ID}"
 # starts with the app's, and profiles of its own.
 BUNDLES = {
   "Notebook" => APP_ID,
-  "NotebookWidgets" => "#{APP_ID}.Widgets"
+  "NotebookWidgets" => "#{APP_ID}.Widgets",
+  "NotebookShare" => "#{APP_ID}.Share"
 }.freeze
+# The App Group the app and the share extension share (NOTEBOOK_APP_GROUP in Config/Shared.xcconfig), with the
+# identifiers that have it.
+APP_GROUP = "group.com.lukaskbl.Notebook"
+APP_GROUP_BUNDLES = [APP_ID, "#{APP_ID}.Widgets", "#{APP_ID}.Share"].freeze
 # Absolute paths, taken while loading: lanes run from other folders, and __dir__ is relative in a Fastfile.
 HERE = File.expand_path(__dir__)
 ROOT = File.expand_path("..", HERE)
@@ -141,6 +146,7 @@ def store_signing(platform)
     lane_context.delete(SharedValues::CERT_CERTIFICATE_ID)
     get_provisioning_profile(api_key: api_key, app_identifier: identifier, platform: platform == :mac ? "macos" : "ios",
                              output_path: folder)
+    check_app_group(identifier, lane_context[SharedValues::SIGH_PROFILE_PATH])
     check_icloud_container(lane_context[SharedValues::SIGH_PROFILE_PATH]) if identifier == APP_ID
     [identifier, lane_context[SharedValues::SIGH_NAME]]
   end
@@ -169,7 +175,7 @@ def installer_certificate
 end
 
 # The extensions' bundle identifiers, registered with the team the first time one is built, for iPhone, iPad and the
-# Mac, like the app's. They need no capabilities.
+# Mac, like the app's. turn_on_capabilities gives them what they need.
 def register_extensions
   api_key
   BUNDLES.each do |target, identifier|
@@ -201,6 +207,27 @@ def turn_on_capabilities
     UI.message("Turning on Time Sensitive notifications for #{APP_ID}")
     bundle.create_capability(types::USERNOTIFICATIONS_TIMESENSITIVE)
   end
+  APP_GROUP_BUNDLES.each do |identifier|
+    bundle = Spaceship::ConnectAPI::BundleId.find(identifier)
+    next if bundle.nil? || bundle.get_capabilities.map(&:capability_type).include?(types::APP_GROUPS)
+
+    UI.message("Turning on App Groups for #{identifier}")
+    bundle.create_capability(types::APP_GROUPS)
+  end
+end
+
+# The API key can turn App Groups on but can neither register the group nor give it to an identifier, so without that
+# done once on the developer website (Design/app-store.md) the profile lacks it and the export would fail late with a
+# message about entitlements. This says what to do instead, before anything is built.
+def check_app_group(identifier, profile)
+  return unless APP_GROUP_BUNDLES.include?(identifier)
+
+  decoded = sh("security cms -D -i #{profile.shellescape} 2>/dev/null", log: false)
+  groups = Plist.parse_xml(decoded)&.dig("Entitlements", "com.apple.security.application-groups") || []
+  return if groups.include?(APP_GROUP)
+
+  UI.user_error!("The profile for #{identifier} doesn't have the App Group #{APP_GROUP}. On developer.apple.com, " \
+                 "register the group and give it to #{APP_GROUP_BUNDLES.join(', ')} (Design/app-store.md).")
 end
 
 # The App Store Connect API can neither make an iCloud container nor give it to an App ID, so that is done by hand,
