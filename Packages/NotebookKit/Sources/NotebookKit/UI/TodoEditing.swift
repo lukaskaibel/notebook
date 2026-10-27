@@ -59,6 +59,18 @@ final class TodoEditing {
     var focus: TodoFocus? = .title
     /// Remind Me is open from its buttons: leaving the words doesn't end the editing then.
     var isChoosing = false
+    /// A to-do just added in To-dos, in no note: the group it was added to, for Return to add the next one there. What
+    /// is typed in it is written without Undo of its own: once it is done, Undo takes it away as it is.
+    @ObservationIgnored var added: TodoSection.Kind?
+    /// It had the keyboard: until then, its row may still be on its way (the next one after Return), and the keyboard
+    /// leaving the row before it isn't the end of this one.
+    @ObservationIgnored var hasHadKeyboard = false
+
+    /// Without words, notes or lines under it: a to-do just added and left so goes again.
+    var isEmpty: Bool {
+        title.trimmingCharacters(in: .whitespaces).isEmpty
+            && lines.allSatisfy { !$0.isEditable || $0.words.trimmingCharacters(in: .whitespaces).isEmpty }
+    }
 
     /// What a popover can change of it: its day, its time, its place.
     enum Pick: Identifiable {
@@ -226,7 +238,7 @@ final class TodoEditing {
         // A line for words that has none yet isn't written: a line of spaces in the note would be nothing to read.
         let after = [Todos.replacingWords(in: current.source, with: title)] + lines.filter { !$0.isNewAndEmpty }.map(\.markdown)
         guard after != before else { return }
-        workspace.changeTodoLines(current, from: before, to: after, actionName: "Edit To-do", now: now)
+        workspace.changeTodoLines(current, from: before, to: after, actionName: "Edit To-do", now: now, undoable: added == nil)
         reference = TodoReference(url: current.url, line: current.line, source: after[0])
         written = after
     }

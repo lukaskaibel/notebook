@@ -11,6 +11,8 @@ enum PaletteMode: Hashable {
     case search
     /// The folders, to move a file into.
     case move(URL)
+    /// The notes, to move a to-do in no note into.
+    case moveTodo(TodoReference)
 }
 
 /// One row of ⌘K.
@@ -19,6 +21,7 @@ struct PaletteRow: Identifiable {
         case result(SearchResult)
         case command(PaletteCommand)
         case moveInto(URL)
+        case moveTodoInto(URL)
     }
 
     var id: String
@@ -58,6 +61,8 @@ struct CommandPalette: View {
         VStack(spacing: 0) {
             if case .move(let url) = mode {
                 ContextChip(title: "Move “\(SearchSection.displayName(url))” to…")
+            } else if case .moveTodo(let todo) = mode {
+                ContextChip(title: "Move “\(Todos.line(todo.source).map { $0.text.isEmpty ? "To-do" : $0.text } ?? "To-do")” to…")
             }
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
@@ -129,12 +134,16 @@ struct CommandPalette: View {
 
     private var placeholder: String {
         if case .move = mode { return "Find a folder" }
+        if case .moveTodo = mode { return "Find a note" }
         return "Search notes and files, or type a command"
     }
 
     private func configure() {
         if case .move = mode {
             search.limits = SearchCorpus.Limits(files: 0, folders: 30, headings: 0, texts: 0, pictures: 0, others: 0)
+            search.offersNewNote = false
+        } else if case .moveTodo = mode {
+            search.limits = SearchCorpus.Limits(files: 30, folders: 0, headings: 0, texts: 0, pictures: 0)
             search.offersNewNote = false
         } else {
             search.limits = SearchCorpus.Limits(files: 6, folders: 4, headings: 4, texts: 8, pictures: 4)
@@ -263,6 +272,7 @@ struct CommandPalette: View {
 
     private func makeRows() -> [PaletteRow] {
         if case .move(let url) = mode { return folderRows(moving: url) }
+        if case .moveTodo = mode { return noteRows() }
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         let commands = workspace.paletteCommands(actions)
         if trimmed.hasPrefix(">") {
@@ -386,6 +396,36 @@ struct CommandPalette: View {
         return rows
     }
 
+    /// The notes a to-do can go into: as you type, those whose names match; before, the notes with to-dos, most
+    /// recently changed first, and the notes you opened last.
+    private func noteRows() -> [PaletteRow] {
+        func isNote(_ url: URL) -> Bool {
+            FileKind(url: url, isDirectory: false) == .note && !workspace.isLoose(url) && !workspace.index.isHidden(url)
+        }
+        func row(_ note: URL, section: String) -> PaletteRow {
+            PaletteRow(id: "note:" + section + note.path, section: section, title: SearchSection.displayName(note),
+                       detail: workspace.index.entry(for: note)?.place, symbol: "doc.text", tint: Color.theme(Theme.textSecondary),
+                       action: .moveTodoInto(note))
+        }
+        guard query.trimmingCharacters(in: .whitespaces).isEmpty else {
+            return search.sections.flatMap(\.items).compactMap { item in
+                guard case .file(let note) = item.result, isNote(note) else { return nil }
+                return row(note, section: "Notes")
+            }
+        }
+        var seen = Set<String>()
+        var rows: [PaletteRow] = []
+        for item in workspace.todos.items where !item.isLoose && isNote(item.url) && seen.insert(item.url.path).inserted {
+            rows.append(row(item.url, section: "Checklists"))
+            if rows.count == 6 { break }
+        }
+        for recent in workspace.recentURLs where isNote(recent) && seen.insert(recent.path).inserted {
+            rows.append(row(recent, section: "Recent Notes"))
+            if rows.count == 12 { break }
+        }
+        return rows
+    }
+
     // MARK: - Keys
 
     /// The row the arrow keys are on: the one chosen, while it is there, else the one Return runs.
@@ -433,6 +473,10 @@ struct CommandPalette: View {
             guard case .move(let url) = mode else { return }
             close()
             workspace.move(url, into: folder)
+        case .moveTodoInto(let note):
+            guard case .moveTodo(let todo) = mode else { return }
+            close()
+            workspace.moveTodo(todo, toNote: note)
         }
     }
 }

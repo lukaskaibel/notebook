@@ -29,6 +29,8 @@ public final class FileWindows {
         // Settings, say: no note to act on.
         let other = controller == nil && !workspace.isMainWindow(window)
         if workspace.isOtherWindowInFront != other { workspace.isOtherWindowInFront = other }
+        // What was kept for Undo while the main window was closed, if it couldn't go there as it opened.
+        if workspace.isMainWindow(window) { workspace.moveUndoToMainWindow() }
     }
 
     /// The notes at or inside a file or folder that are open in windows of their own.
@@ -358,12 +360,22 @@ public final class NotebookAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Quitting waits for notes still being written, off the main thread, which keeps going meanwhile: a note open in
-    /// two windows hears there when the other one wrote it.
+    /// two windows hears there when the other one wrote it. So it does for changes to to-dos, such as Move to Note….
     public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         MainActor.assumeIsolated {
-            Workspace.shared.saveAll(quitting: true)
-            guard NoteDocument.isWriting else { return .terminateNow }
-            NoteDocument.whenAllWritten { NSApp.reply(toApplicationShouldTerminate: true) }
+            let workspace = Workspace.shared
+            workspace.saveAll(quitting: true)
+            guard NoteDocument.isWriting || workspace.isWritingTodos else { return .terminateNow }
+            // The to-dos are waited for ten seconds at most: quitting never gets stuck.
+            let reply = QuitReply()
+            Task { @MainActor in
+                await workspace.todosWritten()
+                reply.send()
+            }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(10))
+                reply.send()
+            }
             return .terminateLater
         }
     }
@@ -395,6 +407,18 @@ public final class NotebookAppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             Workspace.shared.continueActivity(userActivity)
         }
+    }
+}
+
+/// Lets quitting go on once, when the to-dos are written or the wait for them is over, and the notes are written.
+@MainActor
+private final class QuitReply {
+    private var isSent = false
+
+    func send() {
+        guard !isSent else { return }
+        isSent = true
+        NoteDocument.whenAllWritten { NSApp.reply(toApplicationShouldTerminate: true) }
     }
 }
 #endif

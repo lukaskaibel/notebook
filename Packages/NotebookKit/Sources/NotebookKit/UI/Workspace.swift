@@ -40,8 +40,12 @@ public final class Workspace: NSObject {
     private(set) var hidden = HiddenFolders(defaults: nil, cloud: nil)
     /// The reminders of notes: kept in iCloud too, or only for this run with locations given on the command line.
     private(set) var reminders = Reminders(defaults: nil, cloud: nil)
-    /// Every open to-do in the notes, read from what search knows.
+    /// Every open to-do in the notes, read from what search knows, and those in no note.
     let todos = TodoList()
+    /// The to-dos in no note, added in To-dos: one checklist in Notebook's own iCloud folder.
+    @ObservationIgnored let looseTodos = LooseTodos(place: LooseTodos.defaultPlace)
+    /// New To-do in the toolbar, for To-dos to add one for today.
+    var newTodoRequest = 0
     /// The notes in Spotlight, fed from what search knows; nil when Spotlight doesn't get them (`startSpotlight`).
     @ObservationIgnored var spotlight: SpotlightIndex?
     /// Words to search for in ⌘K as it opens: Spotlight's Search in App.
@@ -60,6 +64,7 @@ public final class Workspace: NSObject {
     #endif
     /// The last change to a to-do's file, which the next waits for, and what to-dos' lines became (`current(_:)`).
     @ObservationIgnored var lastTodoWrite: Task<Void, Never>?
+    @ObservationIgnored var todoWritesPending = 0
     /// The to-do being edited in To-dos, whose words are written with the notes when the app goes away.
     @ObservationIgnored weak var todoEditing: TodoEditing?
     @ObservationIgnored var todoRewrites: [String: TodoReference] = [:]
@@ -68,6 +73,8 @@ public final class Workspace: NSObject {
     #if DEBUG
     /// What `remindOfNext` was asked for, for tests: the next one's line, and whether as it will be.
     @ObservationIgnored var remindedOfNext: [(source: String, asItWillBe: Bool)] = []
+    /// Runs while Move to Note… has put a to-do into the note and not yet taken it out of those in no note, for tests.
+    @ObservationIgnored var betweenMoveSteps: (@MainActor () async -> Void)?
     #endif
     #if DEBUG
     /// The sample notes' reminders, shown but never scheduled: a run on the sample notes leaves no notification behind.
@@ -288,6 +295,8 @@ public final class Workspace: NSObject {
             self?.spotlight?.setNeedsUpdate()
         }
         todos.onChange = { [weak self] in self?.todosChanged() }
+        looseTodos.onRead = { [weak self] in self?.todos.update(loose: $0) }
+        looseTodos.onUnread = { [weak self] in self?.todos.looseUnread() }
         index.onRefreshed = { [weak self] in self?.refreshLinks() }
         index.onIndexed = { [weak self] entries in self?.recognizer.consider(entries) }
         #if os(macOS)
@@ -334,11 +343,18 @@ public final class Workspace: NSObject {
             if let store = SearchIndex.storeURL(library: url.path, name: "History", in: .cachesDirectory) {
                 NoteHistory.shared.keepOnDevice(in: store.appendingPathComponent("History.noindex", isDirectory: true))
             }
+            // So do its to-dos in no note.
+            if let store = SearchIndex.storeURL(library: url.path, name: "To-dos", in: .cachesDirectory) {
+                looseTodos.keepOnDevice(in: store.appendingPathComponent("To-dos.noindex", isDirectory: true))
+            }
             #if DEBUG
             if UserDefaults.standard.bool(forKey: "NotebookDemo"), DemoLibrary.create(at: url) {
                 // Versions of earlier sample notes at the same place go with them.
                 NoteHistory.shared.forget(url)
                 DemoLibrary.keepVersions(at: url)
+                if let store = SearchIndex.storeURL(library: url.path, name: "To-dos", in: .cachesDirectory) {
+                    DemoLibrary.createLooseTodos(in: store.appendingPathComponent("To-dos.noindex", isDirectory: true))
+                }
             }
             // YES: next to the library; a path: there, such as On My iPhone for the UI tests.
             if let export = UserDefaults.standard.string(forKey: "NotebookDemoExport"), export != "NO" {
@@ -378,6 +394,8 @@ public final class Workspace: NSObject {
         index.storeURL = SearchIndex.storeURL(library: temporaryLocations ? locations.first?.url.path : nil)
         index.loadKept(for: locations)
         startSpotlight()
+        todos.waitsForLoose = true
+        looseTodos.start()
         hidden.onChange = { [weak self] in self?.hiddenFoldersChanged() }
         reminders.onChange = { [weak self] in self?.remindersChanged() }
         readTextInPictures(NotebookSettings.shared.readsTextInPictures)
@@ -1001,9 +1019,11 @@ public final class Workspace: NSObject {
     }
 
     /// Reads the folders on screen again: when Notebook comes back to the front and when you pull a list down. Pulling
-    /// down (`thoroughly`) reads every folder for search again too.
+    /// down (`thoroughly`) reads every folder for search again too. The to-dos in no note are read again too.
     public func refresh(thoroughly: Bool = false) {
-        guard isStarted, !locations.isEmpty else { return }
+        guard isStarted else { return }
+        looseTodos.read()
+        guard !locations.isEmpty else { return }
         var loaded: [FileNode] = []
         func visit(_ node: FileNode) {
             guard let children = node.children else { return }
@@ -2142,6 +2162,10 @@ public final class Workspace: NSObject {
         keyFileWindow = nil
         if keyFileNote != nil { keyFileNote = nil }
         if isOtherWindowInFront { isOtherWindowInFront = false }
+        // Then as AppKit has it, in case the main window didn't come to the front after all.
+        DispatchQueue.main.async {
+            if let window = NSApp.mainWindow { FileWindows.becameMain(window) }
+        }
     }
 
     /// The main window is the one you are working in: open, with no note's own window or Settings in front of it.
@@ -2192,7 +2216,13 @@ public final class Workspace: NSObject {
             hasQuit = true
         }
         editor.saveDrawingsNow(waiting: quitting)
-        todoEditing?.commit(now: quitting)
+        // A to-do just added and still without words goes, as it would once done; quitting waits for it.
+        if quitting, let editing = todoEditing, editing.added != nil, editing.isEmpty {
+            editing.end()
+            dropNewTodo(editing.current)
+        } else {
+            todoEditing?.commit(now: quitting)
+        }
         #if os(macOS)
         FileWindows.shared.saveAll(quitting: quitting)
         #endif

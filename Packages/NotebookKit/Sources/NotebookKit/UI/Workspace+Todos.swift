@@ -274,11 +274,12 @@ extension Workspace {
     func todoJob(for todo: TodoReference, asItWillBe: Bool = false) -> ReminderNotifications.TodoJob? {
         if let job = todoJobs().filter({ FileNode.samePath(URL(fileURLWithPath: $0.path), todo.url) && $0.source == todo.source })
             .min(by: { abs($0.line - todo.line) < abs($1.line - todo.line) }) { return job }
-        guard asItWillBe, location(containing: todo.url) != nil, !SearchIndex.isHidden(todo.url.path, in: index.hiddenPaths),
+        let isLoose = isLoose(todo.url)
+        guard asItWillBe, isLoose || location(containing: todo.url) != nil, !SearchIndex.isHidden(todo.url.path, in: index.hiddenPaths),
               let parsed = Todos.line(todo.source), !parsed.done, parsed.due != nil || parsed.place != nil else { return nil }
-        let note = todo.url.deletingPathExtension().lastPathComponent
+        let note = isLoose ? "" : todo.url.deletingPathExtension().lastPathComponent
         return ReminderNotifications.TodoJob(identifier: Self.todoIdentifier(path: todo.url.path, source: todo.source, notes: ""), date: parsed.due?.alertDate(),
-                                             place: parsed.place, title: parsed.text.isEmpty ? note : parsed.text, noteName: note, body: "",
+                                             place: parsed.place, title: parsed.text.isEmpty ? (isLoose ? "To-do" : note) : parsed.text, noteName: note, body: "",
                                              path: todo.url.path, line: todo.line, source: todo.source)
     }
 
@@ -352,7 +353,7 @@ extension Workspace {
         return todo
     }
 
-    private static func rewriteKey(_ todo: TodoReference) -> String {
+    static func rewriteKey(_ todo: TodoReference) -> String {
         HiddenFolders.withoutPrivate(todo.url.standardizedFileURL.path) + "\n" + todo.source
     }
 
@@ -403,9 +404,11 @@ extension Workspace {
     }
 
     /// Changes a to-do and the lines under it, edited in To-dos: `before` and `after` start with the to-do's line.
-    /// Nothing changes when the lines no longer say what they said, here or in the file.
+    /// Nothing changes when the lines no longer say what they said, here or in the file. Without `undoable`, Undo
+    /// doesn't take it back on its own: a to-do just added, which Undo takes away as it is.
     @discardableResult
-    func changeTodoLines(_ todo: TodoReference, from before: [String], to after: [String], actionName: String, now: Bool = false) -> Task<Void, Never>? {
+    func changeTodoLines(_ todo: TodoReference, from before: [String], to after: [String], actionName: String, now: Bool = false,
+                         undoable: Bool = true) -> Task<Void, Never>? {
         guard let first = after.first, before.first != nil, before != after else { return nil }
         var todo = current(todo)
         todo.source = before[0]
@@ -415,7 +418,7 @@ extension Workspace {
             let start = document.lines[index].range.location
             let ending = Todos.lineEnding(in: text, line: document.lines[index])
             return (NSRange(location: start, length: document.lines[index + before.count - 1].range.upperBound - start), after.joined(separator: ending))
-        }, under: Array(after.dropFirst()), now: now, undo: { [weak self] changed in
+        }, under: Array(after.dropFirst()), now: now, undoable: undoable, undo: { [weak self] changed in
             self?.changeTodoLines(changed, from: after, to: before, actionName: actionName)
         })
     }
@@ -429,10 +432,11 @@ extension Workspace {
     /// `line` is where the to-do's line is after the change, when lines go in or out above it, and `shows` what To-dos
     /// shows in place of a to-do it lists, when not the to-do's line after the change. Without `rewrites`, what the
     /// to-do's line said stays the to-do's (`current(_:)`): a line that says the same is there again.
-    /// `outcome` is told once what became of the change, and then there is no beep when it couldn't be made.
+    /// `outcome` is told once what became of the change, and then there is no beep when it couldn't be made. Without
+    /// `undoable`, a change to a file isn't kept for Undo.
     private func changeTodo(_ todo: TodoReference, to source: String, line: Int? = nil, shows: (todo: TodoReference, source: String?, under: [String]?)? = nil,
                             rewrites: Bool = true, actionName: String, edit: @escaping TodoLinesEdit, under: [String]?,
-                            now: Bool = false, outcome: (@MainActor (TodoChangeOutcome) -> Void)? = nil,
+                            now: Bool = false, undoable: Bool = true, outcome: (@MainActor (TodoChangeOutcome) -> Void)? = nil,
                             whenWritten: (@MainActor () async -> Void)? = nil,
                             undo: @escaping (TodoReference) -> Void) -> Task<Void, Never>? {
         let changed = TodoReference(url: todo.url, line: line ?? todo.line, source: source)
@@ -456,7 +460,7 @@ extension Workspace {
             todos.patch(shown.todo, to: shown.source, under: shown.under)
             // A note open in a window of its own on the Mac keeps the edit's Undo there: the window this was asked
             // from undoes it too, as one step.
-            if editor !== self.editor, isInTodos { keepTodoChangeForUndo(actionName) { undo(changed) } }
+            if undoable, editor !== self.editor, isInTodos { keepTodoChangeForUndo(actionName) { undo(changed) } }
             // From a notification the app may only have a moment: the note is written now, not after a pause.
             saveNote(showing: todo.url)
             outcome?(.written)
@@ -464,7 +468,7 @@ extension Workspace {
         }
         if rewrites { rewrote(todo, to: changed) }
         todos.patch(shown.todo, to: shown.source, under: shown.under)
-        let kept = keepTodoChangeForUndo(actionName) { undo(changed) }
+        let kept = undoable ? keepTodoChangeForUndo(actionName) { undo(changed) } : nil
         guard !now else {
             let written = Self.write(todo, edit: edit)
             if written.change == nil { todos.unpatch(shown.todo) }
@@ -474,7 +478,7 @@ extension Workspace {
         return writeTodoChange(in: todo.url, { Self.write(todo, edit: edit).outcome }, failed: { [weak self] in
             // Changed or gone meanwhile, here or on another device: the list shows it as it is now, and there is
             // nothing to undo.
-            kept.forget()
+            kept?.forget()
             guard let self else { return }
             if todoRewrites[Self.rewriteKey(todo)] == changed { todoRewrites[Self.rewriteKey(todo)] = nil }
             todos.unpatch(shown.todo)
@@ -483,7 +487,8 @@ extension Workspace {
 
     /// Keeps a change to a note's file for Undo as it is asked for, before it is written: Undo pressed at once waits
     /// for it, and `undo` takes it back.
-    private func keepTodoChangeForUndo(_ actionName: String, undo: @escaping () -> Void) -> TodoUndoTarget {
+    @discardableResult
+    func keepTodoChangeForUndo(_ actionName: String, undo: @escaping () -> Void) -> TodoUndoTarget {
         let manager = fileUndoManager
         let target = TodoUndoTarget(manager: manager)
         // The undo manager closes the group of an event once the event is handled; outside one (a notification's action)
@@ -504,20 +509,23 @@ extension Workspace {
     }
 
     /// Writes a change to a note's file off the main thread, after the changes asked for before it, and has search
-    /// read the note again. `failed` when it couldn't be made; `outcome` is told what became of it, and then there is
-    /// no beep.
-    private func writeTodoChange(in url: URL, _ write: @escaping @Sendable () -> TodoChangeOutcome, failed: @escaping () -> Void,
-                                 outcome: (@MainActor (TodoChangeOutcome) -> Void)? = nil,
-                                 whenWritten: (@MainActor () async -> Void)?) -> Task<Void, Never> {
-        let previous = lastTodoWrite
-        let task = Task { [weak self] in
-            await previous?.value
+    /// read the note again, or To-dos the to-dos in no note. `failed` when it couldn't be made; `outcome` is told what
+    /// became of it, and then there is no beep.
+    @discardableResult
+    func writeTodoChange(in url: URL, _ write: @escaping @Sendable () -> TodoChangeOutcome, failed: @escaping () -> Void,
+                         outcome: (@MainActor (TodoChangeOutcome) -> Void)? = nil,
+                         whenWritten: (@MainActor () async -> Void)?) -> Task<Void, Never> {
+        chainTodoWrite { [weak self] in
             let written = await Task.detached(priority: .userInitiated) { write() }.value
             guard let self else {
                 outcome?(written)
                 return
             }
-            index.refresh(folders: [url.deletingLastPathComponent()], locations: locations)
+            if isLoose(url) {
+                looseTodos.read()
+            } else {
+                index.refresh(folders: [url.deletingLastPathComponent()], locations: locations)
+            }
             guard written == .written else {
                 failed()
                 if let outcome { return outcome(written) }
@@ -526,24 +534,51 @@ extension Workspace {
             outcome?(.written)
             await whenWritten?()
         }
+    }
+
+    /// Writes to-dos' files after what was asked for before (`work` does the writing off the main thread). Quitting
+    /// waits for it (`isWritingTodos`), and on iPhone and iPad going to the background doesn't stop it halfway.
+    @discardableResult
+    func chainTodoWrite(_ work: @escaping @MainActor () async -> Void) -> Task<Void, Never> {
+        let previous = lastTodoWrite
+        todoWritesPending += 1
+        #if os(iOS)
+        let background = BackgroundTask(named: "Writing to-dos")
+        #endif
+        let task = Task { [weak self] in
+            await previous?.value
+            await work()
+            self?.todoWritesPending -= 1
+            #if os(iOS)
+            background.end()
+            #endif
+        }
         lastTodoWrite = task
         return task
+    }
+
+    /// Whether a change to to-dos' files is still being written: quitting waits for it.
+    var isWritingTodos: Bool { todoWritesPending > 0 }
+
+    /// Waits until the changes to to-dos' files asked for so far are written.
+    func todosWritten() async {
+        await lastTodoWrite?.value
     }
 
     // MARK: - Deleting a to-do
 
     /// Deletes a to-do and the lines under it from its note, as Reminders deletes a reminder with its subtasks: in the
     /// editor that shows the note, as an edit, or else in its file. To-dos lets it go at once, and Undo puts the lines
-    /// back where they were.
+    /// back where they were, unless it isn't `undoable`.
     @discardableResult
-    func deleteTodo(_ todo: TodoReference) -> Task<Void, Never>? {
+    func deleteTodo(_ todo: TodoReference, undoable: Bool = true) -> Task<Void, Never>? {
         let todo = current(todo)
         let removed = TodoRemoval.Kept()
         return changeTodo(todo, to: todo.source, shows: (todo, nil, nil), rewrites: false, actionName: "Delete To-do", edit: { text, document, index in
             guard let deleting = Todos.deleting(in: text, document: document, line: index) else { return nil }
             removed.set(deleting.removal)
             return (deleting.range, "")
-        }, under: nil, undo: { [weak self] _ in
+        }, under: nil, undoable: undoable, undo: { [weak self] _ in
             self?.restoreTodo(todo, removed: removed)
         })
     }
@@ -596,7 +631,7 @@ extension Workspace {
     /// Changes a to-do in its file: the line it is on now, found by what it said. The line and what it says after the
     /// change, or nil when the to-do or its file isn't there (`notThere`) or the file couldn't be read or written
     /// (`failed`).
-    nonisolated private static func write(_ todo: TodoReference, edit: TodoLinesEdit) -> (change: (line: Int, source: String)?, outcome: TodoChangeOutcome) {
+    nonisolated static func write(_ todo: TodoReference, edit: TodoLinesEdit) -> (change: (line: Int, source: String)?, outcome: TodoChangeOutcome) {
         var result: (change: (line: Int, source: String)?, outcome: TodoChangeOutcome) = (nil, .failed)
         var error: NSError?
         NSFileCoordinator().coordinate(writingItemAt: todo.url, options: .forMerging, error: &error) { url in
@@ -617,7 +652,7 @@ extension Workspace {
     }
 
     /// Makes a change to a note's file that isn't found by a to-do's line, such as a deleted to-do put back.
-    nonisolated private static func write(_ url: URL, edit: (NSString, MarkdownDocument) -> (range: NSRange, replacement: String)?) -> TodoChangeOutcome {
+    nonisolated static func write(_ url: URL, edit: (NSString, MarkdownDocument) -> (range: NSRange, replacement: String)?) -> TodoChangeOutcome {
         var outcome = TodoChangeOutcome.failed
         var error: NSError?
         NSFileCoordinator().coordinate(writingItemAt: url, options: .forMerging, error: &error) { url in
@@ -633,19 +668,31 @@ extension Workspace {
     // MARK: - Going to a to-do
 
     /// Opens a to-do's note with the caret at the end of its words; from a notification once the locations are known.
+    /// One in no note shows in To-dos.
     func openTodo(_ todo: TodoReference, fromNotification: Bool = false) {
-        guard fromNotification else { return open(todo.url, at: .todo(line: todo.line, source: todo.source)) }
+        guard fromNotification else {
+            if isLoose(todo.url) { return showTodos() }
+            return open(todo.url, at: .todo(line: todo.line, source: todo.source))
+        }
         start()
         whenSurveyed { [weak self] in
-            guard let self else { return }
-            // From a notification shown before an update of the app, which moved its folder: known now.
-            let todo = Self.rerooted(todo)
-            guard FileManager.default.fileExists(atPath: todo.url.path) else { return beep() }
-            showWindow?()
-            #if os(macOS)
-            NSApp.activate()
-            #endif
-            open(todo.url, at: .todo(line: todo.line, source: todo.source))
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                // From a notification shown before an update of the app, which moved its folder: known now.
+                let todo = Self.rerooted(todo)
+                // The to-dos in no note may not have been looked up yet, and an update moves their folder too.
+                let loose = await looseTodos.fileURL()
+                let isLoose = FileNode.samePath(loose, todo.url) || todo.url.lastPathComponent == loose.lastPathComponent
+                    && todo.url.deletingLastPathComponent().lastPathComponent == loose.deletingLastPathComponent().lastPathComponent
+                    && location(containing: todo.url) == nil
+                guard isLoose || FileManager.default.fileExists(atPath: todo.url.path) else { return beep() }
+                showWindow?()
+                #if os(macOS)
+                NSApp.activate()
+                #endif
+                if isLoose { return showTodos() }
+                open(todo.url, at: .todo(line: todo.line, source: todo.source))
+            }
         }
     }
 
@@ -663,13 +710,16 @@ extension Workspace {
         if temporaryLocations, UserDefaults.standard.bool(forKey: "NotebookDemo") { return nil }
         #endif
         let jobs = withoutWidgetTicks(todoJobs())
-        return ReminderNotifications.shared.scheduleTodos(jobs, open: Set(jobs.map(\.identifier)))
+        // The to-dos in no note not read yet: their notifications, which To-dos doesn't know, stay as they are.
+        let unread = todos.isLooseUnread ? looseTodos.url?.path : nil
+        return ReminderNotifications.shared.scheduleTodos(jobs, open: Set(jobs.map(\.identifier)), keeping: unread)
     }
 
     /// What the notifications of the to-dos with a reminder are made from.
     func todoJobs() -> [ReminderNotifications.TodoJob] {
         var seen: [String: Int] = [:]
-        return todos.items.filter(\.todo.hasReminder).map { item in
+        // One in no note without words yet is being added: it reminds once it has them.
+        return todos.items.filter { $0.todo.hasReminder && !$0.isNewAndEmpty }.map { item in
             let todo = item.todo
             let notes = todo.notes.joined(separator: "\n")
             // The same words twice in a note are two to-dos.
@@ -677,7 +727,7 @@ extension Workspace {
             let occurrence = seen[key, default: 0]
             seen[key] = occurrence + 1
             return ReminderNotifications.TodoJob(identifier: Self.todoIdentifier(path: item.url.path, source: todo.source, notes: notes, occurrence: occurrence),
-                                                 date: todo.due?.alertDate(), place: todo.place, title: todo.text.isEmpty ? item.note : todo.text,
+                                                 date: todo.due?.alertDate(), place: todo.place, title: todo.text.isEmpty ? (item.isLoose ? "To-do" : item.note) : todo.text,
                                                  noteName: item.note, body: todo.notes.joined(separator: "\n"), path: item.url.path, line: todo.line, source: todo.source)
         }
     }
@@ -703,7 +753,7 @@ extension Workspace {
 }
 
 /// What Undo keeps a change to a to-do's file under, to take it out again if the change couldn't be written.
-private final class TodoUndoTarget {
+final class TodoUndoTarget {
     let manager: UndoManager
 
     init(manager: UndoManager) {
@@ -753,3 +803,23 @@ struct TodoTick {
         func set(_ value: Bool) { lock.withLock { wrote = value } }
     }
 }
+
+#if os(iOS)
+/// Time to finish something once the app goes to the background, for as long as the system gives it.
+@MainActor
+final class BackgroundTask {
+    private var identifier = UIBackgroundTaskIdentifier.invalid
+
+    init(named name: String) {
+        identifier = UIApplication.shared.beginBackgroundTask(withName: name) { [weak self] in
+            MainActor.assumeIsolated { self?.end() }
+        }
+    }
+
+    func end() {
+        guard identifier != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(identifier)
+        identifier = .invalid
+    }
+}
+#endif

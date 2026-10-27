@@ -286,4 +286,58 @@ final class TodoTests: XCTestCase {
         back = Todos.restoring(deleting.removal, in: changed, document: MarkdownParser.parse(changed))
         XCTAssertEqual(changed.replacingCharacters(in: back.range, with: back.replacement), "Other\n- [ ] Buy milk\n    - oat\n- [ ] Eggs\n")
     }
+
+    // MARK: - To-dos in no note
+
+    /// Moves `lines` into `note` as Move to Note does, and says what the note says then and the line the to-do is on.
+    private func move(_ lines: [String], into note: String) -> (text: String, line: Int, source: String) {
+        let text = note as NSString
+        let inserting = Todos.inserting(lines, in: text, document: MarkdownParser.parse(text))
+        let result = text.replacingCharacters(in: inserting.range, with: inserting.replacement)
+        XCTAssertEqual(result.components(separatedBy: "\n")[safe: inserting.line]?.replacingOccurrences(of: "\r", with: ""), inserting.source)
+        return (result, inserting.line, inserting.source)
+    }
+
+    func testAnEmptyTodoIsATodo() throws {
+        let empty = try XCTUnwrap(Todos.open(in: "- [ ]").first)
+        XCTAssertEqual(empty.text, "")
+        let dated = try XCTUnwrap(Todos.open(in: "- [ ] 📅 2026-10-28").first)
+        XCTAssertEqual(dated.text, "")
+        XCTAssertEqual(dated.due, TodoDue(year: 2026, month: 10, day: 28))
+        XCTAssertEqual(Todos.replacingWords(in: "- [ ] 📅 2026-10-28", with: "Call the plumber"), "- [ ] Call the plumber 📅 2026-10-28")
+    }
+
+    func testATodoMovedIntoANoteGoesAfterItsLastChecklist() {
+        let butter = ["- [ ] Butter", "    - the salted one"]
+        // After the last to-do of the last checklist, with the lines under that one.
+        XCTAssertEqual(move(butter, into: "# Shop\n\n- [ ] Bread\n    - wholemeal\n\nNotes.\n").text,
+                       "# Shop\n\n- [ ] Bread\n    - wholemeal\n- [ ] Butter\n    - the salted one\n\nNotes.\n")
+        XCTAssertEqual(move(butter, into: "- [ ] A\n\nText\n\n- [x] B").text, "- [ ] A\n\nText\n\n- [x] B\n- [ ] Butter\n    - the salted one")
+        // A sub-to-do isn't a checklist of its own.
+        XCTAssertEqual(move(["- [ ] C"], into: "- [ ] A\n    - [ ] a\n").text, "- [ ] A\n    - [ ] a\n- [ ] C\n")
+        // With the checklist's bullet and the note's line endings.
+        XCTAssertEqual(move(["- [ ] C"], into: "* [ ] A\r\n* [ ] B\r\n").text, "* [ ] A\r\n* [ ] B\r\n* [ ] C\r\n")
+        XCTAssertEqual(move(["- [ ] C"], into: "* [ ] A\r\n").source, "* [ ] C")
+    }
+
+    func testATodoMovedIntoANoteWithoutAChecklistGoesAtItsEnd() {
+        XCTAssertEqual(move(["- [ ] C"], into: "# Plans\n\nSome words.\n").text, "# Plans\n\nSome words.\n\n- [ ] C\n")
+        XCTAssertEqual(move(["- [ ] C"], into: "# Plans\n\nSome words.\n\n").text, "# Plans\n\nSome words.\n\n- [ ] C\n")
+        XCTAssertEqual(move(["- [ ] C"], into: "Some words.").text, "Some words.\n\n- [ ] C")
+        XCTAssertEqual(move(["- [ ] C"], into: "Some words.").line, 2)
+        XCTAssertEqual(move(["- [ ] C"], into: "").text, "- [ ] C\n")
+        XCTAssertEqual(move(["- [ ] C"], into: "1. [ ] Numbered\n").text, "1. [ ] Numbered\n- [ ] C\n")
+    }
+
+    func testLinesAddedAtTheEndOfAFile() {
+        func add(_ lines: [String], to text: String) -> (String, Int) {
+            let adding = LooseTodos.adding(lines, to: text)
+            return (text + adding.text, adding.line)
+        }
+        XCTAssertTrue(add(["- [ ] A"], to: "") == ("- [ ] A\n", 0))
+        XCTAssertTrue(add(["- [ ] B"], to: "- [ ] A\n") == ("- [ ] A\n- [ ] B\n", 1))
+        XCTAssertTrue(add(["- [ ] B"], to: "- [ ] A") == ("- [ ] A\n- [ ] B\n", 1))
+        XCTAssertTrue(add(["- [ ] B"], to: "- [ ] A\r\n") == ("- [ ] A\r\n- [ ] B\r\n", 1))
+        XCTAssertTrue(add(["- [ ] C"], to: "- [ ] A\n\n") == ("- [ ] A\n\n- [ ] C\n", 2))
+    }
 }
