@@ -84,6 +84,20 @@ enum EditorStyle {
         NotificationCenter.default.post(name: .notebookTypographyChanged, object: nil)
     }
 
+    /// Runs `body` with the sizes Settings › Text gives, as if the system's text size were the standard one: a PDF or a
+    /// printout of a note doesn't change with the size of the text on the screen. Nothing else runs meanwhile.
+    static func unscaled<T>(_ body: () -> T) -> T {
+        let scale = textScale
+        guard scale != 1 else { return body() }
+        textScale = 1
+        makeFonts()
+        defer {
+            textScale = scale
+            makeFonts()
+        }
+        return body()
+    }
+
     /// As much as the system's text size scales body text; nil while it isn't known.
     private static func scale(for category: UIContentSizeCategory) -> CGFloat? {
         guard category != .unspecified else { return nil }

@@ -1,4 +1,5 @@
 #if DEBUG && os(iOS)
+import PDFKit
 import PencilKit
 import SwiftUI
 import UIKit
@@ -439,6 +440,15 @@ enum DebugRemote {
             log("cursorview caret \(position.map { view.caretRect(for: $0).integral } ?? .null): \(drawn.joined(separator: "; "))")
         case "views":
             if let window = editor.textView.window { log(describe(window, depth: 0, limit: Int(numbers.first ?? 6))) }
+        case "exportpdf":
+            // exportpdf <path>: the open note as Share › PDF and Print make it; its pages and the size of its text there.
+            Task {
+                guard let data = await NoteExporter.pdfData(for: editor, title: editor.titleText) else { return log("exportpdf failed") }
+                try? data.write(to: URL(fileURLWithPath: (argument as NSString).expandingTildeInPath))
+                let page = PDFDocument(data: data)?.page(at: 0)?.attributedString
+                let body = page.flatMap { text in (text.string as NSString).range(of: "\n").location < text.length - 1 ? text.attribute(.font, at: (text.string as NSString).range(of: "\n").location + 1, effectiveRange: nil) as? UIFont : nil }
+                log("exportpdf pages \(PDFDocument(data: data)?.pageCount ?? 0) text \(body?.pointSize ?? 0) on screen \(EditorStyle.bodySize)")
+            }
         case "drawing", "drawstroke", "drawinfo", "drawundo", "drawredo":
             log(editor.debugDrawing(command, argument))
         case "drawpolicy":
