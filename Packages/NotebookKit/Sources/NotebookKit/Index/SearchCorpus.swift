@@ -56,6 +56,8 @@ final class SearchCorpus: Sendable {
     private let names: [UInt8]
     /// Where each item's name starts in `names`, and one more as if a name followed the last.
     private let nameStarts: [Int]
+    /// The longest name's length in bytes: the room loose matching needs to go through any of them.
+    private let longestName: Int
     /// Newest first.
     let documents: [Document]
     /// Each document's folded text, as `documents` has them: what the threads of a search read, without touching the
@@ -120,6 +122,7 @@ final class SearchCorpus: Sendable {
         self.items = items
         self.names = names
         self.nameStarts = nameStarts
+        self.longestName = zip(nameStarts, nameStarts.dropFirst()).map { $1 - $0 - 1 }.max() ?? 0
         self.documents = documents.map(\.document)
         self.folds = self.documents.map(\.folded)
         self.kinds = items.map(\.kind)
@@ -151,6 +154,11 @@ final class SearchCorpus: Sendable {
         }
 
         var isOneWord: Bool { words.count == 1 }
+        /// How many letters it has, whatever their bytes, without the spaces.
+        var letterCount: Int { Self.letters(in: folded) }
+        static func letters(in text: String) -> Int { text.unicodeScalars.filter { !$0.properties.isWhitespace }.count }
+        /// From this many letters on, names and commands only a bit like it are listed too, last.
+        static let lettersForSimilar = 3
     }
 
     struct Limits: Sendable {
@@ -159,6 +167,8 @@ final class SearchCorpus: Sendable {
         var headings = 4
         var texts = 6
         var pictures = 4
+        /// Names that only match loosely, below everything else.
+        var others = 3
     }
 
     struct TextHit: Sendable {
@@ -185,19 +195,22 @@ final class SearchCorpus: Sendable {
         var texts: [TextHit] = []
         /// In pictures, scans and drawings.
         var pictures: [TextHit] = []
+        /// Files and folders whose names have the letters typed but not much like it: "kyo" in "Workout family notes".
+        var others: [Item] = []
         /// How many notes and files have the words in them, shown or not.
         var textCount = 0
 
-        var isEmpty: Bool { files.isEmpty && folders.isEmpty && headings.isEmpty && texts.isEmpty && pictures.isEmpty }
+        var isEmpty: Bool { files.isEmpty && folders.isEmpty && headings.isEmpty && texts.isEmpty && pictures.isEmpty && others.isEmpty }
     }
 
     /// Everything that matches, best first in each kind. `isCancelled` is asked as it goes, so a search for what was
     /// typed before stops as soon as there is a newer one.
     func search(_ query: Query, limits: Limits = Limits(), names namesOnly: Bool = false, isCancelled: @Sendable () -> Bool = { false }) -> Results {
         var results = Results()
-        let named = matchNames(query, files: limits.files, folders: limits.folders, isCancelled: isCancelled)
+        let named = matchNames(query, files: limits.files, folders: limits.folders, others: limits.others, isCancelled: isCancelled)
         results.files = named.files.map { items[$0] }
         results.folders = named.folders.map { items[$0] }
+        results.others = named.others.map { items[$0] }
         // A single letter is in nearly every note.
         if namesOnly || query.folded.utf8.count < 2 || isCancelled() { return results }
         results.headings = matchHeadings(query, limit: limits.headings).map { HeadingHit(item: items[headings[$0].item], heading: headings[$0]) }
@@ -220,15 +233,22 @@ final class SearchCorpus: Sendable {
         results.texts = texts
         results.pictures = pictures
         results.textCount = counted.count
+        // Listed for the words in it, a file isn't listed again for its name being a bit like them.
+        let listed = Set(texts.map(\.item.url))
+        results.others = named.others.filter { !listed.contains(items[$0].url) }.map { items[$0] }
         return results
     }
 
     // MARK: Names
 
-    /// Items whose names have every word, best first, as notes and files and as folders.
-    func matchNames(_ query: Query, files fileLimit: Int, folders folderLimit: Int, isCancelled: @Sendable () -> Bool = { false }) -> (files: [Int], folders: [Int]) {
+    /// Items whose names have every word, best first, as notes and files and as folders; when there is room left and
+    /// `loose`, those that have them loosely too, the good ones with them and up to `others` more that are only a bit
+    /// like them. Not loose, it is quick enough for the main thread, as links typed in a note need.
+    func matchNames(_ query: Query, files fileLimit: Int, folders folderLimit: Int, others otherLimit: Int = 0, loose: Bool = true,
+                    isCancelled: @Sendable () -> Bool = { false }) -> (files: [Int], folders: [Int], others: [Int]) {
         var files = Best(fileLimit)
         var folders = Best(folderLimit)
+        var others = Best(otherLimit)
         var seen = [Bool](repeating: false, count: items.count)
         func consider(_ index: Int, _ score: Int) {
             seen[index] = true
@@ -264,11 +284,22 @@ final class SearchCorpus: Sendable {
                 }
             }
         }
-        // A word's letters in order, "kytr" for "Kyoto trip", when nothing better fills the list.
-        if query.isOneWord, whole.count >= 2, files.items.count < fileLimit, !isCancelled() {
-            for index in subsequenceMatches(whole, skipping: seen, isCancelled: isCancelled) { consider(index, 10) }
+        // Names with the words loosely, when nothing better fills the lists: their letters in order, "kytr" for "Kyoto
+        // trip", or with a letter wrong, "ryokna" for "ryokan". Those only a bit like them go last, also for a note.
+        let letters = query.letterCount
+        if loose, letters >= 2, files.items.count < fileLimit, !isCancelled() {
+            for (index, quality) in looseMatches(query, skipping: seen, isCancelled: isCancelled) {
+                let score = FuzzyMatch.score(quality)
+                if quality >= FuzzyMatch.good {
+                    consider(index, score)
+                } else if letters >= Query.lettersForSimilar, others.takes(score) {
+                    // Two letters are in order in most names.
+                    let item = items[index]
+                    others.add(Candidate(score: score, modified: item.modified, path: item.url.path, index: index))
+                }
+            }
         }
-        return (files.items.map(\.index), folders.items.map(\.index))
+        return (files.items.map(\.index), folders.items.map(\.index), others.items.map(\.index))
     }
 
     /// How well a name matches, from where its first word was found in it: the whole query as the name (100), at its
@@ -295,42 +326,105 @@ final class SearchCorpus: Sendable {
         return 30
     }
 
-    /// Items whose names have the letters of `query` in order, found on every core. The threads read the names
-    /// through pointers taken once: in a Debug build, every use of a shared array from many threads at once would
+    /// Items whose names have every word loosely, with how well (`FuzzyMatch`), found on every core. A word with
+    /// letters wrong is looked for first, through all names at once, only where a word of a name starts with its first
+    /// letter; then every name not found already gets the best of that and its letters in order. The threads read the
+    /// names through pointers taken once: in a Debug build, every use of a shared array from many threads at once would
     /// fight over its reference count.
-    private func subsequenceMatches(_ letters: [UInt8], skipping seen: [Bool], isCancelled: @Sendable () -> Bool) -> [Int] {
+    private func looseMatches(_ query: Query, skipping seen: [Bool], isCancelled: @Sendable () -> Bool) -> [(index: Int, quality: Double)] {
         let chunks = Self.chunks(items.count)
-        let found = Mutex<[Int]>([])
+        let found = Mutex<[(index: Int, quality: Double)]>([])
         let stop = Atomic<Bool>(false)
+        // The words one after the other, and where each ends.
+        var letters: [UInt8] = []
+        var ends: [Int] = []
+        for word in query.words {
+            letters += word.utf8
+            ends.append(letters.count)
+        }
+        // For each word and item, the fewest letters wrong for the word to start a word of its name; 0 for none.
+        var typos = [UInt8](repeating: 0, count: ends.count * items.count)
+        let typed = query.words.map { word in
+            var word = word
+            return word.withUTF8 { FuzzyMatch.Typed($0) }
+        }
+        let count = items.count, longest = longestName
+        // With one word, a name that has it as it is was found by it already; with more, it may have some of them.
+        let mayHaveWords = !query.isOneWord
         names.withUnsafeBufferPointer { buffer in
             nameStarts.withUnsafeBufferPointer { starts in
                 seen.withUnsafeBufferPointer { seen in
                     letters.withUnsafeBufferPointer { letters in
-                        guard let base = buffer.baseAddress else { return }
-                        DispatchQueue.concurrentPerform(iterations: chunks.count) { chunk in
-                            var mine: [Int] = []
-                            let range = chunks[chunk]
-                            var index = range.lowerBound
-                            while index < range.upperBound {
-                                if index & 255 == 0, stop.load(ordering: .relaxed) || isCancelled() {
-                                    stop.store(true, ordering: .relaxed)
-                                    return
+                        ends.withUnsafeBufferPointer { ends in
+                            typos.withUnsafeMutableBufferPointer { typos in
+                                guard let base = buffer.baseAddress, let letterBase = letters.baseAddress, let typoBase = typos.baseAddress else { return }
+                                func word(_ number: Int) -> UnsafeBufferPointer<UInt8> {
+                                    let from = number == 0 ? 0 : ends[number - 1]
+                                    return UnsafeBufferPointer(start: letterBase + from, count: ends[number] - from)
                                 }
-                                if !seen[index] {
-                                    var position = starts[index]
-                                    let end = starts[index + 1] - 1
-                                    var next = 0
-                                    while next < letters.count, position < end,
-                                          let found = memchr(base + position, Int32(letters[next]), end - position) {
-                                        position = UnsafeRawPointer(found) - UnsafeRawPointer(base) + 1
-                                        next += 1
+                                for number in 0..<ends.count {
+                                    let allowed = typed[number].allowed
+                                    guard allowed > 0, let lead = typed[number].first.first else { continue }
+                                    let row = typoBase + number * count
+                                    typed[number].letters.withUnsafeBufferPointer { wordLetters in
+                                        typed[number].first.withUnsafeBufferPointer { first in
+                                            DispatchQueue.concurrentPerform(iterations: chunks.count) { chunk in
+                                                let scratch = FuzzyMatch.Scratch(length: longest)
+                                                defer { scratch.free() }
+                                                let range = chunks[chunk]
+                                                var item = range.lowerBound
+                                                var position = starts[range.lowerBound]
+                                                let end = starts[range.upperBound]
+                                                var hits = 0
+                                                while position < end, let at = memchr(base + position, Int32(lead), end - position) {
+                                                    let offset = UnsafeRawPointer(at) - UnsafeRawPointer(base)
+                                                    position = offset + 1
+                                                    while starts[item + 1] <= offset { item += 1 }
+                                                    if hits & 1023 == 0, stop.load(ordering: .relaxed) || isCancelled() {
+                                                        stop.store(true, ordering: .relaxed)
+                                                        return
+                                                    }
+                                                    hits += 1
+                                                    let nameEnd = starts[item + 1] - 1
+                                                    guard !seen[item], FuzzyMatch.couldBe(first, at: offset, in: base, length: nameEnd),
+                                                          let wrong = FuzzyMatch.typos(wordLetters, allowed: allowed, at: base + offset,
+                                                                                        length: nameEnd - offset, scratch) else { continue }
+                                                    if row[item] == 0 || Int(row[item]) > wrong { row[item] = UInt8(wrong) }
+                                                }
+                                            }
+                                        }
                                     }
-                                    if next == letters.count { mine.append(index) }
                                 }
-                                index += 1
+                                guard !stop.load(ordering: .relaxed) else { return }
+                                DispatchQueue.concurrentPerform(iterations: chunks.count) { chunk in
+                                    let scratch = FuzzyMatch.Scratch(length: longest)
+                                    defer { scratch.free() }
+                                    var mine: [(index: Int, quality: Double)] = []
+                                    let range = chunks[chunk]
+                                    var index = range.lowerBound
+                                    next: while index < range.upperBound {
+                                        if (index - range.lowerBound) & 255 == 0, stop.load(ordering: .relaxed) || isCancelled() {
+                                            stop.store(true, ordering: .relaxed)
+                                            return
+                                        }
+                                        defer { index += 1 }
+                                        if seen[index] { continue }
+                                        let start = starts[index]
+                                        let name = UnsafeBufferPointer(start: base + start, count: starts[index + 1] - 1 - start)
+                                        var worst = 1.0
+                                        for number in 0..<ends.count {
+                                            let word = word(number)
+                                            if mayHaveWords, let wordBase = word.baseAddress, word.count <= name.count,
+                                               memmem(base + start, name.count, wordBase, word.count) != nil { continue }
+                                            guard let quality = FuzzyMatch.quality(word, in: name, typos: Int(typoBase[number * count + index]), scratch) else { continue next }
+                                            if quality < worst { worst = quality }
+                                        }
+                                        mine.append((index, worst))
+                                    }
+                                    let result = mine
+                                    found.withLock { $0 += result }
+                                }
                             }
-                            let result = mine
-                            found.withLock { $0 += result }
                         }
                     }
                 }
@@ -339,12 +433,13 @@ final class SearchCorpus: Sendable {
         return found.withLock { $0 }
     }
 
-    /// How well a name matches: the whole query as the name (100), at its start (80), at a word's start (60), inside
-    /// it (40), or every word of it somewhere in it (30).
+    /// How well a folded name matches, as search ranks names: the whole query as the name (100), at its start (80), at
+    /// a word's start (60), inside it (40), every word of it somewhere in it (30), or loosely (below that, from
+    /// `FuzzyMatch.goodScore` a good match).
     static func score(_ name: String, _ query: Query) -> Int? {
-        if let score = SearchIndex.score(name, query.folded), score > 10 { return score }
-        guard !query.isOneWord else { return nil }
-        return query.words.allSatisfy { SearchIndex.offset(of: $0, in: name) != nil } ? 30 : nil
+        if let score = SearchIndex.score(name, query.folded), score > FuzzyMatch.score(1) { return score }
+        if !query.isOneWord, query.words.allSatisfy({ SearchIndex.offset(of: $0, in: name) != nil }) { return 30 }
+        return FuzzyMatch.quality(query.words, in: name).map(FuzzyMatch.score)
     }
 
     // MARK: Headings
@@ -378,7 +473,7 @@ final class SearchCorpus: Sendable {
 
     /// The documents with every word in them, on every core: those with the words together first (for more than one
     /// word), each newest first. The threads read the texts and the words through pointers taken once, as
-    /// `subsequenceMatches` does.
+    /// `looseMatches` does.
     func matchDocuments(_ query: Query, isCancelled: @Sendable () -> Bool) -> [Int] {
         guard !documents.isEmpty else { return [] }
         let chunks = Self.chunks(documents.count)

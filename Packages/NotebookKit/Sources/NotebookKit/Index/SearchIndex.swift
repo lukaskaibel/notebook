@@ -943,14 +943,7 @@ public final class SearchIndex {
             let before = name.utf8[name.utf8.index(name.utf8.startIndex, offsetBy: offset - 1)]
             return before == UInt8(ascii: " ") || before == UInt8(ascii: "-") || before == UInt8(ascii: "_") ? 60 : 40
         }
-        var letters = name.unicodeScalars.makeIterator()
-        for wanted in query.unicodeScalars {
-            while true {
-                guard let letter = letters.next() else { return nil }
-                if letter == wanted { break }
-            }
-        }
-        return 10
+        return FuzzyMatch.quality([query], in: name).map(FuzzyMatch.score)
     }
 
     /// Where `query` is in `text`, in bytes. Both are folded alike, so their bytes match where their letters do; this
@@ -972,7 +965,7 @@ public final class SearchIndex {
         let current = note?.standardizedFileURL.path
         let candidates: [SearchCorpus.Item]
         if let parsed = SearchCorpus.Query(query) {
-            candidates = corpus.matchNames(parsed, files: 8, folders: 0).files.map { corpus.items[$0] }.filter { $0.url.path != current }.prefix(7).map { $0 }
+            candidates = corpus.matchNames(parsed, files: 8, folders: 0, loose: false).files.map { corpus.items[$0] }.filter { $0.url.path != current }.prefix(7).map { $0 }
         } else {
             var newest = SearchCorpus.Best(6)
             for (index, item) in corpus.items.enumerated() where item.kind == .note && item.url.path != current {

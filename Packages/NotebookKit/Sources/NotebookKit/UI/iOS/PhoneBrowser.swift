@@ -288,7 +288,7 @@ struct HomeScreen: View {
 
     /// Return opens the best match, as on the Mac.
     private func submitSearch() {
-        guard let first = workspace.searchSession.sections.first?.items.first else { return }
+        guard let first = SearchSection.firstToOpen(in: workspace.searchSession.sections) else { return }
         open(first.result)
     }
 }
@@ -360,7 +360,7 @@ struct FolderScreen: View {
         .searchable(text: $query, isPresented: $isSearching, prompt: "Search")
         .onChange(of: query, initial: true) { _, query in workspace.searchSession.update(query) }
         .onSubmit(of: .search) {
-            if let first = workspace.searchSession.sections.first?.items.first { open(first.result) }
+            if let first = SearchSection.firstToOpen(in: workspace.searchSession.sections) { open(first.result) }
         }
         .refreshable { await workspace.readAgain(page.url) }
         #if DEBUG

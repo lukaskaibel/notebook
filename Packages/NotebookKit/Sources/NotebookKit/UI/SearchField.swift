@@ -58,7 +58,7 @@ final class SearchController: NSObject, NSTextSuggestionsDelegate, NSSearchField
     private func answer(_ sections: [SearchSection]) {
         // Only while you are in the field: files changing later mustn't bring the menu back.
         guard let respond, session.query == field.stringValue, field.currentEditor() != nil else { return }
-        var response = ItemResponse(itemSections: Self.menuSections(sections))
+        var response = ItemResponse(itemSections: Self.menuSections(SearchSection.highlightingWhatReturnOpens(sections)))
         response.preferredHighlight = .firstSelectableItem
         respond(response)
     }
@@ -129,7 +129,7 @@ final class SearchController: NSObject, NSTextSuggestionsDelegate, NSSearchField
     /// Return with no result chosen opens the best one, as the first suggestion would.
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
         if commandSelector == #selector(NSResponder.insertNewline(_:)),
-           let first = session.sections.first(where: { !$0.items.isEmpty })?.items.first {
+           let first = SearchSection.firstToOpen(in: session.sections) {
             run(first.result)
             return true
         }
