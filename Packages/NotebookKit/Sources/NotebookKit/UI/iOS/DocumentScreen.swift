@@ -244,6 +244,8 @@ struct FormatMenu: View {
 
     var body: some View {
         Button {
+            // As Attach does: in a note you haven't put the caret in, the styles are for its last line.
+            editor.placeCaretForToolbar()
             editor.beginEditing()
             isShown = true
         } label: {
@@ -369,8 +371,9 @@ extension EditorController {
         if let command { perform(command) }
     }
 
-    /// The caret is somewhere you put it, or Back took you to: it isn't still at the start, where a note opens.
-    var hasPlacedCaret: Bool { isFocused || selection != NSRange(location: 0, length: 0) }
+    /// The caret is somewhere you put it, also at the very start, or where Back took you: not just where the note
+    /// opened.
+    var hasPlacedCaret: Bool { isFocused || caretWasPlaced }
 
     /// What a toolbar button adds goes at the end of a note you haven't put the caret in, as in Notes: a picture
     /// from Attach, say, rather than above the note's first line.

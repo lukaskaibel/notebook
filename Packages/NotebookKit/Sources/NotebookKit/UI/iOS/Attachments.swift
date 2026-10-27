@@ -85,6 +85,8 @@ final class AttachmentPicker: NSObject, PHPickerViewControllerDelegate, UIImageP
 
     private func insert(_ images: [UIImage]) {
         guard let editor, editor.loadCount == note, !images.isEmpty else { return }
+        // Only now: cancelled, the picker leaves the caret where it was.
+        editor.placeCaretForToolbar()
         editor.makeTextFirstResponder()
         editor.insertPictures(images)
     }
@@ -147,6 +149,7 @@ final class AttachmentPicker: NSObject, PHPickerViewControllerDelegate, UIImageP
     nonisolated func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         Task { @MainActor in
             guard let editor, editor.loadCount == note else { return }
+            editor.placeCaretForToolbar()
             editor.makeTextFirstResponder()
             editor.insertFiles(urls)
         }
@@ -170,12 +173,7 @@ struct AttachmentMenu: View {
     var body: some View {
         Menu {
             ForEach(AttachmentSource.available) { source in
-                Button {
-                    editor.placeCaretForToolbar()
-                    AttachmentPicker.shared.present(source, for: editor)
-                } label: {
-                    Label(source.name, systemImage: source.symbol)
-                }
+                Button { AttachmentPicker.shared.present(source, for: editor) } label: { Label(source.name, systemImage: source.symbol) }
             }
         } label: {
             Label("Attach", systemImage: "paperclip")
