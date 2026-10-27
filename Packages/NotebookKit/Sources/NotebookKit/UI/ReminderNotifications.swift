@@ -134,7 +134,8 @@ final class ReminderNotifications: NSObject, UNUserNotificationCenterDelegate {
     /// The to-dos with a reminder: their notifications, soonest first, as many as can wait at once. Those of to-dos
     /// changed or done since go, the ones waiting, and the ones shown unless the to-do is still open (`open`).
     @discardableResult
-    func scheduleTodos(_ jobs: [TodoJob], open: Set<String>) -> Task<Void, Never>? {
+    /// `keeping`: a file whose to-dos couldn't be read; the notifications of its to-dos stay as they are.
+    func scheduleTodos(_ jobs: [TodoJob], open: Set<String>, keeping: String? = nil) -> Task<Void, Never>? {
         guard isActive else { return nil }
         let previous = last
         let task = Task.detached(priority: .utility) {
@@ -143,13 +144,21 @@ final class ReminderNotifications: NSObject, UNUserNotificationCenterDelegate {
             let now = Date()
             let watchesPlaces = await Self.watchesPlaces
             let timed = jobs.filter { ($0.date ?? .distantPast) > now }.sorted { $0.date! < $1.date! }.prefix(Self.todoLimit)
-            let pending = Set(await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix(Self.todoPrefix) })
+            let requests = await center.pendingNotificationRequests().filter { $0.identifier.hasPrefix(Self.todoPrefix) }
+            let pending = Set(requests.map(\.identifier))
+            func isKept(_ content: UNNotificationContent) -> Bool {
+                guard let keeping, let path = content.userInfo["path"] as? String else { return false }
+                return HiddenFolders.withoutPrivate(path) == HiddenFolders.withoutPrivate(keeping)
+            }
+            let kept = Set(requests.filter { isKept($0.content) }.map(\.identifier))
             let fired = Self.firedPlaces(prefix: Self.todoPrefix, pending: pending)
             let placed = watchesPlaces ? Array(jobs.filter { $0.place?.hasCoordinates == true && !fired.contains($0.identifier + ".place") }.prefix(Self.placeLimit)) : []
             let wanted = Set(timed.map(\.identifier) + placed.map { $0.identifier + ".place" })
-            center.removePendingNotificationRequests(withIdentifiers: Array(pending.subtracting(wanted)))
-            let shown = await center.deliveredNotifications().map(\.request.identifier).filter { $0.hasPrefix(Self.todoPrefix) }
-            center.removeDeliveredNotifications(withIdentifiers: shown.filter { !open.contains($0.replacingOccurrences(of: ".place", with: "")) })
+            center.removePendingNotificationRequests(withIdentifiers: Array(pending.subtracting(wanted).subtracting(kept)))
+            let shown = await center.deliveredNotifications().map(\.request).filter { $0.identifier.hasPrefix(Self.todoPrefix) }
+            center.removeDeliveredNotifications(withIdentifiers: shown.filter { request in
+                !open.contains(request.identifier.replacingOccurrences(of: ".place", with: "")) && !isKept(request.content)
+            }.map(\.identifier))
             for job in timed where !pending.contains(job.identifier) {
                 try? await center.add(UNNotificationRequest(identifier: job.identifier, content: Self.content(for: job, place: false), trigger: Self.trigger(at: job.date!)))
             }

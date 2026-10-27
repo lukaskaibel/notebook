@@ -64,6 +64,7 @@ public final class Workspace: NSObject {
     #endif
     /// The last change to a to-do's file, which the next waits for, and what to-dos' lines became (`current(_:)`).
     @ObservationIgnored var lastTodoWrite: Task<Void, Never>?
+    @ObservationIgnored var todoWritesPending = 0
     /// The to-do being edited in To-dos, whose words are written with the notes when the app goes away.
     @ObservationIgnored weak var todoEditing: TodoEditing?
     @ObservationIgnored var todoRewrites: [String: TodoReference] = [:]
@@ -289,6 +290,7 @@ public final class Workspace: NSObject {
         }
         todos.onChange = { [weak self] in self?.todosChanged() }
         looseTodos.onRead = { [weak self] in self?.todos.update(loose: $0) }
+        looseTodos.onUnread = { [weak self] in self?.todos.looseUnread() }
         index.onRefreshed = { [weak self] in self?.refreshLinks() }
         index.onIndexed = { [weak self] entries in self?.recognizer.consider(entries) }
         #if os(macOS)
@@ -2176,7 +2178,13 @@ public final class Workspace: NSObject {
             hasQuit = true
         }
         editor.saveDrawingsNow(waiting: quitting)
-        todoEditing?.commit(now: quitting)
+        // A to-do just added and still without words goes, as it would once done; quitting waits for it.
+        if quitting, let editing = todoEditing, editing.added != nil, editing.isEmpty {
+            editing.end()
+            dropNewTodo(editing.current)
+        } else {
+            todoEditing?.commit(now: quitting)
+        }
         #if os(macOS)
         FileWindows.shared.saveAll(quitting: quitting)
         #endif

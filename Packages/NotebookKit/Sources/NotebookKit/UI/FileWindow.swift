@@ -337,12 +337,16 @@ public final class NotebookAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Quitting waits for notes still being written, off the main thread, which keeps going meanwhile: a note open in
-    /// two windows hears there when the other one wrote it.
+    /// two windows hears there when the other one wrote it. So it does for changes to to-dos, such as Move to Note….
     public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         MainActor.assumeIsolated {
-            Workspace.shared.saveAll(quitting: true)
-            guard NoteDocument.isWriting else { return .terminateNow }
-            NoteDocument.whenAllWritten { NSApp.reply(toApplicationShouldTerminate: true) }
+            let workspace = Workspace.shared
+            workspace.saveAll(quitting: true)
+            guard NoteDocument.isWriting || workspace.isWritingTodos else { return .terminateNow }
+            Task { @MainActor in
+                await workspace.todosWritten()
+                NoteDocument.whenAllWritten { NSApp.reply(toApplicationShouldTerminate: true) }
+            }
             return .terminateLater
         }
     }

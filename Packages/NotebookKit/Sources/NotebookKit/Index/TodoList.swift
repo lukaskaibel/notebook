@@ -18,6 +18,8 @@ final class TodoList {
         var isLoose = false
 
         var id: String { url.path + "\u{0}\(todo.line)\u{0}" + todo.source }
+        /// In no note and without words or lines under it: just added, or left so.
+        var isNewAndEmpty: Bool { isLoose && todo.text.isEmpty && todo.lines.isEmpty }
         var reference: TodoReference { TodoReference(url: url, line: todo.line, source: todo.source) }
     }
 
@@ -38,8 +40,10 @@ final class TodoList {
     /// The to-dos in no note as `items` has them: the reading of them last finished.
     @ObservationIgnored private var shownLoose: LooseTodos.Snapshot?
     @ObservationIgnored private var isWanted = false
-    /// The to-dos in no note are read too: ready only once they have been.
+    /// The to-dos in no note are read too: ready only once they have been, or couldn't be (`looseUnread`).
     @ObservationIgnored var waitsForLoose = false
+    /// The to-dos in no note couldn't be read yet: their notifications are left as they are until they are.
+    @ObservationIgnored private(set) var isLooseUnread = false
 
     private struct Cached: Sendable {
         var modified: Date?
@@ -58,8 +62,18 @@ final class TodoList {
         readNext()
     }
 
+    /// The to-dos in no note couldn't be read, or not yet: the others don't wait for them.
+    func looseUnread() {
+        guard loose == nil, !isLooseUnread else { return }
+        isLooseUnread = true
+        isWanted = true
+        guard task == nil else { return }
+        readNext()
+    }
+
     /// The to-dos in no note were read again.
     func update(loose: LooseTodos.Snapshot) {
+        isLooseUnread = false
         self.loose = loose
         isWanted = true
         guard task == nil else { return }
@@ -72,7 +86,7 @@ final class TodoList {
         guard isWanted else { return }
         isWanted = false
         let cache = self.cache
-        let ready = buildDone && (!waitsForLoose || loose != nil)
+        let ready = buildDone && (!waitsForLoose || loose != nil || isLooseUnread)
         let entries = entries, hidden = hidden, loose = loose
         task = Task.detached(priority: .utility) { [weak self] in
             let (items, fresh) = Self.read(entries, hidden: hidden, loose: loose, cache: cache)

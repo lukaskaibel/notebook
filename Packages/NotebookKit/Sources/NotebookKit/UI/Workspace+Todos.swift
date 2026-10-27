@@ -515,9 +515,7 @@ extension Workspace {
     func writeTodoChange(in url: URL, _ write: @escaping @Sendable () -> TodoChangeOutcome, failed: @escaping () -> Void,
                          outcome: (@MainActor (TodoChangeOutcome) -> Void)? = nil,
                          whenWritten: (@MainActor () async -> Void)?) -> Task<Void, Never> {
-        let previous = lastTodoWrite
-        let task = Task { [weak self] in
-            await previous?.value
+        chainTodoWrite { [weak self] in
             let written = await Task.detached(priority: .userInitiated) { write() }.value
             guard let self else {
                 outcome?(written)
@@ -536,8 +534,35 @@ extension Workspace {
             outcome?(.written)
             await whenWritten?()
         }
+    }
+
+    /// Writes to-dos' files after what was asked for before (`work` does the writing off the main thread). Quitting
+    /// waits for it (`isWritingTodos`), and on iPhone and iPad going to the background doesn't stop it halfway.
+    @discardableResult
+    func chainTodoWrite(_ work: @escaping @MainActor () async -> Void) -> Task<Void, Never> {
+        let previous = lastTodoWrite
+        todoWritesPending += 1
+        #if os(iOS)
+        let background = BackgroundTask(named: "Writing to-dos")
+        #endif
+        let task = Task { [weak self] in
+            await previous?.value
+            await work()
+            self?.todoWritesPending -= 1
+            #if os(iOS)
+            background.end()
+            #endif
+        }
         lastTodoWrite = task
         return task
+    }
+
+    /// Whether a change to to-dos' files is still being written: quitting waits for it.
+    var isWritingTodos: Bool { todoWritesPending > 0 }
+
+    /// Waits until the changes to to-dos' files asked for so far are written.
+    func todosWritten() async {
+        await lastTodoWrite?.value
     }
 
     // MARK: - Deleting a to-do
@@ -685,13 +710,16 @@ extension Workspace {
         if temporaryLocations, UserDefaults.standard.bool(forKey: "NotebookDemo") { return nil }
         #endif
         let jobs = withoutWidgetTicks(todoJobs())
-        return ReminderNotifications.shared.scheduleTodos(jobs, open: Set(jobs.map(\.identifier)))
+        // The to-dos in no note not read yet: their notifications, which To-dos doesn't know, stay as they are.
+        let unread = todos.isLooseUnread ? looseTodos.url?.path : nil
+        return ReminderNotifications.shared.scheduleTodos(jobs, open: Set(jobs.map(\.identifier)), keeping: unread)
     }
 
     /// What the notifications of the to-dos with a reminder are made from.
     func todoJobs() -> [ReminderNotifications.TodoJob] {
         var seen: [String: Int] = [:]
-        return todos.items.filter(\.todo.hasReminder).map { item in
+        // One in no note without words yet is being added: it reminds once it has them.
+        return todos.items.filter { $0.todo.hasReminder && !$0.isNewAndEmpty }.map { item in
             let todo = item.todo
             let notes = todo.notes.joined(separator: "\n")
             // The same words twice in a note are two to-dos.
@@ -775,3 +803,23 @@ struct TodoTick {
         func set(_ value: Bool) { lock.withLock { wrote = value } }
     }
 }
+
+#if os(iOS)
+/// Time to finish something once the app goes to the background, for as long as the system gives it.
+@MainActor
+final class BackgroundTask {
+    private var identifier = UIBackgroundTaskIdentifier.invalid
+
+    init(named name: String) {
+        identifier = UIApplication.shared.beginBackgroundTask(withName: name) { [weak self] in
+            MainActor.assumeIsolated { self?.end() }
+        }
+    }
+
+    func end() {
+        guard identifier != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(identifier)
+        identifier = .invalid
+    }
+}
+#endif

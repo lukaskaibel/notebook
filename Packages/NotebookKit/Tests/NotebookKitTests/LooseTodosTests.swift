@@ -211,8 +211,111 @@ final class LooseTodosTests: XCTestCase {
         try await until { workspace.note?.isLoaded == true }
         let rice = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Rice" })
         await workspace.moveTodo(rice.reference, toNote: trip)?.value
-        XCTAssertEqual(workspace.editor.text, "- [ ] Pack the adapter\n- [ ] Rice\n")
+        // Written into its file, which the note open takes in as a change from elsewhere.
+        try await until { workspace.editor.text == "- [ ] Pack the adapter\n- [ ] Rice\n" }
         XCTAssertEqual(loose(workspace), "")
+    }
+
+    func testUndoStraightAfterMovingATodo() async throws {
+        let workspace = try await makeWorkspace(loose: "- [ ] Call the plumber\n- [ ] Butter\n")
+        let butter = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Butter" })
+        let original = try String(contentsOf: groceries, encoding: .utf8)
+        workspace.moveTodo(butter.reference, toNote: groceries)
+        // Undo before the move is written waits for it.
+        try await Task.sleep(for: .milliseconds(30))
+        let manager = workspace.fileUndoManager
+        XCTAssertEqual(manager.undoActionName, "Move to Note")
+        manager.undo()
+        await workspace.todosWritten()
+        XCTAssertEqual(loose(workspace), "- [ ] Call the plumber\n- [ ] Butter\n")
+        XCTAssertEqual(try String(contentsOf: groceries, encoding: .utf8), original)
+        XCTAssertTrue(manager.canRedo)
+        manager.redo()
+        await workspace.todosWritten()
+        XCTAssertEqual(loose(workspace), "- [ ] Call the plumber\n")
+        XCTAssertTrue(try String(contentsOf: groceries, encoding: .utf8).contains("- [ ] Butter\n"))
+    }
+
+    func testAMoveStoppedHalfwayLeavesTheTodoInBoth() async throws {
+        let workspace = try await makeWorkspace(loose: "- [ ] Butter\n")
+        let butter = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Butter" })
+        // Those in no note can't be written: it goes into the note first, and stays where it was too.
+        let folder = try XCTUnwrap(workspace.looseTodos.url).deletingLastPathComponent()
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: folder.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.path) }
+        await workspace.moveTodo(butter.reference, toNote: groceries)?.value
+        XCTAssertTrue(try String(contentsOf: groceries, encoding: .utf8).contains("- [ ] Butter\n"))
+        XCTAssertEqual(loose(workspace), "- [ ] Butter\n")
+        // Undo takes it out of the note again, where it is twice.
+        workspace.fileUndoManager.undo()
+        await workspace.todosWritten()
+        XCTAssertFalse(try String(contentsOf: groceries, encoding: .utf8).contains("Butter"))
+        XCTAssertEqual(loose(workspace), "- [ ] Butter\n")
+    }
+
+    #if os(macOS)
+    /// A note open in a window of its own takes the move in from its file: Undo is To-dos', and the note's window has
+    /// none that would take only half of it back.
+    func testMovingATodoIntoANoteOpenInItsOwnWindow() async throws {
+        let workspace = try await makeWorkspace(loose: "- [ ] Rice\n")
+        workspace.showTodos()
+        FileWindows.shared.open(trip)
+        let controller = try XCTUnwrap(FileWindows.shared.windows.compactMap { $0.windowController as? FileWindowController }.first { FileNode.samePath($0.url, trip) })
+        defer { controller.window?.close() }
+        try await until { controller.isLoaded }
+        let rice = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Rice" })
+        await workspace.moveTodo(rice.reference, toNote: trip)?.value
+        try await until { controller.editor.text == "- [ ] Pack the adapter\n- [ ] Rice\n" }
+        XCTAssertNotEqual(controller.window?.undoManager?.undoActionName, "Move to Note")
+        try await Task.sleep(for: .milliseconds(30))
+        workspace.fileUndoManager.undo()
+        await workspace.todosWritten()
+        try await until { controller.editor.text == "- [ ] Pack the adapter\n" }
+        XCTAssertEqual(loose(workspace), "- [ ] Rice\n")
+    }
+    #endif
+
+    func testAnUnreadableFileOfTodosDoesntHoldUpTheOthers() async throws {
+        UserDefaults.standard.set(library.path, forKey: "NotebookLibrary")
+        let workspace = Workspace()
+        let url = await workspace.looseTodos.fileURL()
+        try "- [ ] Call the plumber ⏰ 2099-01-02 09:30\n".write(to: url, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: url.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path) }
+        workspace.start()
+        // Ready without it: the notes' to-dos remind, and its own notifications are left as they are.
+        try await until { !workspace.index.isBuilding && workspace.todos.isReady }
+        XCTAssertTrue(workspace.todos.isLooseUnread)
+        XCTAssertTrue(workspace.todos.items.contains { $0.todo.text == "Bread" })
+        // Read once it can be.
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path)
+        workspace.looseTodos.read()
+        try await until { workspace.todos.items.contains { $0.todo.text == "Call the plumber" } }
+        XCTAssertFalse(workspace.todos.isLooseUnread)
+    }
+
+    func testANewTodoWithoutWordsHasNoNotificationAndGoesAsTheAppQuits() async throws {
+        let workspace = try await makeWorkspace(loose: "- [ ] Call the plumber\n")
+        let added = try XCTUnwrap(workspace.addTodo(due: Calendar.current.startOfDay(for: .now).addingTimeInterval(86_400)))
+        XCTAssertTrue(workspace.todos.items.contains { $0.id == added.id })
+        XCTAssertFalse(workspace.todoJobs().contains { $0.path == added.url.path }, "no notification for it")
+        let editing = TodoEditing(workspace: workspace, item: added)
+        editing.added = .tomorrow
+        workspace.todoEditing = editing
+        workspace.saveAll(quitting: true)
+        XCTAssertTrue(workspace.isWritingTodos, "quitting waits for it")
+        await workspace.todosWritten()
+        XCTAssertEqual(loose(workspace), "- [ ] Call the plumber\n")
+    }
+
+    func testTheOpenTodosOnlyAConflictingVersionHas() {
+        let here = "- [ ] Call the plumber\n- [x] Buy milk ✅ 2026-10-27\n"
+        let there = "- [ ] Call the plumber\n- [ ] Buy milk\n- [ ] Book a table\n    - for four\n- [x] Done there\n"
+        // Book a table is only there; Buy milk was ticked here, and done ones stay done.
+        XCTAssertEqual(LooseTodos.missingTodos(in: here, from: [there]), ["- [ ] Book a table", "    - for four"])
+        XCTAssertEqual(LooseTodos.missingTodos(in: here, from: [there, "- [ ] Book a table\n- [ ] Third\n"]),
+                       ["- [ ] Book a table", "    - for four", "- [ ] Third"])
+        XCTAssertEqual(LooseTodos.missingTodos(in: there, from: [here]), [])
     }
 
     func testANoteThatIsGoneKeepsTheTodo() async throws {

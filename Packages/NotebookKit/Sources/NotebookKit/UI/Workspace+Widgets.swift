@@ -22,7 +22,7 @@ extension Workspace {
         let end = calendar.date(byAdding: .day, value: 8, to: start) ?? .distantFuture
         let notified = Dictionary(todoJobs().map { ($0.path + "\u{0}\($0.line)\u{0}" + $0.source, $0.identifier) }) { first, _ in first }
         var rows: [WidgetData.TodoRow] = []
-        for item in todos.items {
+        for item in todos.items where !item.isNewAndEmpty {
             guard let due = item.todo.due, due.date(in: calendar) < end else { continue }
             rows.append(WidgetData.TodoRow(kind: .todo, text: item.todo.text, path: item.url.path, note: item.note,
                                            line: item.todo.line, source: item.todo.source, due: due.date(in: calendar), hasTime: due.hasTime,

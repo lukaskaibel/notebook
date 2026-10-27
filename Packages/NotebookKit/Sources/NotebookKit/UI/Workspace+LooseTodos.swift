@@ -48,8 +48,10 @@ extension Workspace {
     // MARK: - Moving into a note
 
     /// Moves a to-do in no note, with the lines under it, into a note: after the last to-do of its last checklist, or
-    /// at its end (`Todos.inserting`), in the editor that shows the note or else in its file. To-dos shows it under
-    /// the note's name at once, and one Undo puts it back among those in no note.
+    /// at its end (`Todos.inserting`). The note's file is written, which a note open in an editor takes in as it takes
+    /// a change from another app, so the move has one Undo, To-dos'. It goes into the note first and only then out of
+    /// those in no note: stopped halfway (the app quits, the note can't be written) it is in one or both, never neither.
+    /// To-dos shows it under the note's name at once.
     @discardableResult
     func moveTodo(_ todo: TodoReference, toNote note: URL) -> Task<Void, Never>? {
         let todo = current(todo)
@@ -71,40 +73,65 @@ extension Workspace {
         todos.patch(todo, to: nil, under: nil)
         todos.add(moved)
 
-        let removed = TodoRemoval.Kept()
-        let placed = TodoPlacement()
-        let undo = keepTodoChangeForUndo("Move to Note") { [weak self] in
-            self?.moveBack(from: note, placed: placed, removed: removed, to: todo.url)
-        }
+        let move = TodoMove(from: todo)
+        let undo = keepTodoChangeForUndo("Move to Note") { [weak self] in self?.moveBack(move, from: note) }
         func failed() {
             undo.forget()
             todos.unpatch(todo)
             todos.unpatch(moved.reference)
+            beep()
         }
-        return writeTodoChange(in: todo.url, {
-            Self.write(todo) { text, document, index in
-                guard let deleting = Todos.deleting(in: text, document: document, line: index) else { return nil }
-                removed.set(deleting.removal)
-                return (deleting.range, "")
-            }.outcome
-        }, failed: failed, whenWritten: { [weak self] in
-            guard let self, let removal = removed.value else { return }
-            guard await insert(Self.lines(of: removal), into: note, placed: placed) else {
-                // The note is gone, or can't be written: the to-do goes back among those in no note.
-                failed()
-                await Task.detached(priority: .userInitiated) {
-                    _ = Self.write(todo.url) { text, document in Todos.restoring(removal, in: text, document: document) }
-                }.value
+        return chainTodoWrite { [weak self] in
+            guard let self else { return }
+            // Its lines as they are in the file now.
+            guard let lines = await Task.detached(priority: .userInitiated, operation: { Self.lines(of: todo) }).value else {
                 looseTodos.read()
-                beep()
-                return
+                return failed()
             }
-        })
+            let inserted = await Task.detached(priority: .userInitiated) {
+                Self.write(note) { text, document in
+                    let inserting = Todos.inserting(lines, in: text, document: document)
+                    move.placed(line: inserting.line, source: inserting.source)
+                    return (inserting.range, inserting.replacement)
+                }
+            }.value
+            index.refresh(folders: [note.deletingLastPathComponent()], locations: locations)
+            // The note is gone, or can't be written: the to-do stays where it was.
+            guard inserted == .written else { return failed() }
+            let removed = await Task.detached(priority: .userInitiated) {
+                Self.write(todo) { text, document, index in
+                    guard let deleting = Todos.deleting(in: text, document: document, line: index) else { return nil }
+                    move.removed(deleting.removal)
+                    return (deleting.range, "")
+                }.outcome
+            }.value
+            looseTodos.read()
+            // Not written, or changed or gone meanwhile: it is in the note, and still among those in no note.
+            if removed != .written {
+                move.removed(nil)
+                todos.unpatch(todo)
+            }
+        }
     }
 
     /// The to-do in no note To-dos lists for a reference: the nearest one with its words.
     private func looseItem(_ todo: TodoReference) -> TodoList.Item? {
         todos.items.filter { $0.isLoose && $0.todo.source == todo.source }.min { abs($0.todo.line - todo.line) < abs($1.todo.line - todo.line) }
+    }
+
+    /// A to-do's line and the lines under it as its file has them now, found by what it said; nil when it is gone.
+    nonisolated private static func lines(of todo: TodoReference) -> [String]? {
+        var lines: [String]?
+        var error: NSError?
+        NSFileCoordinator().coordinate(readingItemAt: todo.url, options: [], error: &error) { url in
+            guard let data = try? Data(contentsOf: url), let text = NoteDocument.decode(data) else { return }
+            let string = text as NSString
+            let document = MarkdownParser.parse(string)
+            guard let index = Todos.find(todo.source, near: todo.line, in: document, string: string) else { return }
+            let under = Todos.noteLines(under: index, in: document, string: string)
+            lines = ([index] + Array(under)).map { string.substring(with: document.lines[$0].range) }
+        }
+        return lines
     }
 
     /// The lines deleting a to-do took out, without the line endings and blank lines around them.
@@ -115,57 +142,68 @@ extension Workspace {
         return lines
     }
 
-    /// Puts a to-do's lines into a note's checklist, in the editor that shows it or else in its file, and says where it
-    /// went. False when the note is gone or couldn't be written. Inside a change to a to-do's file being written.
-    private func insert(_ lines: [String], into note: URL, placed: TodoPlacement) async -> Bool {
-        if let editor = editorShowing(note) {
-            guard !editor.isWaitingForText else { return false }
-            let done = editor.editTodoLines(line: 0, actionName: "Move to Note") { text, document, _ in
-                let inserting = Todos.inserting(lines, in: text, document: document)
-                placed.set(line: inserting.line, source: inserting.source)
-                return (inserting.range, inserting.replacement)
-            }
-            if done { saveNote(showing: note) }
-            return done
+    /// Undo of moving a to-do into a note, once the move is written, which this waits for: it goes back among those in
+    /// no note where it was, and then out of the note, with the lines under it. Redo moves it again.
+    private func moveBack(_ move: TodoMove, from note: URL) {
+        let loose = move.todo.url
+        // Registered now, as Undo runs: what it moves is known by the time Redo can be chosen.
+        let redo = keepTodoChangeForUndo("Move to Note") { [weak self] in
+            let back = move.removal.map { TodoReference(url: loose, line: $0.line, source: Self.lines(of: $0).first ?? "") } ?? move.todo
+            self?.moveTodo(back, toNote: note)
         }
-        let written = await Task.detached(priority: .userInitiated) {
-            Self.write(note) { text, document in
-                let inserting = Todos.inserting(lines, in: text, document: document)
-                placed.set(line: inserting.line, source: inserting.source)
-                return (inserting.range, inserting.replacement)
+        chainTodoWrite { [weak self] in
+            guard let self else { return }
+            guard let place = move.placement else {
+                redo.forget()
+                return beep()
             }
-        }.value
-        index.refresh(folders: [note.deletingLastPathComponent()], locations: locations)
-        return written == .written
-    }
-
-    /// Undo of moving a to-do into a note: it goes from the note, with the lines under it, and back among those in no
-    /// note where it was. Redo moves it again.
-    private func moveBack(from note: URL, placed: TodoPlacement, removed: TodoRemoval.Kept, to loose: URL) {
-        // Known once the move was written, which Undo waits for.
-        guard let removal = removed.value, let place = placed.value else { return beep() }
-        let inNote = TodoReference(url: note, line: place.line, source: place.source)
-        deleteTodo(inNote, undoable: false)
-        let lines = Self.lines(of: removal)
-        let back = TodoReference(url: loose, line: removal.line, source: lines.first ?? "")
-        if let todo = TodoList.todo(lines, line: removal.line) {
-            todos.add(TodoList.Item(url: loose, note: "", modified: looseTodos.snapshot?.modified, todo: todo, isLoose: true))
+            let inNote = TodoReference(url: note, line: place.line, source: place.source)
+            if let removal = move.removal {
+                let lines = Self.lines(of: removal)
+                if let todo = TodoList.todo(lines, line: removal.line) {
+                    todos.add(TodoList.Item(url: loose, note: "", modified: nil, todo: todo, isLoose: true))
+                }
+                todos.patch(inNote, to: nil, under: nil)
+                let restored = await Task.detached(priority: .userInitiated) {
+                    Self.write(loose) { text, document in Todos.restoring(removal, in: text, document: document) }
+                }.value
+                looseTodos.read()
+                // It can't go back now: it stays in the note.
+                guard restored == .written else {
+                    redo.forget()
+                    todos.unpatch(inNote)
+                    return beep()
+                }
+            } else {
+                // It never left those in no note: only the note has it twice.
+                todos.patch(inNote, to: nil, under: nil)
+            }
+            let taken = await Task.detached(priority: .userInitiated) {
+                Self.write(inNote) { text, document, index in
+                    Todos.deleting(in: text, document: document, line: index).map { ($0.range, "") }
+                }.outcome
+            }.value
+            index.refresh(folders: [note.deletingLastPathComponent()], locations: locations)
+            // Changed in the note meanwhile: it stays there as it is now, and is among those in no note again too.
+            if taken != .written { todos.unpatch(inNote) }
         }
-        let redo = keepTodoChangeForUndo("Move to Note") { [weak self] in self?.moveTodo(back, toNote: note) }
-        writeTodoChange(in: loose, {
-            Self.write(loose) { text, document in Todos.restoring(removal, in: text, document: document) }
-        }, failed: { [weak self] in
-            redo.forget()
-            self?.todos.unpatch(back)
-        }, whenWritten: nil)
     }
 }
 
-/// Where a to-do moved into a note went, known once that is written: in a file off the main thread.
-final class TodoPlacement: @unchecked Sendable {
+/// A to-do being moved into a note: where it was among those in no note, and once written, where it went in the note
+/// and what taking it out of those in no note took. Written off the main thread.
+final class TodoMove: @unchecked Sendable {
+    let todo: TodoReference
     private let lock = NSLock()
-    private var placed: (line: Int, source: String)?
+    private var place: (line: Int, source: String)?
+    private var taken: TodoRemoval?
 
-    var value: (line: Int, source: String)? { lock.withLock { placed } }
-    func set(line: Int, source: String) { lock.withLock { placed = (line, source) } }
+    init(from todo: TodoReference) {
+        self.todo = todo
+    }
+
+    var placement: (line: Int, source: String)? { lock.withLock { place } }
+    var removal: TodoRemoval? { lock.withLock { taken } }
+    func placed(line: Int, source: String) { lock.withLock { place = (line, source) } }
+    func removed(_ removal: TodoRemoval?) { lock.withLock { taken = removal } }
 }

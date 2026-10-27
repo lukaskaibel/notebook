@@ -32,6 +32,11 @@ final class LooseTodos {
     private(set) var snapshot: Snapshot?
     /// Told on the main thread each time the file was read.
     var onRead: ((Snapshot) -> Void)?
+    /// Told when the file couldn't be read the first time, or not within `patience`: offline with it still in iCloud,
+    /// say. The other to-dos don't wait for it then.
+    var onUnread: (() -> Void)?
+    /// How long the first reading may take before the other to-dos stop waiting for it.
+    var patience: Duration = .seconds(5)
 
     private var place: Place
     private var lookup: Task<URL, Never>?
@@ -108,13 +113,23 @@ final class LooseTodos {
         guard let url else { return }
         guard !isReading else { return readsAgain = true }
         isReading = true
+        if snapshot == nil {
+            Task { [weak self, patience] in
+                try? await Task.sleep(for: patience)
+                guard let self, snapshot == nil else { return }
+                onUnread?()
+            }
+        }
         Task {
+            await Task.detached(priority: .utility) { Self.mergeConflicts(at: url) }.value
             let read = await Self.read(url)
             isReading = false
             // Not read now (iCloud couldn't bring it down): what was read before stays.
             if let read, read.url == self.url {
                 snapshot = read
                 onRead?(read)
+            } else if snapshot == nil {
+                onUnread?()
             }
             if readsAgain {
                 readsAgain = false
@@ -210,6 +225,43 @@ final class LooseTodos {
         let before = last.breakLength == 0 && !isEmptyLast ? ending : ""
         let first = isEmptyLast ? document.lines.count - 1 : document.lines.count
         return (before + lines.map { $0 + ending }.joined(), first)
+    }
+
+    // MARK: - Two devices at once
+
+    /// Two devices changed the file before iCloud brought each the other's change: iCloud keeps one and sets the
+    /// others aside, unseen, as conflict versions. Their open to-dos the file doesn't have go at its end, with the lines
+    /// under them, and the conflict is settled. Says whether there was one.
+    @discardableResult
+    nonisolated static func mergeConflicts(at url: URL) -> Bool {
+        guard let versions = NSFileVersion.unresolvedConflictVersionsOfItem(at: url), !versions.isEmpty else { return false }
+        let others = versions.compactMap { (try? Data(contentsOf: $0.url)).flatMap(NoteDocument.decode) }
+        guard others.count == versions.count else { return false }
+        let current = NoteDocument.read(url) ?? ""
+        let missing = missingTodos(in: current, from: others)
+        guard missing.isEmpty || append(missing, to: url) != nil else { return false }
+        for version in versions { version.isResolved = true }
+        try? NSFileVersion.removeOtherVersionsOfItem(at: url)
+        return true
+    }
+
+    /// The open to-dos of other versions of the file that `text` doesn't have, with the lines under them, in their
+    /// order. One `text` has done or cancelled counts as had: it was ticked on one device and not yet on the other.
+    nonisolated static func missingTodos(in text: String, from others: [String]) -> [String] {
+        let today = TodoDay.today
+        var had = Set<String>()
+        for line in text.components(separatedBy: .newlines) {
+            had.insert(line)
+            if let open = Todos.marking(line, as: .open, today: today)?.line { had.insert(open) }
+        }
+        var missing: [String] = []
+        for other in others {
+            for todo in Todos.open(in: other) where !had.contains(todo.source) {
+                had.insert(todo.source)
+                missing += [todo.source] + todo.lines.map(\.source)
+            }
+        }
+        return missing
     }
 
     // MARK: - Watching
