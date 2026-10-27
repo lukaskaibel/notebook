@@ -29,7 +29,7 @@ final class FolderIconTests: XCTestCase {
         try? FileManager.default.removeItem(at: library)
     }
 
-    private func until(_ what: String, seconds: Double = 5, _ condition: () -> Bool) async throws {
+    private func until(_ what: String, seconds: Double = TestRun.patience, _ condition: () -> Bool) async throws {
         let end = Date().addingTimeInterval(seconds)
         while !condition() {
             guard Date() < end else { return XCTFail("never: \(what)") }
@@ -187,7 +187,7 @@ final class FolderIconTests: XCTestCase {
     /// The Finder, or iCloud from another device, changes a folder's look: the sidebar follows.
     func testLookChangedElsewhereShows() async throws {
         let (workspace, sidebar) = try await makeSidebar()
-        try await Task.sleep(for: .milliseconds(300))
+        await TestRun.watching()
         XCTAssertTrue(FolderIcons.write(FolderIcon(emoji: "✈️", color: .blue), to: travel))
         try await until("the sidebar shows the new look") { workspace.folderIcon(for: self.travel) == FolderIcon(emoji: "✈️", color: .blue) }
         try await until("the row shows the emoji") { (try? self.cell(self.travel, in: sidebar).icon.image?.isTemplate) == false }

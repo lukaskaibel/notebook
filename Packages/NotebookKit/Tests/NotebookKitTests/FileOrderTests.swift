@@ -153,7 +153,7 @@ final class FileOrderTests: XCTestCase {
         return (workspace, sidebar)
     }
 
-    private func until(_ what: String, seconds: Double = 5, _ condition: () -> Bool) async throws {
+    private func until(_ what: String, seconds: Double = TestRun.patience, _ condition: () -> Bool) async throws {
         let end = Date().addingTimeInterval(seconds)
         while !condition() {
             guard Date() < end else { return XCTFail("never: \(what)") }
@@ -164,7 +164,7 @@ final class FileOrderTests: XCTestCase {
     /// Writes a new note into a folder, as the Finder or iCloud would, and again each second until `condition` holds:
     /// the watcher for file changes starts a moment after the locations have been read, and misses what came before.
     private func write(into folder: URL, until what: String, _ condition: () -> Bool) async throws {
-        let end = Date().addingTimeInterval(8)
+        let end = Date().addingTimeInterval(TestRun.patience)
         var count = 0
         while !condition() {
             guard Date() < end else { return XCTFail("never: \(what)") }

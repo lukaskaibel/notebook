@@ -12,6 +12,9 @@ final class NewFolderTests: XCTestCase {
     private var papers: URL { drive.appendingPathComponent("Papers") }
     private var vault: URL { base.appendingPathComponent("Mobile Documents/iCloud~md~obsidian/Documents") }
     private var window: NSWindow!
+    /// Kept as long as the test is: a new folder's row is still sliding in as a test ends on a busy Mac, and its name
+    /// field then asks the sidebar for its row.
+    private var sidebar: SidebarController?
 
     override func setUp() async throws {
         base = FileManager.default.temporaryDirectory.appendingPathComponent("notebook-newfolder-\(UUID().uuidString)").standardizedFileURL
@@ -46,6 +49,7 @@ final class NewFolderTests: XCTestCase {
     private func makeSidebar() async throws -> (Workspace, SidebarController) {
         let workspace = Workspace()
         let sidebar = SidebarController(workspace: workspace)
+        self.sidebar = sidebar
         workspace.start()
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 260, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
         sidebar.scrollView.frame = window.contentView!.bounds
@@ -55,7 +59,7 @@ final class NewFolderTests: XCTestCase {
         return (workspace, sidebar)
     }
 
-    private func until(_ what: String, seconds: Double = 5, _ condition: () -> Bool) async throws {
+    private func until(_ what: String, seconds: Double = TestRun.patience, _ condition: () -> Bool) async throws {
         let end = Date().addingTimeInterval(seconds)
         while !condition() {
             guard Date() < end else { return XCTFail("never: \(what)") }

@@ -35,7 +35,8 @@ final class SearchTests: XCTestCase {
     }
 
     private func waitUntil(_ condition: () -> Bool) async throws {
-        for _ in 0..<250 where !condition() { try await Task.sleep(for: .milliseconds(20)) }
+        let end = Date().addingTimeInterval(TestRun.patience)
+        while !condition(), Date() < end { try await Task.sleep(for: .milliseconds(20)) }
         XCTAssertTrue(condition(), "waited in vain")
     }
 

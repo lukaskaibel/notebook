@@ -29,21 +29,34 @@ final class EditorSmoothnessTests: XCTestCase {
         return text
     }
 
-    func testTypingInLongNoteIsFast() {
-        let h = EditorHarness(longNote(sections: 150))
-        XCTAssertGreaterThan(h.text.count, 40_000)
-        let middle = h.range(of: "paragraph 75").location
-        h.caret(middle)
+    /// A keystroke fits in one frame, however long the note. Timed in the main thread's processor time, the work a
+    /// keystroke takes: other test runs and builds on the Mac add the time it waits for a core, which says nothing
+    /// about the editor.
+    func testTypingInLongNoteIsFast() throws {
+        let long = EditorHarness(longNote(sections: 150))
+        XCTAssertGreaterThan(long.text.count, 40_000)
+        long.caret(long.range(of: "paragraph 75").location)
+        let short = EditorHarness(longNote(sections: 3))
+        short.caret(short.range(of: "paragraph 1").location)
+        // In a short note a keystroke takes a sixth to a tenth of what it takes in the long one.
+        try assertFast("a keystroke in a long note", under: 0.016, comparedWith: ("in a short note", 15, { self.keystroke(in: short) })) {
+            keystroke(in: long)
+        }
+    }
+
+    /// What a keystroke at the caret takes on average, laid out, in processor time.
+    private func keystroke(in h: EditorHarness) -> TimeInterval {
+        let caret = h.selection.location
         var times: [Double] = []
         for character in "quick brown fox " {
-            let start = CACurrentMediaTime()
+            let start = Timing.threadTime()
             h.textView.insertText(String(character), replacementRange: h.textView.selectedRange())
-            h.editor.layoutManager.ensureLayout(forCharacterRange: NSRange(location: middle, length: 200))
-            times.append(CACurrentMediaTime() - start)
+            h.editor.layoutManager.ensureLayout(forCharacterRange: NSRange(location: caret, length: min(200, h.editor.storage.length - caret)))
+            times.append(Timing.threadTime() - start)
         }
         let average = times.reduce(0, +) / Double(times.count)
-        print("typing in a \(h.text.count) character note: average \(Int(average * 1000)) ms, worst \(Int((times.max() ?? 0) * 1000)) ms")
-        XCTAssertLessThan(average, 0.016, "a keystroke fits in one frame")
+        print(String(format: "typing in a %d character note: average %.1f ms, worst %.1f ms", h.text.count, average * 1000, (times.max() ?? 0) * 1000))
+        return average
     }
 
     func testBlockClosingAboveViewDoesNotMoveWhatYouSee() {

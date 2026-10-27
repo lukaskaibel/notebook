@@ -45,7 +45,8 @@ final class SpotlightTests: XCTestCase {
     }
 
     private func until(_ what: String, _ condition: () -> Bool) async throws {
-        for _ in 0..<200 where !condition() {
+        let end = Date().addingTimeInterval(TestRun.patience)
+        while !condition(), Date() < end {
             try await Task.sleep(for: .milliseconds(25))
         }
         XCTAssertTrue(condition(), "timed out: \(what)")

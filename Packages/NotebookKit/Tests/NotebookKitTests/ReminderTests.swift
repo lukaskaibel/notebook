@@ -16,13 +16,11 @@ final class ReminderTests: XCTestCase {
         try FileManager.default.createDirectory(at: library.appendingPathComponent("Health"), withIntermediateDirectories: true)
         try "- [ ] Knee\n".write(to: questions, atomically: true, encoding: .utf8)
         try "Plain\n".write(to: library.appendingPathComponent("Personal/Other.md"), atomically: true, encoding: .utf8)
-        defaults = UserDefaults(suiteName: "notebook-reminder-tests")
-        defaults.removePersistentDomain(forName: "notebook-reminder-tests")
+        defaults = TestRun.settings()
     }
 
     override func tearDown() async throws {
         UserDefaults.standard.removeObject(forKey: "NotebookLibrary")
-        defaults.removePersistentDomain(forName: "notebook-reminder-tests")
         try? FileManager.default.removeItem(at: base)
     }
 
@@ -73,9 +71,7 @@ final class ReminderTests: XCTestCase {
         UserDefaults.standard.set(library.path, forKey: "NotebookLibrary")
         let workspace = Workspace()
         workspace.start()
-        for _ in 0..<100 where workspace.index.isBuilding || workspace.index.entry(for: questions) == nil {
-            try await Task.sleep(for: .milliseconds(50))
-        }
+        try await TestRun.wait(while: { workspace.index.isBuilding || workspace.index.entry(for: questions) == nil })
         return workspace
     }
 
@@ -114,9 +110,7 @@ final class ReminderTests: XCTestCase {
         let moved = library.appendingPathComponent("Health/Questions for Dr. Weber.md")
         try FileManager.default.moveItem(at: questions, to: moved)
         workspace.readAgain([library.appendingPathComponent("Personal"), library.appendingPathComponent("Health")])
-        for _ in 0..<100 where workspace.index.entry(for: moved) == nil {
-            try await Task.sleep(for: .milliseconds(50))
-        }
+        try await TestRun.wait(while: { workspace.index.entry(for: moved) == nil })
         XCTAssertNil(workspace.url(for: reminder, searching: false))
         XCTAssertEqual(workspace.url(for: reminder), moved)
         XCTAssertEqual(workspace.reminder(for: moved)?.id, reminder.id, "the reminder follows it")

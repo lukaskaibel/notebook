@@ -672,7 +672,7 @@ public final class SearchIndex {
     /// (`library`) gets a file of its own, so a run on the sample notes leaves the one for your locations alone. None
     /// in tests, which keep theirs where they say.
     nonisolated static func storeURL(library: String? = nil, name: String = "Search index", in directory: FileManager.SearchPathDirectory = .cachesDirectory) -> URL? {
-        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil,
+        guard !ProcessInfo.isTesting,
               let base = FileManager.default.urls(for: directory, in: .userDomainMask).first else { return nil }
         let folder = base.appendingPathComponent(Bundle.main.bundleIdentifier ?? "Notebook", isDirectory: true)
         guard let library else { return folder.appendingPathComponent(name) }

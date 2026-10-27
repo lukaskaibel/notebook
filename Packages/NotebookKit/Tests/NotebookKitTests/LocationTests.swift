@@ -56,7 +56,8 @@ final class LocationTests: XCTestCase {
 
     /// Waits until the locations have been looked up and no folder is being read any more.
     private func settle(_ workspace: Workspace) async throws {
-        for _ in 0..<250 {
+        let end = Date().addingTimeInterval(TestRun.patience)
+        while Date() < end {
             if workspace.hasReadLocations, workspace.reader.isIdle { return }
             try await Task.sleep(for: .milliseconds(20))
         }
@@ -288,7 +289,7 @@ final class LocationTests: XCTestCase {
         var shown = false
         workspace.readFolders(to: plan) { shown = true }
         XCTAssertFalse(shown)
-        for _ in 0..<100 where !shown { try await Task.sleep(for: .milliseconds(20)) }
+        try await TestRun.wait(while: { !shown })
         XCTAssertTrue(shown)
         XCTAssertEqual(workspace.node(for: plan, reading: false)?.name, "Plan")
     }
@@ -302,8 +303,9 @@ final class LocationTests: XCTestCase {
         try await settle(workspace)
         XCTAssertEqual(node.visibleChildren().map(\.name), [])
 
+        await TestRun.watching()
         try "# New\n".write(to: papers.appendingPathComponent("New.md"), atomically: true, encoding: .utf8)
-        for _ in 0..<150 where node.visibleChildren().isEmpty { try await Task.sleep(for: .milliseconds(20)) }
+        try await TestRun.wait(while: { node.visibleChildren().isEmpty })
         XCTAssertEqual(node.visibleChildren().map(\.name), ["New"])
     }
 
@@ -316,7 +318,7 @@ final class LocationTests: XCTestCase {
         reader.read([.init(url: drive)]) { first = $0 }
         reader.read([.init(url: drive)]) { second = $0 }
         XCTAssertTrue(reader.isReading(drive))
-        for _ in 0..<100 where first == nil || second == nil { try await Task.sleep(for: .milliseconds(20)) }
+        try await TestRun.wait(while: { first == nil || second == nil })
         XCTAssertEqual(first?.count, 0)
         // Folders first; the hidden link to Desktop isn't read as a file of iCloud Drive's.
         XCTAssertEqual(second?.first?.listing?.map(\.url.lastPathComponent), ["Papers", "Shortcut"])
@@ -333,7 +335,7 @@ final class LocationTests: XCTestCase {
         // File events name it /private/var/…, the sidebar /var/….
         reader.dropReadings(of: URL(fileURLWithPath: "/private" + drive.path))
         XCTAssertFalse(reader.isReading(drive))
-        for _ in 0..<100 where results == nil { try await Task.sleep(for: .milliseconds(20)) }
+        try await TestRun.wait(while: { results == nil })
         XCTAssertEqual(results?.count, 0)
     }
 
@@ -349,7 +351,7 @@ final class LocationTests: XCTestCase {
             reader.read([.init(url: folder)], ahead: true) { results in order += results.map { URL(fileURLWithPath: $0.path).lastPathComponent } }
         }
         reader.hurry(folders[5])
-        for _ in 0..<500 where order.count < 6 { try await Task.sleep(for: .milliseconds(20)) }
+        try await TestRun.wait(while: { order.count < 6 })
         XCTAssertEqual(order.count, 6, "\(order)")
         XCTAssertLessThan(order.firstIndex(of: "Folder 6") ?? 6, order.firstIndex(of: "Folder 5") ?? -1, "\(order)")
     }
@@ -359,7 +361,7 @@ final class LocationTests: XCTestCase {
     func testSearchFollowsChangesFolderByFolder() async throws {
         let workspace = try await makeWorkspace()
         let index = workspace.index
-        for _ in 0..<100 where index.isBuilding || index.entry(for: plan) == nil { try await Task.sleep(for: .milliseconds(20)) }
+        try await TestRun.wait(while: { index.isBuilding || index.entry(for: plan) == nil })
         let papers = drive.appendingPathComponent("Papers")
         let old = papers.appendingPathComponent("Old")
         try make(old)
@@ -368,23 +370,21 @@ final class LocationTests: XCTestCase {
         let before = index.count
 
         index.refresh(folders: [papers, old], locations: workspace.locations)
-        for _ in 0..<100 where index.entry(for: old.appendingPathComponent("Deep.md")) == nil { try await Task.sleep(for: .milliseconds(20)) }
+        try await TestRun.wait(while: { index.entry(for: old.appendingPathComponent("Deep.md")) == nil })
         XCTAssertEqual(index.count, before + 3)
         XCTAssertEqual(index.textHits("quantum").map(\.item.name), ["Paper"])
         XCTAssertEqual(index.resolve("Deep", from: plan)?.lastPathComponent, "Deep.md")
 
         try FileManager.default.removeItem(at: old)
         index.refresh(folders: [papers], locations: workspace.locations)
-        for _ in 0..<100 where index.entry(for: old) != nil { try await Task.sleep(for: .milliseconds(20)) }
+        try await TestRun.wait(while: { index.entry(for: old) != nil })
         XCTAssertNil(index.entry(for: old.appendingPathComponent("Deep.md")), "went with its folder")
         XCTAssertEqual(index.count, before + 1)
     }
 
     func testSearchAndMoveToReachLinkedFolders() async throws {
         let workspace = try await makeWorkspace()
-        for _ in 0..<100 where workspace.index.isBuilding || workspace.index.entry(for: plan) == nil {
-            try await Task.sleep(for: .milliseconds(50))
-        }
+        try await TestRun.wait(while: { workspace.index.isBuilding || workspace.index.entry(for: plan) == nil })
         XCTAssertEqual(workspace.index.entry(for: plan)?.place, "iCloud Drive › Desktop › Trip")
         XCTAssertFalse(workspace.index.entries.contains { $0.url.path == drive.appendingPathComponent("Desktop").path },
                        "the hidden link isn't a file of its own")
