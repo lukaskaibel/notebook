@@ -499,6 +499,13 @@ enum DebugRemote {
         case "resignactive":
             // resignactive: what switching to another app tells Notebook (it never is the active app here).
             NotificationCenter.default.post(name: NSApplication.willResignActiveNotification, object: NSApp)
+        case "minimize":
+            // minimize: the main window into the Dock, as its yellow button does; `windowstate` says where it is.
+            NSApp.windows.first { $0.isVisible && Workspace.shared.isMainWindow($0) }?.miniaturize(nil)
+        case "windowstate":
+            for window in NSApp.windows where !(window is NSPanel) && (window.isVisible || window.isMiniaturized) {
+                log("windowstate \"\(window.title)\" miniaturized=\(window.isMiniaturized) visible=\(window.isVisible) main=\(window.isMainWindow)")
+            }
         case "closemain":
             // closemain: closes the main window, as its close button does.
             window?.performClose(nil)
