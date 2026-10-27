@@ -806,7 +806,8 @@ changes the text itself. Changes to files are kept for Undo in the window's undo
 on the Mac next to the text's own, in the order they were made; on iPhone and iPad the editor's history weighs them
 against its own by when each was made.
 
-Run the tests (they use off-screen windows and temporary folders, and touch none of your files):
+Run the tests (they use off-screen windows, temporary folders and settings of their own, and touch none of your files,
+so several runs can go at once):
 
 ```bash
 cd Packages/NotebookKit && swift test

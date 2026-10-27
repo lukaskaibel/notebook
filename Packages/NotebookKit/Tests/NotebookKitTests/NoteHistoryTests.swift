@@ -235,7 +235,7 @@ final class NoteHistoryTests: XCTestCase {
             try "old".write(to: copy, atomically: true, encoding: .utf8)
         }
         try writeOld()
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: "notebook-history-\(UUID().uuidString)"))
+        let defaults = TestRun.settings()
         history.tidyUp(defaults: defaults, device: "Mac 222222")
         await history.written()
         XCTAssertFalse(FileManager.default.fileExists(atPath: cloud.appendingPathComponent(".Trash").path), "emptied folders go too")
@@ -263,7 +263,7 @@ final class NoteHistoryTests: XCTestCase {
         try thrownAway("\(lately) CCCCCCCC (iPhone 111111) 0a1b2c3d", in: trash)
         try thrownAway("\(long) DDDDDDDD (iPad 333333) 0a1b2c3d", in: trash)
         try thrownAway("\(long) EEEEEEEE (iPhone 111111) 0a1b2c3d", in: device)
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: "notebook-history-\(UUID().uuidString)"))
+        let defaults = TestRun.settings()
         history.tidyUp(defaults: defaults, device: "Mac 222222")
         await history.written()
         // This Mac's by its clock; the iPhone's a year before the newest it threw away; the iPad's stays, as it threw
@@ -487,7 +487,7 @@ final class NoteHistoryTests: XCTestCase {
         history.keep("on the iPhone", of: synced, at: Date() - 2 * 86400, device: "iPhone 111111")
         history.keep("on the iPhone long ago", of: unseen, at: Date() - 60 * 86400, device: "iPhone 111111")
         history.keep("outside the locations", of: loose)
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: "notebook-history-\(UUID().uuidString)"))
+        let defaults = TestRun.settings()
         history.tidyUp(defaults: defaults, device: "Mac 222222", notesIn: [notes])
         let first = await versions(gone)
         XCTAssertEqual(first, ["deleted in the Finder"], "gone once: iCloud may still be bringing it")
@@ -575,7 +575,7 @@ final class NoteHistoryTests: XCTestCase {
         for (days, text) in [(400.0, "old, from the iPhone"), (500, "older, from the iPhone"), (800, "two years before")] {
             try text.write(to: there.appendingPathComponent(NoteHistory.name(for: Date() - days * 86400, device: "iPhone 111111")), atomically: true, encoding: .utf8)
         }
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: "notebook-history-\(UUID().uuidString)"))
+        let defaults = TestRun.settings()
         history.tidyUp(defaults: defaults, device: "Mac 222222")
         let kept = await versions(note)
         XCTAssertEqual(kept, ["old, from the iPhone", "older, from the iPhone"], "a year before its newest, whatever this clock says")
@@ -591,7 +591,7 @@ final class NoteHistoryTests: XCTestCase {
         try FileManager.default.createDirectory(at: thrownAway, withIntermediateDirectories: true)
         try "gone".write(to: thrownAway.appendingPathComponent(NoteHistory.name(for: now - 86400, device: "iPhone 111111")), atomically: true, encoding: .utf8)
         // A Mac whose clock is two years ahead tidies up.
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: "notebook-history-\(UUID().uuidString)"))
+        let defaults = TestRun.settings()
         history.tidyUp(defaults: defaults, device: "Mac 222222", now: now + 730 * 86400)
         let kept = await versions(note)
         XCTAssertEqual(kept, ["c", "b", "a"])
@@ -599,7 +599,7 @@ final class NoteHistoryTests: XCTestCase {
     }
 
     func testADayAheadWrittenDownDoesntStopTidyingUp() async throws {
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: "notebook-history-\(UUID().uuidString)"))
+        let defaults = TestRun.settings()
         defaults.set(Date() + 30 * 86400, forKey: "historyTidiedUp")
         let gone = cloud.appendingPathComponent(".Trash/1700000000 ABCDEF12 (Mac 222222) 0a1b2c3d")
         let copy = gone.appendingPathComponent(NoteHistory.name(for: Date() - 400 * 86400, device: "iPhone 111111"))

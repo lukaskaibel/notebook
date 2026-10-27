@@ -36,7 +36,8 @@ final class TodoListTests: XCTestCase {
     }
 
     private func until(_ condition: () -> Bool) async throws {
-        for _ in 0..<200 where !condition() {
+        let end = Date().addingTimeInterval(TestRun.patience)
+        while !condition(), Date() < end {
             try await Task.sleep(for: .milliseconds(25))
         }
         XCTAssertTrue(condition(), "timed out")
@@ -203,11 +204,11 @@ final class TodoListTests: XCTestCase {
         XCTAssertEqual(controller.editor.text, "# Doctor\n\n- [x] Book the taxi\n")
         let manager = workspace.fileUndoManager
         XCTAssertFalse(manager === controller.window?.undoManager, "another window's")
-        try await Task.sleep(for: .milliseconds(50))
+        try await until { manager.groupingLevel == 0 }
         XCTAssertEqual(manager.undoActionName, "Delete To-do")
         manager.undo()
         XCTAssertEqual(controller.editor.text, original)
-        try await Task.sleep(for: .milliseconds(50))
+        try await until { manager.groupingLevel == 0 }
         XCTAssertTrue(manager.canRedo)
         manager.redo()
         XCTAssertEqual(controller.editor.text, "# Doctor\n\n- [x] Book the taxi\n")
@@ -372,7 +373,9 @@ final class TodoListTests: XCTestCase {
         XCTAssertEqual(dues(workspace), [12])
         workspace.untickTodo(water.reference, to: .open)
         XCTAssertEqual(workspace.editor.text, repeating)
-        // Written to the file at once, as a notification's Done may have only a moment.
+        // Written to the file at once, as a notification's Done may have only a moment. The file says what it said at
+        // first until the tick is written, which on a busy Mac can be after this looks.
+        await workspace.note?.saved()
         try await until { (try? String(contentsOf: self.plants, encoding: .utf8)) == self.repeating }
     }
 
