@@ -90,6 +90,11 @@ versions follow [semantic versioning](https://semver.org).
   folder with each update, and Notebook looked for them where they had been. A reminder's notification from before the
   update opens its note, the note you left open opens again, and text shared to the end of the last note goes there.
   From the next update on, a to-do that has reminded you at a place doesn't do it again.
+- On the iPhone, Checklist in the bar at the bottom of a note you haven't tapped into starts a new to-do at the end of
+  the note, as in Notes, rather than making its first paragraph a to-do; and a photo, scan or file from Attach goes at
+  the end of the note rather than above its first line. On the iPad, and on a large iPhone held sideways, a style from
+  Aa in the toolbar of such a note is for its last line, where Attach adds. A picker you cancel leaves the note as it
+  was.
 - Maths on a line of its own grows and shrinks with the size chosen in Settings › Text, as maths within a line does.
   It stayed at one size.
 - On iPhone and iPad, a note fades out under the bars at the top and bottom as you scroll, as in Notes, rather than
