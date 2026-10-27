@@ -292,6 +292,8 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     }
 
     public func textViewDidBeginEditing(_ textView: UITextView) {
+        // A tap at the very start, or Return in the title, puts the caret where it already was.
+        if !isLoading { caretWasPlaced = true }
         // A tap in the text while drawing stops drawing and puts the caret there.
         if isDrawing { endDrawing() }
         // Before the keyboard comes up, for the bar to come up with it as it should be.

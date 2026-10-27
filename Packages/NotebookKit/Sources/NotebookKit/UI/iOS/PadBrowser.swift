@@ -173,7 +173,8 @@ struct PadBrowser: View {
                             ShowHiddenFoldersMenu(workspace: workspace)
                             Button { showsSettings = true } label: { Label("Settings", systemImage: "gearshape") }
                         } label: {
-                            Label("More", systemImage: "ellipsis")
+                            // Not More, which the note's ⋯ next to it is.
+                            Label("More for Notebook", systemImage: "ellipsis")
                         }
                     }
                     ToolbarItem(placement: .topBarTrailing) {
@@ -215,7 +216,7 @@ struct PadSidebar: View {
     let query: String
     @Binding var newFolderIn: URL?
     @Environment(\.isSearching) private var isSearching
-    @State private var expanded = Set(UserDefaults.standard.stringArray(forKey: "expandedFolders") ?? [])
+    @State private var expanded = Set((UserDefaults.standard.stringArray(forKey: "expandedFolders") ?? []).map(Workspace.rerooted))
     @State private var collapsedSections = Set(UserDefaults.standard.stringArray(forKey: "collapsedSections") ?? [])
 
     var body: some View {
@@ -255,6 +256,8 @@ struct PadSidebar: View {
                 }
             }
             .onChange(of: expanded) { _, expanded in UserDefaults.standard.set(Array(expanded), forKey: "expandedFolders") }
+            // Read before an update's move was known: the folders open follow it.
+            .onReceive(NotificationCenter.default.publisher(for: Workspace.documentsMoved)) { _ in expanded = Set(expanded.map(Workspace.rerooted)) }
             .onChange(of: workspace.revealRequest?.id) { _, _ in
                 guard let request = workspace.revealRequest else { return }
                 reveal(request.url)
@@ -322,6 +325,8 @@ struct FolderTree: View {
                         .onTapGesture { withAnimation(.snappy) { toggle(node.url.path) } }
                         .fileDragAndDrop(node.url, isFolder: true, workspace: workspace)
                         .contextMenu { FileActions(workspace: workspace, url: node.url) { newFolderIn = $0 } }
+                        // VoiceOver reads the row, arrow and all, as one: "Personal, collapsed", as Files does.
+                        .accessibilityValue(expanded.contains(node.url.path) ? "expanded" : "collapsed")
                 }
                 .id(node.url)
             } else {
