@@ -147,7 +147,10 @@ versions follow [semantic versioning](https://semver.org).
   portrait, the sidebar left lying over the note, dimming it. Turned to portrait with a note open, the sidebar now
   slides out of the way, and back in when you turn the iPad to landscape; put away by hand, it stays away. Opened in
   portrait with a note, Notebook shows the note without it. Shown in portrait, it sits next to the note rather than
-  over it.
+  over it. Turned while you write, the note stays in front with the keyboard up, as in Notes; before, the keyboard went
+  down.
+- In the iPad's sidebar, VoiceOver says whether a folder is open or closed ("Personal, collapsed"), as Files does, and
+  calls the sidebar's ⋯ "More for Notebook", so it isn't mistaken for the note's More next to it.
 - On iPhone and iPad, the folder Keep Notes on This iPhone uses is called On My iPhone (On My iPad) on the first screen,
   in search and in Settings, also where you chose it before. It was called "Documents", its folder's name on disk.
 - On iPhone and iPad, a list no longer says "No additional text" under notes Notebook hasn't read yet, as on the first
