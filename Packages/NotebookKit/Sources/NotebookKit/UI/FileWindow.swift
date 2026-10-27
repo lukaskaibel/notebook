@@ -29,6 +29,8 @@ public final class FileWindows {
         // Settings, say: no note to act on.
         let other = controller == nil && !workspace.isMainWindow(window)
         if workspace.isOtherWindowInFront != other { workspace.isOtherWindowInFront = other }
+        // What was kept for Undo while the main window was closed, if it couldn't go there as it opened.
+        if workspace.isMainWindow(window) { workspace.moveUndoToMainWindow() }
     }
 
     /// The notes at or inside a file or folder that are open in windows of their own.

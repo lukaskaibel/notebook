@@ -68,6 +68,29 @@ final class WindowInFrontTests: XCTestCase {
         try await until("back from the Trash") { FileManager.default.fileExists(atPath: self.other.path) }
     }
 
+    /// The main window opened again showing neither the sidebar nor the note (To-dos, the sidebar away): the Trash
+    /// kept while it was closed goes to that window all the same, so it isn't left for a later reopen, on top of newer
+    /// changes.
+    func testATrashKeptWhileClosedFindsTheWindowWithoutItsSidebarOrNote() async throws {
+        let (workspace, manager) = try await makeWindow()
+        workspace.isMainWindowOpen = false
+        _ = await workspace.trash(other).value
+        workspace.editor.view.removeFromSuperview()
+        window?.contentView?.subviews.forEach { $0.removeFromSuperview() }
+        let main = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled], backing: .buffered, defer: false)
+        main.identifier = NSUserInterfaceItemIdentifier("main-AppWindow-1")
+        main.isReleasedWhenClosed = false
+        main.orderFront(nil)
+        defer { main.close() }
+        workspace.isMainWindowOpen = true
+        workspace.moveUndoToMainWindow()
+        XCTAssertEqual(main.undoManager?.undoMenuItemTitle, "Undo Move to Trash")
+        XCTAssertFalse(workspace.ownUndoManager.canUndo)
+        XCTAssertFalse(manager.canUndo)
+        workspace.moveUndoToMainWindow()
+        XCTAssertEqual(main.undoManager?.undoMenuItemTitle, "Undo Move to Trash", "moved once")
+    }
+
     /// ⌘N in a note's own window makes the note in the main window, which comes to the front: what it does is kept for
     /// Undo there, where ⌘Z in the main window finds it, not in the note's window it came from.
     func testWhatAMainWindowCommandDoesIsUndoneInTheMainWindow() async throws {
