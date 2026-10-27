@@ -58,7 +58,10 @@ struct TodoSwipe: ViewModifier {
                         .onTapGesture { close() }
                 }
             }
-            .overlay(alignment: .trailing) { button(revealed) }
+            // Only while it shows: a closed row has no Delete for VoiceOver to find, which has its own (`TodoRowView`).
+            .overlay(alignment: .trailing) {
+                if revealed > 0 { button(revealed).transition(.identity) }
+            }
             .frame(height: isClosedUp ? 0 : nil, alignment: .top)
             .clipShape(Rectangle().inset(by: isClosingUp ? 0 : -1000))
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }

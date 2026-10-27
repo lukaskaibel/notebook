@@ -723,6 +723,46 @@ public enum Todos {
         return (NSRange(location: above.range.upperBound, length: 0), ending + removed)
     }
 
+    /// Where a to-do moved into a note goes, with the lines under it: after the last to-do of the note's last checklist
+    /// and the lines under that one, or else at the end of the note, after a blank line. It takes the checklist's
+    /// bullet and the note's line endings. With the number of the line the to-do is on then, and what it says there.
+    public static func inserting(_ lines: [String], in text: NSString, document: MarkdownDocument) -> (range: NSRange, replacement: String, line: Int, source: String) {
+        let placed = placing(lines, in: text, document: document)
+        return (placed.range, placed.replacement, placed.line, placed.lines.first ?? "")
+    }
+
+    private static func placing(_ lines: [String], in text: NSString, document: MarkdownDocument) -> (range: NSRange, replacement: String, line: Int, lines: [String]) {
+        var lines = lines
+        let last = document.lines.indices.last { index in
+            guard case .listItem(let item) = document.lines[index].kind else { return false }
+            return item.isTask && item.indent == 0
+        }
+        if let last, case .listItem(let item) = document.lines[last].kind, case .bullet(let bullet) = item.marker, bullet != "-",
+           let first = lines.first, first.hasPrefix("- ") {
+            lines[0] = String(bullet) + first.dropFirst()
+        }
+        guard let last else {
+            guard let end = document.lines.lastIndex(where: { $0.kind != .blank }) else {
+                return (NSRange(location: 0, length: text.length), lines.joined(separator: "\n") + "\n", 0, lines)
+            }
+            let line = document.lines[end]
+            let ending = lineEnding(in: text, line: line)
+            let joined = lines.joined(separator: ending)
+            if line.breakLength == 0 { return (NSRange(location: line.range.upperBound, length: 0), ending + ending + joined, end + 2, lines) }
+            // A blank line after the note's last words already: it goes after that.
+            if let blank = document.lines[safe: end + 1], blank.kind == .blank, blank.breakLength > 0 {
+                return (NSRange(location: blank.range.upperBound + blank.breakLength, length: 0), joined + ending, end + 2, lines)
+            }
+            return (NSRange(location: line.range.upperBound + line.breakLength, length: 0), ending + joined + ending, end + 2, lines)
+        }
+        let end = noteLines(under: last, in: document, string: text).upperBound - 1
+        let after = document.lines[end]
+        let ending = lineEnding(in: text, line: after)
+        let joined = lines.joined(separator: ending)
+        if after.breakLength == 0 { return (NSRange(location: after.range.upperBound, length: 0), ending + joined, end + 1, lines) }
+        return (NSRange(location: after.range.upperBound + after.breakLength, length: 0), joined + ending, end + 1, lines)
+    }
+
     /// The line of the next one of a to-do that repeats, as Tasks writes it: open, its due, scheduled and start dates
     /// moved on as far from the next day as they were from the first of them, and without the day it was done or
     /// cancelled, its name, what it waited for and its block link. Nil when the rule has no next day.

@@ -126,6 +126,13 @@ enum DemoLibrary {
         history.keepFile(root.appendingPathComponent("Travel/Kyoto trip.md"), at: now.addingTimeInterval(-35 * 60), device: "Mac")
     }
 
+    /// The sample to-dos in no note, as added in To-dos, in `folder` (`LooseTodos`), in place of any there.
+    static func createLooseTodos(in folder: URL) {
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let text = "- [ ] Book a table for Saturday \(due(1))\n- [ ] Ask Mia about the bike\n"
+        try? Data(text.utf8).write(to: folder.appendingPathComponent(LooseTodos.fileName))
+    }
+
     /// Makes the sample notes in `root`, unless they are there already. Says whether it made them.
     @discardableResult
     static func create(at root: URL) -> Bool {

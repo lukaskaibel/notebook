@@ -287,7 +287,8 @@ struct TodoRowView: View {
             let days = Calendar.current.dateComponents([.day], from: row.due, to: date).day ?? 0
             parts.append(days < 7 ? row.due.formatted(.dateTime.weekday(.wide)) : row.due.formatted(.dateTime.day().month()))
         }
-        if row.kind == .todo { parts.append(row.note) }
+        // A to-do in no note has no note to name.
+        if row.kind == .todo, !row.note.isEmpty { parts.append(row.note) }
         return parts.joined(separator: " · ")
     }
 }

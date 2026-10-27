@@ -58,7 +58,8 @@ final class ReminderNotifications: NSObject, UNUserNotificationCenterDelegate {
         /// "14:00 · Kyoto trip", "Arriving at Pharmacy · Kyoto trip".
         func subtitle(forPlace: Bool) -> String {
             let when = forPlace ? place?.phrase : date.map { $0.formatted(date: .omitted, time: .shortened) }
-            return [when, noteName].compactMap { $0 }.joined(separator: " · ")
+            // A to-do in no note has no note to name.
+            return [when, noteName].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
         }
     }
 

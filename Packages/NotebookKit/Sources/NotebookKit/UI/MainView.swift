@@ -142,6 +142,13 @@ struct DocumentToolbar: ToolbarContent {
             }
             ToolbarSpacer(.fixed)
         }
+        if workspace.showsTodos {
+            ToolbarItem {
+                Button { workspace.newTodoRequest += 1 } label: { Label("New To-do", systemImage: "plus") }
+                    .help("New to-do for today")
+            }
+            ToolbarSpacer(.fixed)
+        }
         ToolbarItem {
             SearchFieldItem(controller: workspace.search)
                 .frame(width: 190, height: 36)

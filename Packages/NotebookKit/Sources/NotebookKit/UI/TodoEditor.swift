@@ -4,13 +4,15 @@ import SwiftUI
 /// the lines under it; the buttons for its date, time and place are under them on the Mac (`TodoEditBar`, in the row)
 /// and above the keyboard on iPhone and iPad.
 ///
-/// Return is done; Shift-Return starts a line under the words. In a line under them Return starts the next one of
-/// the same kind, and on an empty one is done; Tab and Shift-Tab move a line in and out, and `[ ] ` or `- ` typed at
-/// the start of words make a sub-to-do or a point, as in a note.
+/// Return is done (`returned`: in a to-do just added, the next one comes); Shift-Return starts a line under the
+/// words. In a line under them Return starts the next one of the same kind, and on an empty one is done; Tab and
+/// Shift-Tab move a line in and out, and `[ ] ` or `- ` typed at the start of words make a sub-to-do or a point, as in
+/// a note.
 struct TodoEditor: View {
     @Bindable var editing: TodoEditing
     var focus: FocusState<TodoFocus?>.Binding
     var end: () -> Void
+    var returned: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -28,15 +30,16 @@ struct TodoEditor: View {
                     // Return on the touch keyboard: done.
                     if title.contains("\n") {
                         editing.title = title.replacingOccurrences(of: "\n", with: "")
-                        end()
+                        returned()
                     } else {
                         editing.changed()
                     }
                 }
                 .onKeyPress(phases: .down) { titleKey($0) }
-                .onSubmit { end() }
+                .onSubmit { returned() }
                 #if os(iOS)
-                .submitLabel(.done)
+                // In a to-do just added, Return adds the next, as in Reminders.
+                .submitLabel(editing.added == nil ? .done : .next)
                 #endif
                 .accessibilityLabel("To-do")
             ForEach(editing.lines) { line in
@@ -119,7 +122,7 @@ struct TodoEditor: View {
     private func titleKey(_ press: KeyPress) -> KeyPress.Result {
         switch press.key {
         case .return:
-            if press.modifiers.contains(.shift) { editing.addLineUnderTitle() } else { end() }
+            if press.modifiers.contains(.shift) { editing.addLineUnderTitle() } else { returned() }
             return .handled
         case .tab:
             // The words stay where they are.
@@ -209,11 +212,12 @@ extension TodoEditing {
 #if os(macOS)
 /// Reminders' buttons under a to-do being edited, capsules as Reminders draws them: its day, its time and its place, in
 /// the accent colour with an × to take them away once they are set and a grey symbol until then, each a dropdown to
-/// type in or click, as Issues has them; a sub-to-do; and the note it is in.
+/// type in or click, as Issues has them; a sub-to-do; and the note it is in, or for one in no note, Move to Note….
 struct TodoEditBar: View {
     let workspace: Workspace
     let editing: TodoEditing
-    let noteName: String
+    /// Nil for a to-do in no note.
+    let noteName: String?
     var open: () -> Void
     @State private var picking: Picking?
 
@@ -243,9 +247,15 @@ struct TodoEditBar: View {
             }
             TodoChip(symbol: "checklist", title: "Add Sub-to-do") { editing.addTodo() }
             Spacer(minLength: 8)
-            TodoNoteLink(name: noteName, action: open)
-                .font(.system(size: TodosView.metaSize))
-                .layoutPriority(-1)
+            Group {
+                if let noteName {
+                    TodoNoteLink(name: noteName, action: open)
+                } else {
+                    TodoNoteLink(moving: open)
+                }
+            }
+            .font(.system(size: TodosView.metaSize))
+            .layoutPriority(-1)
         }
         .fixedSize(horizontal: false, vertical: true)
         .onChange(of: picking) { _, new in

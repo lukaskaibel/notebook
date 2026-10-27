@@ -1,9 +1,9 @@
 import XCTest
 
 /// To-dos on iPhone and iPad as in Reminders: a to-do swiped to the left shows Delete behind it, and swiped all the
-/// way across it goes from its note; a drag up or down still scrolls. The app starts on fresh sample notes in its own
-/// home folder, so nothing of yours is touched.
-final class TodosSwipeTests: XCTestCase {
+/// way across it goes from its note; a drag up or down still scrolls. New To-do adds one in no note, and Move to Note…
+/// puts it into a note. The app starts on fresh sample notes in its own home folder, so nothing of yours is touched.
+final class TodosTests: XCTestCase {
     var app: XCUIApplication!
 
     override func setUp() {
@@ -73,6 +73,66 @@ final class TodosSwipeTests: XCTestCase {
         undo.tap()
         XCTAssertTrue(cleaning.waitForExistence(timeout: 30), app.debugDescription)
         XCTAssertTrue(row("The ticket is in the blue jacket").exists, app.debugDescription)
+    }
+
+    /// New To-do at the bottom, as in Reminders: one for today, typed in; Return starts the next, and one left empty
+    /// goes. Move to Note… puts it into a note picked in ⌘K, and shaking takes that back.
+    func testNewTodoAndMoveToNote() throws {
+        launch()
+        openTodos()
+        let new = app.buttons["New To-do"].firstMatch
+        XCTAssertTrue(new.waitForExistence(timeout: 10), app.debugDescription)
+        new.tap()
+        let field = app.textFields["To-do"].firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 10), app.debugDescription)
+        field.typeText("Call the plumber")
+        shot("5-new")
+        field.typeText("\n")
+        // The next one, under it.
+        let next = app.textFields["To-do"].firstMatch
+        XCTAssertTrue(next.waitForExistence(timeout: 10), app.debugDescription)
+        next.typeText("Buy milk\n")
+        XCTAssertTrue(app.textFields["To-do"].firstMatch.waitForExistence(timeout: 10), app.debugDescription)
+        // Return in one left empty is done, and it goes.
+        app.textFields["To-do"].firstMatch.typeText("\n")
+        XCTAssertTrue(app.textFields["To-do"].firstMatch.waitForNonExistence(timeout: 10), app.debugDescription)
+        let plumber = row("Call the plumber")
+        XCTAssertTrue(plumber.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(row("Buy milk").exists, app.debugDescription)
+        shot("6-added")
+
+        // Into a note, picked in ⌘K.
+        plumber.press(forDuration: 1.2)
+        let move = app.buttons["Move to Note…"]
+        XCTAssertTrue(move.waitForExistence(timeout: 10), app.debugDescription)
+        shot("7-menu")
+        move.tap()
+        let search = app.textFields["Search or run a command"]
+        XCTAssertTrue(search.waitForExistence(timeout: 10), app.debugDescription)
+        shot("8-picker")
+        search.typeText("Errands")
+        let errands = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Errands")).element(boundBy: 0)
+        XCTAssertTrue(errands.waitForExistence(timeout: 30), app.debugDescription)
+        shot("9-picker-typed")
+        errands.tap()
+        XCTAssertTrue(search.waitForNonExistence(timeout: 10), app.debugDescription)
+        // Now in Errands: its menu opens the note rather than moving it.
+        XCTAssertTrue(plumber.waitForExistence(timeout: 30), app.debugDescription)
+        shot("10-moved")
+        plumber.press(forDuration: 1.2)
+        XCTAssertTrue(app.buttons["Mark as In Progress"].waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertFalse(app.buttons["Move to Note…"].exists, app.debugDescription)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
+        XCTAssertTrue(app.buttons["Mark as In Progress"].waitForNonExistence(timeout: 10), app.debugDescription)
+
+        // Shaken, Undo puts it back among those in no note.
+        shake()
+        let undo = app.alerts.buttons["Undo"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.alerts.staticTexts["Undo Move to Note"].exists, app.debugDescription)
+        undo.tap()
+        plumber.press(forDuration: 1.2)
+        XCTAssertTrue(app.buttons["Move to Note…"].waitForExistence(timeout: 30), app.debugDescription)
     }
 
     /// The Simulator's Device › Shake: a notification the app's UIKit takes for a shake.

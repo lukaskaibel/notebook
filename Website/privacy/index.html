@@ -66,6 +66,11 @@
         your name › iCloud › Manage on the Mac, shows how much Notebook keeps in iCloud, and can delete it.</li>
       <li><strong>A to-do's date, time and place</strong> are part of the to-do: they are written into the note after
         its words, a place as a link to it in Apple Maps, so they go along with the note like everything else in it.</li>
+      <li><strong>To-dos you add in To-dos without a note</strong>, from version 1.1, are a plain Markdown checklist,
+        <code>To-dos.md</code>, in Notebook's own iCloud folder, which Apple syncs to your other devices signed in to the
+        same Apple Account, as it syncs the earlier versions of notes; the folder doesn't show in iCloud Drive. Without
+        iCloud it stays in the app's own folder on that device. Moving such a to-do into a note writes it into that
+        note.</li>
       <li><strong>The places you chose last</strong>, to choose again at a tap, are kept in the app's preferences on that
         device.</li>
       <li><strong>Home and Work</strong>, once you choose them for reminders, are kept in the app's preferences and, in
@@ -97,7 +102,8 @@
       version 1.1, the versions of notes outside iCloud stay in its container, the folder
       <code>~/Library/Containers/com.lukaskbl.Notebook</code>, until you delete that folder too. The folders you hide,
       your reminders and your Home and Work stay in iCloud's key-value store for your other devices, and, from version
-      1.1, the versions of notes in iCloud in Notebook's iCloud folder, until you delete it in iCloud's storage settings. Your notes are your
+      1.1, the versions of notes in iCloud and the to-dos you added without a note in Notebook's iCloud folder, until you
+      delete it in iCloud's storage settings. Your notes are your
       files and stay where they are.</p>
 
     <h2>Reminders, notifications and your location</h2>
@@ -132,7 +138,8 @@
       <li>When you click or tap a web link in a note, your browser opens it.</li>
       <li>If your notes are in iCloud Drive, Apple syncs them as it syncs every other file there. Notebook asks the system
         to download notes that aren't on your device yet, so it can show and search them. From version 1.1, Apple syncs
-        the earlier versions of those notes, in Notebook's own iCloud folder, the same way. What Apple does with iCloud Drive is
+        the earlier versions of those notes, and the to-dos you added without a note, in Notebook's own iCloud folder, the
+        same way. What Apple does with iCloud Drive is
         described in <a href="https://www.apple.com/legal/privacy/">Apple's privacy policy</a>.</li>
     </ul>
 
