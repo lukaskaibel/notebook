@@ -33,14 +33,17 @@ enum DemoLibrary {
         return TodoDue(date, time: hour != nil).markdown
     }
 
-    /// A time later today, at the next half hour `hours` from now but no later than `latest` (hour, minute): the to-dos
-    /// due today stay under Today whenever the samples are made, also in the evening, rather than turning overdue at a
-    /// fixed hour.
-    private static func later(by hours: Int, latest: (Int, Int), now: Date = .now) -> String {
+    /// A time later today, at the next half hour `hours` from now, or today without a time when that would be after
+    /// `latest` (hour, minute): the to-dos due today stay under Today whenever the samples are made, also late in the
+    /// evening, rather than turning overdue at a fixed hour.
+    static func later(by hours: Int, latest: (Int, Int), now: Date = .now) -> String {
         let calendar = Calendar.current
         let minutes = calendar.component(.hour, from: now) * 60 + calendar.component(.minute, from: now) + hours * 60
-        let at = min((minutes + 29) / 30 * 30, latest.0 * 60 + latest.1)
-        let date = calendar.date(bySettingHour: at / 60, minute: at % 60, second: 0, of: now) ?? now
+        let at = (minutes + 29) / 30 * 30
+        guard at <= latest.0 * 60 + latest.1,
+              let date = calendar.date(bySettingHour: at / 60, minute: at % 60, second: 0, of: now) else {
+            return TodoDue(now, time: false).markdown
+        }
         return TodoDue(date, time: true).markdown
     }
 

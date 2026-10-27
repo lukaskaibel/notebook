@@ -39,7 +39,7 @@ xcodebuild -project Notebook.xcodeproj -scheme Notebook -configuration Debug -de
 swiftc -O Tools/readme-images/capture.swift -o "$work/capture" 2>/dev/null
 
 # say <command>…: drives the app through its debug remote.
-say() { for line in "$@"; do echo "$line" >> "$work/cmd"; done; }
+say() { local line; for line in "$@"; do echo "$line" >> "$work/cmd"; done; }
 
 rm -rf "${library:?}"
 defaults delete $bundle_id 2>/dev/null || true
@@ -73,23 +73,24 @@ front() {
   exit 1
 }
 
-# active <picture>: whether the window was drawn as the active one: the close button's red is in its top left corner,
-# and nothing else red is.
+# active <picture>: whether the window was drawn as the active one: its traffic lights in the top left corner are in
+# colour, and nothing else there is. Only the close button's red can go grey in an active window, while a sheet such
+# as Browse All Versions is open, so any colour counts.
 active() {
   python3 - "$1" <<'EOF'
 import sys
 import numpy as np
 from PIL import Image
 corner = np.asarray(Image.open(sys.argv[1]).convert("RGB").crop((0, 0, 140, 140))).astype(int)
-red = ((corner[..., 0] > 180) & (corner[..., 1] < 140) & (corner[..., 2] < 140)).sum()
-sys.exit(0 if red > 80 else 1)
+coloured = (corner.max(axis=-1) - corner.min(axis=-1) > 90).sum()
+sys.exit(0 if coloured > 80 else 1)
 EOF
 }
 
 # shot <name> <theme> <caption> <smaller line> <command>…: sets the scene up in front, lets it settle, takes the
 # window and lays it out with its caption.
 shot() {
-  local name=$1 theme=$2 line=$3 smaller=$4
+  local name=$1 theme=$2 caption=$3 smaller=$4
   shift 4
   front
   say "appearance $theme"
@@ -113,7 +114,7 @@ shot() {
     echo "$name came out ${size% }px, not $((width * 2)) x $((height * 2)): is the window on a Retina display?" >&2
     exit 1
   fi
-  python3 Tools/app-store-media/caption.py "$work/$name.png" "$work/framed/$name.png" mac "$theme" "$line" "$smaller"
+  python3 Tools/app-store-media/caption.py "$work/$name.png" "$work/framed/$name.png" mac "$theme" "$caption" "$smaller"
   echo "$out/$name.png"
 }
 
