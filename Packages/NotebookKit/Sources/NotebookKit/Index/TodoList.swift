@@ -85,7 +85,7 @@ final class TodoList {
         self.cache = cache
         shownLoose = loose
         var fresh = fresh
-        applyPatches(to: &fresh)
+        applyPatches(to: &fresh, read: true)
         let changed = fresh != items
         if changed { items = fresh }
         let becameReady = ready && !isReady
@@ -157,11 +157,19 @@ final class TodoList {
     }
 
     /// The changes in `items` that a reading may not have caught up with yet.
-    private func applyPatches(to items: inout [Item]) {
-        // Read again since the change: the note says what it says now.
+    /// `read`: `items` is what a reading of the notes found, not what shows.
+    private func applyPatches(to items: inout [Item], read: Bool = false) {
         let loose = shownLoose
         patches.removeAll { patch in
-            patch.until < .now || items.contains { FileNode.samePath($0.url, patch.url) && $0.modified != patch.modified }
+            if patch.until < .now { return true }
+            // One just added goes once a reading has it as it is now: a reading begun before its line was written is
+            // of a note changed since, without it.
+            if let added = patch.added {
+                guard read, let todo = patch.todo else { return false }
+                return items.contains { FileNode.samePath($0.url, added.url) && $0.todo.source == todo.source }
+            }
+            // Read again since the change: the note says what it says now.
+            return items.contains { FileNode.samePath($0.url, patch.url) && $0.modified != patch.modified }
                 || loose.map { FileNode.samePath($0.url, patch.url) && $0.modified != patch.modified } == true
         }
         for patch in patches {

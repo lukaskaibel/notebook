@@ -142,6 +142,26 @@ final class LooseTodosTests: XCTestCase {
         try await until { self.loose(workspace) == "- [ ] Call the plumber \(date)\n" }
     }
 
+    func testANewTodoStaysThroughAReadingBeforeItsLineWasWritten() async throws {
+        let list = TodoList()
+        let url = base.appendingPathComponent("To-dos.md")
+        func read(_ text: String, at seconds: Int) async throws {
+            list.update(loose: LooseTodos.Snapshot(url: url, text: text, modified: Date(timeIntervalSinceReferenceDate: Double(seconds))))
+            try await until { list.items.contains { $0.todo.text == "Read \(seconds)" } || !text.contains("Read") }
+        }
+        list.update(entries: [:], hidden: [], built: true)
+        try await read("- [ ] Call the plumber\n- [ ] Read 1\n", at: 1)
+        let todo = try XCTUnwrap(TodoList.todo(["- [ ]"], line: 2))
+        list.add(TodoList.Item(url: url, note: "", modified: nil, todo: todo, isLoose: true))
+        XCTAssertEqual(list.items.count, 3)
+        // A reading begun before its line was written, finished after: the file changed meanwhile, but not by it yet.
+        try await read("- [ ] Call the plumber\n- [ ] Read 2\n", at: 2)
+        XCTAssertEqual(list.items.map(\.todo.text), ["Call the plumber", "Read 2", ""], "still there")
+        // The reading that has it takes over, without the row twice.
+        try await read("- [ ] Call the plumber\n- [ ] Read 3\n- [ ]\n", at: 3)
+        XCTAssertEqual(list.items.map(\.todo.text), ["Call the plumber", "Read 3", ""])
+    }
+
     func testANewTodoLeftWithoutWordsGoes() async throws {
         let workspace = try await makeWorkspace(loose: "- [ ] Call the plumber\n")
         let manager = workspace.fileUndoManager
