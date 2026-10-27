@@ -21,6 +21,7 @@ struct FileRow: View {
     var date: Date?
     /// A hidden folder, there while its location shows hidden folders.
     var isHidden = false
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         // Hidden folders show dimmed, as hidden files in the Files app and the Finder.
@@ -28,7 +29,9 @@ struct FileRow: View {
         Label {
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
-                    .lineLimit(1)
+                    // At the largest text sizes a name goes on over a few lines, as in Files, rather than losing its
+                    // middle.
+                    .lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
                     .truncationMode(.middle)
                     .foregroundStyle(dimmed || isInCloud ? .secondary : .primary)
                 if showsDetail, let detail {
