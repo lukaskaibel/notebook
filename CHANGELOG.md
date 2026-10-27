@@ -103,10 +103,11 @@ versions follow [semantic versioning](https://semver.org).
   outline, which those screens don't have; the note's ⋯ menu has its outline there.
 - The sidebar on the Mac no longer scrolls back to the open note each time it is saved while you look at another part
   of it.
-- On iPhone and iPad, when the buttons for where the caret is come or go in the bar above the keyboard, the tools that
-  move onto the first page or off it slide there, rather than showing twice for a moment. The bar also comes up with
-  the keyboard already as it should be for where you tap, and goes away with it as it was, rather than its buttons
-  popping in after it or shrinking away as it leaves.
+- Closing Notebook's window on the Mac no longer quits it. As in Notes, Notebook keeps running: its icon in the Dock and
+  the new Window › Notebook bring the window back, with the note you had open.
+- On the Mac, ⌘N in a note's own window made the new note in the main window behind it, so nothing seemed to happen.
+  New Note, New Folder, Open Recent, Search, ⌘K, To-dos, Back and Forward now bring the main window to the front, and
+  open it again if it was closed.
 - Turning the iPad no longer rebuilds the window a moment after the turn, with the toolbar and the note jumping and, in
   portrait, the sidebar left lying over the note, dimming it. Turned to portrait with a note open, the sidebar now
   slides out of the way, and back in when you turn the iPad to landscape; put away by hand, it stays away. Opened in
@@ -119,6 +120,10 @@ versions follow [semantic versioning](https://semver.org).
 - On the iPhone's welcome screen, the last lines no longer run under the Choose a Folder button.
 - On the iPhone, going back to the first screen from a note no longer pushes its list down once you are there: the note
   you were in is already at the top of Recent while you go back.
+- On iPhone and iPad, when the buttons for where the caret is come or go in the bar above the keyboard, the tools that
+  move onto the first page or off it slide there, rather than showing twice for a moment. The bar also comes up with
+  the keyboard already as it should be for where you tap, and goes away with it as it was, rather than its buttons
+  popping in after it or shrinking away as it leaves.
 - In the Mac's sidebar, Tab now goes on into the note that is open, with the caret where it was, as Tab goes from the
   list to the note in Notes and Mail. Moving a file to the Trash from the sidebar opens the next file in its folder, or
   the one before it at the end, as Notes shows the next note; before, the note opened before it came back, wherever it
