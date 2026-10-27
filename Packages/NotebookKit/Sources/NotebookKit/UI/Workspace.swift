@@ -96,6 +96,11 @@ public final class Workspace: NSObject {
         get { columnVisibility != .detailOnly }
         set { columnVisibility = newValue ? .all : .detailOnly }
     }
+    #if os(iOS)
+    /// The iPad's sidebar was put away for want of room, so it comes back once the window is wide again, also after the
+    /// window was as narrow as a phone and showed the iPhone's screens.
+    @ObservationIgnored var sidebarHiddenForWidth = false
+    #endif
     /// The outline of the open note, on the right. On the iPad it starts hidden, leaving the note the room.
     var isOutlineVisible = UserDefaults.standard.object(forKey: "showsOutline") as? Bool ?? Workspace.showsOutlineAtFirst {
         didSet { UserDefaults.standard.set(isOutlineVisible, forKey: "showsOutline") }

@@ -12,8 +12,6 @@ struct PadBrowser: View {
     @FocusState private var isSearchFocused: Bool
     /// Wide enough for the sidebar next to the page: an iPad in landscape, or a large window.
     @State private var isWide = true
-    /// The sidebar was put away because the window got narrow, so it comes back when the window is wide again.
-    @State private var hidSidebarForWidth = false
     @Bindable private var settings = NotebookSettings.shared
 
     var body: some View {
@@ -24,7 +22,6 @@ struct PadBrowser: View {
             // Room for the sidebar, a column of text and the outline: an iPad in landscape. In portrait, even the
             // 13-inch one's, the text would get too narrow with all three.
             .onGeometryChange(for: Bool.self) { $0.size.width >= 1100 } action: { wide in
-                guard wide != isWide else { return }
                 isWide = wide
                 withAnimation { fitSidebar() }
             }
@@ -67,7 +64,7 @@ struct PadBrowser: View {
         }
         .onChange(of: workspace.columnVisibility) { _, visibility in
             // Shown by hand: it stays, whatever the width does next.
-            if visibility != .detailOnly { hidSidebarForWidth = false }
+            if visibility != .detailOnly { workspace.sidebarHiddenForWidth = false }
         }
     }
 
@@ -75,7 +72,7 @@ struct PadBrowser: View {
     private func makeWayForPage() {
         guard !isWide, workspace.columnVisibility != .detailOnly else { return }
         workspace.columnVisibility = .detailOnly
-        hidSidebarForWidth = true
+        workspace.sidebarHiddenForWidth = true
     }
 
     /// Narrower, the sidebar makes way for what is open, as Files' does when the iPad turns to portrait; wider again,
@@ -83,9 +80,9 @@ struct PadBrowser: View {
     private func fitSidebar() {
         if !isWide {
             if workspace.currentURL != nil || workspace.showsTodos { makeWayForPage() }
-        } else if hidSidebarForWidth {
+        } else if workspace.sidebarHiddenForWidth {
             workspace.columnVisibility = .all
-            hidSidebarForWidth = false
+            workspace.sidebarHiddenForWidth = false
         }
     }
 
