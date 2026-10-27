@@ -79,6 +79,7 @@ versions follow [semantic versioning](https://semver.org).
   version in, rather than closing as if it had been deleted.
 - Leaving a note you took pictures out of no longer downloads the other notes in its folder from iCloud to see whether
   they use those pictures: with one of them still in iCloud, the pictures stay.
+- On the iPad, the Format popover (Aa in the toolbar) cut off Body, the last of the text styles; all four fit now.
 - On iPhone and iPad, On My iPhone (On My iPad) chosen itself as a location was called "File Provider Storage", the
   name of its folder on disk, on the first screen, in the sidebar and in Settings. It now has the name the Files app
   gives it, also where you added it before.
