@@ -173,9 +173,12 @@ struct TodosView: View {
         .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { old, new in
             if swiped != nil, abs(new - old) > 1 { swiped = nil }
         }
-        // ⌘K closed, after Move to Note… say: Shake to Undo takes the focus back from its field.
+        // ⌘K closed, after Move to Note… say: Shake to Undo takes the focus, once its field, going with it, has let go.
         .onChange(of: workspace.palette == nil) { _, closed in
-            if closed, editing == nil { workspace.takeUndoFocusIfFree() }
+            guard closed else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                if editing == nil { workspace.takeUndoFocusIfFree() }
+            }
         }
         // In the bar once the page's own title has scrolled up under it, as a note's.
         .navigationTitle(workspace.isTitleScrolledAway ? "To-dos" : "")
