@@ -1,0 +1,13 @@
+Notebook 1.1 brings widgets, version history and a lot of polish.
+
+• Widgets: New Note on the Home Screen, the Lock Screen and the Mac's desktop, and as a control in Control Center and on the Action button. A Today widget with your to-dos for today and the overdue ones, ticked right in the widget, and a Note widget that shows a note of your choice.
+• Share to Notebook: text, links, pictures and PDFs from any app's share sheet become a new note, or go at the end of the note you opened last.
+• Version history: Notebook keeps earlier versions of your notes as you write. Show Changes marks what's new and what went, and Restore puts a version back. File › Revert To on the Mac, Version History in the ⋯ menu on iPhone and iPad.
+• Import from Apple Notes: export notes from Notes as Markdown, then import them with their pictures, links and folders.
+• To-dos that repeat (🔁 every week), to-dos that aren't in a note, and swipe to delete in To-dos.
+• Sort a folder by date edited or date created.
+• Search and ⌘K find names loosely, as Spotlight does: "kytr" finds Kyoto trip, and a typo or two is fine.
+• On the Mac: Edit › Find in a note, Spelling and Grammar, Attach File, and File › Duplicate, as in Notes. Closing the window no longer quits Notebook.
+• On iPhone and iPad: a note's text follows the system's text size, the bar above the keyboard has the size of Notes', and notes fade softly under the bars as you scroll.
+• Notes are saved in the background, so a slow disk or iCloud never makes you wait.
+• Many fixes, among them a hang on the Mac with the same note open in two windows, and deleting on iPhone and iPad.

@@ -1,50 +1,37 @@
 The ease of Notes. The freedom of files.
 
-Your notes are your files. Every note is a plain Markdown file: no account, no database, nothing to import, and Obsidian and other Markdown apps read the same files.
+Notebook keeps every note as a plain Markdown file, in your own iCloud Drive or any folder you choose. There is no vault to set up and nothing to import: your notes sit right next to the PDFs, photos and documents they belong with, and they stay yours. Obsidian and other Markdown apps open the same files.
 
-Right where your other things are. There is no vault: Notebook shows iCloud Drive, or any folder you choose, as the Finder does, so a note sits next to the PDF, the Pages document and the scan it belongs with.
+And it writes like Notes. Headings, bold, lists and checklists look finished as you type, and their Markdown marks show only on the line you're writing. Pictures, PDFs and drawings go right into the note. On the Mac, iPhone and iPad it's an Apple app through and through: widgets, Spotlight, Shortcuts, the share sheet, Apple Pencil and the keyboard shortcuts you know.
 
-An Apple app through and through, on the Mac, iPhone and iPad. It writes like Notes: the marks hide as you type, and pictures and links are objects in the note.
+NEW IN 1.1
+• Widgets for a new note, today's to-dos and a note of your choice, and New Note in Control Center
+• Version history: every earlier version of a note, with what changed marked
+• Share to Notebook from any app
+• Import from Apple Notes
+• To-dos that repeat, and to-dos that don't need a note
 
 WRITE
-• Markdown that gets out of the way: headings, bold, lists, links and checklists look finished as you type, and their marks show only where you are writing
-• Tables, code with highlighting, maths and Mermaid diagrams, drawn right in the note
-• Pictures, PDFs and other files as objects in the note, kept in a hidden .assets folder beside it
-• Drawings in notes, with Apple Pencil, a finger, the mouse or the trackpad
-• [[Links]] between notes that keep working when you rename or move a note or its folder
-• Saves as you type; a change from another device is merged in line by line, never written over
-• New Note in Shortcuts, Spotlight and Siri, and on an iPhone's Action button: a new note, ready to type
+• Tables, code, maths and Mermaid diagrams, drawn right in the note
+• Pictures, PDFs and files in the note, kept in a hidden .assets folder beside it
+• Drawings with Apple Pencil, a finger, the mouse or the trackpad
+• [[Links]] between notes that keep working when you rename or move them
 
 FIND
-• Search finds the names of notes, files and folders, headings, words in notes and PDFs, and the text in pictures, scanned pages and handwriting
-• ⌘K finds the same and runs any command
-• Every note in Spotlight on the Mac and in search on iPhone and iPad: pick one and it opens in Notebook
+• Search finds words in notes, PDFs, pictures, scans and handwriting, and names from a few letters, typos included
+• ⌘K finds anything and runs any command, and every note is in Spotlight
 
-TO-DOS AND REMINDERS
-• Every open checkbox of every note in one list, grouped by when it's due, as in Reminders. Tick to-dos off, edit them in place or drag them to another day
-• Give a to-do a date, a time or a place: it is written into the note, where other Markdown apps read it too
-• Remind Me brings a note back at a time you type in a few words ("friday evening", "in 3 weeks"), or when you arrive at or leave a place, such as Home or Work
+TO-DOS
+• Every open checkbox of every note in one list, by when it's due, as in Reminders
+• Dates, times, places and repeats are written into the note, where other Markdown apps read them too
 
-YOUR FOLDERS, AS THEY ARE
-• iCloud Drive shows what the Finder shows: Desktop and Documents, and the folders of other apps
-• Create, rename and move notes and folders by drag and drop; Undo takes back a move, a rename or the Trash
-• Give a folder a symbol and a colour, kept where the Finder keeps them, and hide the folders you don't need
-• Favourites at the top of the sidebar
-
-ON THE MAC
-• A window built like Notes and Mail: the sidebar, the note and its outline, and swipe back and forward as in Safari
-• PDFs, pictures and videos open in the window, everything else in Quick Look
-• Drag pictures and files around a note, into another note, or out to the Finder and other apps
-• Export a note as a PDF or a picture, or print it
-
-ON IPHONE AND IPAD
-• One folder per screen on iPhone, as in Files; the Mac's sidebar on iPad
-• A bar above the keyboard with formatting, checklists, links, the camera, the document scanner and photos
-• The Mac's keyboard shortcuts on an iPad with a keyboard
+YOUR FOLDERS
+• iCloud Drive as the Finder shows it, with drag and drop, and Undo for moves, renames and the Trash
+• Folder symbols and colours, kept where the Finder keeps them
 
 PRIVATE
-• No account, no server, no tracking. Notebook sees only the folders you choose, and your notes stay in them.
+• No account, no server, no tracking. Notebook sees only the folders you choose.
 
-Try it first: Try Sample Notes on the first screen makes a folder of sample notes to look around in.
+To look around first, Try Sample Notes on the first screen makes a folder of sample notes.
 
-Notebook is open source: github.com/lukaskaibel/notebook
+Notebook is free and open source: github.com/lukaskaibel/notebook

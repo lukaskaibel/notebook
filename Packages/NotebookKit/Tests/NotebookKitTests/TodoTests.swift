@@ -34,6 +34,18 @@ final class TodoTests: XCTestCase {
         XCTAssertEqual(TodoMarks.schedule(of: both).place?.name, "Praxis")
     }
 
+    func testSampleTimesStayLaterToday() throws {
+        let calendar = Calendar.current
+        func at(_ hour: Int, _ minute: Int) throws -> Date {
+            try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 27, hour: hour, minute: minute)))
+        }
+        XCTAssertEqual(DemoLibrary.later(by: 2, latest: (23, 0), now: try at(14, 10)), "⏰ 2026-10-27 16:30")
+        XCTAssertEqual(DemoLibrary.later(by: 2, latest: (23, 0), now: try at(21, 0)), "⏰ 2026-10-27 23:00")
+        XCTAssertEqual(DemoLibrary.later(by: 2, latest: (23, 0), now: try at(21, 1)), "📅 2026-10-27",
+                       "too late for a time: due today, so not overdue before the day is over")
+        XCTAssertEqual(DemoLibrary.later(by: 3, latest: (23, 30), now: try at(23, 40)), "📅 2026-10-27")
+    }
+
     func testMarksAreWrittenAsOtherAppsReadThem() {
         XCTAssertEqual(TodoDue(year: 2026, month: 10, day: 24, hour: 9, minute: 5).markdown, "⏰ 2026-10-24 09:05")
         XCTAssertEqual(TodoDue(year: 2026, month: 1, day: 2).markdown, "📅 2026-01-02")

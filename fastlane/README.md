@@ -67,6 +67,18 @@ Builds the Mac, iPhone and iPad apps, uploads them with texts and screenshots an
 
 submit:false stops before the submission, automatic_release:true releases them as soon as they are approved
 
+### store_media
+
+```sh
+[bundle exec] fastlane store_media
+```
+
+Checks the header, the search result and the app previews against App Store Connect's specs, says where they'd go
+
+version:1.1.0 is required. upload:true uploads them to the app's Asset Library and places them on that version's
+
+English page, once every one has passed; platform:ios or platform:mac takes one platform alone
+
 ----
 
 

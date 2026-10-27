@@ -1,1 +1,1 @@
-The ease of Notes. The freedom of files. Your notes are plain files in your own iCloud Drive, next to your other documents, on Mac, iPhone and iPad.
+New in 1.1: widgets, version history, Share to Notebook, repeating to-dos and import from Apple Notes. Your notes stay Markdown files, next to your other documents.
