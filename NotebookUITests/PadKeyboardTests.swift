@@ -75,7 +75,7 @@ final class PadKeyboardTests: XCTestCase {
             sleep(1)
             searching = app.debugDescription.split(separator: "\n").contains { $0.contains("label: 'Search'") && $0.contains("Keyboard Focused") }
         }
-        XCTAssertTrue(searching, "⌥⌘F: no caret in Search")
+        XCTAssertTrue(searching, "⌥⌘F: no caret in Search: " + app.debugDescription.split(separator: "\n").filter { $0.contains("SearchField") || $0.contains("Keyboard Focused") }.joined(separator: " | "))
 
         note.tap()
         app.typeKey("f", modifierFlags: .command)
