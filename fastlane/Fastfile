@@ -44,7 +44,7 @@ BUNDLES = {
 # The App Group the app and the share extension share (NOTEBOOK_APP_GROUP in Config/Shared.xcconfig), with the
 # identifiers that have it.
 APP_GROUP = "group.com.lukaskbl.Notebook"
-APP_GROUP_BUNDLES = [APP_ID, "#{APP_ID}.Share"].freeze
+APP_GROUP_BUNDLES = [APP_ID, "#{APP_ID}.Widgets", "#{APP_ID}.Share"].freeze
 # Absolute paths, taken while loading: lanes run from other folders, and __dir__ is relative in a Fastfile.
 HERE = File.expand_path(__dir__)
 ROOT = File.expand_path("..", HERE)
@@ -227,7 +227,7 @@ def check_app_group(identifier, profile)
   return if groups.include?(APP_GROUP)
 
   UI.user_error!("The profile for #{identifier} doesn't have the App Group #{APP_GROUP}. On developer.apple.com, " \
-                 "register the group and give it to #{APP_GROUP_BUNDLES.join(' and ')} (Design/app-store.md).")
+                 "register the group and give it to #{APP_GROUP_BUNDLES.join(', ')} (Design/app-store.md).")
 end
 
 # The App Store Connect API can neither make an iCloud container nor give it to an App ID, so that is done by hand,

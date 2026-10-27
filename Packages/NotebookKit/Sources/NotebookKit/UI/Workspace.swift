@@ -51,6 +51,8 @@ public final class Workspace: NSObject {
     @ObservationIgnored var dueTimer: Timer?
     /// The to-dos' notifications, scheduled a moment after the to-dos changed.
     @ObservationIgnored var todoScheduling: DispatchWorkItem?
+    /// What was last written for the widgets, and the writing (`Workspace+Widgets`).
+    @ObservationIgnored let widgets = WidgetKeeping()
     #if os(macOS)
     /// Reports waiting for Notebook to come to the front (`reportInFront`).
     @ObservationIgnored var reportsWaiting: [(title: String, message: String)] = []
@@ -481,6 +483,8 @@ public final class Workspace: NSObject {
         locations.removeAll { $0.id == id }
         if !temporaryLocations { LocationStore.save(locations) }
         locationsChanged()
+        // Its notes leave the widgets, and Edit Widget.
+        publishWidgetNotes()
     }
 
     #if os(macOS)
@@ -1153,6 +1157,7 @@ public final class Workspace: NSObject {
         hiddenFolderMoved(from: old, to: new)
         reminderMoved(from: old, to: new)
         defaultFolderMoved(from: old, to: new)
+        widgetNoteMoved(from: old, to: new)
         favorites = favorites.map(fix)
         recents = recents.map(fix)
         history = history.map(fix)
@@ -1749,6 +1754,7 @@ public final class Workspace: NSObject {
         defaultFolderMoved(from: url, to: nil)
         favorites.removeAll { HiddenFolders.withoutPrivate($0) == HiddenFolders.withoutPrivate(url.path) }
         if !temporaryLocations { UserDefaults.standard.set(favorites, forKey: "favorites") }
+        widgetNoteThrownAway(url)
         showChanges(in: [url.deletingLastPathComponent()], removing: [url])
     }
 

@@ -23,6 +23,10 @@ extension Workspace {
         // Ready only once every file has been read, not with the index kept from the last run: until then a to-do left
         // out would take its notification with it.
         todos.update(entries: index.byPathSnapshot, hidden: index.hiddenPaths, built: index.hasBuilt && !index.isBuilding)
+        widgets.refresh?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.publishWidgetNotes(catalog: false) }
+        widgets.refresh = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: work)
     }
 
     /// The to-dos changed: their notifications follow a moment later, so a pause in typing doesn't schedule them
@@ -33,7 +37,10 @@ extension Workspace {
         sidebar?.refreshTodosRow()
         #endif
         todoScheduling?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.scheduleTodoNotifications() }
+        let work = DispatchWorkItem { [weak self] in
+            self?.scheduleTodoNotifications()
+            self?.publishWidgetTodos()
+        }
         todoScheduling = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: work)
     }
@@ -162,20 +169,31 @@ extension Workspace {
     }
 
     /// Ticks a to-do, or unticks it. Undo gives it back the mark it had, `[/]` say. `fromNotification`: Done in the
-    /// to-do's notification (`setTodoMark`).
+    /// to-do's notification; `unless` and `outcome`: see `setTodoMark`.
     @discardableResult
-    func setTodoDone(_ todo: TodoReference, _ done: Bool, fromNotification: Bool = false) -> Task<Void, Never>? {
+    func setTodoDone(_ todo: TodoReference, _ done: Bool, fromNotification: Bool = false, unless refused: TodoLinesCheck? = nil,
+                     outcome: (@MainActor (TodoChangeOutcome) -> Void)? = nil) -> Task<Void, Never>? {
         let todo = current(todo)
-        guard let mark = Todos.mark(of: todo.source), mark.isClosed != done else { return nil }
-        return setTodoMark(todo, done ? .done : .open, fromNotification: fromNotification)
+        guard let mark = Todos.mark(of: todo.source) else {
+            outcome?(.notThere)
+            return nil
+        }
+        guard mark.isClosed != done else {
+            outcome?(.unchanged)
+            return nil
+        }
+        return setTodoMark(todo, done ? .done : .open, fromNotification: fromNotification, unless: refused, outcome: outcome)
     }
 
     /// Puts another mark in a to-do's brackets: done, in progress, cancelled, or back to do. Ticked, a to-do that repeats
     /// gets the day it was done and the next one goes above it, as the Tasks plugin writes them; brought back, a to-do
     /// loses the day it was done. The notifications of one that repeats change once the change is written, and from its
     /// notification (`fromNotification`) the next one's is in before the task ends, even before To-dos lists it.
+    /// `unless`: nothing is changed when it holds for the to-do's line in the note as it is then. `outcome`: told what
+    /// became of it, once, instead of a beep when it couldn't be done.
     @discardableResult
-    func setTodoMark(_ todo: TodoReference, _ mark: TaskMark, fromNotification: Bool = false) -> Task<Void, Never>? {
+    func setTodoMark(_ todo: TodoReference, _ mark: TaskMark, fromNotification: Bool = false, unless refused: TodoLinesCheck? = nil,
+                     outcome: (@MainActor (TodoChangeOutcome) -> Void)? = nil) -> Task<Void, Never>? {
         let todo = current(todo)
         let before = Todos.mark(of: todo.source) ?? .open
         let name = switch mark {
@@ -185,12 +203,16 @@ extension Workspace {
         default: "Mark To-do"
         }
         let today = TodoDay.today
-        guard let after = Todos.marking(todo.source, as: mark, today: today) else { return nil }
+        guard let after = Todos.marking(todo.source, as: mark, today: today) else {
+            outcome?(.unchanged)
+            return nil
+        }
         let edit: TodoLinesEdit = { text, document, index in
-            Todos.marking(in: text, document: document, line: index, as: mark, today: today)
+            if let refused, refused(text, document, index) { return nil }
+            return Todos.marking(in: text, document: document, line: index, as: mark, today: today)
         }
         guard let next = after.next else {
-            return changeTodo(todo, to: after.line, actionName: name, edit: edit, under: nil, undo: { [weak self] changed in
+            return changeTodo(todo, to: after.line, actionName: name, edit: edit, under: nil, outcome: outcome, undo: { [weak self] changed in
                 self?.setTodoMark(changed, before)
             })
         }
@@ -209,7 +231,7 @@ extension Workspace {
             let change = edit(text, document, index)
             if let change { written.set(change.replacement.contains("\n")) }
             return change
-        }, under: nil, whenWritten: { [weak self] in
+        }, under: nil, outcome: outcome, whenWritten: { [weak self] in
             await self?.remindOfNext(nextTodo, withdrawing: notified, asItWillBe: fromNotification)?.value
         }, undo: { [weak self] _ in
             self?.takeBackTick(tick)
@@ -357,6 +379,8 @@ extension Workspace {
     typealias TodoEdit = @Sendable (NSString, MarkdownLine) -> (range: NSRange, replacement: String)?
     /// A change to a to-do and the lines under it, given the note's text, its lines and the to-do's line.
     typealias TodoLinesEdit = @Sendable (NSString, MarkdownDocument, Int) -> (range: NSRange, replacement: String)?
+    /// Something about a to-do's line in a note, given the same.
+    typealias TodoLinesCheck = @Sendable (NSString, MarkdownDocument, Int) -> Bool
 
     /// Changes a to-do's line. See `changeTodo(_:to:actionName:edit:under:undo:)`.
     private func changeTodo(_ todo: TodoReference, actionName: String, edit: @escaping TodoEdit, undo: @escaping (TodoReference) -> Void) -> Task<Void, Never>? {
@@ -396,43 +420,53 @@ extension Workspace {
     /// `line` is where the to-do's line is after the change, when lines go in or out above it, and `shows` what To-dos
     /// shows in place of a to-do it lists, when not the to-do's line after the change. Without `rewrites`, what the
     /// to-do's line said stays the to-do's (`current(_:)`): a line that says the same is there again.
+    /// `outcome` is told once what became of the change, and then there is no beep when it couldn't be made.
     private func changeTodo(_ todo: TodoReference, to source: String, line: Int? = nil, shows: (todo: TodoReference, source: String?, under: [String]?)? = nil,
                             rewrites: Bool = true, actionName: String, edit: @escaping TodoLinesEdit, under: [String]?,
-                            now: Bool = false, whenWritten: (@MainActor () async -> Void)? = nil,
+                            now: Bool = false, outcome: (@MainActor (TodoChangeOutcome) -> Void)? = nil,
+                            whenWritten: (@MainActor () async -> Void)? = nil,
                             undo: @escaping (TodoReference) -> Void) -> Task<Void, Never>? {
         let changed = TodoReference(url: todo.url, line: line ?? todo.line, source: source)
         let shown = shows ?? (todo, source, under)
         if let editor = editorShowing(todo.url) {
+            // The note isn't in the editor yet: another time.
+            if let outcome, editor.isWaitingForText {
+                outcome(.failed)
+                return nil
+            }
             guard let line = editor.todoLine(todo.source, near: todo.line) else {
-                beep()
+                if let outcome { outcome(.notThere) } else { beep() }
                 return nil
             }
             guard editor.editTodoLines(line: line, actionName: actionName, edit: edit) else {
                 // The lines under it changed meanwhile.
-                if under != nil { beep() }
+                if let outcome { outcome(.notThere) } else if under != nil { beep() }
                 return nil
             }
             if rewrites { rewrote(todo, to: changed) }
             todos.patch(shown.todo, to: shown.source, under: shown.under)
             // From a notification the app may only have a moment: the note is written now, not after a pause.
             saveNote(showing: todo.url)
+            outcome?(.written)
             return whenWritten.map { then in Task { await then() } }
         }
         if rewrites { rewrote(todo, to: changed) }
         todos.patch(shown.todo, to: shown.source, under: shown.under)
         let kept = keepTodoChangeForUndo(actionName) { undo(changed) }
         guard !now else {
-            if Self.write(todo, edit: edit) == nil { todos.unpatch(shown.todo) }
+            let written = Self.write(todo, edit: edit)
+            if written.change == nil { todos.unpatch(shown.todo) }
+            outcome?(written.outcome)
             return nil
         }
-        return writeTodoChange(in: todo.url, { Self.write(todo, edit: edit) != nil }, failed: { [weak self] in
+        return writeTodoChange(in: todo.url, { Self.write(todo, edit: edit).outcome }, failed: { [weak self] in
             // Changed or gone meanwhile, here or on another device: the list shows it as it is now, and there is
             // nothing to undo.
             kept.forget()
             guard let self else { return }
             if todoRewrites[Self.rewriteKey(todo)] == changed { todoRewrites[Self.rewriteKey(todo)] = nil }
             todos.unpatch(shown.todo)
-        }, whenWritten: whenWritten)
+        }, outcome: outcome, whenWritten: whenWritten)
     }
 
     /// Keeps a change to a note's file for Undo as it is asked for, before it is written: Undo pressed at once waits
@@ -454,19 +488,26 @@ extension Workspace {
     }
 
     /// Writes a change to a note's file off the main thread, after the changes asked for before it, and has search
-    /// read the note again. `failed` when it couldn't be written.
-    private func writeTodoChange(in url: URL, _ write: @escaping @Sendable () -> Bool, failed: @escaping () -> Void,
+    /// read the note again. `failed` when it couldn't be made; `outcome` is told what became of it, and then there is
+    /// no beep.
+    private func writeTodoChange(in url: URL, _ write: @escaping @Sendable () -> TodoChangeOutcome, failed: @escaping () -> Void,
+                                 outcome: (@MainActor (TodoChangeOutcome) -> Void)? = nil,
                                  whenWritten: (@MainActor () async -> Void)?) -> Task<Void, Never> {
         let previous = lastTodoWrite
         let task = Task { [weak self] in
             await previous?.value
             let written = await Task.detached(priority: .userInitiated) { write() }.value
-            guard let self else { return }
+            guard let self else {
+                outcome?(written)
+                return
+            }
             index.refresh(folders: [url.deletingLastPathComponent()], locations: locations)
-            guard written else {
+            guard written == .written else {
                 failed()
+                if let outcome { return outcome(written) }
                 return beep()
             }
+            outcome?(.written)
             await whenWritten?()
         }
         lastTodoWrite = task
@@ -532,34 +573,40 @@ extension Workspace {
     }
 
     /// Changes a to-do in its file: the line it is on now, found by what it said. The line and what it says after the
-    /// change, or nil when the to-do isn't there or the file couldn't be written.
-    nonisolated private static func write(_ url: URL, edit: (NSString, MarkdownDocument) -> (range: NSRange, replacement: String)?) -> Bool {
-        var written = false
-        var error: NSError?
-        NSFileCoordinator().coordinate(writingItemAt: url, options: .forMerging, error: &error) { url in
-            guard let data = try? Data(contentsOf: url), let text = NoteDocument.decode(data) else { return }
-            let string = text as NSString
-            guard let change = edit(string, MarkdownParser.parse(string)) else { return }
-            written = FileOperations.write(Data(string.replacingCharacters(in: change.range, with: change.replacement).utf8), to: url)
-        }
-        return written
-    }
-
-    nonisolated private static func write(_ todo: TodoReference, edit: TodoLinesEdit) -> (line: Int, source: String)? {
-        var result: (line: Int, source: String)?
+    /// change, or nil when the to-do or its file isn't there (`notThere`) or the file couldn't be read or written
+    /// (`failed`).
+    nonisolated private static func write(_ todo: TodoReference, edit: TodoLinesEdit) -> (change: (line: Int, source: String)?, outcome: TodoChangeOutcome) {
+        var result: (change: (line: Int, source: String)?, outcome: TodoChangeOutcome) = (nil, .failed)
         var error: NSError?
         NSFileCoordinator().coordinate(writingItemAt: todo.url, options: .forMerging, error: &error) { url in
+            // Renamed, moved or deleted somewhere else: there is no to-do to change. (One only in iCloud is downloaded
+            // for the coordinated write first.)
+            guard FileManager.default.fileExists(atPath: url.path) else { return result.outcome = .notThere }
             guard let data = try? Data(contentsOf: url), let text = NoteDocument.decode(data) else { return }
             let string = text as NSString
             let document = MarkdownParser.parse(string)
             guard let index = Todos.find(todo.source, near: todo.line, in: document, string: string),
-                  let change = edit(string, document, index) else { return }
+                  let change = edit(string, document, index) else { return result.outcome = .notThere }
             let changed = string.replacingCharacters(in: change.range, with: change.replacement)
             guard FileOperations.write(Data(changed.utf8), to: url) else { return }
             let line = MarkdownParser.parse(changed).lines[index].range
-            result = (index, (changed as NSString).substring(with: line))
+            result = ((index, (changed as NSString).substring(with: line)), .written)
         }
         return result
+    }
+
+    /// Makes a change to a note's file that isn't found by a to-do's line, such as a deleted to-do put back.
+    nonisolated private static func write(_ url: URL, edit: (NSString, MarkdownDocument) -> (range: NSRange, replacement: String)?) -> TodoChangeOutcome {
+        var outcome = TodoChangeOutcome.failed
+        var error: NSError?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: .forMerging, error: &error) { url in
+            guard FileManager.default.fileExists(atPath: url.path) else { return outcome = .notThere }
+            guard let data = try? Data(contentsOf: url), let text = NoteDocument.decode(data) else { return }
+            let string = text as NSString
+            guard let change = edit(string, MarkdownParser.parse(string)) else { return outcome = .notThere }
+            if FileOperations.write(Data(string.replacingCharacters(in: change.range, with: change.replacement).utf8), to: url) { outcome = .written }
+        }
+        return outcome
     }
 
     // MARK: - Going to a to-do
@@ -592,7 +639,7 @@ extension Workspace {
         // A run on the sample notes leaves no notification behind.
         if temporaryLocations, UserDefaults.standard.bool(forKey: "NotebookDemo") { return nil }
         #endif
-        let jobs = todoJobs()
+        let jobs = withoutWidgetTicks(todoJobs())
         return ReminderNotifications.shared.scheduleTodos(jobs, open: Set(jobs.map(\.identifier)))
     }
 
@@ -649,6 +696,12 @@ extension TodoRemoval {
         var value: TodoRemoval? { lock.withLock { removal } }
         func set(_ value: TodoRemoval) { lock.withLock { removal = value } }
     }
+}
+
+/// What became of a change to a to-do, for what waits on it (a tick from a widget): written; nothing to change (done
+/// already); not there to change (gone, changed since, or its note gone); or not written now, to be tried again.
+enum TodoChangeOutcome: Sendable {
+    case written, unchanged, notThere, failed
 }
 
 /// A to-do that repeats, ticked in To-dos or from its notification: the line it was ticked to, what it said before and
