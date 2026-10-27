@@ -27,6 +27,14 @@ final class SearchBenchmarkTests: XCTestCase {
             }
             print(line)
         }
+        // Links typed in a note are looked up on the main thread, as `[[` is typed.
+        var links = "links:"
+        for text in ["kyoto trip", "quarterly budget", "meetnig", "kytr"] {
+            start = CACurrentMediaTime()
+            _ = index.linkSuggestions(text, from: nil)
+            links += String(format: " %@=%.1f", text, (CACurrentMediaTime() - start) * 1000)
+        }
+        print(links)
     }
 
     /// The index kept between launches: how soon search has every file after a relaunch, and how long checking the

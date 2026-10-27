@@ -271,10 +271,19 @@ struct CommandPalette: View {
         }
         guard !trimmed.isEmpty else {
             // What you opened last, then every command, by what it is for.
-            return Self.resultRows(search.query.isEmpty ? search.sections : []) + commands.map { Self.commandRow($0, section: $0.section) }
+            return Self.resultRows(search.query.isEmpty ? shown(search.sections) : []) + commands.map { Self.commandRow($0, section: $0.section) }
         }
         // The results that go with what was typed: while they are on their way, the last ones stay.
-        return Self.rows(for: trimmed, commands: commands, results: search.sections)
+        return Self.rows(for: trimmed, commands: commands, results: shown(search.sections))
+    }
+
+    /// Without what was just deleted, which search finds until it has read the folder again.
+    private func shown(_ sections: [SearchSection]) -> [SearchSection] {
+        sections.map { section in
+            var section = section
+            section.items = section.items.filter { item in item.result.url.map { !workspace.isThrownAway($0) } ?? true }
+            return section
+        }
     }
 
     /// What ⌘K lists for what was typed: the files and folders, the commands named like it (first when one starts
@@ -317,8 +326,7 @@ struct CommandPalette: View {
 
     private static func resultRows(_ sections: [SearchSection]) -> [PaletteRow] {
         sections.flatMap { section in
-            // Without what was just deleted, which search finds until it has read the folder again.
-            section.items.filter { item in item.result.url.map { !workspace.isThrownAway($0) } ?? true }.map { item in
+            section.items.map { item in
                 // By section too: a scanned PDF can be found by its text and by its pictures.
                 PaletteRow(id: (section.title ?? "") + "/" + Self.id(of: item.result), section: section.title, title: item.title, snippet: item.snippet,
                            matches: item.matches, detail: item.snippet == nil ? item.place : nil, symbol: item.image,

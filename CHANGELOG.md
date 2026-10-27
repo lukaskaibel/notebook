@@ -75,7 +75,8 @@ versions follow [semantic versioning](https://semver.org).
   finds Kyoto trip), and with a letter or two wrong ("ryokna" finds Getting to the ryokan, "seting" finds Settings).
   In a big library, names that only have the letters typed somewhere in them ("kyo" in Workout family notes) no longer
   crowd the files above the notes with the words in them: they come last, under Similar Names, and such commands
-  under Similar Commands.
+  under Similar Commands. Suggestions for a link after [[ take only names with what was typed in them, so they keep
+  up as you type in any library.
 - On iPhone and iPad, the bar above the keyboard has the size of Notes': its symbols are as big as Notes' tools, its
   glass is 48 points tall and sits 12 points above the keyboard, and on an iPhone a page holds one more tool. The note
   fades out under it, as under Notes', while the line you write stays clear above the fade. On an iPad with a keyboard
