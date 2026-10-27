@@ -64,6 +64,14 @@ versions follow [semantic versioning](https://semver.org).
   selection and edit; and Delete in its menu everywhere. Its line goes from its note with the lines under it, and one
   Undo puts them back where they were.
 - Shake the iPhone in To-dos to undo what you did to a to-do last, a deletion, a tick or a new date, as in Reminders.
+- To-dos that aren't in a note, as reminders are: New To-do at the end of a group in To-dos adds one for that day, or
+  without a date under No Date, and New To-do in the toolbar (at the bottom on iPhone and iPad) adds one for today, as
+  New Reminder does. Type its words and press Return for the next; one left without words goes again. It is ticked,
+  dated, reminded of, repeated, deleted and undone like any other to-do, and shows no note's name. Move to Note… in its
+  menu puts it, with the lines under it, into a note you pick by name or from those with checklists and those you
+  opened last: after the note's last to-do, or at its end. One Undo takes it back out. Notebook keeps these to-dos as
+  one Markdown checklist in its own iCloud folder, next to the versions of notes, so your other devices have them too;
+  it never shows among your notes, in search or in Spotlight.
 
 - The Mac's Edit menu has what Notes' has for writing. Edit › Find finds in the note you're in, in a find bar under the
   toolbar: Find (⌘F), Find and Replace (⇧⌘F), Find Next and Previous (⌘G, ⇧⌘G), Use Selection for Find and Jump to
@@ -104,6 +112,7 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- To-dos opens at once with hundreds of open to-dos, rather than after a few seconds: only the rows that show are made.
 - A picture no longer goes to the Trash when its link in the note changes case, say after editing the note in another
   app: the Mac's disk finds the picture whatever the case, and now Notebook does too.
 - A to-do ticked in To-dos stays in its place for the three seconds it shows ticked, rather than jumping to the end of

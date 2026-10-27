@@ -17,6 +17,11 @@ import UserNotifications
 ///     placetodo <name> <latitude> <longitude> <words>  gives it a place to arrive at
 ///     movetodo <today|tomorrow|week|later|none> <words>  as dragging it into that group
 ///     deletetodo <words>                         deletes it from its note, as Delete in its menu does
+///     newtodo <today|tomorrow|week|later|none>   New To-do at the end of that group, being edited
+///     todotype <text>                            types in the words of the to-do being edited
+///     todokey return|escape                      Return or Escape in the words of the to-do being edited
+///     movetonote <note> <words>                  moves a to-do in no note into the note named (with _ for spaces)
+///     movetonotepicker <words>                   Move to Note… for it: ⌘K, to pick a note
 ///     opentodo <words>                           opens its note at it
 ///     remindtodo [date|place] <words>            Remind Me for it (the popover or the sheet), or on the Mac the
 ///                                                dropdown for its date or place, as its pills open them
@@ -41,6 +46,10 @@ enum DebugTodos {
     static let pickerType = Notification.Name("DebugTodosPickerType")
     /// A key in the open dropdown: "down", "up", "return" or "escape" as the object.
     static let pickerKey = Notification.Name("DebugTodosPickerKey")
+    /// Asks To-dos for New To-do at the end of a group: its `TodoSection.Kind` as the object.
+    static let new = Notification.Name("DebugTodosNew")
+    /// Return or Escape in the words of the to-do being edited: "return" or "escape" as the object.
+    static let key = Notification.Name("DebugTodosKey")
     /// The to-do To-dos is editing, and where its keyboard is.
     static weak var session: TodoEditing?
     static var focus: TodoFocus?
@@ -62,7 +71,7 @@ enum DebugTodos {
                         let when = item.todo.due.map { " | " + ReminderText.text($0.date(), time: $0.hasTime) } ?? ""
                         let place = item.todo.place.map { " | " + $0.phrase } ?? ""
                         let notes = item.todo.notes.isEmpty ? "" : " | notes: " + item.todo.notes.joined(separator: " / ")
-                        return "  ○ \(item.todo.text)\(when)\(place) | in \(item.note)\(notes)"
+                        return "  ○ \(item.todo.text)\(when)\(place) | \(item.isLoose ? "in no note" : "in " + item.note)\(notes)"
                     case .note(let note):
                         return "  ◻︎ \(note.name) | \(note.reminder.text) | note"
                     }
@@ -104,6 +113,32 @@ enum DebugTodos {
             guard let item = find(argument) else { log("deletetodo: no to-do “\(argument)”"); break }
             workspace.deleteTodo(item.reference)
             log("deletetodo \(item.todo.text) in \(item.note)")
+        case "newtodo":
+            let kinds: [String: TodoSection.Kind] = ["today": .today, "tomorrow": .tomorrow, "week": .week, "later": .later, "none": .someday]
+            guard let kind = kinds[argument] else { log("newtodo: <today|tomorrow|week|later|none>"); break }
+            NotificationCenter.default.post(name: new, object: kind)
+            log("newtodo in \(argument)")
+        case "todotype":
+            guard let session, !session.isEnded else { log("todotype: nothing edited"); break }
+            session.title = argument
+            session.changed()
+            log("todotype \(argument)")
+        case "todokey":
+            NotificationCenter.default.post(name: key, object: argument)
+            log("todokey \(argument)")
+        case "movetonote":
+            guard split.count == 2, let item = find(split[1]) else { log("movetonote: <note> <words>"); break }
+            let name = split[0].replacingOccurrences(of: "_", with: " ").lowercased()
+            guard let note = workspace.index.files(matching: name, limit: 20).first(where: { $0.kind == .note && $0.name.lowercased() == name }) else {
+                log("movetonote: no note “\(split[0])”")
+                break
+            }
+            workspace.moveTodo(item.reference, toNote: note.url)
+            log("movetonote \(item.todo.text) into \(note.url.path)")
+        case "movetonotepicker":
+            guard let item = find(argument) else { log("movetonotepicker: no to-do “\(argument)”"); break }
+            workspace.palette = .moveTodo(item.reference)
+            log("movetonotepicker \(item.todo.text)")
         case "opentodo":
             guard let item = find(argument) else { log("opentodo: no to-do “\(argument)”"); break }
             workspace.openTodo(item.reference)

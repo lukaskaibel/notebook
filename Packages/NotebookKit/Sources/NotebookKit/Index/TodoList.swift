@@ -2,7 +2,7 @@ import Foundation
 
 /// Every open to-do in the locations, for the To-dos list and their notifications. Read off the main thread from the
 /// text search already keeps of every note, after it changed; a note that didn't change since isn't read again.
-/// Folders you hide leave their to-dos out, as they leave search.
+/// Folders you hide leave their to-dos out, as they leave search. After them, the to-dos in no note (`LooseTodos`).
 @MainActor
 @Observable
 final class TodoList {
@@ -14,8 +14,12 @@ final class TodoList {
         /// When the note was last changed, to put the to-dos of the notes you work on first.
         var modified: Date?
         var todo: Todo
+        /// In no note: added in To-dos (`LooseTodos`).
+        var isLoose = false
 
         var id: String { url.path + "\u{0}\(todo.line)\u{0}" + todo.source }
+        /// In no note and without words or lines under it: just added, or left so.
+        var isNewAndEmpty: Bool { isLoose && todo.text.isEmpty && todo.lines.isEmpty }
         var reference: TodoReference { TodoReference(url: url, line: todo.line, source: todo.source) }
     }
 
@@ -29,7 +33,17 @@ final class TodoList {
     /// What each note had, by its address, with the date and size it had then.
     @ObservationIgnored private var cache: [String: Cached] = [:]
     @ObservationIgnored private var task: Task<Void, Never>?
-    @ObservationIgnored private var wanted: (entries: [String: SearchIndex.Entry], hidden: [String])?
+    /// What to read next: the notes search knows and the folders hidden, and the to-dos in no note.
+    @ObservationIgnored private var entries: [String: SearchIndex.Entry] = [:]
+    @ObservationIgnored private var hidden: [String] = []
+    @ObservationIgnored private var loose: LooseTodos.Snapshot?
+    /// The to-dos in no note as `items` has them: the reading of them last finished.
+    @ObservationIgnored private var shownLoose: LooseTodos.Snapshot?
+    @ObservationIgnored private var isWanted = false
+    /// The to-dos in no note are read too: ready only once they have been, or couldn't be (`looseUnread`).
+    @ObservationIgnored var waitsForLoose = false
+    /// The to-dos in no note couldn't be read yet: their notifications are left as they are until they are.
+    @ObservationIgnored private(set) var isLooseUnread = false
 
     private struct Cached: Sendable {
         var modified: Date?
@@ -40,8 +54,27 @@ final class TodoList {
     /// Reads the to-dos again from what search knows now. Called whenever it changed: one reading at a time, and after
     /// a burst of changes one for all of them.
     func update(entries: [String: SearchIndex.Entry], hidden: [String], built: Bool) {
-        wanted = (entries, hidden)
+        self.entries = entries
+        self.hidden = hidden
         if built { buildDone = true }
+        isWanted = true
+        guard task == nil else { return }
+        readNext()
+    }
+
+    /// The to-dos in no note couldn't be read, or not yet: the others don't wait for them.
+    func looseUnread() {
+        guard loose == nil, !isLooseUnread else { return }
+        isLooseUnread = true
+        isWanted = true
+        guard task == nil else { return }
+        readNext()
+    }
+
+    /// The to-dos in no note were read again.
+    func update(loose: LooseTodos.Snapshot) {
+        self.loose = loose
+        isWanted = true
         guard task == nil else { return }
         readNext()
     }
@@ -49,26 +82,31 @@ final class TodoList {
     @ObservationIgnored private var buildDone = false
 
     private func readNext() {
-        guard let (entries, hidden) = wanted else { return }
-        wanted = nil
+        guard isWanted else { return }
+        isWanted = false
         let cache = self.cache
-        let ready = buildDone
+        let ready = buildDone && (!waitsForLoose || loose != nil || isLooseUnread)
+        let entries = entries, hidden = hidden, loose = loose
         task = Task.detached(priority: .utility) { [weak self] in
-            let (items, fresh) = Self.read(entries, hidden: hidden, cache: cache)
-            await self?.finished(items, cache: fresh, ready: ready)
+            let (items, fresh) = Self.read(entries, hidden: hidden, loose: loose, cache: cache)
+            await self?.finished(items, cache: fresh, ready: ready, loose: loose)
         }
     }
 
-    private func finished(_ fresh: [Item], cache: [String: Cached], ready: Bool) {
+    private func finished(_ fresh: [Item], cache: [String: Cached], ready: Bool, loose: LooseTodos.Snapshot?) {
         task = nil
         self.cache = cache
+        shownLoose = loose
+        // Their notifications are scheduled from `items` again, now that it has them.
+        let wasUnread = isLooseUnread
+        if loose != nil { isLooseUnread = false }
         var fresh = fresh
-        applyPatches(to: &fresh)
+        applyPatches(to: &fresh, read: true)
         let changed = fresh != items
         if changed { items = fresh }
         let becameReady = ready && !isReady
         if becameReady { isReady = true }
-        if changed || becameReady { onChange?() }
+        if changed || becameReady || wasUnread != isLooseUnread { onChange?() }
         readNext()
     }
 
@@ -85,6 +123,8 @@ final class TodoList {
         /// The to-do after the change; nil once it is done or deleted.
         var todo: Todo?
         var until: Date
+        /// A to-do Notebook just added: shown until its note is read again, also when the list doesn't have it yet.
+        var added: Item?
     }
 
     @ObservationIgnored private var patches: [Patch] = []
@@ -94,10 +134,32 @@ final class TodoList {
     func patch(_ todo: TodoReference, to source: String?, under: [String]?) {
         guard let index = Self.index(of: todo.source, in: todo.url, near: todo.line, among: items) else { return }
         let old = items[index].todo
-        patches.removeAll { FileNode.samePath($0.url, todo.url) && $0.source == todo.source }
+        let changed = source.flatMap { Self.todo([$0] + (under ?? old.lines.map(\.source)), line: old.line) }
+        // One just added and not read yet stays added, as it is now.
+        // Another just added can say the same: it keeps its own.
+        func isThis(_ patch: Patch) -> Bool {
+            FileNode.samePath(patch.url, todo.url) && patch.source == todo.source && (patch.added == nil || patch.line == old.line)
+        }
+        var added = patches.first(where: isThis)?.added
+        added?.todo = changed ?? old
+        patches.removeAll(where: isThis)
         patches.append(Patch(url: todo.url, source: todo.source, line: old.line, modified: items[index].modified,
-                             todo: source.flatMap { Self.todo([$0] + (under ?? old.lines.map(\.source)), line: old.line) },
-                             until: .now.addingTimeInterval(10)))
+                             todo: changed, until: .now.addingTimeInterval(10), added: changed == nil ? nil : added))
+        show()
+    }
+
+    /// Shows a to-do Notebook just added at once, before its note is read again: after the others of its note. It goes
+    /// once a reading of the note after the one shown now has it.
+    func add(_ item: Item) {
+        var item = item
+        item.modified = item.isLoose ? shownLoose?.modified : items.first { FileNode.samePath($0.url, item.url) }?.modified ?? item.modified
+        patches.removeAll { FileNode.samePath($0.url, item.url) && $0.source == item.todo.source && $0.line == item.todo.line }
+        patches.append(Patch(url: item.url, source: item.todo.source, line: item.todo.line, modified: item.modified, todo: item.todo,
+                             until: .now.addingTimeInterval(10), added: item))
+        show()
+    }
+
+    private func show() {
         var changed = items
         applyPatches(to: &changed)
         guard changed != items else { return }
@@ -111,13 +173,33 @@ final class TodoList {
     }
 
     /// The changes in `items` that a reading may not have caught up with yet.
-    private func applyPatches(to items: inout [Item]) {
-        // Read again since the change: the note says what it says now.
+    /// `read`: `items` is what a reading of the notes found, not what shows.
+    private func applyPatches(to items: inout [Item], read: Bool = false) {
+        let loose = shownLoose
         patches.removeAll { patch in
-            patch.until < .now || items.contains { FileNode.samePath($0.url, patch.url) && $0.modified != patch.modified }
+            if patch.until < .now { return true }
+            // One just added goes once a reading has it as it is now: a reading begun before its line was written is
+            // of a note changed since, without it.
+            if let added = patch.added {
+                guard read, let todo = patch.todo else { return false }
+                return items.contains { FileNode.samePath($0.url, added.url) && $0.todo.source == todo.source }
+            }
+            // Read again since the change: the note says what it says now.
+            return items.contains { FileNode.samePath($0.url, patch.url) && $0.modified != patch.modified }
+                || loose.map { FileNode.samePath($0.url, patch.url) && $0.modified != patch.modified } == true
         }
         for patch in patches {
-            guard let index = Self.index(of: patch.source, in: patch.url, near: patch.line, among: items) else { continue }
+            // One just added is where it was added: two added a moment apart can say the same, without words yet.
+            let found = patch.added == nil ? Self.index(of: patch.source, in: patch.url, near: patch.line, among: items)
+                : items.firstIndex { FileNode.samePath($0.url, patch.url) && $0.todo.source == patch.source && $0.todo.line == patch.line }
+            guard let index = found else {
+                if var added = patch.added, let todo = patch.todo {
+                    added.todo = todo
+                    let after = items.lastIndex { FileNode.samePath($0.url, added.url) }.map { $0 + 1 }
+                    items.insert(added, at: after ?? (added.isLoose ? items.endIndex : 0))
+                }
+                continue
+            }
             if let todo = patch.todo { items[index].todo = todo } else { items.remove(at: index) }
         }
     }
@@ -145,7 +227,8 @@ final class TodoList {
         return todo
     }
 
-    nonisolated private static func read(_ entries: [String: SearchIndex.Entry], hidden: [String], cache: [String: Cached]) -> ([Item], [String: Cached]) {
+    nonisolated private static func read(_ entries: [String: SearchIndex.Entry], hidden: [String], loose: LooseTodos.Snapshot?,
+                                         cache: [String: Cached]) -> ([Item], [String: Cached]) {
         var fresh: [String: Cached] = [:]
         var notes: [(entry: SearchIndex.Entry, todos: [Todo])] = []
         for (path, entry) in entries where entry.kind == .note {
@@ -163,8 +246,20 @@ final class TodoList {
             let aDate = a.entry.modified ?? .distantPast, bDate = b.entry.modified ?? .distantPast
             return aDate != bDate ? aDate > bDate : a.entry.path < b.entry.path
         }
-        let items = notes.flatMap { note in
+        var items = notes.flatMap { note in
             note.todos.map { Item(url: note.entry.url, note: note.entry.name, modified: note.entry.modified, todo: $0) }
+        }
+        // Those in no note after them, in the order they were added.
+        if let loose {
+            let key = "\u{0}loose\u{0}" + loose.url.path
+            let todos: [Todo]
+            if let kept = cache[key], kept.modified == loose.modified, kept.size == loose.text.utf8.count {
+                todos = kept.todos
+            } else {
+                todos = Todos.open(in: loose.text)
+            }
+            fresh[key] = Cached(modified: loose.modified, size: loose.text.utf8.count, todos: todos)
+            items += todos.map { Item(url: loose.url, note: "", modified: loose.modified, todo: $0, isLoose: true) }
         }
         return (items, fresh)
     }

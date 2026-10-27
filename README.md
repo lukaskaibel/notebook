@@ -193,6 +193,14 @@ all the way across, as in Reminders; on the Mac, click beside its words to selec
 menu too. Its line goes from its note with the lines under it, and Undo puts them back where they were. If you keep your to-dos in another app, turn off Show To-dos in Settings › Sidebar (on iPhone and iPad, in
 Settings): the list goes, and Notebook doesn't remind you of to-dos either.
 
+A to-do doesn't have to be in a note. New To-do at the end of a group adds one there, for that day, or without a date
+under No Date; New To-do in the toolbar, at the bottom on iPhone and iPad as in Reminders, adds one for today. Type its
+words and press Return for the next one; one you leave empty goes again. It works like any other to-do and shows no
+note's name. When it belongs somewhere, choose Move to Note… in its menu and pick a note in ⌘K, by its name or from the
+notes with checklists and those you opened last: it goes after the note's last to-do, with the lines under it, or at
+the end of a note without one, and Undo takes it back out. Notebook keeps these to-dos in a checklist of its own (see
+[How notes are stored](#how-notes-are-stored)).
+
 Click a to-do's words to change them where they are, as in Reminders. A Notes line slides in under them, in smaller
 letters: what you type there becomes a line indented under the to-do, its notes. Shift-Return starts a line under the
 words; Return in that line starts the next one of the same kind, Tab and ⇧Tab move it in and out, and `[ ] ` or `- `
@@ -251,7 +259,7 @@ in To-dos to mark it in progress or cancelled.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/todos-dark.webp">
-  <img alt="To-dos selected at the top of the sidebar, with 4 next to it. The list shows Overdue with Return the library books from yesterday in red; Today with Water the plants, every week, Pick up the dry cleaning at 5:30 PM, its two notes under it, and Send the map to Mia at 7:00 PM; Tomorrow with the note Questions for Dr. Weber and Market shopping, with its sub-to-dos Tomatoes and basil, Burrata and Bags, ticked, under it; then Next 7 Days and Later. Each row has a circle to tick it and the note it is in" src="Design/screenshots/todos-light.webp">
+  <img alt="To-dos selected at the top of the sidebar, with 4 next to it. The list shows Overdue with Return the library books from yesterday in red; Today with Water the plants, every week, Pick up the dry cleaning at 5:30 PM, its two notes under it, and Send the map to Mia at 7:00 PM; Tomorrow with Book a table for Saturday, in no note, the note Questions for Dr. Weber and Market shopping, with its sub-to-dos Tomatoes and basil, Burrata and Bags, ticked, under it; then Next 7 Days and Later. Each row has a circle to tick it and the note it is in, and each group but Overdue ends with New To-do" src="Design/screenshots/todos-light.webp">
 </picture>
 
 <picture>
@@ -437,7 +445,8 @@ screens.
   a line for notes and dates typed in a few words ("thursday in 3 weeks"), open their note, or drag them to another day. A to-do takes a date, a time and a place, written after its words where
   other apps read them too, and shows them as pills; Obsidian's Tasks, Reminder, Kanban and Dataview dates and its
   `[/]` and `[-]` checkboxes are understood. A to-do with the Tasks plugin's `🔁 every week` makes the next one when
-  you tick it, as the plugin does. Settings turns To-dos off.
+  you tick it, as the plugin does. Add a to-do in To-dos without a note, as in Reminders, and move it into a note
+  later. Settings turns To-dos off.
 - **Reminders.** Remind Me… brings a note or a to-do back at a time you choose, picked or typed in a few words ("friday
   evening", "in 3 weeks"), or when you arrive at or leave a place, with a notification of its first points or the
   to-do's notes that gets through a Focus. A note's reminder follows it when you rename or move it in Notebook, goes
@@ -474,7 +483,11 @@ Everything is plain Markdown, so other apps keep reading your notes. Notebook ad
 file with its strokes. A folder's symbol and colour are kept on the folder, as the Finder keeps them, not in a file.
 What isn't part of a note or a folder, such as the folders you hide, the reminders of notes you set and your Home and
 Work, is kept in the app's settings and iCloud's key-value store, not in your folders. A to-do's date and place are part of the
-to-do, so they are in the note. What search knows, the text of your notes and
+to-do, so they are in the note. The to-dos you add in To-dos without a note are a plain Markdown checklist,
+`To-dos.md`, in Notebook's own iCloud folder, in `To-dos` next to its `History` (on a Mac,
+`~/Library/Mobile Documents/iCloud~com~lukaskbl~Notebook/To-dos/To-dos.md`), so they reach your other devices without
+a Notebook folder in iCloud Drive; without iCloud, and in builds from source, it is in the app's Application Support
+folder. It never shows among your notes, and Spotlight leaves it out. What search knows, the text of your notes and
 PDFs and the words read in pictures, is kept in the app's caches on each device, from where it can always be read again.
 The list of the notes Spotlight has is kept in the app's own folder on each device.
 
@@ -692,6 +705,7 @@ Editing a to-do in To-dos:
 | Delete at the start of a line | A sub-to-do or point becomes words; words join the line above |
 | ↑ and ↓ at either end of a line | The line above or below |
 | Return on its words, Escape, a click outside it | Done; after Return or Escape the to-do stays selected |
+| Return on the words of a to-do just added | The next one under it |
 | Typing in its date, time or location dropdown | What it could mean, the first lit; ↑ and ↓ light another, Return takes it, Escape closes |
 
 A to-do selected in To-dos on the Mac, by a click beside its words:
@@ -708,7 +722,7 @@ Return renames, ⌘⌫ moves to the Trash and opens the next file, Space opens a
 note. Right-click a file or folder for everything else, including Open in New Window, New Folder, Copy Link, which
 copies a `[[link]]` to it, Remind Me…, Customize Folder… and Hide Folder. In a note, right-click a to-do for Remind Me…,
 or click the bell that comes up after it as you point at it; in To-dos, right-click a row to move it to another day,
-mark it in progress or cancelled, open its note, or delete it. As you point at a location's name, a folder with a plus
+mark it in progress or cancelled, open its note or move one in no note into a note, or delete it. As you point at a location's name, a folder with a plus
 comes up next to it for a new folder at its top, and, when the location has hidden folders, an eye that shows them.
 
 On an iPad with a keyboard, ⌘N, ⇧⌘N, ⌘Z and ⇧⌘Z, ⌘K, ⇧⌘R, ⌘[ and ⌘], ⌃⌘S, ⌃⌘I, ⇧⌘., ⌘+, ⌘− and ⌘0, ⌘P and the
@@ -726,7 +740,8 @@ Replace; otherwise ⌥⌘F searches. On iPhone and iPad:
 | Tap a to-do's pill | Its date or its place, to type or tap, as in To-dos |
 | Tap the bell above the keyboard in a to-do | Remind Me: its date, time and place |
 | Tap a to-do's words in To-dos | Edit it, with a Notes line under it; the bar above the keyboard opens its day, time and place to type or tap, adds a sub-to-do and moves a line in or out |
-| Touch and hold a row in To-dos, or drag it | Today, Tomorrow, This Weekend, Next Week, Remind Me…, Delete, or another group |
+| Touch and hold a row in To-dos, or drag it | Today, Tomorrow, This Weekend, Next Week, Remind Me…, Move to Note… for one in no note, Delete, or another group |
+| New To-do at the bottom of To-dos, or at the end of a group | A to-do in no note, for today or for that group's day; Return starts the next |
 | Swipe a to-do in To-dos to the left | Delete; all the way across deletes it at once |
 | Shake the iPhone in To-dos | Undo or Redo what you last did to a to-do |
 | Tap a drawing | Draw in it |
