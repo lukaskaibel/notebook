@@ -167,6 +167,16 @@ final class EditorFeatureTests: XCTestCase {
         XCTAssertTrue(font?.fontName.lowercased().contains("newyork") == true || font?.familyName?.contains("New York") == true, font?.fontName ?? "")
     }
 
+    func testDisplayMathsGrowsWithTheText() {
+        let settings = NotebookSettings.shared
+        let saved = settings.typography
+        defer { settings.typography = saved }
+        settings.typography.size = Typography().size
+        XCTAssertEqual(EditorStyle.displayMathSize, 19, "as it was at the size the app starts with")
+        settings.typography.size = 24
+        XCTAssertEqual(EditorStyle.displayMathSize, (24 * 19 / Typography().size).rounded(), "larger with the text, as inline maths is")
+    }
+
     func testExportMakesAPDFAndAPicture() async throws {
         let h = EditorHarness(note)
         let pdfData = await NoteExporter.data(for: h.editor, title: "Kyoto trip", as: .pdf)

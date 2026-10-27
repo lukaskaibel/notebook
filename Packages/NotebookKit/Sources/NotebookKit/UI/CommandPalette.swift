@@ -317,7 +317,8 @@ struct CommandPalette: View {
 
     private static func resultRows(_ sections: [SearchSection]) -> [PaletteRow] {
         sections.flatMap { section in
-            section.items.map { item in
+            // Without what was just deleted, which search finds until it has read the folder again.
+            section.items.filter { item in item.result.url.map { !workspace.isThrownAway($0) } ?? true }.map { item in
                 // By section too: a scanned PDF can be found by its text and by its pictures.
                 PaletteRow(id: (section.title ?? "") + "/" + Self.id(of: item.result), section: section.title, title: item.title, snippet: item.snippet,
                            matches: item.matches, detail: item.snippet == nil ? item.place : nil, symbol: item.image,

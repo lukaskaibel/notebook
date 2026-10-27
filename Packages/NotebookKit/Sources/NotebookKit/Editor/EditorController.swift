@@ -600,6 +600,8 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         #endif
         textView.applyTypography()
         preservingScroll {
+            // The title and the line under it grow with the text: the note starts lower, by that much, at once.
+            textView.updateInsets()
             restyle(lines: Array(document.lines.indices))
             layoutManager.invalidateLayout(forCharacterRange: NSRange(location: 0, length: storage.length), actualCharacterRange: nil)
         }
@@ -846,7 +848,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         setScrollTop(max(-topInset, yPosition(of: mapped) - offset))
     }
 
-    private func firstVisibleCharacter() -> Int {
+    func firstVisibleCharacter() -> Int {
         let visible = visibleRect
         let point = NSPoint(x: visible.minX + 1, y: max(0, visible.minY + topInset - textOrigin.y + 1))
         let glyph = layoutManager.glyphIndex(for: point, in: container)
