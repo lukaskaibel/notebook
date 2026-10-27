@@ -345,7 +345,8 @@ The window is built from the system's own pieces: a source-list sidebar, a toolb
 share menu, an inspector, Settings, alerts, PDFKit, AVKit and Quick Look. It follows the system's light or dark
 appearance. The inspector shows a note's outline, with the section you're reading marked and a word count; a click on
 a heading scrolls there. In Settings › Text you pick the typeface (San Francisco, New York, Rounded or Monospaced,
-each shown in itself), the size, the line spacing and the line width. The icon is a leather notebook, and Settings › App Icon makes it yours:
+each shown in itself), the size, the line spacing and the line width; on iPhone and iPad the system's text size makes
+notes larger or smaller on top of that, as it does the text of other apps (not in a PDF or printout). The icon is a leather notebook, and Settings › App Icon makes it yours:
 pick the leather, the elastic band, the ribbon and the background, and the Dock shows your notebook while the app is
 open. Links, the caret and folders are in ink blue to go with it, or in the accent colour you chose in System Settings.
 
