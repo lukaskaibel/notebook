@@ -472,6 +472,7 @@ enum DebugRemote {
             if DebugReminders.run(command, argument, workspace: workspace, url: url, log: log) { break }
             if DebugFolderIcons.run(command, argument, workspace: workspace, url: url, log: log) { break }
             if DebugTodos.run(command, argument, workspace: workspace, log: log) { break }
+            if DebugVersions.run(command, argument, workspace: workspace, log: log) { break }
             // Everything else is the screens': going back, searching, showing settings.
             NotificationCenter.default.post(name: .notebookDebug, object: nil, userInfo: ["command": command, "argument": argument])
         }

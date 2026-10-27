@@ -52,6 +52,8 @@ final class FileChange {
         var isFavorite: Bool
         var reminders: [Reminder]
         var hiddenFolders: [String]
+        /// What its versions are under in the History's own Trash (`NoteHistory.trash`).
+        var history: String
     }
 }
 
@@ -173,11 +175,18 @@ extension Workspace {
     /// too), else to the changes to files.
     func undo() {
         if UIApplication.shared.sendAction(Selector(("undo:")), to: nil, from: nil, for: nil) { return }
+        // A field with nothing to undo, such as the note's title or a search, takes nothing else back.
+        if UIResponder.focused is UITextInput { return }
+        // With the keyboard away, the open note's own Undo, which weighs its changes against those to files, newest
+        // first: a version restored from Version History is taken back too.
+        if note != nil, let manager = editor.textView.undoManager, manager.canUndo { return manager.undo() }
         if fileUndoManager.canUndo { fileUndoManager.undo() }
     }
 
     func redo() {
         if UIApplication.shared.sendAction(Selector(("redo:")), to: nil, from: nil, for: nil) { return }
+        if UIResponder.focused is UITextInput { return }
+        if note != nil, let manager = editor.textView.undoManager, manager.canRedo { return manager.redo() }
         if fileUndoManager.canRedo { fileUndoManager.redo() }
     }
     #endif
@@ -216,8 +225,10 @@ extension Workspace {
         let target = (undoing ? change.before : change.after).map(follow)
         var result: URL?
         if change.kind == (undoing ? .make : .trash) {
-            change.remembered = remembered(source)
+            let remembered = remembered(source)
+            change.remembered = remembered
             result = await throwAwayNow(source)
+            if result != nil { NoteHistory.shared.trash(source, as: remembered.history) }
         } else if let target, change.kind == (undoing ? .trash : .make) {
             result = await putBackNow(source, to: target, remembered: change.remembered)
         } else if let target {
@@ -258,6 +269,8 @@ extension Workspace {
             return nil
         }
         showChanges(in: [folder], adding: result.listing.map { [$0] } ?? [])
+        // Its versions come back with it, under the name it has now.
+        if let remembered { NoteHistory.shared.putBack(remembered.history, to: result.url) }
         if let remembered { restore(remembered, at: result.url) }
         if remembered?.openFile == nil { reveal(result.url, select: false) }
         return result.url
@@ -285,7 +298,8 @@ extension Workspace {
             openFile: currentURL.flatMap { FileNode.isSameOrInside($0, url) ? $0 : nil },
             isFavorite: isFavorite(url),
             reminders: reminders.all.filter { isIn($0.note) },
-            hiddenFolders: hidden.keys.filter(isIn)
+            hiddenFolders: hidden.keys.filter(isIn),
+            history: NoteHistory.trashedName()
         )
     }
 
@@ -309,3 +323,20 @@ extension Workspace {
         }
     }
 }
+
+#if os(iOS)
+extension UIResponder {
+    private static weak var found: UIResponder?
+
+    /// What has the focus, which UIKit doesn't say: an action sent to the first responder finds out.
+    static var focused: UIResponder? {
+        found = nil
+        UIApplication.shared.sendAction(#selector(noteFocused), to: nil, from: nil, for: nil)
+        return found
+    }
+
+    @objc private func noteFocused() {
+        UIResponder.found = self
+    }
+}
+#endif

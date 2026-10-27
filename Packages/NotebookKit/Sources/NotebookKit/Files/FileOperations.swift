@@ -35,11 +35,71 @@ enum FileOperations {
         }
         var candidate = make(name)
         var counter = 2
-        while FileManager.default.fileExists(atPath: candidate.path) {
+        while exists(candidate) {
             candidate = make("\(name) \(counter)")
             counter += 1
         }
         return candidate
+    }
+
+    /// A name in `.assets` that no file there has, nor a drawing's strokes: "Photo.jpg", "Photo 2.jpg", …
+    static func uniqueAssetURL(named name: String, in assets: URL) -> URL {
+        let base = (name as NSString).deletingPathExtension
+        let ext = (name as NSString).pathExtension
+        var candidate = assets.appendingPathComponent(name)
+        var counter = 2
+        while FileManager.default.fileExists(atPath: candidate.path) || FileManager.default.fileExists(atPath: DrawingFile.strokesURL(for: candidate).path) {
+            candidate = assets.appendingPathComponent(ext.isEmpty ? "\(base) \(counter)" : "\(base) \(counter).\(ext)")
+            counter += 1
+        }
+        return candidate
+    }
+
+    /// A path in `.assets` for Markdown: spaces and brackets encoded so the link holds together everywhere.
+    static func markdownPath(_ name: String) -> String {
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
+        return ".assets/" + (name.addingPercentEncoding(withAllowedCharacters: allowed) ?? name)
+    }
+
+    /// Copies a file into a folder's `.assets`, under a name not taken there, in a coordinated write. Where it went,
+    /// or nil when it couldn't be copied; then a `.assets` made for it goes again.
+    static func storeAsset(copying url: URL, in folder: URL) -> URL? {
+        let assets = folder.appendingPathComponent(".assets", isDirectory: true)
+        let madeAssets = !FileManager.default.fileExists(atPath: assets.path)
+        try? FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
+        let destination = uniqueAssetURL(named: url.lastPathComponent, in: assets)
+        var copied = false
+        NSFileCoordinator().coordinate(readingItemAt: url, options: [], writingItemAt: destination, options: .forReplacing, error: nil) { from, to in
+            copied = (try? FileManager.default.copyItem(at: from, to: to)) != nil
+        }
+        if !copied, madeAssets { removeEmptyFolder(assets) }
+        return copied ? destination : nil
+    }
+
+    /// Takes back copies made a moment ago that nothing uses, in coordinated deletes, and the `.assets` folder they
+    /// were the first files in. Only for files Notebook itself just put there: anything else goes to the Trash.
+    static func removeStoredAssets(_ urls: [URL]) {
+        for url in urls {
+            NSFileCoordinator().coordinate(writingItemAt: url, options: .forDeleting, error: nil) { url in
+                try? FileManager.default.removeItem(at: url)
+            }
+        }
+        for assets in Set(urls.map { $0.deletingLastPathComponent() }) { removeEmptyFolder(assets) }
+    }
+
+    /// Deletes a folder Notebook just made, in a coordinated delete, only if it is still empty: whether it is and
+    /// deleting it are one step (`rmdir`), so a file another app or device puts in meanwhile keeps it, and itself.
+    static func removeEmptyFolder(_ folder: URL) {
+        NSFileCoordinator().coordinate(writingItemAt: folder, options: .forDeleting, error: nil) { folder in
+            _ = rmdir(folder.path)
+        }
+    }
+
+    /// A file there, also one iCloud hasn't brought down to this iPhone or iPad yet, which shows as ".name.icloud".
+    static func exists(_ url: URL) -> Bool {
+        FileManager.default.fileExists(atPath: url.path)
+            || FileManager.default.fileExists(atPath: url.deletingLastPathComponent().appendingPathComponent("." + url.lastPathComponent + ".icloud").path)
     }
 
     /// A file name from a title: the characters files can't have become dashes.
@@ -60,7 +120,9 @@ enum FileOperations {
         NSFileCoordinator().coordinate(writingItemAt: url, options: .forReplacing, error: nil) { url in
             written = (try? Data(text.utf8).write(to: url, options: .atomic)) != nil
         }
-        return written ? (url, madeFolder) : nil
+        guard written else { return nil }
+        NoteHistory.shared.made(url)
+        return (url, madeFolder)
     }
 
     /// A new note under a name no other file has, even with another made in the folder at the same moment: the name is
@@ -81,7 +143,10 @@ enum FileOperations {
                     taken = true
                 } catch {}
             }
-            if written { return url }
+            if written {
+                NoteHistory.shared.made(url)
+                return url
+            }
             if !taken { return nil }
         }
         return nil
@@ -222,7 +287,9 @@ enum FileOperations {
         NSFileCoordinator().coordinate(readingItemAt: url, options: [], writingItemAt: destination, options: .forReplacing, error: nil) { from, to in
             copied = (try? FileManager.default.copyItem(at: from, to: to)) != nil
         }
-        return copied ? destination : nil
+        guard copied else { return nil }
+        NoteHistory.shared.made(destination)
+        return destination
     }
 
     // MARK: - Links

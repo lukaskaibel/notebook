@@ -36,8 +36,7 @@
 </picture>
 
 > **Status: on its way to the App Store.** Version 1.0.0 runs on the Mac, iPhone and iPad; until it is in the App Store,
-> you build it from source (five minutes, see below). It covers writing, organising and finding notes day to day. A
-> share extension for quick capture comes later; see [Not there yet](#not-there-yet).
+> you build it from source (five minutes, see below). It covers writing, organising and finding notes day to day.
 
 ## Why
 
@@ -285,6 +284,29 @@ a Mac can set one, and your iPhone reminds you.
   <img alt="The note Questions for Dr. Weber with a bell and Tomorrow 8:30 under its title, a bell in its row in the sidebar and a Reminder section in the inspector; Remind Me is open below the title with fri typed in its field, and Friday, Friday Afternoon and Friday Evening to choose from above Date and its day, Time, and Location" src="Design/screenshots/reminder-light.webp">
 </picture>
 
+### Earlier versions of a note
+
+Notebook keeps earlier versions of your notes as you write: the note as it was when you start changing it, a version
+every ten minutes while you write, and one when you stop, as you close the note, go to another one or switch to
+another app. On the Mac, File › Revert To › Browse All Versions… shows them in a sheet: the versions on the left, by
+day and as "15:32 · iPhone", and the one you pick on the right, as the note looks. Show Changes marks what was added
+since then in green and what was taken out in red, line by line and, in a line that changed, word by word, with a + or
+a − in the margin. Restore puts the version back as one change that Undo (⌘Z) takes back, and keeps the text you had
+as a version first; Copy Text copies it. File › Revert To › Last Opened goes back to the note as it was when you
+opened it. On iPhone and iPad, Version History is in the note's ⋯ menu: the list by day, and a tap opens a version
+with Show Changes, Restore and Copy; the iPad shows the list and the version side by side, as the Mac does.
+
+Each version is a plain copy of the note's Markdown. Those of notes in iCloud go into Notebook's own iCloud folder, so
+they reach your other Macs, iPhones and iPads; those of notes anywhere else stay on the device. Notebook keeps every
+version from the last hour, then one an hour for a day, one a day for a month and one a week for a year. Versions
+follow a note you rename or move in Notebook, and go to the Trash with it, so Undo or Put Back brings them back; a new
+note given its name starts without them.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/versions-dark.webp">
+  <img alt="Browse All Versions over the note Kyoto trip: on the left its versions by day, from Today back two weeks, each with its time and Mac or iPhone; on the right a version from the iPhone with Show Changes on, the first paragraph as it was on red with a minus and as it is now on green with a plus, the words that changed marked stronger; at the bottom Show Changes, how many lines were added and taken out, Copy Text, Done and Restore" src="Design/screenshots/versions-light.webp">
+</picture>
+
 ### A symbol and a colour for a folder
 
 Folders start out as plain folders. To find one at a glance, right-click it and choose Customize Folder…, or on iPhone
@@ -368,6 +390,14 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   Home Screen, the Lock Screen and the Mac's desktop, and a control for Control Center, the Lock Screen and the iPhone's
   Action button: Notebook opens with a new note in the default folder, the caret in its title. In a shortcut of your
   own it takes text for the note to start with.
+- **Widgets for the day.** Today shows the to-dos for today and the overdue ones, as Reminders does, and ticks them
+  off from the Home Screen, writing the tick into the note the next time Notebook opens; Note shows a note of your
+  choice, styled as in the note, on the Home Screen, the Lock Screen or the Mac's desktop. Notebook keeps what they
+  show up to date; a tap opens To-dos or the note. Notes in folders you hid stay out of them.
+- **Share to Notebook.** Text, links, pictures and PDFs from any app's share sheet become a new note in the default
+  folder, named after the page or the first line, or go at the end of the note you opened last. Pictures and files go
+  into `.assets` next to the note. The share sheet hands them to Notebook, which writes them as soon as it's open, with
+  the same care as everything else it saves.
 - **Folders as they are.** Add iCloud Drive or any folder as a location with Add Location at the bottom of the
   sidebar, or drop the folder from the Finder below the sidebar's sections. iCloud Drive shows what the Finder shows
   in it: Desktop and Documents when they are kept in iCloud, and the folders of apps such as Pages or Obsidian.
@@ -421,6 +451,9 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
 - **Spotlight** finds your notes by their names and words too, on the Mac, iPhone and iPad, and opens them in
   Notebook. It gets what search has already read, in the background, and after a launch only what changed.
 - **Saves as you type,** and never overwrites a change made somewhere else (see below).
+- **Version history.** Earlier versions of every note, kept as you write and for a year, with what changed since each
+  one marked: File › Revert To on the Mac, Version History in the ⋯ menu on iPhone and iPad. Restore is one change
+  Undo takes back. The versions of notes in iCloud reach your other devices through Notebook's own iCloud folder.
 - **Export** a note as a PDF or a PNG image, or print it (on iPhone and iPad: as a PDF to share, or print).
 - **Notes in windows of their own.** Double-click a note in the sidebar, or open any Markdown file from the Finder or
   with ⌘O, and it gets a plain window of its own; more of them join it as tabs. A note from your locations links to
@@ -436,6 +469,23 @@ Work, is kept in the app's settings and iCloud's key-value store, not in your fo
 to-do, so they are in the note. What search knows, the text of your notes and
 PDFs and the words read in pictures, is kept in the app's caches on each device, from where it can always be read again.
 The list of the notes Spotlight has is kept in the app's own folder on each device.
+
+Earlier versions of notes are plain Markdown copies, kept outside your folders. Those of notes in iCloud (iCloud Drive,
+Desktop and Documents in iCloud, other apps' iCloud folders) are in Notebook's own iCloud folder, in `History`, next to
+its `Documents`, so iCloud Drive doesn't show a Notebook folder; on a Mac it is
+`~/Library/Mobile Documents/iCloud~com~lukaskbl~Notebook/History`. They go by the note's place in iCloud, which is the
+same on every device, one file per version named after when and on what it was taken:
+`com~apple~CloudDocs/Travel/Kyoto trip.md/2026-10-24 at 19.05.00 +0200 (iPhone 3f9a2c).md`, where the letters tell your
+devices apart. The versions of notes anywhere else, and of every note in builds from source, which have no iCloud, are
+kept the same way in the app's Application Support folder, on that device only. Each device thins the versions it took;
+another device's go a year after the newest that device took of the note, so a clock set wrong on one can't take away
+the others'. Those of a note you delete in Notebook go to the History's own Trash, come back with Undo, or when you put
+the note back in the Finder and open it, and go a year later. Those of a note deleted outside Notebook go there too,
+from a device that had the note, once it is still gone a day later, and not while another device took one in the last
+month: iCloud may not have brought that note yet. A note Notebook makes under a name another had starts without its
+versions. Settings › your name › iCloud › Storage on iPhone and
+iPad, or System Settings › your name › iCloud › Manage on the Mac, shows how much Notebook keeps in iCloud, and can
+delete it.
 
 | What | In the file | In Notebook |
 | --- | --- | --- |
@@ -475,7 +525,9 @@ stay where they were. If both sides changed, Notebook merges the two line by lin
 writes over a change it hasn't seen. Only when both changed the same lines does it ask: keep this version, use the
 other one, or keep both as two files. Conflicts that iCloud Drive reports are handled the same way. If you have left
 the note by then, or quit, there is no one to ask, so Notebook keeps both: what you typed goes into a copy next to the
-note, named after your Mac or device, such as "Groceries (Anna's iPhone)".
+note, named after your Mac or device, such as "Groceries (Anna's iPhone)". Before two texts are merged, and before you
+choose, both are kept as versions of the note, so the one you didn't keep can be brought back from its versions, even
+after Notebook was closed.
 
 Notes are saved in the background, so a slow disk or iCloud holding a note never makes the window wait. What you typed
 in a note you have just left is still written, and Notebook doesn't quit before it is. A note open in the main window
@@ -508,9 +560,11 @@ Choose the **Notebook** scheme, then **My Mac** or an iPhone or iPad simulator a
 build needs no Apple developer account: without a team, Xcode signs it to run on your Mac and in the Simulator. To run
 it on your own iPhone or iPad, or to sign with your own team, create `Config/Local.xcconfig` with `DEVELOPMENT_TEAM =
 <your team ID>`; it isn't checked in. With a team of your own, give the app an identifier of yours there too,
-`NOTEBOOK_BUNDLE_IDENTIFIER = com.example.Notebook`; the widgets' extension takes it with `.Widgets` after it. A local build keeps hidden folders and reminders on the device; only the App
-Store build, signed with a team, has the iCloud entitlement that takes them to your other devices, and the one for Time
-Sensitive notifications.
+`NOTEBOOK_BUNDLE_IDENTIFIER = com.example.Notebook`; the extensions take it with `.Widgets` and `.Share` after it. A
+local build keeps hidden folders and reminders on the device; only the App Store build, signed with a team, has the
+iCloud entitlement that takes them to your other devices, and the one for Time Sensitive notifications. The share
+extension and the Today and Note widgets reach the app through an App Group, which only the App Store build and the
+Simulator have; in other builds the share sheet says it can't keep anything and those widgets stay empty.
 
 ### Adding your notes
 
@@ -664,12 +718,12 @@ on the Mac. On iPhone and iPad:
 
 Planned, and not built yet:
 
-- **A share extension:** text, links, pictures and PDFs from the share sheet, as a new note in the default folder or
-  at the end of the note opened last.
 - **Reminders when a calendar event starts,** and on the iPhone a Live Activity that keeps the note on the Lock Screen.
   A reminder set on another device reaches an iPhone or iPad the next time Notebook runs there or gets time in the
   background. Reminders of notes don't repeat, and a Mac doesn't remind you at places.
 - Footnotes are styled but don't jump to their text.
+- **Versions of a note renamed or moved outside Notebook,** in the Finder or another app, don't follow it: they go to
+  the History's Trash, and come back only if it gets its old name again (#148).
 - On iPhone and iPad there is no Settings › App Icon (iOS only switches between icons built into the app), no PNG
   export and no window of its own for a single file.
 - **Sketches** as files of their own, next to your notes rather than in one.
@@ -682,10 +736,12 @@ The full plan, with what is deliberately left out (tags, backlinks, a database, 
 
 ```
 Notebook/                    The app target (Mac, iPhone and iPad): the entry point, the icon and the App Shortcuts
-NotebookWidgets/             The widgets' extension: the New Note widget and control
+NotebookWidgets/             The widgets' extension: New Note (widget and control), Today and Note
+NotebookShare/               The share extension: the sheet, and what it leaves for the app to write
 NotebookUITests/             UI tests on iPhone and iPad simulators, for what only a real keyboard or touch reaches
 Packages/NotebookKit/
-  Sources/NotebookCapture/   The New Note intent, apart from the rest so the widgets' extension can have it too
+  Sources/NotebookCapture/   What the extensions share with the app: the New Note intent, the notes shared to it, and
+                             what the widgets show, kept by the app in the App Group
   Sources/NotebookKit/
     Editor/                  The live-preview editor on TextKit 1: styling, hidden marks, objects, typing, export;
                              the Mac's text view, and iPhone's and iPad's in the "+UIKit" files
@@ -694,8 +750,8 @@ Packages/NotebookKit/
     Drawing/                 Drawings: the strokes file and its picture, and drawing them in notes
     Files/                   Locations, the file tree read in the background, file operations, saving, watching, the
                              three-way merge, the hidden folders and reminders kept in iCloud's key-value store,
-                             folders' symbols and colours kept where the Finder keeps them, the sample notes, and
-                             Import from Apple Notes
+                             folders' symbols and colours kept where the Finder keeps them, version history
+                             (NoteHistory, VersionChanges), the sample notes, and Import from Apple Notes
     Index/                   Search: the index of every file and how it is kept between launches, the corpus a
                              search goes through on every core, the text read in pictures, scans and drawings, and
                              how [[links]] resolve and follow files renamed or moved; the to-dos of every note, and
@@ -706,7 +762,7 @@ Packages/NotebookKit/
     UI/iOS/                  The iPhone's and iPad's screens: folders, the sidebar, the note, search and Settings
     Debug/                   The debug remotes (Debug builds only)
   Tests/                     Parser, editor, merge, smoothness, search index, Spotlight, link, drawing, reminder,
-                             to-do, folder look, app icon and Apple Notes import tests
+                             to-do, folder look, version history, app icon and Apple Notes import tests
 Config/                      Build settings, Info.plist and entitlements
 Design/                      The icon, the README pictures, the social preview, and the App Store screenshots and
                              what is set in App Store Connect (app-store.md)

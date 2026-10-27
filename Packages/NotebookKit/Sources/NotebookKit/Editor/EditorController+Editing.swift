@@ -25,6 +25,49 @@ extension EditorController {
         return true
     }
 
+    /// Puts text at the end of the note, after its last line and a blank one, as one step of Undo of its own:
+    /// something shared to the note from another app. The caret and the scroll position stay where they are.
+    @discardableResult
+    func appendAtEnd(_ addition: String, actionName: String) -> Bool {
+        let end = Workspace.sharedEnd(addition, after: nsText)
+        // Made as a link's change is: one step, the caret and the scroll position kept.
+        return changeLinks([(NSRange(location: end.kept, length: storage.length - end.kept), end.tail)], actionName: actionName)
+    }
+
+    /// Puts other text in the note's place, an earlier version's, as one step of Undo of its own. Only the part that
+    /// differs is replaced, so the caret and the scroll position stay where they can. Nothing changes while the text
+    /// isn't in.
+    @discardableResult
+    func restore(text: String, actionName: String) -> Bool {
+        guard !isWaitingForText, !isReadOnly else { return false }
+        guard let change = change(to: text) else { return true }
+        // A caret in what is replaced stays where that begins, near where you were, rather than after it all, and what
+        // is above it stays where it is on screen.
+        let selection = self.selection
+        let inside = selection.location > change.range.location && selection.location < change.range.upperBound
+        let caret = inside ? NSRange(location: change.range.location, length: 0) : change.caret
+        let manager = textView.undoManager
+        breakTyping()
+        let opens = manager?.groupingLevel == 0
+        if opens { manager?.beginUndoGrouping() }
+        preservingScroll(anchor: inside ? change.range.location : nil) {
+            replace(change.range, with: change.replacement, select: caret)
+        }
+        manager?.setActionName(actionName)
+        if opens { manager?.endUndoGrouping() }
+        breakTyping()
+        return true
+    }
+
+    /// What is typed next is a step of Undo of its own, apart from what was typed before.
+    private func breakTyping() {
+        #if os(macOS)
+        textView.breakUndoCoalescing()
+        #else
+        openStep = nil
+        #endif
+    }
+
     /// Changes the addresses of links, each where it is, as one step of Undo of its own: a file they point at was
     /// renamed or moved. The caret and the scroll position stay where they are. Nothing changes while the text isn't in.
     @discardableResult
@@ -39,13 +82,6 @@ extension EditorController {
     func replace(_ changes: [(range: NSRange, replacement: String)], actionName: String, anchor: Int? = nil, movedTo: Int? = nil) -> Bool {
         guard !isWaitingForText, !changes.isEmpty, changes.allSatisfy({ $0.range.upperBound <= storage.length }) else { return false }
         let manager = textView.undoManager
-        func breakTyping() {
-            #if os(macOS)
-            textView.breakUndoCoalescing()
-            #else
-            openStep = nil
-            #endif
-        }
         breakTyping()
         // Outside an event the undo manager would keep its group open until after the next, and take it in.
         let opens = manager?.groupingLevel == 0

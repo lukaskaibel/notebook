@@ -121,8 +121,8 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     /// note is made before its screen slides in.
     /// Nothing can be typed while the note's text is on its way, in the note or its title.
     func updateEditability() {
-        textView.isEditable = !isWaitingForText
-        textView.titleField.isEnabled = !isWaitingForText
+        textView.isEditable = !isWaitingForText && !isReadOnly
+        textView.titleField.isEnabled = !isWaitingForText && !isReadOnly
     }
 
     /// The next change to the note fades in, as a file read in the background does (`FileLoadingView`): above all the

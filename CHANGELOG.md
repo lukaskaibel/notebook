@@ -11,6 +11,20 @@ versions follow [semantic versioning](https://semver.org).
   Mac's desktop, the control in Control Center, on the Lock Screen and on the iPhone's Action button. A tap opens
   Notebook with a new note in your default folder and the caret in its title, as New Note in Shortcuts does. The
   widget shows Notebook's icon and the pencil in its ink; on the Lock Screen it is the pencil alone, or with its name.
+- Share to Notebook, on the Mac, iPhone and iPad: text, links, pictures and PDFs from any app's share sheet become a
+  new note in your default folder, named after the page or the first line, or go at the end of the note you opened
+  last. Pictures and files go into the note's `.assets` folder, as when you add them in a note. Notebook writes them
+  into your notes as soon as it's open; when that note is open in Notebook, they go in as one step of Undo.
+- A Today widget, as Reminders has one: the to-dos for today and the overdue ones, overdue first and in red as in
+  To-dos, on the Home Screen and the Lock Screen of iPhone and iPad and on the Mac's desktop. Tick a to-do in the
+  widget and it shows ticked at once, its reminder gone; Notebook writes the tick into its note as To-dos would the
+  next time it opens, and keeps it until it can. Tap again to untick it before then. A to-do changed meanwhile, on
+  another device say, is left as it is, and Notebook tells you. A tap anywhere else opens To-dos or the to-do's note.
+  It moves on by itself at midnight and when a to-do's time passes.
+- A Note widget that shows a note of your choice, its title and as much of it as fits, with its headings, lists,
+  to-dos, links and bold or struck text as in the note. Pick the note under Edit Widget, from the notes you opened
+  last or by searching their names. It follows the note when you rename or move it in Notebook, and a tap opens it.
+  A note in a folder you hid isn't shown or offered there, and one you throw away says so.
 - Sort the notes and files in a folder by date edited or date created, newest first, as well as by name: View › Sort By
   on the Mac, Sort By in the ⋯ menu on iPhone and iPad, where it says how a folder is sorted now, in Settings › Sidebar
   (Settings › Files on iPhone and iPad), and in ⌘K. The order goes for every folder, the sidebar and the lists alike;
@@ -33,6 +47,18 @@ versions follow [semantic versioning](https://semver.org).
   between the notes you exported keep finding them, the title Notes repeats as the first line goes, and the folders you
   put the exports in come along. Notes' export itself is only read, nothing in your folders is written over, what
   couldn't come over is listed, and one Undo takes the whole import back.
+- Version history: Notebook keeps earlier versions of your notes as you write. It keeps the note as it was when you
+  start changing it, a version every ten minutes while you write, and one when you stop. On the Mac, File › Revert To ›
+  Browse All Versions… shows them by day next to the one you pick, as the note looks. Show Changes marks what was added
+  since then in green and what was taken out in red, word by word where a line changed. Restore puts a version back as
+  one change Undo takes back, and keeps the text you had as a version first; Revert To › Last Opened goes back to the
+  note as you opened it. On iPhone and iPad, Version History is in the note's ⋯ menu.
+  - **Where they're kept:** the versions are plain Markdown copies. Those of notes in iCloud are in Notebook's own
+    iCloud folder, which iCloud Drive doesn't show, so they reach your other devices. The rest stay on the device.
+  - **How long:** everything from the last hour, then one an hour for a day, one a day for a month and one a week for
+    a year.
+  - **Merges and conflicts:** before a change from elsewhere is merged in or a conflict is settled, both texts are
+    kept, so the one you didn't keep can be brought back.
 
 ### Changed
 

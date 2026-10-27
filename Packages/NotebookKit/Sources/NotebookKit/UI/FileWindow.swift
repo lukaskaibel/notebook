@@ -10,6 +10,20 @@ public final class FileWindows {
     public static let shared = FileWindows()
     private var controllers: [String: FileWindowController] = [:]
 
+    private init() {
+        // Revert To acts on the note of the window you are in: whichever became key, or the one its sheet is over.
+        NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { notification in
+            guard let window = notification.object as? NSWindow else { return }
+            MainActor.assumeIsolated { Self.becameKey(window) }
+        }
+    }
+
+    static func becameKey(_ window: NSWindow) {
+        var window = window
+        while let below = window.sheetParent ?? window.parent { window = below }
+        Workspace.shared.keyFileNote = (window.windowController as? FileWindowController)?.noteDocument
+    }
+
     public func open(_ url: URL) {
         let url = url.standardizedFileURL
         if let existing = controllers[url.path] {
@@ -91,6 +105,8 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
     private(set) var url: URL
     private let note: NoteDocument
     var isLoaded: Bool { note.isLoaded }
+    /// The note, for Revert To.
+    var noteDocument: NoteDocument { note }
     let editor = EditorController()
     var onClose: (() -> Void)?
 
@@ -140,6 +156,8 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
     }
 
     func windowWillClose(_ notification: Notification) {
+        if Workspace.shared.keyFileNote === note { Workspace.shared.keyFileNote = nil }
+        VersionsWindow.close(over: window)
         editor.endDrawing()
         note.update(text: editor.text)
         // Saved off the main thread; a conflict met then keeps both, as no one can be asked.
@@ -150,6 +168,7 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
     func save(quitting: Bool) {
         editor.saveDrawingsNow(waiting: quitting)
         note.update(text: editor.text)
+        note.keepCopyOfChanges()
         if quitting { note.close() } else { note.saveNow() }
     }
 
@@ -251,7 +270,9 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
                 // The notes next to it, which are what its links and theirs find, as they are before it is renamed.
                 (renamed, next) = await Task.detached(priority: .userInitiated) {
                     let targets = LinkTargets.reading(url.deletingLastPathComponent(), deep: false)
-                    return (FileOperations.rename(url, to: name, presenter: note), targets)
+                    let renamed = FileOperations.rename(url, to: name, presenter: note)
+                    if let renamed { NoteHistory.shared.follow(from: url, to: renamed) }
+                    return (renamed, targets)
                 }.value
                 NoteDocument.endMoving(documents, from: url, to: renamed)
             }
@@ -328,7 +349,9 @@ public final class NotebookAppDelegate: NSObject, NSApplicationDelegate {
 
     public func application(_ application: NSApplication, open urls: [URL]) {
         MainActor.assumeIsolated {
-            FileWindows.shared.open(urls)
+            // A tap in a widget: New Note, To-dos, a to-do or a note.
+            let files = urls.filter { !QuickCapture.open($0) }
+            if !files.isEmpty { FileWindows.shared.open(files) }
         }
     }
 
