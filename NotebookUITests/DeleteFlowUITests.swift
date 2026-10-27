@@ -2,8 +2,8 @@ import XCTest
 
 /// Deleting notes on the iPhone and iPad as you would: a swipe, the context menu, the ⋯ menu of an open note, several in
 /// a row, in search. The row goes at once, as in Notes, while the disk is slow (`-NotebookSlowWrites`), and nothing
-/// comes back. (Undo isn't here: ⌘Z typed by a test reaches only a text field, and a test can't shake.) Every test starts the app on fresh sample notes in its own home folder, so nothing of yours
-/// is touched. With `TEST_RUNNER_PACE=<seconds>` the tests wait that long between steps, for a recording of the screen.
+/// comes back, and a shake's Undo brings it back. (⌘Z isn't here: typed by a test, it reaches only a text field.) Every
+/// test starts the app on fresh sample notes in its own home folder, so nothing of yours is touched. With `TEST_RUNNER_PACE=<seconds>` the tests wait that long between steps, for a recording of the screen.
 final class DeleteFlowUITests: XCTestCase {
     var app: XCUIApplication!
 
@@ -137,17 +137,68 @@ final class DeleteFlowUITests: XCTestCase {
         pause(3)
     }
 
+    /// Shaken right after a delete, as in Notes: Undo Move to Trash, and its Undo brings the note back.
+    func testShakeToUndoADelete() throws {
+        launch(slowWrites: 0)
+        tap("Inbox")
+        row("Errands").press(forDuration: 1.2)
+        tap("Delete")
+        assertGone("Errands", within: 1.2)
+        pause()
+        shake()
+        let undo = app.alerts.buttons["Undo"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.alerts.staticTexts["Undo Move to Trash"].exists, app.debugDescription)
+        pause()
+        undo.tap()
+        assertShown("Errands", within: 10)
+        pause(2)
+    }
+
+    /// Where a place has no Recently Deleted, Notebook asks first: Cancel brings the row back, Delete deletes it.
+    func testWithoutRecentlyDeletedItAsks() throws {
+        launch(slowWrites: 0, recentlyDeleted: false)
+        tap("Inbox")
+        row("Errands").press(forDuration: 1.2)
+        tap("Delete")
+        assertGone("Errands", within: 1.2)
+        let cancel = app.alerts.buttons["Cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10), app.debugDescription)
+        pause()
+        cancel.tap()
+        assertShown("Errands", within: 3)
+        XCTAssertTrue(app.alerts.firstMatch.waitForNonExistence(timeout: 3), app.debugDescription)
+        pause()
+        row("Errands").press(forDuration: 1.2)
+        tap("Delete")
+        let delete = app.alerts.buttons["Delete"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 10), app.debugDescription)
+        pause()
+        delete.tap()
+        assertGone("Errands", within: 0.1)
+        pause(2)
+        assertGone("Errands", within: 0.1)
+    }
+
     // MARK: -
 
-    private func launch(slowWrites: Double) {
+    private func launch(slowWrites: Double, recentlyDeleted: Bool = true) {
         app = XCUIApplication()
         // A `~` is the app's home in the Simulator.
         app.launchArguments = ["-NotebookLibrary", "~/Documents/UITests-\(UUID().uuidString)", "-NotebookLibraryName", "Library",
                                "-NotebookDemo", "YES", "-NotebookTips", "hide", "-NotebookSlowWrites", "\(slowWrites)",
+                               "-NotebookNoRecentlyDeleted", recentlyDeleted ? "NO" : "YES",
                                "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
         if isPad { XCUIDevice.shared.orientation = .landscapeLeft }
         pause()
+    }
+
+    /// Shakes the device, as the Simulator's Device › Shake does.
+    private func shake() {
+        typealias Post = @convention(c) (UnsafePointer<CChar>) -> UInt32
+        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "notify_post") else { return XCTFail("no notify_post") }
+        _ = unsafeBitCast(symbol, to: Post.self)("com.apple.UIKit.SimulatorShake")
     }
 
     /// Waits between steps when the screen is being recorded.

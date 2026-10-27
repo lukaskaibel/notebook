@@ -224,6 +224,10 @@ enum FileOperations {
         debugWait("trashed", url)
         var result: (done: Bool, place: URL?) = (false, nil)
         #if os(iOS)
+        #if DEBUG
+        // `-NotebookNoRecentlyDeleted YES`, or `notrash on` in the debug remote: as a place without one.
+        if UserDefaults.standard.bool(forKey: "NotebookNoRecentlyDeleted") { return result }
+        #endif
         // On iPhone and iPad the move to Recently Deleted is coordinated by the system, on a thread of its own: inside a
         // coordinated write of ours it would wait for that write to end, which waits for it, for good.
         for attempt in 1...2 {

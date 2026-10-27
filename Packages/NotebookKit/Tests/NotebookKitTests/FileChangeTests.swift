@@ -308,6 +308,55 @@ final class FileChangeTests: XCTestCase {
         XCTAssertEqual(workspace.favoriteURLs.map(\.lastPathComponent), ["Draft.md"])
     }
 
+    /// Deleted while its rename, or its folder's, is still under way, a file stays out of the lists under its new name
+    /// too, rather than showing again once the rename is done.
+    func testAFileLeavingFollowsARenameUnderWay() async throws {
+        let (workspace, _) = try await makeSidebar()
+        let renaming = workspace.rename(draft, to: "Plan")
+        workspace.beginLeaving(draft)
+        let renamed = await renaming.value
+        let plan = try XCTUnwrap(renamed)
+        XCTAssertEqual(plan.lastPathComponent, "Plan.md")
+        XCTAssertTrue(workspace.isLeaving(plan))
+        XCTAssertFalse(workspace.isLeaving(draft))
+
+        let renamingFolder = workspace.rename(papers, to: "Writing")
+        let renamedFolder = await renamingFolder.value
+        let writing = try XCTUnwrap(renamedFolder)
+        XCTAssertTrue(workspace.isLeaving(writing.appendingPathComponent("Plan.md")))
+        workspace.endLeaving(writing.appendingPathComponent("Plan.md"))
+        XCTAssertFalse(workspace.isLeaving(writing.appendingPathComponent("Plan.md")))
+        XCTAssertTrue(workspace.leaving.isEmpty)
+    }
+
+    /// "Delete immediately?" asks about one file at a time, in the order they couldn't go to the Trash, and the next
+    /// question waits until the alert answered has gone. One that fails while it is going away waits its turn too,
+    /// rather than showing at once, where it wouldn't show, and putting the one before it off for good.
+    func testDeleteQuestionsAskOneAtATime() {
+        let a = library.appendingPathComponent("A.md"), b = library.appendingPathComponent("B.md")
+        let c = library.appendingPathComponent("C.md")
+        var questions = DeleteQuestions()
+        questions.ask(a)
+        questions.ask(b)
+        XCTAssertEqual(questions.asking, a)
+        questions.answered(a)
+        XCTAssertNil(questions.asking, "the alert is still going away")
+        questions.ask(c)
+        XCTAssertNil(questions.asking)
+        questions.gone()
+        XCTAssertEqual(questions.asking, b)
+        XCTAssertEqual(questions.waiting, [c])
+        questions.answered(b)
+        questions.gone()
+        XCTAssertEqual(questions.asking, c)
+        questions.answered(c)
+        questions.gone()
+        XCTAssertNil(questions.asking)
+        XCTAssertEqual(questions.waiting, [])
+        questions.ask(a)
+        XCTAssertEqual(questions.asking, a, "with no alert going away, at once")
+    }
+
     /// Search finds a note thrown away until it has read its folder again: it is left out of the results meanwhile,
     /// and so is what was in a folder thrown away. Put back from the Trash, it is there again.
     func testSearchLeavesOutWhatWasThrownAway() async throws {

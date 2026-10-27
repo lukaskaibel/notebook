@@ -269,6 +269,12 @@ enum DebugRemote {
             workspace.problem = nil
         case "deletenow":
             if let url = workspace.deleting { workspace.answerDeleting(url, delete: true) }
+        case "notrash":
+            // notrash on|off: every place as one without Recently Deleted, or as it is.
+            UserDefaults.standard.set(argument != "off", forKey: "NotebookNoRecentlyDeleted")
+        case "asking":
+            // asking: the file "Delete immediately?" asks about now, and those after it.
+            log("asking \(workspace.deleting?.lastPathComponent ?? "-") then \(workspace.deleteQuestions.waiting.map(\.lastPathComponent))")
         case "trash":
             if let url = url(argument) { workspace.trash(url) }
         case "keyundo", "keyredo":

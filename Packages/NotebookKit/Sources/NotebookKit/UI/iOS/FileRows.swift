@@ -455,7 +455,8 @@ struct FileAlerts: ViewModifier {
                 VersionHistorySheet(browser: browser, source: workspace.editor)
                     .presentationSizing(.page)
             }
-            .alert(deleteTitle, isPresented: Binding(get: { workspace.deleting != nil }, set: { if !$0 { workspace.deleting = nil } }),
+            // Its buttons answer it, which lets it go (`answerDeleting`).
+            .alert(deleteTitle, isPresented: Binding(get: { workspace.deleting != nil }, set: { _ in }),
                    presenting: workspace.deleting) { url in
                 Button("Cancel", role: .cancel) { workspace.answerDeleting(url, delete: false) }
                 Button("Delete", role: .destructive) { workspace.answerDeleting(url, delete: true) }

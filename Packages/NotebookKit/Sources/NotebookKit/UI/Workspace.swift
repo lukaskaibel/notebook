@@ -161,8 +161,11 @@ public final class Workspace: NSObject {
     /// The folder Import from Apple Notes puts the notes in, while the Files app's picker asks for them.
     var appleNotesImportFolder: URL?
     #endif
-    /// A file to delete for good, once you said so, where there is no Recently Deleted to put it in.
-    var deleting: URL?
+    /// The files to delete for good, once you said so, where there is no Recently Deleted to put them in: asked about
+    /// one at a time.
+    var deleteQuestions = DeleteQuestions()
+    /// The file asked about now.
+    var deleting: URL? { deleteQuestions.asking }
     /// A note to set a reminder for, in a sheet.
     var reminderRequest: ReminderRequest?
     /// A to-do to set a reminder for, in a sheet.
@@ -236,8 +239,6 @@ public final class Workspace: NSObject {
     /// What Notebook knew about files it couldn't put in the Trash, before it closed them, by path: for deleting them
     /// for good.
     @ObservationIgnored var rememberedForDeleting: [String: FileChange.Remembered] = [:]
-    /// More files to delete for good, to ask about once the question about `deleting` is answered.
-    @ObservationIgnored var toAskAboutDeleting: [URL] = []
     /// What takes the focus after a change to files, for Shake to Undo and ⌘Z to reach it (`FileUndoFocus`).
     @ObservationIgnored weak var fileUndoView: FileUndoView?
     #endif
@@ -1175,6 +1176,8 @@ public final class Workspace: NSObject {
         history = history.map(fix)
         relocation = (old.standardizedFileURL, new.standardizedFileURL, UUID())
         if let current = currentURL { currentURL = fix(current) }
+        // A file deleted while its rename was under way stays out of the lists under its new name.
+        if !leaving.isEmpty { leaving = Dictionary(leaving.map { (fix($0.key), $0.value) }, uniquingKeysWith: +) }
         // Else ⌘N would make the folder again under its old name, for the note.
         if let folder = selectedFolder { selectedFolder = fix(folder) }
         #if os(iOS)
@@ -1699,9 +1702,7 @@ public final class Workspace: NSObject {
         beginLeaving(url)
         #endif
         return changeFiles { [self] follow in
-            #if os(iOS)
-            let asked = url
-            #endif
+            // Out of the lists under the name a rename before this gave it, too (`replacePath`).
             let url = follow(url)
             var remembered = remembered(url)
             #if os(iOS)
@@ -1719,13 +1720,9 @@ public final class Workspace: NSObject {
             if !trashed.done, FileManager.default.fileExists(atPath: url.path) {
                 // Deleted for good next, once you say so: Undo brings it back from there as it was now, open.
                 rememberedForDeleting[url.path] = change.remembered
-                askToDelete(url)
-                if url != asked {
-                    beginLeaving(url)
-                    endLeaving(asked)
-                }
+                deleteQuestions.ask(url)
             } else {
-                endLeaving(asked, animated: !trashed.done)
+                endLeaving(url, animated: !trashed.done)
             }
             #endif
             return trashed.done
@@ -1770,6 +1767,7 @@ public final class Workspace: NSObject {
     /// while Notebook is open. It is out of the lists until it is done.
     func deleteImmediately(_ url: URL) {
         let change = keepForUndo(FileChange(.trash, "Delete", from: url))
+        change.forGood = true
         beginLeaving(url)
         changeFiles { [self] follow in
             let asked = url
@@ -1781,7 +1779,7 @@ public final class Workspace: NSObject {
             if deleted.done { NoteHistory.shared.trash(url, as: remembered.history) }
             changeDone(change, from: url, to: deleted.place)
             if !deleted.done { beep() }
-            endLeaving(asked, animated: !deleted.done)
+            endLeaving(url, animated: !deleted.done)
         }
     }
 
@@ -1794,24 +1792,16 @@ public final class Workspace: NSObject {
         return deleted
     }
 
-    /// Asks whether to delete a file for good that couldn't go to the Trash, or once the question asked now is
-    /// answered.
-    private func askToDelete(_ url: URL) {
-        if deleting == nil { deleting = url } else { toAskAboutDeleting.append(url) }
-    }
-
     /// The answer to "Delete immediately?": deleted for good, or back in the lists where it was. Then the next file
     /// waiting for the question, once this alert has gone.
     func answerDeleting(_ url: URL, delete: Bool) {
-        if deleting == url { deleting = nil }
+        deleteQuestions.answered(url)
         if delete { deleteImmediately(url) } else { rememberedForDeleting[url.path] = nil }
         endLeaving(url, animated: !delete)
-        guard !toAskAboutDeleting.isEmpty else { return }
-        let next = toAskAboutDeleting.removeFirst()
         Task {
-            // An alert asked for while the one before is still going away doesn't show.
+            // Once the alert has gone: one asked for meanwhile wouldn't show.
             try? await Task.sleep(for: .seconds(0.5))
-            deleting = next
+            deleteQuestions.gone()
         }
     }
     #endif
