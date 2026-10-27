@@ -49,19 +49,15 @@ final class MovedFolderTests: XCTestCase {
         XCTAssertNil(Workspace.formerDocuments(moved: new + "/Documents/Notes", to: new + "/Notes", documents: new), "moved out of a folder named Documents")
     }
 
-    /// Only a folder that is gone was moved by an update: a folder you moved into Notebook's from another app's leaves
-    /// that app's Documents folder where it was, and teaches nothing.
-    func testOnlyAGoneFolderWasMovedByAnUpdate() throws {
-        let apps = FileManager.default.temporaryDirectory.appendingPathComponent("notebook-moved-\(UUID().uuidString)/Data/Application")
-        defer { try? FileManager.default.removeItem(at: apps.deletingLastPathComponent().deletingLastPathComponent()) }
-        let new = apps.appendingPathComponent("NEW/Documents").path, old = apps.appendingPathComponent("OLD/Documents").path
-        let obsidian = apps.appendingPathComponent("OBSIDIAN/Documents").path
-        try FileManager.default.createDirectory(atPath: new + "/Notes", withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(atPath: obsidian, withIntermediateDirectories: true)
-
-        XCTAssertEqual(Workspace.movedByUpdate(old + "/Notes", to: new + "/Notes", documents: new), old, "the app's folder of before, gone")
-        XCTAssertNil(Workspace.movedByUpdate(obsidian + "/Notes", to: new + "/Notes", documents: new), "moved in from Obsidian, still there")
-        XCTAssertNil(Workspace.movedByUpdate(new + "/Notes", to: new + "/Notes", documents: new), "not moved")
+    /// Only Notebook's own folder, the location that is the app's Documents, is moved by an update alone: a folder you
+    /// moved into it from another app's teaches nothing, whether or not the sandbox lets that app's folder be seen.
+    func testOnlyNotebooksOwnFolderSaysWhereDocumentsWas() {
+        let obsidian = apps + "/OBSIDIAN-UUID/Documents"
+        XCTAssertEqual(Workspace.movedByUpdate(old, to: new, documents: new), "/var/mobile/Containers/Data/Application/OLD-UUID/Documents")
+        XCTAssertNil(Workspace.movedByUpdate(old + "/Notes", to: new + "/Notes", documents: new), "a folder in it")
+        XCTAssertNil(Workspace.movedByUpdate(obsidian + "/Vault", to: new + "/Vault", documents: new), "moved in from Obsidian")
+        XCTAssertNil(Workspace.movedByUpdate(new, to: new, documents: new), "not moved")
+        XCTAssertNil(Workspace.movedByUpdate("/private/var/mobile/Library/Mobile Documents/Notes", to: new, documents: new), "not an app's")
     }
 
     /// A to-do's notification is named from its note's place in Documents, so a place that reminded you doesn't remind

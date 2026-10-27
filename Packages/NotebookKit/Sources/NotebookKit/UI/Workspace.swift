@@ -206,6 +206,13 @@ public final class Workspace: NSObject {
     @ObservationIgnored private var surveys = 0
     @ObservationIgnored private var surveysDone = 0
     @ObservationIgnored private var afterSurvey: [() -> Void] = []
+    /// The lookup that follows the locations' bookmarks, which finds where they moved, until it is applied: what waits
+    /// on the lookups waits on it too, also when a later one, for a location added meanwhile, is done first.
+    @ObservationIgnored private var bookmarkSurvey: Int?
+    #if DEBUG
+    /// Tests: the lookup with the bookmarks takes this much longer, as it can with many locations.
+    nonisolated(unsafe) static var bookmarkLookupDelay: TimeInterval = 0
+    #endif
     #if os(iOS)
     /// The first launch of a version that keeps where the app's Documents folder is: a location the survey finds moved
     /// says where it was before.
@@ -408,6 +415,7 @@ public final class Workspace: NSObject {
     private func survey(resolving: Bool, reading files: [String], new: UUID?) {
         surveys += 1
         let count = surveys
+        if resolving { bookmarkSurvey = count }
         var folders = UserDefaults.standard.stringArray(forKey: "expandedFolders") ?? []
         for file in files {
             var folder = URL(fileURLWithPath: file).deletingLastPathComponent()
@@ -420,7 +428,13 @@ public final class Workspace: NSObject {
             LocationSurvey.Job(id: location.id, url: location.url, bookmark: resolving ? location.bookmark : nil, isNew: location.id == new,
                                linked: location.linked, isRead: roots[location.id]?.hasLoadedChildren ?? false, folders: folders)
         }
+        #if DEBUG
+        let delay = resolving ? Self.bookmarkLookupDelay : 0
+        #endif
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            #if DEBUG
+            if delay > 0 { Thread.sleep(forTimeInterval: delay) }
+            #endif
             let surveys = jobs.map(LocationSurvey.run)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated { self?.surveyed(surveys, count: count) }
@@ -437,7 +451,9 @@ public final class Workspace: NSObject {
             if survey.url.path != locations[index].path {
                 #if os(iOS)
                 // In the app's Documents folder, which the update from a version that didn't keep where it was moved.
-                if learnsFormerDocuments, let former = survey.formerDocuments { follow(movedDocuments: former) }
+                if learnsFormerDocuments, let former = Self.movedByUpdate(locations[index].path, to: survey.url.path, documents: Self.documentsPath) {
+                    follow(movedDocuments: former)
+                }
                 #endif
                 // Moved since last time: the bookmark found it.
                 locations[index].path = survey.url.path
@@ -472,10 +488,13 @@ public final class Workspace: NSObject {
             reloadsAll = true
         }
         if saves, !temporaryLocations { LocationStore.save(locations) }
-        // An older lookup's files are as good as any, but only the newest knows every location.
+        // An older lookup's files are as good as any, but only the newest knows every location, and only the one with the
+        // bookmarks where they moved.
         surveysDone = max(surveysDone, count)
+        let followedBookmarks = count == bookmarkSurvey
+        if followedBookmarks { bookmarkSurvey = nil }
         if reloadsAll { sidebarReloadAll() } else if !changed.isEmpty { sidebarReload(changed) }
-        guard count == self.surveys else { return }
+        guard count == self.surveys || followedBookmarks, !isSurveying else { return }
         watcher = FileWatcher(paths: locations.flatMap { $0.folders.map(\.url.path) }) { [weak self] paths in
             MainActor.assumeIsolated { self?.filesChanged(paths) }
         }
@@ -495,7 +514,7 @@ public final class Workspace: NSObject {
     }
 
     /// True while the locations are being looked up (`survey`).
-    var isSurveying: Bool { surveysDone < surveys }
+    var isSurveying: Bool { surveysDone < surveys || bookmarkSurvey != nil }
 
     /// Does something once the locations have been looked up, with iCloud Drive's linked folders: at once if they have.
     func whenSurveyed(_ action: @escaping () -> Void) {
@@ -1042,13 +1061,12 @@ public final class Workspace: NSObject {
         return folder
     }
 
-    /// The earlier Documents folder a location was in (`formerDocuments(moved:to:documents:)`), when that folder is gone,
-    /// as an app's is after an update: a folder you moved in from another app's leaves that app's in place. Off the main
-    /// thread.
+    /// The earlier Documents folder of the location that is Notebook's own folder, when its bookmark found it at `new`,
+    /// this device's `documents` now: only an update moves that folder. A folder moved in from another app's teaches
+    /// nothing.
     nonisolated static func movedByUpdate(_ old: String, to new: String, documents: String) -> String? {
-        guard old != new, let former = formerDocuments(moved: old, to: new, documents: documents),
-              !FileManager.default.fileExists(atPath: former) else { return nil }
-        return former
+        guard HiddenFolders.withoutPrivate(new) == HiddenFolders.withoutPrivate(documents) else { return nil }
+        return formerDocuments(moved: old, to: new, documents: documents)
     }
 
     /// `path` as it stays when an update of the app moves its Documents folder (`documents`): from there, when it is in
