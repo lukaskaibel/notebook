@@ -781,7 +781,8 @@ Planned, and not built yet:
 - **Sketches** as files of their own, next to your notes rather than in one.
 - Translations: the app is in English only.
 
-The full plan, with what is deliberately left out (tags, backlinks, a database, sync of its own), is in
+Which version brings what is in the [milestones](https://github.com/lukaskaibel/notebook/milestones), about a week
+apart. The full plan, with what is deliberately left out (tags, backlinks, a database, sync of its own), is in
 [PLAN.md](PLAN.md), in German.
 
 ## For contributors
