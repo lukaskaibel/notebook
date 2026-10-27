@@ -62,6 +62,11 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Changed
 
+- On iPhone and iPad, a note's text follows the system's text size (Display & Brightness › Text Size, or Larger Text in
+  Accessibility), as the text of Notes and other apps does: the size you chose in Settings › Text is the size at the
+  standard text size, and the note is larger or smaller from there. The title, headings, checkboxes, maths and the line
+  with the date grow with it, and a note that is open follows a change at once, keeping your place. A PDF or a printout
+  of a note stays at the size from Settings › Text.
 - Notes are saved in the background, on the Mac, iPhone and iPad: a slow disk, or iCloud holding a note while it puts
   in another device's version, no longer makes the window wait when you pause typing, leave a note or switch apps.
   What you type meanwhile is saved right after. A note you have just left is still written, and quitting, renaming,
@@ -79,6 +84,8 @@ versions follow [semantic versioning](https://semver.org).
   folder with each update, and Notebook looked for them where they had been. A reminder's notification from before the
   update opens its note, the note you left open opens again, and text shared to the end of the last note goes there.
   From the next update on, a to-do that has reminded you at a place doesn't do it again.
+- Maths on a line of its own grows and shrinks with the size chosen in Settings › Text, as maths within a line does.
+  It stayed at one size.
 - On iPhone and iPad, a note fades out under the bars at the top and bottom as you scroll, as in Notes, rather than
   running sharp under the toolbar's buttons and stopping at a hard line under the title.
 - A note open in the main window and in a window of its own no longer makes Notebook hang as you type in one of them.
@@ -110,6 +117,16 @@ versions follow [semantic versioning](https://semver.org).
   outline, which those screens don't have; the note's ⋯ menu has its outline there.
 - The sidebar on the Mac no longer scrolls back to the open note each time it is saved while you look at another part
   of it.
+- On iPhone and iPad, deleting a note works smoothly, as in Notes. On iOS 27 deleting could hang, after which
+  nothing happened, and no other change to files went through either until Notebook was opened again. Now the note
+  leaves the list at once, with the swipe or the menu, rather than once the disk or iCloud has moved it, also when
+  you delete several one after another, and it doesn't come back for a moment where it was. Delete in the ⋯ menu of
+  the note you are in goes back to its folder with the note still showing as it slides away, instead of an empty
+  page, and the note doesn't turn up in Recent, Favorites or search on its way out. Where a place has no Recently
+  Deleted, the note stays out of the list while Notebook asks whether to delete it for good, and comes back if you
+  cancel. Shake to Undo, and ⌘Z on an iPhone with a keyboard, now bring back a note deleted from a list; nothing
+  answered them there before, as nothing in a list has the focus. The Delete behind a swiped row is red, as in Notes
+  and Mail, and no longer blue.
 - Closing Notebook's window on the Mac no longer quits it. As in Notes, Notebook keeps running: its icon in the Dock and
   the new Window › Notebook bring the window back, with the note you had open.
 - On the Mac, ⌘N in a note's own window made the new note in the main window behind it, so nothing seemed to happen.

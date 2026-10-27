@@ -210,7 +210,7 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
                 return NSRect(x: 0, y: 0, width: width, height: 120)
             }
         case .mathBlock(let tex):
-            guard let math = MathStore.render(tex, display: true, size: 19, color: Theme.text.resolved(dark: source?.isDarkAppearance ?? false)) else {
+            guard let math = MathStore.render(tex, display: true, size: EditorStyle.displayMathSize, color: Theme.text.resolved(dark: source?.isDarkAppearance ?? false)) else {
                 return NSRect(x: 0, y: 0, width: width, height: 44)
             }
             return NSRect(x: 0, y: 0, width: width, height: ceil(math.image.size.height) + 20)
@@ -482,7 +482,7 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
             }
 
         case .mathBlock(let tex):
-            if let math = MathStore.render(tex, display: true, size: 19, color: Theme.text.resolved(dark: source?.isDarkAppearance ?? false)) {
+            if let math = MathStore.render(tex, display: true, size: EditorStyle.displayMathSize, color: Theme.text.resolved(dark: source?.isDarkAppearance ?? false)) {
                 let size = math.image.size
                 let x = rect.minX + max(0, (rect.width - size.width) / 2)
                 math.image.drawUpright(in: NSRect(x: x, y: rect.minY + 10, width: size.width, height: size.height))
@@ -865,7 +865,7 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
                 image.drawUpright(in: NSRect(x: area.minX, y: area.minY, width: size.width, height: size.height))
             }
         case .math(let tex):
-            if let math = MathStore.render(tex, display: true, size: 19, color: Theme.text.resolved(dark: source?.isDarkAppearance ?? false)) {
+            if let math = MathStore.render(tex, display: true, size: EditorStyle.displayMathSize, color: Theme.text.resolved(dark: source?.isDarkAppearance ?? false)) {
                 let size = math.image.size
                 math.image.drawUpright(in: NSRect(x: area.minX + max(0, (area.width - size.width) / 2), y: area.minY, width: size.width, height: size.height))
             }
