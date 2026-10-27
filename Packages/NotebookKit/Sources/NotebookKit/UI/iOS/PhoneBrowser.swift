@@ -313,7 +313,9 @@ struct FolderScreen: View {
                     .contextMenu { FileActions(workspace: workspace, url: node.url) { newFolderIn = $0 } }
                     .swipeActions(edge: .trailing) {
                         if !node.isLinked {
+                            // Red as in Notes and Mail: a destructive swipe would take the app's ink instead.
                             Button(role: .destructive) { workspace.trash(node.url) } label: { Label("Delete", systemImage: "trash") }
+                                .tint(.red)
                             Button { workspace.moving = MovingFile(url: node.url) } label: { Label("Move", systemImage: "folder") }
                                 .tint(.indigo)
                         }

@@ -245,6 +245,7 @@ struct TouchSettings: View {
                         }
                         .swipeActions {
                             Button("Remove", role: .destructive) { workspace.removeLocation(location.id) }
+                                .tint(.red)
                         }
                     }
                     Button { addsLocation = true } label: { Label("Add Location", systemImage: "plus") }

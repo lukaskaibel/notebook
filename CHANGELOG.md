@@ -98,7 +98,8 @@ versions follow [semantic versioning](https://semver.org).
   page, and the note doesn't turn up in Recent, Favorites or search on its way out. Where a place has no Recently
   Deleted, the note stays out of the list while Notebook asks whether to delete it for good, and comes back if you
   cancel. Shake to Undo, and ⌘Z on an iPhone with a keyboard, now bring back a note deleted from a list; nothing
-  answered them there before, as nothing in a list has the focus.
+  answered them there before, as nothing in a list has the focus. The Delete behind a swiped row is red, as in Notes
+  and Mail, and no longer blue.
 
 ## [1.0.0] – not released yet
 
