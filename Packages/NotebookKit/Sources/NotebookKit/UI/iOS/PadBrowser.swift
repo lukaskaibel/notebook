@@ -12,21 +12,22 @@ struct PadBrowser: View {
     @FocusState private var isSearchFocused: Bool
     /// Wide enough for the sidebar next to the page: an iPad in landscape, or a large window.
     @State private var isWide = true
+    /// The sidebar was put away because the window got narrow, so it comes back when the window is wide again.
+    @State private var hidSidebarForWidth = false
     @Bindable private var settings = NotebookSettings.shared
 
     var body: some View {
-        Group {
-            // As in Notes and Mail: in a narrower window the sidebar lies over the page rather than squeezing it,
-            // and gets out of the way once you have picked something.
-            if isWide {
-                splitView.navigationSplitViewStyle(.balanced)
-            } else {
-                splitView.navigationSplitViewStyle(.prominentDetail)
+        // One split view, whatever the width: choosing between two styles as the iPad turned or a window was resized
+        // made a new one after each turn, with the page jumping and the sidebar left lying over it. Where there isn't
+        // room for both, the sidebar makes way for the page instead, as Files' does.
+        splitView
+            // Room for the sidebar, a column of text and the outline: an iPad in landscape. In portrait, even the
+            // 13-inch one's, the text would get too narrow with all three.
+            .onGeometryChange(for: Bool.self) { $0.size.width >= 1100 } action: { wide in
+                guard wide != isWide else { return }
+                isWide = wide
+                withAnimation { fitSidebar() }
             }
-        }
-        // Room for the sidebar, a column of text and the outline: an iPad in landscape. In portrait, even the 13-inch
-        // one's, the text would get too narrow with all three.
-        .onGeometryChange(for: Bool.self) { $0.size.width >= 1100 } action: { isWide = $0 }
         .overlay {
             PaletteHost(workspace: workspace, actions: PaletteActions(
                 openSettings: { _ in showsSettings = true },
@@ -59,14 +60,32 @@ struct PadBrowser: View {
             isSearchFocused = true
         }
         .onChange(of: workspace.currentURL) { _, url in
-            if url != nil, !isWide, workspace.columnVisibility != .detailOnly {
-                withAnimation { workspace.columnVisibility = .detailOnly }
-            }
+            if url != nil { withAnimation { makeWayForPage() } }
         }
         .onChange(of: workspace.showsTodos) { _, shows in
-            if shows, !isWide, workspace.columnVisibility != .detailOnly {
-                withAnimation { workspace.columnVisibility = .detailOnly }
-            }
+            if shows { withAnimation { makeWayForPage() } }
+        }
+        .onChange(of: workspace.columnVisibility) { _, visibility in
+            // Shown by hand: it stays, whatever the width does next.
+            if visibility != .detailOnly { hidSidebarForWidth = false }
+        }
+    }
+
+    /// Where there isn't room for both, the sidebar goes once something is open: you have picked what you wanted.
+    private func makeWayForPage() {
+        guard !isWide, workspace.columnVisibility != .detailOnly else { return }
+        workspace.columnVisibility = .detailOnly
+        hidSidebarForWidth = true
+    }
+
+    /// Narrower, the sidebar makes way for what is open, as Files' does when the iPad turns to portrait; wider again,
+    /// it comes back if it went for want of room.
+    private func fitSidebar() {
+        if !isWide {
+            if workspace.currentURL != nil || workspace.showsTodos { makeWayForPage() }
+        } else if hidSidebarForWidth {
+            workspace.columnVisibility = .all
+            hidSidebarForWidth = false
         }
     }
 

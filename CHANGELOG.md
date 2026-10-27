@@ -90,6 +90,10 @@ versions follow [semantic versioning](https://semver.org).
   This iPhone uses, so its notes can be opened, shared and backed up from there. It was missing.
 - The sidebar on the Mac no longer scrolls back to the open note each time it is saved while you look at another part
   of it.
+- Turning the iPad no longer rebuilds the window a moment after the turn, with the toolbar and the note jumping and, in
+  portrait, the sidebar left lying over the note, dimming it. Turned to portrait with a note open, the sidebar now
+  slides out of the way, and back in when you turn the iPad to landscape; put away by hand, it stays away. Shown in
+  portrait, it sits next to the note rather than over it.
 
 ## [1.0.0] – not released yet
 
