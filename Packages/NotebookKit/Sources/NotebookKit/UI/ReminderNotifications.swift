@@ -351,10 +351,11 @@ final class ReminderNotifications: NSObject, UNUserNotificationCenterDelegate {
         let action = response.actionIdentifier
         let userInfo = response.notification.request.content.userInfo
         let id = (userInfo["reminder"] as? String).flatMap(UUID.init(uuidString:))
-        let note = userInfo["note"] as? String
+        // Shown before an update of the app, which moved its folder and the notes in it.
+        let note = (userInfo["note"] as? String).map(Workspace.rerooted)
         let done = UncheckedSendable(completionHandler)
         if let identifier = userInfo["todo"] as? String, let path = userInfo["path"] as? String, let line = userInfo["line"] as? Int, let source = userInfo["source"] as? String {
-            let todo = TodoReference(url: URL(fileURLWithPath: path), line: line, source: source)
+            let todo = TodoReference(url: URL(fileURLWithPath: Workspace.rerooted(path)), line: line, source: source)
             let shown = response.notification.request.content
             let again = UncheckedSendable((title: shown.title, subtitle: shown.subtitle, body: shown.body, thread: shown.threadIdentifier))
             DispatchQueue.main.async {

@@ -313,6 +313,9 @@ public final class Workspace: NSObject {
             locations = LocationStore.load()
             hidden = HiddenFolders()
             reminders = Reminders()
+            #if os(iOS)
+            followMovedFolder()
+            #endif
             // Versions a year old go, also those of notes not written in since, and those of notes gone from the
             // locations go to the History's Trash; not while the app is starting.
             DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
@@ -337,7 +340,7 @@ public final class Workspace: NSObject {
         reminders.onChange = { [weak self] in self?.remindersChanged() }
         readTextInPictures(NotebookSettings.shared.readsTextInPictures)
         watchForDueReminders()
-        let last = temporaryLocations ? nil : UserDefaults.standard.string(forKey: "lastOpened")
+        let last = temporaryLocations ? nil : UserDefaults.standard.string(forKey: "lastOpened").map(Self.rerooted)
         locationsChanged(resolving: true, reading: last.map { [$0] } ?? [])
         if let last, FileManager.default.fileExists(atPath: last) {
             open(URL(fileURLWithPath: last))
@@ -923,6 +926,54 @@ public final class Workspace: NSObject {
               let snapshot = editor.view.snapshotView(afterScreenUpdates: false) else { return }
         pageSnapshots[current] = snapshot
         if pageSnapshots.count > 12, let old = pageSnapshots.keys.first(where: { $0 != current }) { pageSnapshots[old] = nil }
+    }
+    #endif
+
+    /// Where a file kept by its path is now. On iPhone and iPad the app's own folder moves with each update of the
+    /// app, and the notes kept in it move along: their place in it stays the same. Anything else stays where it was.
+    nonisolated static func rerooted(_ path: String) -> String {
+        #if os(iOS)
+        rerooted(path, into: onDeviceFolder.standardizedFileURL.path)
+        #else
+        path
+        #endif
+    }
+
+    /// `path`, in an app's folder that is gone, in the same place in `documents`, the app's `Documents` now, if
+    /// something is there.
+    nonisolated static func rerooted(_ path: String, into documents: String) -> String {
+        guard !FileManager.default.fileExists(atPath: path), let container = path.range(of: "/Data/Application/"),
+              let folder = path.range(of: "/Documents", range: container.upperBound..<path.endIndex),
+              folder.upperBound == path.endIndex || path[folder.upperBound] == "/" else { return path }
+        let moved = documents + path[folder.upperBound...]
+        return FileManager.default.fileExists(atPath: moved) ? moved : path
+    }
+
+    #if os(iOS)
+    /// After an update of the app: the favourites, files opened last and default folder in Notebook's own folder, and
+    /// the folders hidden and notes with reminders in it, kept by their paths, follow it where iOS moved it.
+    private func followMovedFolder() {
+        let favorites = favorites.map(Self.rerooted), recents = recents.map(Self.rerooted)
+        if favorites != self.favorites {
+            self.favorites = favorites
+            UserDefaults.standard.set(favorites, forKey: "favorites")
+        }
+        if recents != self.recents {
+            self.recents = recents
+            UserDefaults.standard.set(recents, forKey: "recents")
+        }
+        if let folder = chosenDefaultFolder, Self.rerooted(folder) != folder {
+            chosenDefaultFolder = Self.rerooted(folder)
+            UserDefaults.standard.set(chosenDefaultFolder, forKey: "defaultFolder")
+        }
+        for key in hidden.keys {
+            let moved = HiddenFolders.withoutPrivate(Self.rerooted(key))
+            if moved != key { hidden.move(key, to: moved) }
+        }
+        for reminder in reminders.all {
+            let moved = HiddenFolders.withoutPrivate(Self.rerooted(reminder.note))
+            if moved != reminder.note { reminders.move(reminder.note, to: moved) }
+        }
     }
     #endif
 

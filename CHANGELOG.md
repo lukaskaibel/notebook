@@ -69,6 +69,10 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- On iPhone and iPad, after Notebook is updated, the notes kept in its own folder (On My iPhone › Notebook) keep their
+  favourites, reminders, hidden folders and places in Recent, the default folder stays chosen, and the note you left
+  open opens again. iOS moves an app's folder with each update, and Notebook looked for them where they had been. A
+  reminder's notification from before the update opens its note too.
 - A note open in the main window and in a window of its own no longer makes Notebook hang as you type in one of them.
   Each window now shows what was typed in the other, and quitting with both open quits.
 - Leaving a note a moment after another device changed the same lines no longer loses what you typed since the last
