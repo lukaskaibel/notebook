@@ -1109,7 +1109,11 @@ public final class Workspace: NSObject {
         }
         // Last: stopped before here, the next launch does it all again.
         UserDefaults.standard.set(Array(([former] + Self.formerDocuments).prefix(8)), forKey: "formerDocuments")
+        NotificationCenter.default.post(name: Self.documentsMoved, object: self)
     }
+
+    /// What was read by path before the move was known follows it (`rerooted`): the folders open in the iPad's sidebar.
+    static let documentsMoved = Notification.Name("NotebookDocumentsMoved")
     #endif
 
     /// Back and Forward come back to where you were, once the note is in the window again.

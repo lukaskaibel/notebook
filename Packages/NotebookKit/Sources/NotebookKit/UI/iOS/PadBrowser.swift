@@ -180,7 +180,7 @@ struct PadSidebar: View {
     let query: String
     @Binding var newFolderIn: URL?
     @Environment(\.isSearching) private var isSearching
-    @State private var expanded = Set(UserDefaults.standard.stringArray(forKey: "expandedFolders") ?? [])
+    @State private var expanded = Set((UserDefaults.standard.stringArray(forKey: "expandedFolders") ?? []).map(Workspace.rerooted))
     @State private var collapsedSections = Set(UserDefaults.standard.stringArray(forKey: "collapsedSections") ?? [])
 
     var body: some View {
@@ -220,6 +220,8 @@ struct PadSidebar: View {
                 }
             }
             .onChange(of: expanded) { _, expanded in UserDefaults.standard.set(Array(expanded), forKey: "expandedFolders") }
+            // Read before an update's move was known: the folders open follow it.
+            .onReceive(NotificationCenter.default.publisher(for: Workspace.documentsMoved)) { _ in expanded = Set(expanded.map(Workspace.rerooted)) }
             .onChange(of: workspace.revealRequest?.id) { _, _ in
                 guard let request = workspace.revealRequest else { return }
                 reveal(request.url)
