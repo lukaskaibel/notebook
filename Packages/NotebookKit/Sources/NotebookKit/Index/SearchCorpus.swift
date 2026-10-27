@@ -154,6 +154,10 @@ final class SearchCorpus: Sendable {
         }
 
         var isOneWord: Bool { words.count == 1 }
+        /// How many letters it has, whatever their bytes.
+        var letterCount: Int { folded.unicodeScalars.count }
+        /// From this many letters on, names and commands only a bit like it are listed too, last.
+        static let lettersForSimilar = 3
     }
 
     struct Limits: Sendable {
@@ -236,9 +240,10 @@ final class SearchCorpus: Sendable {
 
     // MARK: Names
 
-    /// Items whose names have every word, best first, as notes and files and as folders; when there is room left,
-    /// those that have them loosely too, the good ones with them and up to `others` more that are only a bit like them.
-    func matchNames(_ query: Query, files fileLimit: Int, folders folderLimit: Int, others otherLimit: Int = 0,
+    /// Items whose names have every word, best first, as notes and files and as folders; when there is room left and
+    /// `loose`, those that have them loosely too, the good ones with them and up to `others` more that are only a bit
+    /// like them. Not loose, it is quick enough for the main thread, as links typed in a note need.
+    func matchNames(_ query: Query, files fileLimit: Int, folders folderLimit: Int, others otherLimit: Int = 0, loose: Bool = true,
                     isCancelled: @Sendable () -> Bool = { false }) -> (files: [Int], folders: [Int], others: [Int]) {
         var files = Best(fileLimit)
         var folders = Best(folderLimit)
@@ -280,12 +285,13 @@ final class SearchCorpus: Sendable {
         }
         // Names with the words loosely, when nothing better fills the lists: their letters in order, "kytr" for "Kyoto
         // trip", or with a letter wrong, "ryokna" for "ryokan". Those only a bit like them go last, also for a note.
-        if whole.count >= 2, files.items.count < fileLimit, !isCancelled() {
+        let letters = query.letterCount
+        if loose, letters >= 2, files.items.count < fileLimit, !isCancelled() {
             for (index, quality) in looseMatches(query, skipping: seen, isCancelled: isCancelled) {
                 let score = FuzzyMatch.score(quality)
                 if quality >= FuzzyMatch.good {
                     consider(index, score)
-                } else if whole.count >= 3, others.takes(score) {
+                } else if letters >= Query.lettersForSimilar, others.takes(score) {
                     // Two letters are in order in most names.
                     let item = items[index]
                     others.add(Candidate(score: score, modified: item.modified, path: item.url.path, index: index))
@@ -337,6 +343,10 @@ final class SearchCorpus: Sendable {
         }
         // For each word and item, the fewest letters wrong for the word to start a word of its name; 0 for none.
         var typos = [UInt8](repeating: 0, count: ends.count * items.count)
+        let typed = query.words.map { word in
+            var word = word
+            return word.withUTF8 { FuzzyMatch.Typed($0) }
+        }
         let count = items.count, longest = longestName
         // With one word, a name that has it as it is was found by it already; with more, it may have some of them.
         let mayHaveWords = !query.isOneWord
@@ -352,31 +362,35 @@ final class SearchCorpus: Sendable {
                                     return UnsafeBufferPointer(start: letterBase + from, count: ends[number] - from)
                                 }
                                 for number in 0..<ends.count {
-                                    let word = word(number)
-                                    let allowed = FuzzyMatch.typosAllowed(in: word.count)
-                                    guard allowed > 0, let first = word.first else { continue }
+                                    let allowed = typed[number].allowed
+                                    guard allowed > 0, let lead = typed[number].first.first else { continue }
                                     let row = typoBase + number * count
-                                    DispatchQueue.concurrentPerform(iterations: chunks.count) { chunk in
-                                        let scratch = FuzzyMatch.Scratch(length: longest)
-                                        defer { scratch.free() }
-                                        let range = chunks[chunk]
-                                        var item = range.lowerBound
-                                        var position = starts[range.lowerBound]
-                                        let end = starts[range.upperBound]
-                                        var hits = 0
-                                        while position < end, let at = memchr(base + position, Int32(first), end - position) {
-                                            let offset = UnsafeRawPointer(at) - UnsafeRawPointer(base)
-                                            position = offset + 1
-                                            while starts[item + 1] <= offset { item += 1 }
-                                            hits += 1
-                                            if hits & 1023 == 0, stop.load(ordering: .relaxed) || isCancelled() {
-                                                stop.store(true, ordering: .relaxed)
-                                                return
+                                    typed[number].letters.withUnsafeBufferPointer { wordLetters in
+                                        typed[number].first.withUnsafeBufferPointer { first in
+                                            DispatchQueue.concurrentPerform(iterations: chunks.count) { chunk in
+                                                let scratch = FuzzyMatch.Scratch(length: longest)
+                                                defer { scratch.free() }
+                                                let range = chunks[chunk]
+                                                var item = range.lowerBound
+                                                var position = starts[range.lowerBound]
+                                                let end = starts[range.upperBound]
+                                                var hits = 0
+                                                while position < end, let at = memchr(base + position, Int32(lead), end - position) {
+                                                    let offset = UnsafeRawPointer(at) - UnsafeRawPointer(base)
+                                                    position = offset + 1
+                                                    while starts[item + 1] <= offset { item += 1 }
+                                                    if hits & 1023 == 0, stop.load(ordering: .relaxed) || isCancelled() {
+                                                        stop.store(true, ordering: .relaxed)
+                                                        return
+                                                    }
+                                                    hits += 1
+                                                    let nameEnd = starts[item + 1] - 1
+                                                    guard !seen[item], FuzzyMatch.couldBe(first, at: offset, in: base, length: nameEnd),
+                                                          let wrong = FuzzyMatch.typos(wordLetters, allowed: allowed, at: base + offset,
+                                                                                        length: nameEnd - offset, scratch) else { continue }
+                                                    if row[item] == 0 || Int(row[item]) > wrong { row[item] = UInt8(wrong) }
+                                                }
                                             }
-                                            guard !seen[item], offset == starts[item] || FuzzyMatch.isWordStart(base, offset),
-                                                  let wrong = FuzzyMatch.typos(word, at: base + offset, length: starts[item + 1] - 1 - offset,
-                                                                                allowed: allowed, scratch) else { continue }
-                                            if row[item] == 0 || Int(row[item]) > wrong { row[item] = UInt8(wrong) }
                                         }
                                     }
                                 }
@@ -388,7 +402,7 @@ final class SearchCorpus: Sendable {
                                     let range = chunks[chunk]
                                     var index = range.lowerBound
                                     next: while index < range.upperBound {
-                                        if index & 255 == 0, stop.load(ordering: .relaxed) || isCancelled() {
+                                        if (index - range.lowerBound) & 255 == 0, stop.load(ordering: .relaxed) || isCancelled() {
                                             stop.store(true, ordering: .relaxed)
                                             return
                                         }

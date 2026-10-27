@@ -1,4 +1,5 @@
 import AppKit
+import Synchronization
 import XCTest
 @testable import NotebookKit
 
@@ -121,6 +122,98 @@ final class SearchTests: XCTestCase {
         XCTAssertNil(quality("kyp", "kyoto"), "no typos in short words")
         XCTAssertNil(quality("trp", "party"), "the letters in order")
         XCTAssertNotNil(quality("日ノ", "日本語のノート"), "letters of more than one byte")
+        // A word of four letters has no typos: three of its first four letters would find too much.
+        XCTAssertNil(quality("plan", "place to stay"))
+        XCTAssertNil(quality("work", "world cup"))
+        XCTAssertNil(quality("test", "tesla"))
+        XCTAssertLessThan(quality("note", "nothing to declare") ?? 0, FuzzyMatch.good, "its e deep inside a word, after letters skipped")
+        XCTAssertGreaterThanOrEqual(quality("gttr", "getting to the ryokan") ?? 0, FuzzyMatch.good, "at the starts of words, however far")
+    }
+
+    /// Letters of more than one byte are whole letters: a typo is a wrong letter, not a wrong byte; a word of four
+    /// letters or fewer has none, whatever its bytes; and a letter isn't pieced together from the bytes of others.
+    func testLettersOfMoreThanOneByteAreWholeLetters() {
+        func quality(_ word: String, _ name: String) -> Double? { FuzzyMatch.quality([SearchIndex.fold(word)], in: SearchIndex.fold(name)) }
+        XCTAssertNil(quality("папа", "Мама"), "four letters, and the first one wrong")
+        XCTAssertNil(quality("кот", "кит"), "three letters")
+        XCTAssertNil(quality("日木", "日本"), "two letters")
+        XCTAssertNil(quality("日", "早春"), "日's bytes are in 早 and 春, apart")
+        XCTAssertNil(quality("日", "早春の旅"))
+        XCTAssertEqual(quality("москва", "Масква фото"), FuzzyMatch.oneTypo, "one letter wrong, of two bytes")
+        XCTAssertNil(quality("москва", "Осква"), "о starts with the same byte as м, but is another letter")
+    }
+
+    func testOneLetterOfMoreThanOneByteListsNoSimilarNames() async throws {
+        try write("Japan/日本.md")
+        try write("Japan/早春の旅.md")
+        try write("Japan/日記.md")
+        let index = try await makeIndex()
+        var results = try search(index, "日")
+        XCTAssertEqual(Set(results.files.map(\.name)), ["日本", "日記"])
+        XCTAssertTrue(results.others.isEmpty)
+        results = try search(index, "日木")
+        XCTAssertTrue(results.files.isEmpty)
+        XCTAssertTrue(results.others.isEmpty, "two letters")
+    }
+
+    /// A note listed for the words in it isn't listed again for its name being a bit like them.
+    func testASimilarNameListedForItsWordsIsntListedTwice() async throws {
+        try write("Work/Workout yoga 2.md", "Kyoto in spring.\n")
+        try write("Work/Workout family chapter notes 13.md", "Squats.\n")
+        let index = try await makeIndex()
+        let results = try search(index, "kyo")
+        XCTAssertEqual(results.texts.map(\.item.name), ["Workout yoga 2"])
+        XCTAssertEqual(results.others.map(\.name), ["Workout family chapter notes 13"], "wor-k-out y-o-ga is in texts already")
+    }
+
+    /// A link typed in a note is looked up on the main thread as it is typed: by what names have in it, which is quick
+    /// in any library and what a link should be.
+    func testLinkSuggestionsAreExact() async throws {
+        try write("Travel/Kyoto trip.md", "Five days.\n")
+        let index = try await makeIndex()
+        XCTAssertEqual(index.linkSuggestions("kyo", from: nil).first?.title, "Kyoto trip")
+        XCTAssertFalse(index.linkSuggestions("kytr", from: nil).contains { $0.title == "Kyoto trip" })
+    }
+
+    /// A search no longer wanted stops in the middle of matching names loosely, as the next letter is typed.
+    func testLooseMatchingStopsWhenCancelled() throws {
+        final class Calls: Sendable { let count = Atomic<Int>(0) }
+        let entries = (0..<5000).map { number -> SearchIndex.Entry in
+            let name = "Axe box zebra \(number)"
+            let url = URL(fileURLWithPath: "/Notes/\(name).md")
+            return SearchIndex.Entry(url: url, name: name, kind: .note, place: "Notes", locationID: UUID(), modified: nil, isInCloud: false,
+                                     text: nil, folded: nil, foldedName: SearchIndex.fold(name), foldedFileName: SearchIndex.fold(name + ".md"),
+                                     path: url.path, folder: "/Notes")
+        }
+        let corpus = SearchCorpus(version: 0, entries: entries, hidden: [], recognized: [:])
+        let query = try XCTUnwrap(SearchCorpus.Query("abz"))
+        XCTAssertEqual(corpus.matchNames(query, files: 6, folders: 0, others: 3).files.count, 6, "a-xe b-ox z-ebra")
+        // Wanted as the loose matching starts, not once it is under way.
+        let calls = Calls()
+        let cancelled = corpus.matchNames(query, files: 6, folders: 0, others: 3, isCancelled: { calls.count.add(1, ordering: .relaxed).newValue > 1 })
+        XCTAssertTrue(cancelled.files.isEmpty)
+        XCTAssertTrue(cancelled.others.isEmpty)
+        XCTAssertTrue(corpus.matchNames(query, files: 6, folders: 0, others: 3, loose: false).files.isEmpty, "not loose")
+    }
+
+    /// ⌘K lists commands only a bit like what was typed last, after everything search found and before New Note; and
+    /// none for two letters, which are in order in most commands.
+    func testSimilarCommandsComeLast() {
+        let commands = ["Show Hidden Folders", "Delete", "New Note"].map { PaletteCommand(id: $0, title: $0, symbol: "circle", section: "") {} }
+        let note = URL(fileURLWithPath: "/Notes/Idea.md"), other = URL(fileURLWithPath: "/Notes/Garden list.md")
+        let results = [
+            SearchSection(title: "Files", items: [SearchItem(result: .file(note), title: "Idea")]),
+            SearchSection(title: "In Notes and PDFs", items: [SearchItem(result: .text(note, words: "del", page: nil), title: "Idea")]),
+            SearchSection(title: "Similar Names", items: [SearchItem(result: .file(other), title: "Garden list")]),
+            SearchSection(title: nil, items: [SearchItem(result: .newNote("del"), title: "New Note “del”")]),
+        ]
+        var sections: [String?] = []
+        for row in CommandPalette.rows(for: "del", commands: commands, results: results) where sections.last != row.section {
+            sections.append(row.section)
+        }
+        XCTAssertEqual(sections, ["Commands", "Files", "In Notes and PDFs", "Similar Names", "Similar Commands", nil],
+                       "Delete first, as it starts with what was typed; sh-o-w hi-d-d-e-n fo-l-ders last")
+        XCTAssertFalse(CommandPalette.rows(for: "oe", commands: commands, results: []).contains { $0.section == "Similar Commands" })
     }
 
     /// A name that is exactly what was typed comes first wherever it is in the corpus, the last one included.

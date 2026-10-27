@@ -14,7 +14,7 @@ enum PaletteMode: Hashable {
 }
 
 /// One row of ⌘K.
-private struct PaletteRow: Identifiable {
+struct PaletteRow: Identifiable {
     enum Action {
         case result(SearchResult)
         case command(PaletteCommand)
@@ -267,20 +267,27 @@ struct CommandPalette: View {
         let commands = workspace.paletteCommands(actions)
         if trimmed.hasPrefix(">") {
             let filter = trimmed.dropFirst().trimmingCharacters(in: .whitespaces)
-            return matching(commands, filter).map { commandRow($0, section: filter.isEmpty ? $0.section : "Commands") }
+            return Self.matching(commands, filter).map { Self.commandRow($0, section: filter.isEmpty ? $0.section : "Commands") }
         }
         guard !trimmed.isEmpty else {
             // What you opened last, then every command, by what it is for.
-            return resultRows(search.query.isEmpty ? search.sections : []) + commands.map { commandRow($0, section: $0.section) }
+            return Self.resultRows(search.query.isEmpty ? search.sections : []) + commands.map { Self.commandRow($0, section: $0.section) }
         }
         // The results that go with what was typed: while they are on their way, the last ones stay.
-        let results = search.sections
+        return Self.rows(for: trimmed, commands: commands, results: search.sections)
+    }
+
+    /// What ⌘K lists for what was typed: the files and folders, the commands named like it (first when one starts
+    /// with it), the rest of what search found, then commands and names only a bit like it, and New Note.
+    static func rows(for trimmed: String, commands: [PaletteCommand], results: [SearchSection]) -> [PaletteRow] {
+        let folded = SearchIndex.fold(trimmed)
         // Commands only a bit like what was typed go last, as names do: "del" has its letters in Show Hidden Folders.
+        // Two letters are in order in most of them.
         let scored = scoredMatching(commands, trimmed)
         let found = scored.filter { $0.score >= FuzzyMatch.goodScore }.prefix(8).map { commandRow($0.command, section: "Commands") }
-        let similar = scored.filter { $0.score < FuzzyMatch.goodScore }.prefix(3).map { commandRow($0.command, section: "Similar Commands") }
+        let similar = folded.unicodeScalars.count < SearchCorpus.Query.lettersForSimilar ? []
+            : scored.filter { $0.score < FuzzyMatch.goodScore }.prefix(3).map { commandRow($0.command, section: "Similar Commands") }
         // A command named like what was typed comes first; otherwise after the files and folders.
-        let folded = SearchIndex.fold(trimmed)
         let commandFirst = found.first.map { row in
             SearchIndex.fold(row.title).split(separator: " ").contains { $0.hasPrefix(folded) }
         } ?? false
@@ -292,23 +299,23 @@ struct CommandPalette: View {
         return first + resultRows(rest) + similar + resultRows(new)
     }
 
-    private func matching(_ commands: [PaletteCommand], _ filter: String) -> [PaletteCommand] {
+    private static func matching(_ commands: [PaletteCommand], _ filter: String) -> [PaletteCommand] {
         guard !filter.isEmpty else { return commands }
         return scoredMatching(commands, filter).map(\.command)
     }
 
     /// The commands that match, best first.
-    private func scoredMatching(_ commands: [PaletteCommand], _ filter: String) -> [(command: PaletteCommand, score: Int)] {
+    private static func scoredMatching(_ commands: [PaletteCommand], _ filter: String) -> [(command: PaletteCommand, score: Int)] {
         commands.compactMap { command in command.score(filter).map { (command, $0) } }
             .sorted { $0.1 > $1.1 }
     }
 
-    private func commandRow(_ command: PaletteCommand, section: String) -> PaletteRow {
+    private static func commandRow(_ command: PaletteCommand, section: String) -> PaletteRow {
         PaletteRow(id: "command:" + command.id, section: section, title: command.title, symbol: command.symbol,
                    tint: Color.theme(Theme.textSecondary), keys: command.keys, action: .command(command))
     }
 
-    private func resultRows(_ sections: [SearchSection]) -> [PaletteRow] {
+    private static func resultRows(_ sections: [SearchSection]) -> [PaletteRow] {
         sections.flatMap { section in
             section.items.map { item in
                 // By section too: a scanned PDF can be found by its text and by its pictures.
@@ -319,7 +326,7 @@ struct CommandPalette: View {
         }
     }
 
-    private func tint(of item: SearchItem) -> Color {
+    private static func tint(of item: SearchItem) -> Color {
         guard let kind = item.kind else { return Color.theme(Theme.accent) }
         if item.symbol != nil { return Color.theme(Theme.textSecondary) }
         switch kind {

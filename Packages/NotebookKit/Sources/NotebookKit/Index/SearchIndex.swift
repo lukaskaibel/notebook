@@ -965,7 +965,7 @@ public final class SearchIndex {
         let current = note?.standardizedFileURL.path
         let candidates: [SearchCorpus.Item]
         if let parsed = SearchCorpus.Query(query) {
-            candidates = corpus.matchNames(parsed, files: 8, folders: 0).files.map { corpus.items[$0] }.filter { $0.url.path != current }.prefix(7).map { $0 }
+            candidates = corpus.matchNames(parsed, files: 8, folders: 0, loose: false).files.map { corpus.items[$0] }.filter { $0.url.path != current }.prefix(7).map { $0 }
         } else {
             var newest = SearchCorpus.Best(6)
             for (index, item) in corpus.items.enumerated() where item.kind == .note && item.url.path != current {
