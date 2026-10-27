@@ -58,22 +58,16 @@ final class LooseTodos {
 
     /// Where the app keeps them; tests keep theirs apart.
     static var defaultPlace: Place {
-        if isTesting {
+        if ProcessInfo.isTesting {
             return .folder(FileManager.default.temporaryDirectory.appendingPathComponent("Notebook to-dos \(UUID().uuidString)", isDirectory: true))
         }
         return .container(local: defaultLocalFolder)
     }
 
     /// Keeps them in `folder` from now on, on this device: for a library given on the command line (the sample notes,
-    /// UI tests), whose to-dos have no business among your own. Before `start`. Unit tests keep each workspace's apart.
+    /// UI tests), whose to-dos have no business among your own. Before `start`.
     func keepOnDevice(in folder: URL) {
-        guard !Self.isTesting else { return }
         place = .folder(folder)
-    }
-
-    /// In unit tests. `swift test` doesn't say so in the environment, as Xcode does: XCTest is loaded, though.
-    nonisolated static var isTesting: Bool {
-        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil || NSClassFromString("XCTestCase") != nil
     }
 
     /// Looks the file up and reads it, once; again when iCloud's account changes.
