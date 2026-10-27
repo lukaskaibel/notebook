@@ -204,11 +204,11 @@ final class TodoListTests: XCTestCase {
         XCTAssertEqual(controller.editor.text, "# Doctor\n\n- [x] Book the taxi\n")
         let manager = workspace.fileUndoManager
         XCTAssertFalse(manager === controller.window?.undoManager, "another window's")
-        try await Task.sleep(for: .milliseconds(50))
+        try await until { manager.groupingLevel == 0 }
         XCTAssertEqual(manager.undoActionName, "Delete To-do")
         manager.undo()
         XCTAssertEqual(controller.editor.text, original)
-        try await Task.sleep(for: .milliseconds(50))
+        try await until { manager.groupingLevel == 0 }
         XCTAssertTrue(manager.canRedo)
         manager.redo()
         XCTAssertEqual(controller.editor.text, "# Doctor\n\n- [x] Book the taxi\n")
