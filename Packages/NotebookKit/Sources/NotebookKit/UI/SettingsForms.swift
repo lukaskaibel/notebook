@@ -38,6 +38,10 @@ struct TextSettings: View {
                     }
                     .pickerStyle(.segmented)
                 }
+            } footer: {
+                #if os(iOS)
+                Text("The text size you choose in the Settings app, under Display & Brightness, makes notes larger or smaller too, as it does in other apps.")
+                #endif
             }
             Section("Preview") {
                 VStack(alignment: .leading, spacing: 6) {

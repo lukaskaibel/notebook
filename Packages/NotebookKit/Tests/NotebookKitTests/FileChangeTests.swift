@@ -280,6 +280,109 @@ final class FileChangeTests: XCTestCase {
         assertNothingOnTheMainThread()
     }
 
+    /// A file on its way to the Trash, or a folder it is in, is out of Recent and Favorites until it has gone, and back
+    /// in them if it couldn't go. The same file asked to go twice is out until both are done.
+    func testFilesOnTheirWayToTheTrashLeaveTheLists() async throws {
+        let (workspace, _) = try await makeSidebar()
+        workspace.open(draft)
+        workspace.open(other)
+        workspace.open(chart)
+        workspace.toggleFavorite(draft)
+        XCTAssertEqual(workspace.recentURLs.map(\.lastPathComponent), ["Other.md", "Draft.md"])
+        XCTAssertTrue(workspace.recentURLs(includingOpen: true).contains(draft))
+
+        workspace.beginLeaving(papers)
+        XCTAssertTrue(workspace.isLeaving(draft))
+        XCTAssertTrue(workspace.isLeaving(papers))
+        XCTAssertFalse(workspace.isLeaving(archive))
+        XCTAssertFalse(workspace.isLeaving(library.appendingPathComponent("Papers copy/Draft.md")))
+        XCTAssertEqual(workspace.recentURLs, [])
+        // Nor on the iPhone's first screen, which lists the open note too.
+        XCTAssertFalse(workspace.recentURLs(includingOpen: true).contains(draft))
+        XCTAssertEqual(workspace.favoriteURLs, [])
+
+        workspace.beginLeaving(papers)
+        workspace.endLeaving(papers)
+        XCTAssertTrue(workspace.isLeaving(draft), "asked twice, done once")
+        // "/private/var/…" and "/var/…" are one folder.
+        workspace.endLeaving(URL(fileURLWithPath: HiddenFolders.withoutPrivate(papers.path)), animated: true)
+        XCTAssertFalse(workspace.isLeaving(draft))
+        XCTAssertEqual(workspace.recentURLs.map(\.lastPathComponent), ["Other.md", "Draft.md"])
+        XCTAssertEqual(workspace.favoriteURLs.map(\.lastPathComponent), ["Draft.md"])
+    }
+
+    /// Deleted while its rename, or its folder's, is still under way, a file stays out of the lists under its new name
+    /// too, rather than showing again once the rename is done.
+    func testAFileLeavingFollowsARenameUnderWay() async throws {
+        let (workspace, _) = try await makeSidebar()
+        let renaming = workspace.rename(draft, to: "Plan")
+        workspace.beginLeaving(draft)
+        let renamed = await renaming.value
+        let plan = try XCTUnwrap(renamed)
+        XCTAssertEqual(plan.lastPathComponent, "Plan.md")
+        XCTAssertTrue(workspace.isLeaving(plan))
+        XCTAssertFalse(workspace.isLeaving(draft))
+
+        let renamingFolder = workspace.rename(papers, to: "Writing")
+        let renamedFolder = await renamingFolder.value
+        let writing = try XCTUnwrap(renamedFolder)
+        XCTAssertTrue(workspace.isLeaving(writing.appendingPathComponent("Plan.md")))
+        workspace.endLeaving(writing.appendingPathComponent("Plan.md"))
+        XCTAssertFalse(workspace.isLeaving(writing.appendingPathComponent("Plan.md")))
+        XCTAssertTrue(workspace.leaving.isEmpty)
+    }
+
+    /// "Delete immediately?" asks about one file at a time, in the order they couldn't go to the Trash, and the next
+    /// question waits until the alert answered has gone. One that fails while it is going away waits its turn too,
+    /// rather than showing at once, where it wouldn't show, and putting the one before it off for good.
+    func testDeleteQuestionsAskOneAtATime() {
+        let a = library.appendingPathComponent("A.md"), b = library.appendingPathComponent("B.md")
+        let c = library.appendingPathComponent("C.md")
+        var questions = DeleteQuestions()
+        questions.ask(a)
+        questions.ask(b)
+        XCTAssertEqual(questions.asking, a)
+        questions.answered(a)
+        XCTAssertNil(questions.asking, "the alert is still going away")
+        questions.ask(c)
+        XCTAssertNil(questions.asking)
+        questions.gone()
+        XCTAssertEqual(questions.asking, b)
+        XCTAssertEqual(questions.waiting, [c])
+        questions.answered(b)
+        questions.gone()
+        XCTAssertEqual(questions.asking, c)
+        questions.answered(c)
+        questions.gone()
+        XCTAssertNil(questions.asking)
+        XCTAssertEqual(questions.waiting, [])
+        questions.ask(a)
+        XCTAssertEqual(questions.asking, a, "with no alert going away, at once")
+    }
+
+    /// Search finds a note thrown away until it has read its folder again: it is left out of the results meanwhile,
+    /// and so is what was in a folder thrown away. Put back from the Trash, it is there again.
+    func testSearchLeavesOutWhatWasThrownAway() async throws {
+        let (workspace, _) = try await makeSidebar()
+        let manager = workspace.fileUndoManager
+        XCTAssertFalse(workspace.isThrownAway(other))
+        let trashed = await workspace.trash(other).value
+        XCTAssertTrue(trashed)
+        XCTAssertTrue(workspace.isThrownAway(other))
+        XCTAssertFalse(workspace.isThrownAway(draft))
+
+        try await until("the group closed") { manager.groupingLevel == 0 }
+        manager.undo()
+        try await until("put back") { self.exists(self.other) }
+        await workspace.changeFiles { _ in }.value
+        XCTAssertFalse(workspace.isThrownAway(other), "back where it was")
+
+        let folderTrashed = await workspace.trash(papers).value
+        XCTAssertTrue(folderTrashed)
+        XCTAssertTrue(workspace.isThrownAway(draft), "in a folder thrown away")
+        XCTAssertFalse(workspace.isThrownAway(archive))
+    }
+
     /// A note thrown away a moment after it was left, while what was typed in it is still being written: that goes
     /// along to the Trash, and the note doesn't come back where it was.
     func testWhatWasTypedGoesAlongToTheTrash() async throws {
