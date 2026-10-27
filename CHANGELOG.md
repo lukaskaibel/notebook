@@ -85,6 +85,11 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- On iPhone and iPad, after Notebook is updated, the notes kept in its own folder (On My iPhone › Notebook) keep their
+  favourites, reminders, hidden folders and places in Recent, and the default folder stays chosen. iOS moves an app's
+  folder with each update, and Notebook looked for them where they had been. A reminder's notification from before the
+  update opens its note, the note you left open opens again, and text shared to the end of the last note goes there.
+  From the next update on, a to-do that has reminded you at a place doesn't do it again.
 - Maths on a line of its own grows and shrinks with the size chosen in Settings › Text, as maths within a line does.
   It stayed at one size.
 - On iPhone and iPad, a note fades out under the bars at the top and bottom as you scroll, as in Notes, rather than

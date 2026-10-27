@@ -369,6 +369,8 @@ final class ReminderNotifications: NSObject, UNUserNotificationCenterDelegate {
                     // have started the app), the note is written, and then the moment is over.
                     Task {
                         await workspace.surveyed()
+                        // Shown before an update of the app, which moved its folder and the notes in it: known now.
+                        let todo = Workspace.rerooted(todo)
                         switch action {
                         case Self.laterAction:
                             let date = Workspace.minute(after: 60 * 60)
