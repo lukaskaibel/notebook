@@ -86,6 +86,8 @@ versions follow [semantic versioning](https://semver.org).
   pictures and drawings when it isn't in one of your locations, since the system gives Notebook only the file. The
   first time it needs the note's folder, Notebook now asks for it, with the Files app's picker open at that folder, and
   remembers it after that.
+- On iPhone and iPad, at the largest text sizes (Settings › Accessibility › Larger Text), the names in the sidebar and in
+  the lists of files go on over a few lines, as in the Files app, rather than losing their middle ("Gett…kan").
 - On iPhone and iPad, the Files app shows On My iPhone › Notebook (On My iPad › Notebook), the folder Keep Notes on
   This iPhone uses, so its notes can be opened, shared and backed up from there. It was missing.
 - The sidebar on the Mac no longer scrolls back to the open note each time it is saved while you look at another part
