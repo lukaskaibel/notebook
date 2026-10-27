@@ -347,6 +347,19 @@ public final class NotebookAppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Notes are written as you switch to another app, whichever of Notebook's windows are open.
+    public func applicationWillResignActive(_ notification: Notification) {
+        MainActor.assumeIsolated { Workspace.shared.saveAll() }
+    }
+
+    public func applicationWillTerminate(_ notification: Notification) {
+        MainActor.assumeIsolated { Workspace.shared.saveAll(quitting: true) }
+    }
+
+    /// Closing the window leaves Notebook running, as Notes does: the Dock icon and Window › Notebook bring it back,
+    /// and SwiftUI would otherwise quit an app whose one window is closed.
+    public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
     public func application(_ application: NSApplication, open urls: [URL]) {
         MainActor.assumeIsolated {
             // A tap in a widget: New Note, To-dos, a to-do or a note.

@@ -137,6 +137,10 @@ public final class Workspace: NSObject {
     @ObservationIgnored var showWindow: (() -> Void)?
 
     #if os(macOS)
+    /// The main window is open: it can be closed while Notebook keeps running.
+    var isMainWindowOpen = false
+    /// Commands for the main window given while it was closed (⌘N, ⌘F): they run once it is there again.
+    @ObservationIgnored private var waitingForWindow: [() -> Void] = []
     /// The note in its own window that you are working in, for Revert To; nil while it's the main window.
     var keyFileNote: NoteDocument?
     @ObservationIgnored weak var sidebar: SidebarController?
@@ -1844,6 +1848,32 @@ public final class Workspace: NSObject {
         let name = FileManager.default.displayName(atPath: app.path)
         return name.hasSuffix(".app") ? String(name.dropLast(4)) : name
     }
+
+    /// Runs a command of the main window in it: brought to the front, or opened again first when it was closed, so what
+    /// the command shows (a new note, search) is there, and its Undo is the window's. A new note made behind a note's
+    /// own window seemed not to come.
+    func inMainWindow(_ action: @escaping () -> Void) {
+        if isMainWindowOpen {
+            // The sidebar is in the main window whatever it shows.
+            if sidebar?.outline.window?.isKeyWindow != true { showWindow?() }
+            return action()
+        }
+        waitingForWindow.append(action)
+        showWindow?()
+    }
+
+    /// The main window opened (again): the commands given while it was closed run, once its views are in it.
+    func mainWindowOpened() {
+        isMainWindowOpen = true
+        DispatchQueue.main.async { [self] in
+            let waiting = waitingForWindow
+            waitingForWindow = []
+            waiting.forEach { $0() }
+        }
+    }
+
+    /// A note you can see, for Print and Export: in a note's own window, or the main window's while that is open.
+    var hasVisibleNote: Bool { keyFileNote != nil || isMainWindowOpen && note != nil }
 
     /// The note in the window you are working in: a file window's, or this window's.
     func activeEditor() -> (editor: EditorController, title: String, window: NSWindow?)? {

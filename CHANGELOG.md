@@ -98,6 +98,11 @@ versions follow [semantic versioning](https://semver.org).
   outline, which those screens don't have; the note's ⋯ menu has its outline there.
 - The sidebar on the Mac no longer scrolls back to the open note each time it is saved while you look at another part
   of it.
+- Closing Notebook's window on the Mac no longer quits it. As in Notes, Notebook keeps running: its icon in the Dock and
+  the new Window › Notebook bring the window back, with the note you had open.
+- On the Mac, ⌘N in a note's own window made the new note in the main window behind it, so nothing seemed to happen.
+  New Note, New Folder, Open Recent, Search, ⌘K, To-dos, Back and Forward now bring the main window to the front, and
+  open it again if it was closed.
 - Turning the iPad no longer rebuilds the window a moment after the turn, with the toolbar and the note jumping and, in
   portrait, the sidebar left lying over the note, dimming it. Turned to portrait with a note open, the sidebar now
   slides out of the way, and back in when you turn the iPad to landscape; put away by hand, it stays away. Opened in
