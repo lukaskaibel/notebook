@@ -175,7 +175,7 @@ struct TodosView: View {
         }
         // ⌘K closed, after Move to Note… say: Shake to Undo takes the focus back from its field.
         .onChange(of: workspace.palette == nil) { _, closed in
-            if closed, editing == nil { undoFocus += 1 }
+            if closed, editing == nil { workspace.takeUndoFocusIfFree() }
         }
         // In the bar once the page's own title has scrolled up under it, as a note's.
         .navigationTitle(workspace.isTitleScrolledAway ? "To-dos" : "")

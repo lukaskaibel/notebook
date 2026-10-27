@@ -460,7 +460,7 @@ extension Workspace {
             todos.patch(shown.todo, to: shown.source, under: shown.under)
             // A note open in a window of its own on the Mac keeps the edit's Undo there: the window this was asked
             // from undoes it too, as one step.
-            if editor !== self.editor, isInTodos { keepTodoChangeForUndo(actionName) { undo(changed) } }
+            if undoable, editor !== self.editor, isInTodos { keepTodoChangeForUndo(actionName) { undo(changed) } }
             // From a notification the app may only have a moment: the note is written now, not after a pause.
             saveNote(showing: todo.url)
             outcome?(.written)
