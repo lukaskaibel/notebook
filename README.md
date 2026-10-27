@@ -803,10 +803,10 @@ Packages/NotebookKit/
   Tests/                     Parser, editor, merge, smoothness, search index, Spotlight, link, drawing, reminder,
                              to-do, folder look, version history, app icon and Apple Notes import tests
 Config/                      Build settings, Info.plist and entitlements
-Design/                      The icon, the README pictures, the social preview, and the App Store screenshots and
-                             what is set in App Store Connect (app-store.md)
+Design/                      The icon, the README pictures, the social preview, the App Store screenshots, header
+                             and search-result pictures, and what is set in App Store Connect (app-store.md)
 Website/                     The website, published to GitHub Pages by .github/workflows/website.yml
-Tools/                       The app icon, the README pictures and the App Store screenshots
+Tools/                       The app icon, the README pictures, and the App Store's screenshots, pictures and videos
 fastlane/                    Building for the App Store, TestFlight, and the App Store listing's texts
 PLAN.md                      The plan: decisions, file format, architecture and milestones (in German)
 ```
@@ -889,8 +889,11 @@ bundle exec fastlane ios beta
 The App Store listing is kept here too: its texts in `fastlane/metadata`, the age rating in `fastlane/rating.json` and
 the screenshots in `Design/screenshots/app-store`, taken on the sample notes by `bundle exec fastlane screenshots`.
 `bundle exec fastlane metadata` uploads them, `submit` sends the builds TestFlight has for review, and `release`
-builds, uploads and submits in one go. [Design/app-store.md](Design/app-store.md) lists what is set once in App Store
-Connect, and why the answers are what they are.
+builds, uploads and submits in one go. The header and search-result videos of iOS 27 and the app previews are made by
+`Tools/app-store-media.sh`, `Tools/app-store-previews.sh` and `Tools/mac-app-store-preview.sh`, and
+`bundle exec fastlane store_media` checks them against App Store Connect's specs and uploads them.
+[Design/app-store.md](Design/app-store.md) lists what is set once in App Store Connect, and why the answers are what
+they are.
 
 Every change to the app on `main` also goes to TestFlight by itself, for the iPhone and iPad and for the Mac:
 [`.github/workflows/testflight.yml`](.github/workflows/testflight.yml) runs `ios beta` and `mac beta` on GitHub side by

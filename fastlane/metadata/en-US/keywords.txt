@@ -1,1 +1,1 @@
-md,text,editor,writing,journal,to-do,checklist,reminder,folder,files,icloud,pdf,search,drawing,math
+editor,text,writing,journal,todo,checklist,folder,files,icloud,pdf,widget,wiki,offline,private,math

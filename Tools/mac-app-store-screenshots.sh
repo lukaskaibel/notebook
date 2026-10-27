@@ -1,12 +1,13 @@
 #!/bin/bash
-# Takes the Mac App Store screenshots on the sample notes, 2880 x 1800, into Design/screenshots/app-store/mac.
+# Takes the Mac App Store screenshots on the sample notes, 2880 x 1800, into Design/screenshots/app-store/mac: ten
+# slots, each a caption line and a smaller one above the window.
 #   Tools/mac-app-store-screenshots.sh
 # Builds a Debug copy under a bundle identifier of its own, so it shares no settings with a Notebook you have running,
 # runs it on a fresh copy of the sample notes (Files/DemoLibrary.swift) and drives it through its debug remote
 # (Debug/DebugRemote.swift), as Tools/readme-images.sh does. Each window is taken as it is on screen with
-# Tools/readme-images/capture.swift and framed on the README pictures' backdrop by Tools/store-frame.py. The app comes
+# Tools/readme-images/capture.swift and laid out with its caption by Tools/app-store-media/caption.py. The app comes
 # to the front for each picture, so its window is drawn active, with coloured traffic lights: this needs an awake,
-# unlocked screen and Screen Recording for the terminal, and takes about two minutes.
+# unlocked screen nobody is working at, and Screen Recording for the terminal, and takes about three minutes.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -85,10 +86,11 @@ sys.exit(0 if red > 80 else 1)
 EOF
 }
 
-# shot <name> <theme> <command>…: sets the scene up in front, lets it settle, and takes and frames the window.
+# shot <name> <theme> <caption> <smaller line> <command>…: sets the scene up in front, lets it settle, takes the
+# window and lays it out with its caption.
 shot() {
-  local name=$1 theme=$2
-  shift 2
+  local name=$1 theme=$2 line=$3 smaller=$4
+  shift 4
   front
   say "appearance $theme"
   for command in "$@"; do say "$command"; sleep 0.6; done
@@ -111,27 +113,69 @@ shot() {
     echo "$name came out ${size% }px, not $((width * 2)) x $((height * 2)): is the window on a Retina display?" >&2
     exit 1
   fi
-  python3 Tools/store-frame.py "$work/$name.png" "$work/framed/$name.png" "$theme"
+  python3 Tools/app-store-media/caption.py "$work/$name.png" "$work/framed/$name.png" mac "$theme" "$line" "$smaller"
   echo "$out/$name.png"
+}
+
+# typing: the commands that type a to-do at the end of Weekend, a key at a time, and put the caret back inside the bold
+# word, where its marks show.
+typing() {
+  python3 - "$library/Personal/Weekend.md" <<'EOF'
+import sys
+text = open(sys.argv[1], encoding="utf-8").read().rstrip("\n")
+end = len(text.encode("utf-16-le")) // 2
+typed = "\n\n## Sunday\n- [ ] A long walk by the **lake**, then ==coffee== at Mia's"
+lines = [f"caret {end}"]
+for ch in typed:
+    lines.extend(["key return" if ch == "\n" else f"type {ch}", "wait 0.03"])
+# The caret after "la" of lake: the end, less what follows it in the typed line.
+after = typed[typed.index("**lake**") + 4:]
+lines.append(f"caret {end + len(typed) - len(after)}")
+print("\n".join(lines))
+EOF
 }
 
 echo "Taking screenshots…"
 # Framed in the work folder and moved over the old pictures only once every one is taken, so a run that stops (a
 # locked screen, say) leaves the old ones.
 mkdir -p "$work/framed"
-# The order is the store's: the note first, then what it holds, finding, to-dos, drawing and folders.
-shot 1-note light "open Travel/Kyoto trip.md"
-shot 2-blocks dark "open Projects/Notebook roadmap.md"
-shot 3-todos light "showtodos"
-shot 4-drawing light "open Travel/Getting to the ryokan.md" "wait 1" "drawing 0"
-say "drawing end"
+# The order is the store's: the note, its folders and how it writes, then to-dos, reminders, versions, search, what a
+# note holds, and a PDF in the window. Two digits, since fastlane takes them in the order of their names.
+shot 01-note light "The ease of Notes." "Every note a Markdown file in your iCloud Drive." "open Travel/Kyoto trip.md"
 # Customize Folder… from Travel, with the symbols suggested for its name, over a note of words only: the popover's
 # glass shows what is behind it.
-shot 5-folders light "open Personal/Weekend.md" "wait 1" "customize Travel"
+shot 02-folders light "Your folders, as they are." "With symbols and colours the Finder shows too." \
+  "open Personal/Weekend.md" "wait 1" "customize Travel"
 say "customize close"
+# A line typed at the end of Weekend, the caret back inside the bold word, so its marks show.
+front
+say "open Personal/Weekend.md"
+sleep 1
+typing >> "$work/cmd"
+sleep 7
+shot 03-typing light "Markdown that gets out of the way." "The marks show only where you are writing." "showcaret 1"
+say "showcaret 0"
+# To-dos, the dry cleaning edited in place, with a day typed into its date.
+shot 04-todos light "Every to-do in one list." "Type “thursday in 3 weeks”, and it’s a date." \
+  "showtodos" "wait 1" "edittodo end dry cleaning" "wait 1" "todopick date" "wait 0.6" "todopicktype thursday in 3 weeks" "wait 1.5"
+say "todopick none" "key escape"
+# Remind Me for the to-do at a place, from its pill, once the map has loaded.
+shot 05-reminders light "Reminders, right in the note." "At a time you type, or when you get somewhere." \
+  "open Inbox/Errands.md" "wait 1" "remindtodo plasters" "wait 3"
+say "remindme close"
+# Browse All Versions… over the Kyoto trip, the iPhone's version from Sunday picked, Show Changes on.
+shot 06-versions light "Every version, kept." "Go back to any earlier version, with the changes marked." \
+  "open Travel/Kyoto trip.md" "wait 1" "browseversions" "wait 1" "pickversion 2" "wait 1" "showchanges 1" "wait 1"
+say "closeversions"
 # ⌘K finding a word in notes and PDFs, in the middle of the window (the search field's menu reaches past its edge).
-shot 6-search light "open Personal/Weekend.md" "wait 1" "palette" "wait 0.6" "type kyoto" "wait 1.5"
+shot 07-search light "Finds it from a few letters." "⌘K searches notes, PDFs and pictures, and runs any command." \
+  "open Personal/Weekend.md" "wait 1" "palette" "wait 0.6" "type kyoto" "wait 1.5"
 say "key escape"
+shot 08-blocks dark "Tables, code, maths, diagrams." "Drawn right in the note." "open Projects/Notebook roadmap.md"
+shot 09-drawing light "Draw right in the note." "With the trackpad or the mouse, next to your words." \
+  "open Travel/Getting to the ryokan.md" "wait 1" "drawing 0"
+say "drawing end"
+shot 10-pdf light "PDFs and pictures, in the window." "Everything else opens in Quick Look." "open Travel/Flight tickets.pdf" "wait 1"
 mkdir -p "$out"
 rm -f "$out"/*.png
 mv "$work/framed"/*.png "$out"/
