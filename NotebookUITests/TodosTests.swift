@@ -85,20 +85,21 @@ final class TodosTests: XCTestCase {
         new.tap()
         let field = app.textFields["To-do"].firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10), app.debugDescription)
-        field.typeText("Call the plumber")
+        // One word each: a fresh Simulator's keyboard can drop the first space typed.
+        field.typeText("Plumber")
         shot("5-new")
         field.typeText("\n")
         // The next one, under it.
         let next = app.textFields["To-do"].firstMatch
         XCTAssertTrue(next.waitForExistence(timeout: 10), app.debugDescription)
-        next.typeText("Buy milk\n")
+        next.typeText("Milk\n")
         XCTAssertTrue(app.textFields["To-do"].firstMatch.waitForExistence(timeout: 10), app.debugDescription)
         // Return in one left empty is done, and it goes.
         app.textFields["To-do"].firstMatch.typeText("\n")
         XCTAssertTrue(app.textFields["To-do"].firstMatch.waitForNonExistence(timeout: 10), app.debugDescription)
-        let plumber = row("Call the plumber")
+        let plumber = row("Plumber")
         XCTAssertTrue(plumber.waitForExistence(timeout: 10), app.debugDescription)
-        XCTAssertTrue(row("Buy milk").exists, app.debugDescription)
+        XCTAssertTrue(row("Milk").exists, app.debugDescription)
         shot("6-added")
 
         // Into a note, picked in ⌘K.
