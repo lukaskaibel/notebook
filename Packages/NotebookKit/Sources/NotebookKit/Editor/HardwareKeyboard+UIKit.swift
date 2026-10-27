@@ -13,8 +13,9 @@ final class HardwareKeyboard {
 
     /// Whether you type with keys: a keyboard is attached and the touch keyboard isn't on screen (a keyboard can be
     /// attached and the touch keyboard brought up anyway, and the Simulator always has the Mac's).
-    var isInUse: Bool { override ?? (isAttached && !isTouchKeyboardShown) }
+    var isInUse: Bool { override ?? (isShortcutsAlone || isAttached && !isTouchKeyboardShown) }
 
+    /// A keyboard told the game controller framework it is attached, or one of its keys was pressed.
     private(set) var isAttached = false {
         didSet { if isAttached != oldValue { changed() } }
     }
@@ -22,6 +23,13 @@ final class HardwareKeyboard {
     /// The touch keyboard is on screen, as the text view's keyboard notifications tell.
     var isTouchKeyboardShown = false {
         didSet { if isTouchKeyboardShown != oldValue { changed() } }
+    }
+
+    /// Only the keyboard's shortcuts came up while you write in a note, as they do for a keyboard that hasn't told the
+    /// game controller framework yet (one just attached, the Simulator's). For as long as you write there: unlike
+    /// `isAttached`, nothing to go by anywhere else.
+    var isShortcutsAlone = false {
+        didSet { if isShortcutsAlone != oldValue { changed() } }
     }
 
     /// For the debug remote: as if you typed with keys (true) or on the touch keyboard (false), whatever there is.

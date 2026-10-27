@@ -369,8 +369,10 @@ hold it for everything else.
 
 The iPad has the Mac's layout: the sidebar with its folders opening in place, the note next to it, and the outline in
 an inspector. In portrait the sidebar steps aside once you have picked a note. With a keyboard, the Mac's shortcuts
-work, the menu bar has the Mac's File, View, Go and Format menus, and the marks show next to the caret as on the Mac. Drag pictures from Photos into a note, or files onto a folder in
-the sidebar. A window as narrow as a phone gets the iPhone's screens.
+work, the menu bar has the Mac's File, View, Go and Format menus, the marks show next to the caret as on the Mac, and
+the bar above the keyboard steps aside, as in Notes: Aa, attachments and the pencil are in the toolbar at the top. Drag
+pictures from Photos into a note, or files onto a folder in the sidebar. A window as narrow as a phone gets the iPhone's
+screens.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/devices-dark.webp">
