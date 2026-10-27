@@ -245,7 +245,7 @@ final class WritingBar: UIView {
         super.didMoveToWindow()
         presence.isSettled = false
         guard window != nil else { return }
-        keyboardChanged()
+        tuck()
         presence.arrivals += 1
         let arrival = presence.arrivals
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
@@ -271,7 +271,13 @@ final class WritingBar: UIView {
         }
     }
 
+    /// Leaving with the keyboard, the bar stays as it is.
     @objc private func keyboardChanged() {
+        guard window == nil || editor?.textView.isFirstResponder == true else { return }
+        tuck()
+    }
+
+    private func tuck() {
         isTucked = HardwareKeyboard.shared.isInUse && editor?.textView.traitCollection.horizontalSizeClass == .regular
     }
 

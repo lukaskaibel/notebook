@@ -301,6 +301,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
 
     public func textViewDidEndEditing(_ textView: UITextView) {
         guard !isMoving else { return }
+        HardwareKeyboard.shared.isShortcutsAlone = false
         // Next time, the keyboard comes up again rather than the Format panel.
         if isShowingFormatPanel {
             textView.inputView = nil
@@ -429,15 +430,15 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         let keyboard = window.convert(end, from: window.screen.coordinateSpace)
         let frame = textView.convert(textView.bounds, to: window)
         let hiding = notification.name == UIResponder.keyboardWillHideNotification
-        // Taller than the bar above it: the touch keyboard, not just the bar a keyboard with keys leaves.
         let bar = textView.inputAccessoryView?.bounds.height ?? 0
-        let isOnScreen = !hiding && keyboard.intersects(window.bounds)
-        HardwareKeyboard.shared.isTouchKeyboardShown = isOnScreen && keyboard.height - bar > 120
-        // The bar and the keyboard's shortcuts came up without the touch keyboard, which only a keyboard with keys does.
-        if isOnScreen, !HardwareKeyboard.shared.isTouchKeyboardShown { HardwareKeyboard.shared.shortcutsCameAlone() }
-        let overlap = hiding ? 0 : max(0, frame.maxY - keyboard.minY - textView.safeAreaInsets.bottom)
+        let reading = KeyboardFrame(frame: keyboard, in: window.bounds, bar: bar, isHiding: hiding)
+        HardwareKeyboard.shared.isTouchKeyboardShown = reading.isTouchKeyboardShown
+        // Only while you write in the note: Find in Note's bar, for one, stays docked once the keyboard has gone.
+        let isWriting = textView.isFirstResponder
+        if isWriting { HardwareKeyboard.shared.isShortcutsAlone = reading.isShortcutsAlone }
+        let overlap = reading.isOnScreen ? max(0, frame.maxY - keyboard.minY - textView.safeAreaInsets.bottom) : 0
         // The line being written stays above where the note fades out under the bar.
-        let fade = overlap > 0 && (textView.inputAccessoryView as? WritingBar)?.isTucked == false ? WritingBar.fadeReach : 0
+        let fade = overlap > 0 && isWriting && (textView.inputAccessoryView as? WritingBar)?.isTucked == false ? WritingBar.fadeReach : 0
         guard textView.contentInset.bottom != overlap + fade else { return }
         textView.contentInset.bottom = overlap + fade
         textView.verticalScrollIndicatorInsets.bottom = overlap
