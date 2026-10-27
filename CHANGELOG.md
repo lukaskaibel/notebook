@@ -101,6 +101,11 @@ versions follow [semantic versioning](https://semver.org).
 - On the Mac, File › Move To moved the note in the main window while a note's own window was in front; it now moves the
   note you're working in. The Format menu's commands are dimmed while no note is open to format, rather than doing
   nothing.
+- Closing Notebook's window on the Mac no longer quits it. As in Notes, Notebook keeps running: its icon in the Dock and
+  the new Window › Notebook bring the window back, with the note you had open.
+- On the Mac, ⌘N in a note's own window made the new note in the main window behind it, so nothing seemed to happen.
+  New Note, New Folder, Open Recent, Search, ⌘K, To-dos, Back and Forward now bring the main window to the front, and
+  open it again if it was closed.
 
 ## [1.0.0] – not released yet
 

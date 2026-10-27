@@ -22,11 +22,11 @@ public struct NotebookScene: Scene {
                     DebugRemote.startIfRequested(workspace: workspace)
                     #endif
                 }
-                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willResignActiveNotification)) { _ in workspace.saveAll() }
-                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in workspace.saveAll(quitting: true) }
         }
         .windowToolbarStyle(.unified)
         .defaultSize(width: 1280, height: 820)
+        // Open at every launch, also when it was closed as Notebook quit, which it no longer does by itself.
+        .defaultLaunchBehavior(.presented)
         .commands {
             CommandGroup(replacing: .appInfo) {
                 Button("About Notebook") { Acknowledgements.showAbout() }
@@ -41,6 +41,7 @@ public struct NotebookScene: Scene {
                 } label: {
                     Label("Export As", systemImage: "square.and.arrow.up.on.square")
                 }
+                .disabled(!workspace.hasVisibleNote)
             }
             CommandGroup(after: .pasteboard) {
                 Divider()
@@ -54,12 +55,13 @@ public struct NotebookScene: Scene {
             CommandGroup(replacing: .printItem) {
                 Button { workspace.printNote() } label: { Label("Print…", systemImage: "printer") }
                     .keyboardShortcut("p", modifiers: .command)
+                    .disabled(!workspace.hasVisibleNote)
             }
             CommandGroup(replacing: .newItem) {
-                Button { workspace.newNote() } label: { Label("New Note", systemImage: "square.and.pencil") }
+                Button { workspace.inMainWindow { workspace.newNote() } } label: { Label("New Note", systemImage: "square.and.pencil") }
                     .keyboardShortcut("n", modifiers: .command)
                     .disabled(workspace.locations.isEmpty)
-                Button { workspace.newFolder() } label: { Label("New Folder", systemImage: "folder.badge.plus") }
+                Button { workspace.inMainWindow { workspace.newFolder() } } label: { Label("New Folder", systemImage: "folder.badge.plus") }
                     .keyboardShortcut("n", modifiers: [.command, .shift])
                     .disabled(workspace.locations.isEmpty)
                 Button { FileWindows.shared.choose() } label: { Label("Open…", systemImage: "arrow.up.forward.square") }
@@ -67,7 +69,7 @@ public struct NotebookScene: Scene {
                 Menu {
                     ForEach(workspace.recentURLs.prefix(10), id: \.self) { url in
                         let kind = FileKind(url: url, isDirectory: false)
-                        Button { workspace.open(url) } label: {
+                        Button { workspace.inMainWindow { workspace.open(url) } } label: {
                             Label(kind == .note ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent, systemImage: kind.symbol)
                         }
                     }
@@ -104,14 +106,14 @@ public struct NotebookScene: Scene {
             // The window's own sidebar item, bound to the same state as the toolbar button.
             CommandGroup(replacing: .sidebar) {
                 Button {
-                    withAnimation(Theme.spring) { workspace.isSidebarVisible.toggle() }
+                    workspace.inMainWindow { withAnimation(Theme.spring) { workspace.isSidebarVisible.toggle() } }
                 } label: {
                     Label(workspace.isSidebarVisible ? "Hide Sidebar" : "Show Sidebar", systemImage: "sidebar.left")
                 }
                 .keyboardShortcut("s", modifiers: [.command, .control])
                 .disabled(workspace.locations.isEmpty)
                 Button {
-                    withAnimation(Theme.spring) { workspace.isOutlineVisible.toggle() }
+                    workspace.inMainWindow { withAnimation(Theme.spring) { workspace.isOutlineVisible.toggle() } }
                 } label: {
                     Label(workspace.isOutlineVisible ? "Hide Outline" : "Show Outline", systemImage: "sidebar.right")
                 }
@@ -138,21 +140,21 @@ public struct NotebookScene: Scene {
                     .keyboardShortcut("0", modifiers: .command)
             }
             CommandMenu("Go") {
-                Button { workspace.search.focus() } label: { Label("Search…", systemImage: "magnifyingglass") }
+                Button { workspace.inMainWindow { workspace.search.focus() } } label: { Label("Search…", systemImage: "magnifyingglass") }
                     .keyboardShortcut("f", modifiers: .command)
-                Button { workspace.togglePalette() } label: { Label("Command Palette…", systemImage: "command") }
+                Button { workspace.inMainWindow { workspace.togglePalette() } } label: { Label("Command Palette…", systemImage: "command") }
                     .keyboardShortcut("k", modifiers: .command)
                     .disabled(workspace.locations.isEmpty)
                 if settings.showsTodos {
-                    Button { workspace.showTodos() } label: { Label("To-dos", systemImage: "checklist") }
+                    Button { workspace.inMainWindow { workspace.showTodos() } } label: { Label("To-dos", systemImage: "checklist") }
                         .keyboardShortcut("r", modifiers: [.command, .shift])
                         .disabled(workspace.locations.isEmpty)
                 }
                 Divider()
-                Button { workspace.goBack() } label: { Label("Back", systemImage: "chevron.backward") }
+                Button { workspace.inMainWindow { workspace.goBack() } } label: { Label("Back", systemImage: "chevron.backward") }
                     .keyboardShortcut("[", modifiers: .command)
                     .disabled(!workspace.canGoBack)
-                Button { workspace.goForward() } label: { Label("Forward", systemImage: "chevron.forward") }
+                Button { workspace.inMainWindow { workspace.goForward() } } label: { Label("Forward", systemImage: "chevron.forward") }
                     .keyboardShortcut("]", modifiers: .command)
                     .disabled(!workspace.canGoForward)
             }
@@ -187,6 +189,11 @@ public struct NotebookScene: Scene {
                 Divider()
                 formatButton(.indent, #selector(MarkdownTextView.indentLines(_:)), "]", [.command, .option], name: "Increase Indent")
                 formatButton(.outdent, #selector(MarkdownTextView.outdentLines(_:)), "[", [.command, .option], name: "Decrease Indent")
+            }
+            // The main window, also once it was closed, as Window › Notes in Notes.
+            CommandGroup(before: .windowList) {
+                MainWindowItem()
+                Divider()
             }
         }
 
@@ -254,6 +261,15 @@ private struct TextCommands: View {
             Label("Speech", systemImage: "waveform")
         }
         .disabled(!hasNote)
+    }
+}
+
+/// Window › Notebook: brings the main window to the front, and opens it again after it was closed.
+private struct MainWindowItem: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Button("Notebook") { openWindow(id: "main") }
     }
 }
 

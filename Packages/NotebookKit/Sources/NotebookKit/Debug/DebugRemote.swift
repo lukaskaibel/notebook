@@ -21,7 +21,8 @@ enum DebugRemote {
     private static weak var workspace: Workspace?
 
     static func startIfRequested(workspace: Workspace) {
-        guard let path = UserDefaults.standard.string(forKey: "debugCommandFile") else { return }
+        // Once, though the window appears again after it was closed.
+        guard timer == nil, let path = UserDefaults.standard.string(forKey: "debugCommandFile") else { return }
         self.workspace = workspace
         activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .latencyCritical], reason: "Debug remote")
         processed = (try? String(contentsOfFile: path, encoding: .utf8))?.split(separator: "\n", omittingEmptySubsequences: false).count ?? 0
@@ -150,6 +151,16 @@ enum DebugRemote {
                     return object === DebugRemote.fakeKeyWindow || object is DropdownPanel || original(object, selector)
                 }
                 class_replaceMethod(patched, selector, imp_implementationWithBlock(replacement), method_getTypeEncoding(method))
+            }
+            // The app says so too, so the menus enable their items for what has the keyboard in it, as they do for you.
+            for selector in [#selector(getter: NSApplication.keyWindow), #selector(getter: NSApplication.mainWindow)] {
+                guard let method = class_getInstanceMethod(NSApplication.self, selector) else { continue }
+                typealias Getter = @convention(c) (AnyObject, Selector) -> NSWindow?
+                let original = unsafeBitCast(method_getImplementation(method), to: Getter.self)
+                let replacement: @convention(block) (AnyObject) -> NSWindow? = { object in
+                    original(object, selector) ?? DebugRemote.fakeKeyWindow
+                }
+                class_replaceMethod(NSApplication.self, selector, imp_implementationWithBlock(replacement), method_getTypeEncoding(method))
             }
             log("fakekey: key \(window.isKeyWindow), first responder \(window.firstResponder.map { String(describing: type(of: $0)) } ?? "none")")
         case "resignfocus":
@@ -455,6 +466,27 @@ enum DebugRemote {
             guard let editor else { log("attachfiles: no note"); break }
             let urls = argument.split(separator: "|").map { URL(fileURLWithPath: String($0)) }
             log("attachfiles: \(editor.pasteFiles(urls, at: editor.selection))")
+        case "front":
+            // front: which window is in front and what the menus act on there.
+            if let workspace {
+                let key = NSApp.keyWindow
+                log("front key=\"\(key?.title ?? "none")\" mainOpen=\(workspace.isMainWindowOpen) visibleNote=\(workspace.hasVisibleNote) responder=\(key?.firstResponder.map { String(describing: type(of: $0)) } ?? "none") fileUndo=\(workspace.fileUndoManager === window?.undoManager ? "window" : "other")")
+            }
+        case "resignactive":
+            // resignactive: what switching to another app tells Notebook (it never is the active app here).
+            NotificationCenter.default.post(name: NSApplication.willResignActiveNotification, object: NSApp)
+        case "closemain":
+            // closemain: closes the main window, as its close button does.
+            window?.performClose(nil)
+        case "reopen":
+            // reopen: what a click on the Dock icon does: the Dock sends the app this Apple event.
+            let event = NSAppleEventDescriptor(eventClass: AEEventClass(kCoreEventClass), eventID: AEEventID(kAEReopenApplication), targetDescriptor: nil,
+                                               returnID: AEReturnID(kAutoGenerateReturnID), transactionID: AETransactionID(kAnyTransactionID))
+            var reply = AEDesc()
+            if let raw = event.aeDesc {
+                let error = NSAppleEventManager.shared().dispatchRawAppleEvent(raw, withRawReply: &reply, handlerRefCon: UnsafeMutableRawPointer(bitPattern: 1)!)
+                log("reopen: \(error == noErr ? "sent" : "error \(error)")")
+            }
         case "samplenotes":
             // samplenotes <folder>: what Try Sample Notes… does once a folder is chosen.
             workspace?.addSampleNotes(in: URL(fileURLWithPath: argument, isDirectory: true))
