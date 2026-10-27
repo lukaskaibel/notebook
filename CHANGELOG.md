@@ -69,6 +69,8 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- On iPhone and iPad, a note fades out under the bars at the top and bottom as you scroll, as in Notes, rather than
+  running sharp under the toolbar's buttons and stopping at a hard line under the title.
 - A note open in the main window and in a window of its own no longer makes Notebook hang as you type in one of them.
   Each window now shows what was typed in the other, and quitting with both open quits.
 - Leaving a note a moment after another device changed the same lines no longer loses what you typed since the last
@@ -90,8 +92,6 @@ versions follow [semantic versioning](https://semver.org).
   This iPhone uses, so its notes can be opened, shared and backed up from there. It was missing.
 - The sidebar on the Mac no longer scrolls back to the open note each time it is saved while you look at another part
   of it.
-- On iPhone and iPad, a note fades out under the bars at the top and bottom as you scroll, as in Notes, rather than
-  running sharp under the toolbar's buttons and stopping at a hard line under the title.
 
 ## [1.0.0] – not released yet
 
