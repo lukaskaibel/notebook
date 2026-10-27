@@ -38,6 +38,8 @@ enum EditorStyle {
     static var lineHeight: CGFloat { (bodySize * typography.spacing.factor).rounded() }
     static var codeSize: CGFloat { (bodySize * 0.87).rounded() }
     static var codeLineHeight: CGFloat { (codeSize * typography.spacing.factor * 0.96).rounded(.down) }
+    /// Maths on lines of its own, larger than the text around it: 19 points at the size each platform starts with.
+    static var displayMathSize: CGFloat { (bodySize * 19 / Typography().size).rounded() }
     static var contentWidth: CGFloat { typography.width.points }
     static let listIndent: CGFloat = 24
     /// A checklist's circle, as in Notes: big enough for a fingertip on iPhone and iPad, a little smaller next to the

@@ -210,6 +210,12 @@ enum DebugRemote {
             argument == "hide" ? editor.hideFormatPanel() : editor.showFormatPanel()
         case "scroll":
             editor.setScrollTop((numbers.first ?? 0) - editor.topInset)
+        case "place":
+            // place [index]: the first character showing (or that one), and how far below the bars its line starts:
+            // what a change of text size keeps.
+            let index = numbers.first.map { Int($0) } ?? editor.firstVisibleCharacter()
+            let text = (editor.text as NSString).substring(from: index).prefix(16).replacingOccurrences(of: "\n", with: "⏎")
+            log("place \(index) “\(text)” at \(Int((editor.yPosition(of: index) - editor.visibleRect.minY - editor.topInset).rounded())) header \(Int(editor.textView.headerHeight))")
         case "scrollto":
             editor.scroll(to: editor.outline[safe: Int(numbers.first ?? 0)], animated: false)
         case "undo":

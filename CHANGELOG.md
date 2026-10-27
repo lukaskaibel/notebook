@@ -64,7 +64,7 @@ versions follow [semantic versioning](https://semver.org).
 
 - On iPhone and iPad, a note's text follows the system's text size (Display & Brightness › Text Size, or Larger Text in
   Accessibility), as the text of Notes and other apps does: the size you chose in Settings › Text is the size at the
-  standard text size, and the note is larger or smaller from there. The title, headings, checkboxes and the line
+  standard text size, and the note is larger or smaller from there. The title, headings, checkboxes, maths and the line
   with the date grow with it, and a note that is open follows a change at once, keeping your place. A PDF or a printout
   of a note stays at the size from Settings › Text.
 - Notes are saved in the background, on the Mac, iPhone and iPad: a slow disk, or iCloud holding a note while it puts
@@ -74,6 +74,8 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- Maths on a line of its own grows and shrinks with the size chosen in Settings › Text, as maths within a line does.
+  It stayed at one size.
 - A note open in the main window and in a window of its own no longer makes Notebook hang as you type in one of them.
   Each window now shows what was typed in the other, and quitting with both open quits.
 - Leaving a note a moment after another device changed the same lines no longer loses what you typed since the last
