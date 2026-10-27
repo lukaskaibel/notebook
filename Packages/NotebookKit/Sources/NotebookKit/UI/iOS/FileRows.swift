@@ -87,7 +87,10 @@ struct FileRow: View {
         let entry = workspace.index.entry(for: url)
         let date = (self.date ?? entry?.modified).map(Self.shortDate)
         if kind == .note {
-            let start = entry?.text.map(Self.firstLine) ?? ""
+            // Until search has read the note (on the first launch, or while it is still in iCloud), only its date:
+            // "No additional text" is for a note that has none.
+            guard let text = entry?.text else { return date }
+            let start = Self.firstLine(text)
             return [date, start.isEmpty ? "No additional text" : start].compactMap { $0 }.joined(separator: "  ")
         }
         let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) }
