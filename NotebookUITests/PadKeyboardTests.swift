@@ -68,18 +68,29 @@ final class PadKeyboardTests: XCTestCase {
         tap("Weekend")
         let note = app.textViews["Note"].firstMatch
         XCTAssertTrue(note.waitForExistence(timeout: 10), app.debugDescription)
+        // The Simulator now and then drops the first ⌥⌘F after a note is tapped open: in about a run in three, before
+        // #193 and after it alike, with nothing in the app taking it (#222). One more press, then, if the first didn't
+        // reach Search; a real iPad is checked by hand.
         app.typeKey("f", modifierFlags: [.command, .option])
-        // Search has the caret: the tree says so, which the field's attributes don't.
-        var searching = false
-        for _ in 0..<10 where !searching {
-            sleep(1)
-            searching = app.debugDescription.split(separator: "\n").contains { $0.contains("label: 'Search'") && $0.contains("Keyboard Focused") }
+        var searching = isSearching(within: 5)
+        if !searching {
+            app.typeKey("f", modifierFlags: [.command, .option])
+            searching = isSearching(within: 5)
         }
         XCTAssertTrue(searching, "⌥⌘F: no caret in Search: " + app.debugDescription.split(separator: "\n").filter { $0.contains("SearchField") || $0.contains("Keyboard Focused") }.joined(separator: " | "))
 
         note.tap()
         app.typeKey("f", modifierFlags: .command)
         XCTAssertTrue(app.searchFields["find.searchField"].waitForExistence(timeout: 5), "⌘F: no find bar in the note")
+    }
+
+    /// Search has the caret: the tree says so, which the field's attributes don't.
+    private func isSearching(within seconds: Int) -> Bool {
+        for _ in 0..<seconds {
+            sleep(1)
+            if app.debugDescription.split(separator: "\n").contains(where: { $0.contains("label: 'Search'") && $0.contains("Keyboard Focused") }) { return true }
+        }
+        return false
     }
 
     /// The app on fresh sample notes in its own home folder (a `~` is the app's home in the Simulator).
