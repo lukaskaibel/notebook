@@ -487,6 +487,17 @@ public struct Todo: Hashable, Sendable {
     }
 }
 
+/// What deleting a to-do took out of its note, to put it back with Undo.
+public struct TodoRemoval: Hashable, Sendable {
+    /// The to-do's line and the lines under it, with the line ending that went with them.
+    public var text: String
+    /// The line that was above it, nil at the start of the note, and the to-do's line number.
+    public var above: String?
+    public var line: Int
+    /// At the end of the note it took the line ending before it.
+    public var atEnd: Bool
+}
+
 /// A line indented under a to-do: a sub-to-do, a point, words, or something else kept as it is.
 public struct TodoLine: Hashable, Sendable {
     public enum Kind: Hashable, Sendable {
@@ -675,6 +686,41 @@ public enum Todos {
             range = NSRange(location: above.range.location, length: line.range.upperBound - above.range.location)
         }
         return smallestChange(from: text.substring(with: range), to: original, at: range.location)
+    }
+
+    // MARK: - Deleting
+
+    /// Deletes the to-do on line `index` and the lines under it, as Reminders deletes a reminder with its subtasks:
+    /// the lines go with their line ending, and a blank line that would be left after another, or at the start of the
+    /// note, goes with them. What goes, and where, to put it back (`restoring`).
+    public static func deleting(in text: NSString, document: MarkdownDocument, line index: Int) -> (range: NSRange, removal: TodoRemoval)? {
+        guard let line = document.lines[safe: index], case .listItem(let item) = line.kind, item.isTask else { return nil }
+        var last = noteLines(under: index, in: document, string: text).upperBound - 1
+        let above = document.lines[safe: index - 1]
+        if document.lines[safe: last + 1]?.kind == .blank, above == nil || above?.kind == .blank { last += 1 }
+        var start = line.range.location
+        let end = document.lines[last].range.upperBound + document.lines[last].breakLength
+        // The last line has no line ending of its own: the one before it goes.
+        let atEnd = document.lines[last].breakLength == 0 && start > 0
+        if atEnd, let above { start -= above.breakLength }
+        let range = NSRange(location: start, length: end - start)
+        return (range, TodoRemoval(text: text.substring(with: range), above: above.map { text.substring(with: $0.range) }, line: index, atEnd: atEnd))
+    }
+
+    /// Puts back what deleting a to-do took out: after the line that was above it, found by what it says near where it
+    /// was, or where it was when that line is gone.
+    public static func restoring(_ removal: TodoRemoval, in text: NSString, document: MarkdownDocument) -> (range: NSRange, replacement: String) {
+        let lines = document.lines
+        guard let aboveText = removal.above else { return (NSRange(location: 0, length: 0), removal.text) }
+        let found = lines.indices.filter { text.substring(with: lines[$0].range) == aboveText }
+            .min { abs($0 - (removal.line - 1)) < abs($1 - (removal.line - 1)) }
+        let above = lines[found ?? min(removal.line - 1, lines.count - 1)]
+        if removal.atEnd { return (NSRange(location: above.range.upperBound, length: 0), removal.text) }
+        guard above.breakLength == 0 else { return (NSRange(location: above.range.upperBound + above.breakLength, length: 0), removal.text) }
+        // The line above is the last now, without a line ending: one goes before what comes back, not after it.
+        let ending = lineEnding(in: text, line: above)
+        let removed = removal.text.hasSuffix(ending) ? String(removal.text.dropLast(ending.count)) : removal.text
+        return (NSRange(location: above.range.upperBound, length: 0), ending + removed)
     }
 
     /// The line of the next one of a to-do that repeats, as Tasks writes it: open, its due, scheduled and start dates

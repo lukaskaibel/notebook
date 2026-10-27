@@ -82,7 +82,7 @@ final class TodoList {
         var line: Int
         /// When the note had last changed, as read then: a reading with another date has the change, or a later one.
         var modified: Date?
-        /// The to-do after the change; nil once it is done.
+        /// The to-do after the change; nil once it is done or deleted.
         var todo: Todo?
         var until: Date
     }
@@ -90,13 +90,14 @@ final class TodoList {
     @ObservationIgnored private var patches: [Patch] = []
 
     /// Shows a change to a to-do at once, before its note is read again: what its line says now, and the lines under it
-    /// when they changed too.
-    func patch(_ todo: TodoReference, to source: String, under: [String]?) {
+    /// when they changed too; without a line, the to-do was deleted.
+    func patch(_ todo: TodoReference, to source: String?, under: [String]?) {
         guard let index = Self.index(of: todo.source, in: todo.url, near: todo.line, among: items) else { return }
         let old = items[index].todo
         patches.removeAll { FileNode.samePath($0.url, todo.url) && $0.source == todo.source }
         patches.append(Patch(url: todo.url, source: todo.source, line: old.line, modified: items[index].modified,
-                             todo: Self.todo([source] + (under ?? old.lines.map(\.source)), line: old.line), until: .now.addingTimeInterval(10)))
+                             todo: source.flatMap { Self.todo([$0] + (under ?? old.lines.map(\.source)), line: old.line) },
+                             until: .now.addingTimeInterval(10)))
         var changed = items
         applyPatches(to: &changed)
         guard changed != items else { return }
@@ -287,6 +288,14 @@ enum TodoGroups {
             }
             return TodoSection(kind: kind, rows: rows)
         }
+    }
+
+    /// A row ticked a moment ago, which its group no longer has, back in it where it was while it shows ticked: after
+    /// the nearest row that was above it then (`order`) and is still there, or first.
+    static func keep(_ row: TodoRow, in rows: inout [TodoRow], order: [String]) {
+        let ids = rows.map(\.id)
+        let index = order.prefix { $0 != row.id }.reversed().lazy.compactMap { ids.firstIndex(of: $0) }.first.map { $0 + 1 } ?? 0
+        rows.insert(row, at: index)
     }
 
     static func kind(of row: TodoRow, now: Date, calendar: Calendar) -> TodoSection.Kind {

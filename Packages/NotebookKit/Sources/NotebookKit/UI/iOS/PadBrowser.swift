@@ -173,7 +173,8 @@ struct PadBrowser: View {
                             ShowHiddenFoldersMenu(workspace: workspace)
                             Button { showsSettings = true } label: { Label("Settings", systemImage: "gearshape") }
                         } label: {
-                            Label("More", systemImage: "ellipsis")
+                            // Not More, which the note's ⋯ next to it is.
+                            Label("More for Notebook", systemImage: "ellipsis")
                         }
                     }
                     ToolbarItem(placement: .topBarTrailing) {
@@ -324,6 +325,8 @@ struct FolderTree: View {
                         .onTapGesture { withAnimation(.snappy) { toggle(node.url.path) } }
                         .fileDragAndDrop(node.url, isFolder: true, workspace: workspace)
                         .contextMenu { FileActions(workspace: workspace, url: node.url) { newFolderIn = $0 } }
+                        // VoiceOver reads the row, arrow and all, as one: "Personal, collapsed", as Files does.
+                        .accessibilityValue(expanded.contains(node.url.path) ? "expanded" : "collapsed")
                 }
                 .id(node.url)
             } else {

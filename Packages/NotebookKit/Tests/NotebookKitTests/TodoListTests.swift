@@ -114,6 +114,107 @@ final class TodoListTests: XCTestCase {
         XCTAssertTrue(workspace.editor.text.contains("- [x] Call Dr. Weber ⏰ 2099-05-06 14:00\n    - ask about the results\n- [x] Book the taxi"))
     }
 
+    func testATickedRowKeepsItsPlaceWhileItShows() {
+        func row(_ text: String) -> TodoRow {
+            .todo(TodoList.Item(url: trip, note: "Kyoto trip", todo: Todo(line: 0, source: "- [ ] " + text, text: text)))
+        }
+        let (a, b, c, d) = (row("A"), row("B"), row("C"), row("D"))
+        let order = [a, b, c, d].map(\.id)
+        // B ticked: the group no longer has it, and it goes back after A, not to the end.
+        var rows = [a, c, d]
+        TodoGroups.keep(b, in: &rows, order: order)
+        XCTAssertEqual(rows, [a, b, c, d])
+        // B and C ticked, in either order, and C still after A once B has gone.
+        rows = [a, d]
+        TodoGroups.keep(c, in: &rows, order: order)
+        TodoGroups.keep(b, in: &rows, order: order)
+        XCTAssertEqual(rows, [a, b, c, d])
+        rows = [a, d]
+        TodoGroups.keep(c, in: &rows, order: order)
+        XCTAssertEqual(rows, [a, c, d])
+        // The first: first again.
+        rows = [b, c]
+        TodoGroups.keep(a, in: &rows, order: order)
+        XCTAssertEqual(rows, [a, b, c])
+    }
+
+    // MARK: - Deleting
+
+    func testDeletingATodoInItsFileAndUndo() async throws {
+        let workspace = try await makeWorkspace()
+        let original = try String(contentsOf: doctor, encoding: .utf8)
+        let call = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Call Dr. Weber" })
+        let task = workspace.deleteTodo(call.reference)
+        // To-dos lets it go at once, before the note is written.
+        XCTAssertFalse(workspace.todos.items.contains { $0.todo.text == "Call Dr. Weber" })
+        await task?.value
+        XCTAssertEqual(try String(contentsOf: doctor, encoding: .utf8), "# Doctor\n\n- [x] Book the taxi\n", "with the line under it")
+
+        // One Undo puts both lines back, and To-dos lists it again; Redo deletes it again.
+        let manager = workspace.fileUndoManager
+        XCTAssertEqual(manager.undoActionName, "Delete To-do")
+        manager.undo()
+        try await until { (try? String(contentsOf: doctor, encoding: .utf8)) == original }
+        try await until { workspace.todos.items.contains { $0.todo.text == "Call Dr. Weber" } }
+        XCTAssertEqual(workspace.todos.items.first { $0.todo.text == "Call Dr. Weber" }?.todo.notes, ["• ask about the results"])
+        XCTAssertTrue(manager.canRedo)
+        manager.redo()
+        try await until { (try? String(contentsOf: doctor, encoding: .utf8)) == "# Doctor\n\n- [x] Book the taxi\n" }
+        manager.undo()
+        try await until { (try? String(contentsOf: doctor, encoding: .utf8)) == original }
+
+        // Undo at once, before the deletion is written, waits for it.
+        let pack = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Pack the adapter" })
+        workspace.deleteTodo(pack.reference)
+        manager.undo()
+        await workspace.lastTodoWrite?.value
+        XCTAssertEqual(try String(contentsOf: trip, encoding: .utf8), "- [ ] Pack the adapter\n- [ ] Print the tickets 📅 2099-01-02\n")
+
+        // Gone from the note meanwhile: nothing changes, nothing to undo, and the list shows the note as it is.
+        try "- [ ] Print the tickets 📅 2099-01-02\n".write(to: trip, atomically: true, encoding: .utf8)
+        let undos = manager.canUndo ? manager.undoActionName : nil
+        await workspace.deleteTodo(pack.reference)?.value
+        XCTAssertEqual(try String(contentsOf: trip, encoding: .utf8), "- [ ] Print the tickets 📅 2099-01-02\n")
+        XCTAssertEqual(manager.canUndo ? manager.undoActionName : nil, undos)
+    }
+
+    func testDeletingATodoInTheOpenNoteDeletesItInItsEditor() async throws {
+        let workspace = try await makeWorkspace()
+        workspace.open(doctor)
+        try await until { workspace.note?.isLoaded == true }
+        let call = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Call Dr. Weber" })
+        workspace.deleteTodo(call.reference)
+        XCTAssertEqual(workspace.editor.text, "# Doctor\n\n- [x] Book the taxi\n")
+        XCTAssertFalse(workspace.todos.items.contains { $0.todo.text == "Call Dr. Weber" })
+    }
+
+    #if os(macOS)
+    /// The note open in a window of its own: the edit is made there, and To-dos' own Undo takes it back and Redo deletes
+    /// it again, as one step each.
+    func testDeletingATodoWhoseNoteIsOpenInItsOwnWindow() async throws {
+        let workspace = try await makeWorkspace()
+        workspace.showTodos()
+        let original = try String(contentsOf: doctor, encoding: .utf8)
+        FileWindows.shared.open(doctor)
+        let controller = try XCTUnwrap(FileWindows.shared.windows.compactMap { $0.windowController as? FileWindowController }.first { FileNode.samePath($0.url, doctor) })
+        defer { controller.window?.close() }
+        try await until { controller.isLoaded }
+        let call = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Call Dr. Weber" })
+        workspace.deleteTodo(call.reference)
+        XCTAssertEqual(controller.editor.text, "# Doctor\n\n- [x] Book the taxi\n")
+        let manager = workspace.fileUndoManager
+        XCTAssertFalse(manager === controller.window?.undoManager, "another window's")
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(manager.undoActionName, "Delete To-do")
+        manager.undo()
+        XCTAssertEqual(controller.editor.text, original)
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertTrue(manager.canRedo)
+        manager.redo()
+        XCTAssertEqual(controller.editor.text, "# Doctor\n\n- [x] Book the taxi\n")
+    }
+    #endif
+
     // MARK: - Repeating to-dos
 
     private var plants: URL { library.appendingPathComponent("Plants.md") }

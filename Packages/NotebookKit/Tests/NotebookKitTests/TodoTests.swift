@@ -230,4 +230,60 @@ final class TodoTests: XCTestCase {
     func testNotificationPointsLeaveMarksOut() {
         XCTAssertEqual(NotePoints.text(of: "- [ ] Call ⏰ 2026-10-24 14:00\n- Point"), "○ Call\n• Point")
     }
+
+    // MARK: - Deleting
+
+    /// Deletes the to-do whose line says `todo` and puts it back, as Undo does: the note says what it said again.
+    private func delete(_ todo: String, in note: String, file: StaticString = #filePath, line: UInt = #line) throws -> String {
+        let text = note as NSString
+        let document = MarkdownParser.parse(text)
+        let index = try XCTUnwrap(document.lines.firstIndex { text.substring(with: $0.range) == todo }, file: file, line: line)
+        let deleting = try XCTUnwrap(Todos.deleting(in: text, document: document, line: index), file: file, line: line)
+        let deleted = text.replacingCharacters(in: deleting.range, with: "") as NSString
+        let back = Todos.restoring(deleting.removal, in: deleted, document: MarkdownParser.parse(deleted))
+        XCTAssertEqual(deleted.replacingCharacters(in: back.range, with: back.replacement), note, "Undo", file: file, line: line)
+        return deleted as String
+    }
+
+    func testDeletingATodoTakesTheLinesUnderIt() throws {
+        let note = "# Doctor\n\n- [ ] Call Dr. Weber ⏰ 2026-10-24 14:00\n    - ask about the results\n\n    - [ ] bring the letter\n- [x] Book the taxi\n"
+        XCTAssertEqual(try delete("- [ ] Call Dr. Weber ⏰ 2026-10-24 14:00", in: note), "# Doctor\n\n- [x] Book the taxi\n")
+        // A sub-to-do with a date of its own, listed on its own, goes alone.
+        XCTAssertEqual(try delete("    - [ ] bring the letter", in: note),
+                       "# Doctor\n\n- [ ] Call Dr. Weber ⏰ 2026-10-24 14:00\n    - ask about the results\n\n- [x] Book the taxi\n")
+        // Not a to-do: nothing.
+        let text = note as NSString
+        XCTAssertNil(Todos.deleting(in: text, document: MarkdownParser.parse(text), line: 0))
+    }
+
+    func testDeletingATodoLeavesNoBlankLinesBehind() throws {
+        // Between blank lines, one of them goes with it; at the start, the blank line after it.
+        XCTAssertEqual(try delete("- [ ] Buy milk", in: "Shopping\n\n- [ ] Buy milk\n\nLater"), "Shopping\n\nLater")
+        XCTAssertEqual(try delete("- [ ] Buy milk", in: "- [ ] Buy milk\n\nLater"), "Later")
+        // At the end, with the line ending before it, and the blank line before that.
+        XCTAssertEqual(try delete("- [ ] Buy milk", in: "- [ ] Bread\n- [ ] Buy milk"), "- [ ] Bread")
+        XCTAssertEqual(try delete("- [ ] Buy milk", in: "Shopping\n\n- [ ] Buy milk\n"), "Shopping\n")
+        XCTAssertEqual(try delete("- [ ] Buy milk", in: "- [ ] Buy milk"), "")
+        XCTAssertEqual(try delete("- [ ] Buy milk", in: "- [ ] Buy milk\n"), "")
+        // Windows line endings stay as they are.
+        XCTAssertEqual(try delete("- [ ] Buy milk", in: "- [ ] Bread\r\n- [ ] Buy milk\r\n- [ ] Eggs\r\n"), "- [ ] Bread\r\n- [ ] Eggs\r\n")
+        XCTAssertEqual(try delete("- [ ] Buy milk", in: "- [ ] Bread\r\n- [ ] Buy milk"), "- [ ] Bread")
+    }
+
+    func testADeletedTodoGoesBackAfterTheLineAboveIt() throws {
+        let note = "Shopping\n- [ ] Buy milk\n    - oat\n- [ ] Eggs\n" as NSString
+        let deleting = try XCTUnwrap(Todos.deleting(in: note, document: MarkdownParser.parse(note), line: 1))
+        // Lines added above meanwhile: it goes back under the line that was above it.
+        var changed = "Intro\n\nShopping\n- [ ] Eggs\n" as NSString
+        var back = Todos.restoring(deleting.removal, in: changed, document: MarkdownParser.parse(changed))
+        XCTAssertEqual(changed.replacingCharacters(in: back.range, with: back.replacement), "Intro\n\nShopping\n- [ ] Buy milk\n    - oat\n- [ ] Eggs\n")
+        // That line now the last, without a line ending: one goes before it.
+        changed = "Shopping"
+        back = Todos.restoring(deleting.removal, in: changed, document: MarkdownParser.parse(changed))
+        XCTAssertEqual(changed.replacingCharacters(in: back.range, with: back.replacement), "Shopping\n- [ ] Buy milk\n    - oat")
+        // That line gone: where it was.
+        changed = "Other\n- [ ] Eggs\n"
+        back = Todos.restoring(deleting.removal, in: changed, document: MarkdownParser.parse(changed))
+        XCTAssertEqual(changed.replacingCharacters(in: back.range, with: back.replacement), "Other\n- [ ] Buy milk\n    - oat\n- [ ] Eggs\n")
+    }
 }
