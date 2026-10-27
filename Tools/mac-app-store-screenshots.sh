@@ -172,7 +172,7 @@ say "closeversions"
 shot 07-search light "Finds it from a few letters." "⌘K searches notes, PDFs and pictures, and runs any command." \
   "open Personal/Weekend.md" "wait 1" "palette" "wait 0.6" "type kyoto" "wait 1.5"
 say "key escape"
-shot 08-blocks dark "Tables, code, maths, diagrams." "Drawn right in the note." "open Projects/Notebook roadmap.md"
+shot 08-blocks dark "Tables, code and diagrams." "Drawn right in the note." "open Projects/Notebook roadmap.md"
 shot 09-drawing light "Draw right in the note." "With the trackpad or the mouse, next to your words." \
   "open Travel/Getting to the ryokan.md" "wait 1" "drawing 0"
 say "drawing end"

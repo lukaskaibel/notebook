@@ -134,7 +134,7 @@ say "todopick none" "key escape"
 scene 6-pdf 4 "open Personal/Weekend.md" "wait 1" "open Travel/Flight tickets.pdf"
 
 echo "Editing…"
-python3 Tools/app-store-media/preview.py "$out" mac light "$raw/window.png" "$raw/1-open.mov:0:4.3" \
+python3 Tools/app-store-media/preview.py "$out" mac light "$raw/window.png" "$raw/1-open.mov:0.7:4.3" \
   "$raw/2-typing.mov:0.2:8" "$raw/3-search.mov:0.3:5" "$raw/4-versions.mov:0.3:6" "$raw/5-todos.mov:0.4:6" \
   "$raw/6-pdf.mov:0.6:4"
 echo "Done: $out. Watch it before using it."

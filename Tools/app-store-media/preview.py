@@ -13,6 +13,7 @@ import os
 import subprocess
 import sys
 
+import numpy as np
 from PIL import Image
 
 from store import PREVIEW, THEMES, backdrop, shadow_onto
@@ -51,9 +52,12 @@ def frames(path, start, end, size):
 class Window:
     """Puts the Mac window's frames on the backdrop, centred, with its shadow and corners. While a window is recorded,
     macOS draws a badge over its traffic lights; each frame gets them back from a still of the window taken at the end
-    of the same scene (the recording's name with .png), or from <window.png>."""
+    of a scene (the recording's name with .png), made as light or dark as the frame around the badge. A sheet or ⌘K
+    dims the window while it is open, and a still has it either open or closed, so the still is the one that needs the
+    least of that: the same scene's if it is near enough, else another scene's, else <window.png>."""
 
     CORNER = (0, 0, 200, 110)  # the traffic lights, in pixels of a capture at 2x
+    BADGE = (25, 25, 175, 80)  # what the badge covers; the rest of the corner, less its rounded tip, is compared
 
     def __init__(self, still, theme, size):
         W, H = size
@@ -69,14 +73,28 @@ class Window:
         self.base = shadow_onto(backdrop(size, theme).convert("RGBA"), shape, self.pos, theme)
         self.mask = mask
 
-    def frames(self, path, start, end):
-        still = os.path.splitext(path)[0] + ".png"
+    def frames(self, path, start, end, others=()):
+        stills = [os.path.splitext(each)[0] + ".png" for each in (path, *others)] + [self.still]
         k = self.size[0] / self.capture_width
-        corner = Image.open(still if os.path.exists(still) else self.still).convert("RGB").crop(self.CORNER)
-        corner = corner.resize((round(corner.width * k), round(corner.height * k)), Image.LANCZOS)
+        corners = []
+        for name in dict.fromkeys(p for p in stills if os.path.exists(p)):
+            corner = Image.open(name).convert("RGB").crop(self.CORNER)
+            corner = corner.resize((round(corner.width * k), round(corner.height * k)), Image.LANCZOS)
+            corners.append(np.asarray(corner).astype(float))
+        h, w = corners[0].shape[:2]
+        around = np.ones((h, w), bool)
+        x0, y0, x1, y1 = (round(v * k) for v in self.BADGE)
+        around[y0:y1, x0:x1] = False
+        around[:round(40 * k), :round(40 * k)] = False
+        levels = [corner[around].mean(axis=0) for corner in corners]
         for data in frames(path, start, end, self.size):
             frame = Image.frombuffer("RGB", self.size, data).copy()
-            frame.paste(corner, (0, 0))
+            level = np.asarray(frame.crop((0, 0, w, h))).astype(float)[around].mean(axis=0)
+            gains = [level / np.maximum(each, 1) for each in levels]
+            change = [np.abs(np.log(gain)).sum() for gain in gains]
+            best = next(i for i, each in enumerate(change) if each <= min(change) + 0.15)
+            patch = np.clip(corners[best] * gains[best], 0, 255).astype(np.uint8)
+            frame.paste(Image.fromarray(patch), (0, 0))
             img = self.base.copy()
             img.paste(frame, self.pos, self.mask)
             yield img.convert("RGB").tobytes()
@@ -98,7 +116,8 @@ def edit(out, device, clips, window=None):
     count = 0
     for index, clip in enumerate(clips):
         path, start, end = parse(clip)
-        source = window.frames(path, start, end) if window else frames(path, start, end, size)
+        others = [parse(each)[0] for each in clips if each != clip]
+        source = window.frames(path, start, end, others) if window else frames(path, start, end, size)
         last = index == len(clips) - 1
         held = []
         for k, data in enumerate(source):
