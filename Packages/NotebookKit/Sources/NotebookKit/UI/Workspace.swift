@@ -1776,14 +1776,15 @@ public final class Workspace: NSObject {
     /// Moves a file or folder to the Trash. The task says whether it could (on iPhone and iPad a place may have no
     /// Recently Deleted).
     @discardableResult
-    func trash(_ url: URL) -> Task<Bool, Never> {
+    /// `next`: the file to show if the one open goes, as the sidebar asks for the next row; else the last one before it.
+    func trash(_ url: URL, next: URL? = nil) -> Task<Bool, Never> {
         guard !isLinkedFolder(url) else { beep(); return Task { false } }
         let change = keepForUndo(FileChange(.trash, "Move to Trash", from: url))
         return changeFiles { [self] follow in
             let url = follow(url)
             let remembered = remembered(url)
             change.remembered = remembered
-            let trashed = await trashNow(url)
+            let trashed = await trashNow(url, next: next.map(follow))
             // Its versions wait in the History's Trash, for Undo, and a note made under its name starts without them.
             if trashed.done { NoteHistory.shared.trash(url, as: remembered.history) }
             // Moved to the Trash with nowhere to say it went, it can't be put back.
@@ -1799,7 +1800,7 @@ public final class Workspace: NSObject {
 
     /// Moves a file or folder to the Trash, in a change to files under way: closed first when it is open, or the open
     /// note is in it. Says where in the Trash it went.
-    func trashNow(_ url: URL) async -> (done: Bool, place: URL?) {
+    func trashNow(_ url: URL, next: URL? = nil) async -> (done: Bool, place: URL?) {
         let wasCurrent = currentURL.map { FileNode.isSameOrInside($0, url) } ?? false
         if wasCurrent {
             note?.close()
@@ -1812,8 +1813,12 @@ public final class Workspace: NSObject {
         guard trashed.done else { return trashed }
         thrownAway(url)
         #if os(macOS)
-        if wasCurrent, currentURL == nil, let previous = history.last(where: { !FileNode.samePath($0, url) && FileManager.default.fileExists(atPath: $0.path) }) {
-            open(previous, recordHistory: false)
+        if wasCurrent, currentURL == nil {
+            if let next, !FileNode.isSameOrInside(next, url), FileManager.default.fileExists(atPath: next.path) {
+                open(next)
+            } else if let previous = history.last(where: { !FileNode.samePath($0, url) && FileManager.default.fileExists(atPath: $0.path) }) {
+                open(previous, recordHistory: false)
+            }
         }
         #endif
         return trashed
