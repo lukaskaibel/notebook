@@ -690,7 +690,7 @@ point at it; in To-dos, right-click a row to move it to another day, mark it in 
 note. As you point at a location's name, a folder with a plus comes up next to it for a new folder at its top, and, when
 the location has hidden folders, an eye that shows them.
 
-On an iPad with a keyboard, ⌘N, ⇧⌘N, ⌘Z and ⇧⌘Z, ⌘F, ⌘K, ⇧⌘R, ⌘[ and ⌘], ⌃⌘S, ⌃⌘I, ⇧⌘., ⌘+, ⌘− and ⌘0, ⌘P, ⌘, and
+On an iPad with a keyboard, ⌘N, ⇧⌘N, ⌘Z and ⇧⌘Z, ⌘F, ⌘K, ⇧⌘R, ⌘[ and ⌘], ⌃⌘S, ⌃⌘I, ⇧⌘., ⌘+, ⌘− and ⌘0, ⌘P and
 the shortcuts for writing work as on the Mac. On iPhone and iPad:
 
 | Gesture | Action |

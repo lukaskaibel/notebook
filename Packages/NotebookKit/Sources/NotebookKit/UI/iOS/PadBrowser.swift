@@ -35,7 +35,6 @@ struct PadBrowser: View {
             ), top: 80)
         }
         .onChange(of: workspace.newFolderRequest) { _, _ in newFolderIn = newFolderParent }
-        .onChange(of: workspace.settingsRequest) { _, _ in showsSettings = true }
         .modifier(FileAlerts(workspace: workspace, newFolderIn: $newFolderIn))
         .modifier(AppleNotesImporter(workspace: workspace))
         .sheet(isPresented: $showsSettings) { TouchSettings(workspace: workspace) }

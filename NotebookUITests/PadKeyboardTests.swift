@@ -41,7 +41,7 @@ final class PadKeyboardTests: XCTestCase {
         waitForValue(note, lacking: "- Groceries")
     }
 
-    /// What ⌘K shows next to its commands works from the keyboard too: the outline, a new folder, Settings.
+    /// What ⌘K shows next to its commands works from the keyboard too: the outline, a new folder.
     func testMenuShortcutsFromTheKeyboard() throws {
         try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "the menu bar's shortcuts are the iPad's")
         launch()
@@ -58,10 +58,6 @@ final class PadKeyboardTests: XCTestCase {
         let newFolder = app.alerts["New Folder"]
         XCTAssertTrue(newFolder.waitForExistence(timeout: 10), app.debugDescription)
         newFolder.buttons["Cancel"].tap()
-
-        app.typeKey(",", modifierFlags: .command)
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10), app.debugDescription)
-        tap("Done")
     }
 
     /// The app on fresh sample notes in its own home folder (a `~` is the app's home in the Simulator).

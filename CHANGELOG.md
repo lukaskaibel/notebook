@@ -89,9 +89,8 @@ versions follow [semantic versioning](https://semver.org).
 - On iPhone and iPad, the Files app shows On My iPhone › Notebook (On My iPad › Notebook), the folder Keep Notes on
   This iPhone uses, so its notes can be opened, shared and backed up from there. It was missing.
 - On an iPad with a keyboard, the keys ⌘K shows next to its commands now all work: ⇧⌘N makes a folder, ⌘P prints the
-  note, ⌘+, ⌘− and ⌘0 change the text size, and ⌘, opens Settings. They are in the menu bar too, with Show Outline
-  (⌃⌘I) in its View menu. ⌘K called deleting a note Move to Trash, with a ⌘⌫ that did nothing; it says Delete now, as
-  the ⋯ menu does.
+  note, and ⌘+, ⌘− and ⌘0 change the text size. They are in the menu bar too, with Show Outline (⌃⌘I) in its View
+  menu. ⌘K called deleting a note Move to Trash, with a ⌘⌫ that did nothing; it says Delete now, as the ⋯ menu does.
 - The sidebar on the Mac no longer scrolls back to the open note each time it is saved while you look at another part
   of it.
 

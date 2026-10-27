@@ -155,7 +155,8 @@ public final class Workspace: NSObject {
     /// Counts ⌘F, which puts the caret in the search field.
     var searchRequest = 0
     #if os(iOS)
-    /// Counts the times ⌘K or the menus asked for Settings, Add Location and New Folder, which the screens show.
+    /// Counts the times ⌘K asked for Settings and Add Location, and ⌘K or the menu bar for New Folder, which the screens
+    /// show.
     var settingsRequest = 0
     var locationRequest = 0
     var newFolderRequest = 0

@@ -257,7 +257,7 @@ extension Workspace {
             actions.openSettings(nil)
         })
         #else
-        list.append(PaletteCommand(id: "settings", title: "Settings", symbol: "gearshape", section: settingsSection, keys: ["⌘", ","], keywords: ["preferences"]) {
+        list.append(PaletteCommand(id: "settings", title: "Settings", symbol: "gearshape", section: settingsSection, keywords: ["preferences"]) {
             actions.openSettings(nil)
         })
         #endif

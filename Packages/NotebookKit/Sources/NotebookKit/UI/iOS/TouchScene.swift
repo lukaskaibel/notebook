@@ -84,11 +84,6 @@ struct TouchCommands: Commands {
     let workspace: Workspace
 
     var body: some Commands {
-        CommandGroup(replacing: .appSettings) {
-            Button { workspace.settingsRequest += 1 } label: { Label("Settings…", systemImage: "gearshape") }
-                .keyboardShortcut(",", modifiers: .command)
-                .disabled(workspace.locations.isEmpty)
-        }
         CommandGroup(replacing: .newItem) {
             Button { workspace.newNote() } label: { Label("New Note", systemImage: "square.and.pencil") }
                 .keyboardShortcut("n", modifiers: .command)
