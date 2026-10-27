@@ -162,7 +162,7 @@ extension Workspace {
         start()
         whenSurveyed { [weak self] in
             guard let self else { return }
-            let reminder = reminders.reminder(id) ?? note.map { Reminder(id: id, note: $0, date: nil) }
+            let reminder = reminders.reminder(id) ?? note.map { Reminder(id: id, note: Self.rerooted($0), date: nil) }
             guard let reminder, let url = url(for: reminder) else { return beep() }
             showWindow?()
             #if os(macOS)

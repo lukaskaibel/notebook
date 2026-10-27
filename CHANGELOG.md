@@ -95,6 +95,16 @@ versions follow [semantic versioning](https://semver.org).
   its group.
 - VoiceOver reads a to-do's date, place and repeat in To-dos as words, such as "Overdue, Yesterday", rather than the
   names of their symbols, "Calendar" and "Notifications".
+- On iPhone and iPad, after Notebook is updated, the notes kept in its own folder (On My iPhone › Notebook) keep their
+  favourites, reminders, hidden folders and places in Recent, and the default folder stays chosen. iOS moves an app's
+  folder with each update, and Notebook looked for them where they had been. A reminder's notification from before the
+  update opens its note, the note you left open opens again, and text shared to the end of the last note goes there.
+  From the next update on, a to-do that has reminded you at a place doesn't do it again.
+- On the iPhone, Checklist in the bar at the bottom of a note you haven't tapped into starts a new to-do at the end of
+  the note, as in Notes, rather than making its first paragraph a to-do; and a photo, scan or file from Attach goes at
+  the end of the note rather than above its first line. On the iPad, and on a large iPhone held sideways, a style from
+  Aa in the toolbar of such a note is for its last line, where Attach adds. A picker you cancel leaves the note as it
+  was.
 - Maths on a line of its own grows and shrinks with the size chosen in Settings › Text, as maths within a line does.
   It stayed at one size.
 - On iPhone and iPad, a note fades out under the bars at the top and bottom as you scroll, as in Notes, rather than
@@ -147,7 +157,10 @@ versions follow [semantic versioning](https://semver.org).
   portrait, the sidebar left lying over the note, dimming it. Turned to portrait with a note open, the sidebar now
   slides out of the way, and back in when you turn the iPad to landscape; put away by hand, it stays away. Opened in
   portrait with a note, Notebook shows the note without it. Shown in portrait, it sits next to the note rather than
-  over it.
+  over it. Turned while you write, the note stays in front with the keyboard up, as in Notes; before, the keyboard went
+  down.
+- In the iPad's sidebar, VoiceOver says whether a folder is open or closed ("Personal, collapsed"), as Files does, and
+  calls the sidebar's ⋯ "More for Notebook", so it isn't mistaken for the note's More next to it.
 - On iPhone and iPad, the folder Keep Notes on This iPhone uses is called On My iPhone (On My iPad) on the first screen,
   in search and in Settings, also where you chose it before. It was called "Documents", its folder's name on disk.
 - On iPhone and iPad, a list no longer says "No additional text" under notes Notebook hasn't read yet, as on the first
