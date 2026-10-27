@@ -11,6 +11,15 @@
 </p>
 
 <p align="center">
+  <a href="https://apps.apple.com/app/id6823609514">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="Website/images/app-store/en-dark.svg">
+      <img alt="Download on the App Store" src="Website/images/app-store/en-light.svg" height="48">
+    </picture>
+  </a>
+</p>
+
+<p align="center">
   <img alt="Platform: macOS 27 or later" src="https://img.shields.io/badge/macOS-27%2B-34508F">
   <img alt="Platform: iOS and iPadOS 27 or later" src="https://img.shields.io/badge/iOS%20%26%20iPadOS-27%2B-34508F">
   <img alt="Apple silicon" src="https://img.shields.io/badge/Apple%20silicon-native-34508F">
@@ -35,8 +44,9 @@
   <img alt="Notebook showing the note Kyoto trip: links to Budget and Flight tickets.pdf, a picture of a torii gate and a packing checklist; the folders of iCloud Drive in the sidebar and the note's outline on the right" src="Design/screenshots/hero-light.webp">
 </picture>
 
-> **Status: on its way to the App Store.** Version 1.0.0 runs on the Mac, iPhone and iPad; until it is in the App Store,
-> you build it from source (five minutes, see below). It covers writing, organising and finding notes day to day.
+> **Version 1.0.0** covers writing, organising and finding notes day to day, on the Mac, iPhone and iPad. It is
+> [in the App Store](https://apps.apple.com/app/id6823609514) for iPhone and iPad, free; the Mac version is still in App
+> Review and comes to the same page. You can also build it from source (five minutes, see below).
 
 ## Why
 
