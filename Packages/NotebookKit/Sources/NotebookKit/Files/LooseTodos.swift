@@ -43,6 +43,12 @@ final class LooseTodos {
     private var presenter: Presenter?
     private var isReading = false
     private var readsAgain = false
+    /// The to-dos' lines that were in the file and went, by this device or another, newest last: a version of the file
+    /// another device set aside at the same time doesn't bring them back (`mergeConflicts`). Kept between launches.
+    private(set) var gone: [String] = UserDefaults.standard.stringArray(forKey: goneKey) ?? []
+    private static let goneKey = "looseTodosGone"
+    /// At most so many.
+    static let goneLimit = 500
     private var identityObserver: NSObjectProtocol?
 
     init(place: Place) {
@@ -115,16 +121,22 @@ final class LooseTodos {
             }
         }
         Task {
-            await Task.detached(priority: .utility) { Self.mergeConflicts(at: url) }.value
             let read = await Self.read(url)
-            isReading = false
             // Not read now (iCloud couldn't bring it down): what was read before stays.
             if let read, read.url == self.url {
+                if let old = snapshot, old.url == read.url { noteGone(from: old.text, to: read.text) }
                 snapshot = read
                 onRead?(read)
             } else if snapshot == nil {
                 onUnread?()
             }
+            // Another device's version set aside: merged in, and read again. After reading, so what this device took
+            // out last is known not to come back.
+            let gone = Set(gone)
+            if await Task.detached(priority: .utility, operation: { Self.mergeConflicts(at: url, gone: gone) }).value {
+                readsAgain = true
+            }
+            isReading = false
             if readsAgain {
                 readsAgain = false
                 self.read()
@@ -224,38 +236,82 @@ final class LooseTodos {
     // MARK: - Two devices at once
 
     /// Two devices changed the file before iCloud brought each the other's change: iCloud keeps one and sets the
-    /// others aside, unseen, as conflict versions. Their open to-dos the file doesn't have go at its end, with the lines
-    /// under them, and the conflict is settled. Says whether there was one.
-    @discardableResult
-    nonisolated static func mergeConflicts(at url: URL) -> Bool {
+    /// others aside, unseen, as conflict versions. What they have that the file hasn't is merged in (`merging`), and
+    /// the versions merged, only those, are settled, all in one coordinated write. Says whether there were any.
+    nonisolated static func mergeConflicts(at url: URL, gone: Set<String>) -> Bool {
         guard let versions = NSFileVersion.unresolvedConflictVersionsOfItem(at: url), !versions.isEmpty else { return false }
-        let others = versions.compactMap { (try? Data(contentsOf: $0.url)).flatMap(NoteDocument.decode) }
-        guard others.count == versions.count else { return false }
-        let current = NoteDocument.read(url) ?? ""
-        let missing = missingTodos(in: current, from: others)
-        guard missing.isEmpty || append(missing, to: url) != nil else { return false }
-        for version in versions { version.isResolved = true }
-        try? NSFileVersion.removeOtherVersionsOfItem(at: url)
-        return true
+        var merged = false
+        var error: NSError?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: .forMerging, error: &error) { url in
+            guard let data = try? Data(contentsOf: url), let current = NoteDocument.decode(data) else { return }
+            var others: [String] = []
+            for version in versions {
+                guard let text = (try? Data(contentsOf: version.url)).flatMap(NoteDocument.decode) else { return }
+                others.append(text)
+            }
+            let text = merging(current, with: others, gone: gone)
+            guard text == current || FileOperations.write(Data(text.utf8), to: url) else { return }
+            for version in versions {
+                version.isResolved = true
+                try? version.remove()
+            }
+            merged = true
+        }
+        return merged
     }
 
-    /// The open to-dos of other versions of the file that `text` doesn't have, with the lines under them, in their
-    /// order. One `text` has done or cancelled counts as had: it was ticked on one device and not yet on the other.
-    nonisolated static func missingTodos(in text: String, from others: [String]) -> [String] {
+    /// The file's text with what versions of it from devices that changed it at the same time have and it hasn't.
+    /// A to-do they ticked or cancelled is ticked or cancelled here too. Their open to-dos it hasn't go at its end, with
+    /// the lines under them, but not those this device's file had and lost (`gone`): taken out, moved into a note,
+    /// given another day, changed.
+    nonisolated static func merging(_ text: String, with others: [String], gone: Set<String>) -> String {
         let today = TodoDay.today
+        // Closed there, by what they say open.
+        var closed: [String: String] = [:]
+        for other in others {
+            for line in taskLines(in: other) where Todos.mark(of: line)?.isClosed == true {
+                if let open = Todos.marking(line, as: .open, today: today)?.line, closed[open] == nil { closed[open] = line }
+            }
+        }
+        var lines = text.components(separatedBy: "\n")
         var had = Set<String>()
-        for line in text.components(separatedBy: .newlines) {
+        for index in lines.indices {
+            let ending = lines[index].hasSuffix("\r") ? "\r" : ""
+            let line = String(lines[index].dropLast(ending.count))
+            if let done = closed[line] {
+                lines[index] = done + ending
+                had.insert(done)
+            }
             had.insert(line)
             if let open = Todos.marking(line, as: .open, today: today)?.line { had.insert(open) }
         }
         var missing: [String] = []
         for other in others {
-            for todo in Todos.open(in: other) where !had.contains(todo.source) {
+            for todo in Todos.open(in: other) where !had.contains(todo.source) && !gone.contains(todo.source) {
                 had.insert(todo.source)
                 missing += [todo.source] + todo.lines.map(\.source)
             }
         }
-        return missing
+        let merged = lines.joined(separator: "\n")
+        return missing.isEmpty ? merged : merged + adding(missing, to: merged).text
+    }
+
+    /// The to-dos' lines of a text, sub-to-dos too.
+    nonisolated static func taskLines(in text: String) -> [String] {
+        let string = text as NSString
+        return MarkdownParser.parse(string).lines.compactMap { line in
+            guard case .listItem(let item) = line.kind, item.isTask else { return nil }
+            return string.substring(with: line.range)
+        }
+    }
+
+    /// Notes the to-dos' lines the file lost from one reading to the next.
+    private func noteGone(from old: String, to new: String) {
+        let now = Set(Self.taskLines(in: new))
+        let lost = Self.taskLines(in: old).filter { !now.contains($0) && !gone.contains($0) }
+        guard !lost.isEmpty else { return }
+        gone = Array((gone + lost).suffix(Self.goneLimit))
+        UserDefaults.standard.set(gone, forKey: Self.goneKey)
     }
 
     // MARK: - Watching

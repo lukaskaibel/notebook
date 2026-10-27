@@ -91,16 +91,21 @@ extension Workspace {
             let inserted = await Task.detached(priority: .userInitiated) {
                 Self.write(note) { text, document in
                     let inserting = Todos.inserting(lines, in: text, document: document)
-                    move.placed(line: inserting.line, source: inserting.source)
+                    move.placed(line: inserting.line, lines: [inserting.source] + lines.dropFirst())
                     return (inserting.range, inserting.replacement)
                 }
             }.value
             index.refresh(folders: [note.deletingLastPathComponent()], locations: locations)
             // The note is gone, or can't be written: the to-do stays where it was.
             guard inserted == .written else { return failed() }
+            #if DEBUG
+            await betweenMoveSteps?()
+            #endif
             let removed = await Task.detached(priority: .userInitiated) {
                 Self.write(todo) { text, document, index in
-                    guard let deleting = Todos.deleting(in: text, document: document, line: index) else { return nil }
+                    // Changed meanwhile, on another device say: it stays as it is now, in both, rather than lose that.
+                    guard Self.lines(at: index, in: document, string: text) == lines,
+                          let deleting = Todos.deleting(in: text, document: document, line: index) else { return nil }
                     move.removed(deleting.removal)
                     return (deleting.range, "")
                 }.outcome
@@ -128,10 +133,15 @@ extension Workspace {
             let string = text as NSString
             let document = MarkdownParser.parse(string)
             guard let index = Todos.find(todo.source, near: todo.line, in: document, string: string) else { return }
-            let under = Todos.noteLines(under: index, in: document, string: string)
-            lines = ([index] + Array(under)).map { string.substring(with: document.lines[$0].range) }
+            lines = Self.lines(at: index, in: document, string: string)
         }
         return lines
+    }
+
+    /// The lines of the to-do on line `index`: its own and those under it.
+    nonisolated private static func lines(at index: Int, in document: MarkdownDocument, string: NSString) -> [String] {
+        let under = Todos.noteLines(under: index, in: document, string: string)
+        return ([index] + Array(under)).map { string.substring(with: document.lines[$0].range) }
     }
 
     /// The lines deleting a to-do took out, without the line endings and blank lines around them.
@@ -157,7 +167,7 @@ extension Workspace {
                 redo.forget()
                 return beep()
             }
-            let inNote = TodoReference(url: note, line: place.line, source: place.source)
+            let inNote = TodoReference(url: note, line: place.line, source: place.lines.first ?? "")
             if let removal = move.removal {
                 let lines = Self.lines(of: removal)
                 if let todo = TodoList.todo(lines, line: removal.line) {
@@ -180,7 +190,9 @@ extension Workspace {
             }
             let taken = await Task.detached(priority: .userInitiated) {
                 Self.write(inNote) { text, document, index in
-                    Todos.deleting(in: text, document: document, line: index).map { ($0.range, "") }
+                    // Only as it went in: with lines typed under it since, it stays, and so do they.
+                    guard Self.lines(at: index, in: document, string: text) == place.lines else { return nil }
+                    return Todos.deleting(in: text, document: document, line: index).map { ($0.range, "") }
                 }.outcome
             }.value
             index.refresh(folders: [note.deletingLastPathComponent()], locations: locations)
@@ -195,15 +207,16 @@ extension Workspace {
 final class TodoMove: @unchecked Sendable {
     let todo: TodoReference
     private let lock = NSLock()
-    private var place: (line: Int, source: String)?
+    private var place: (line: Int, lines: [String])?
     private var taken: TodoRemoval?
 
     init(from todo: TodoReference) {
         self.todo = todo
     }
 
-    var placement: (line: Int, source: String)? { lock.withLock { place } }
+    /// Where it went in the note, and the lines it went in as.
+    var placement: (line: Int, lines: [String])? { lock.withLock { place } }
     var removal: TodoRemoval? { lock.withLock { taken } }
-    func placed(line: Int, source: String) { lock.withLock { place = (line, source) } }
+    func placed(line: Int, lines: [String]) { lock.withLock { place = (line, lines) } }
     func removed(_ removal: TodoRemoval?) { lock.withLock { taken = removal } }
 }

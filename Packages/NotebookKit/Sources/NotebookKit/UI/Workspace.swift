@@ -73,6 +73,8 @@ public final class Workspace: NSObject {
     #if DEBUG
     /// What `remindOfNext` was asked for, for tests: the next one's line, and whether as it will be.
     @ObservationIgnored var remindedOfNext: [(source: String, asItWillBe: Bool)] = []
+    /// Runs while Move to Note… has put a to-do into the note and not yet taken it out of those in no note, for tests.
+    @ObservationIgnored var betweenMoveSteps: (@MainActor () async -> Void)?
     #endif
     #if DEBUG
     /// The sample notes' reminders, shown but never scheduled: a run on the sample notes leaves no notification behind.

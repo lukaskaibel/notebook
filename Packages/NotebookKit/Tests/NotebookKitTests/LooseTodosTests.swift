@@ -288,11 +288,11 @@ final class LooseTodosTests: XCTestCase {
         try await until { !workspace.index.isBuilding && workspace.todos.isReady }
         XCTAssertTrue(workspace.todos.isLooseUnread)
         XCTAssertTrue(workspace.todos.items.contains { $0.todo.text == "Bread" })
-        // Read once it can be.
+        // Read once it can be; its notifications are left alone until To-dos lists its to-dos.
         try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path)
         workspace.looseTodos.read()
-        try await until { workspace.todos.items.contains { $0.todo.text == "Call the plumber" } }
-        XCTAssertFalse(workspace.todos.isLooseUnread)
+        try await until { !workspace.todos.isLooseUnread }
+        XCTAssertTrue(workspace.todos.items.contains { $0.todo.text == "Call the plumber" })
     }
 
     func testANewTodoWithoutWordsHasNoNotificationAndGoesAsTheAppQuits() async throws {
@@ -309,14 +309,58 @@ final class LooseTodosTests: XCTestCase {
         XCTAssertEqual(loose(workspace), "- [ ] Call the plumber\n")
     }
 
-    func testTheOpenTodosOnlyAConflictingVersionHas() {
-        let here = "- [ ] Call the plumber\n- [x] Buy milk ✅ 2026-10-27\n"
-        let there = "- [ ] Call the plumber\n- [ ] Buy milk\n- [ ] Book a table\n    - for four\n- [x] Done there\n"
-        // Book a table is only there; Buy milk was ticked here, and done ones stay done.
-        XCTAssertEqual(LooseTodos.missingTodos(in: here, from: [there]), ["- [ ] Book a table", "    - for four"])
-        XCTAssertEqual(LooseTodos.missingTodos(in: here, from: [there, "- [ ] Book a table\n- [ ] Third\n"]),
-                       ["- [ ] Book a table", "    - for four", "- [ ] Third"])
-        XCTAssertEqual(LooseTodos.missingTodos(in: there, from: [here]), [])
+    func testAVersionFromAnotherDeviceMergedIn() {
+        let here = "- [ ] Call the plumber\n- [x] Buy milk ✅ 2026-10-27\n- [ ] Water the plants\n"
+        let there = "- [ ] Call the plumber\n- [ ] Buy milk\n- [x] Water the plants ✅ 2026-10-28\n- [ ] Book a table\n    - for four\n- [x] Done there\n"
+        // Book a table is only there, and Water the plants was ticked there; Buy milk was ticked here.
+        XCTAssertEqual(LooseTodos.merging(here, with: [there], gone: []),
+                       "- [ ] Call the plumber\n- [x] Buy milk ✅ 2026-10-27\n- [x] Water the plants ✅ 2026-10-28\n- [ ] Book a table\n    - for four\n")
+        // Nothing new from there: the text stays as it is.
+        XCTAssertEqual(LooseTodos.merging(there, with: [there], gone: []), there)
+        // What this device took out, moved into a note or changed doesn't come back.
+        XCTAssertEqual(LooseTodos.merging("- [ ] Call the plumber 📅 2026-10-30\n", with: ["- [ ] Call the plumber\n- [ ] Buy milk\n"],
+                                          gone: ["- [ ] Call the plumber", "- [ ] Buy milk"]), "- [ ] Call the plumber 📅 2026-10-30\n")
+        // Line endings as the file has them.
+        XCTAssertEqual(LooseTodos.merging("- [ ] A\r\n", with: ["- [x] A\r\n- [ ] B\r\n"], gone: []), "- [x] A\r\n- [ ] B\r\n")
+    }
+
+    func testTheLinesTheFileLostAreKept() async throws {
+        let workspace = try await makeWorkspace(loose: "- [ ] Call the plumber\n- [ ] Buy milk\n")
+        let url = try XCTUnwrap(workspace.looseTodos.url)
+        try "- [ ] Call the plumber 📅 2026-10-30\n".write(to: url, atomically: true, encoding: .utf8)
+        workspace.looseTodos.read()
+        try await until { workspace.looseTodos.gone.contains("- [ ] Buy milk") }
+        XCTAssertTrue(workspace.looseTodos.gone.contains("- [ ] Call the plumber"))
+        XCTAssertFalse(workspace.looseTodos.gone.contains("- [ ] Call the plumber 📅 2026-10-30"))
+    }
+
+    func testUndoOfAMoveKeepsWhatWasTypedUnderItInTheNote() async throws {
+        let workspace = try await makeWorkspace(loose: "- [ ] Butter\n")
+        let butter = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Butter" })
+        await workspace.moveTodo(butter.reference, toNote: groceries)?.value
+        // A line typed under it in the note since.
+        let moved = try String(contentsOf: groceries, encoding: .utf8)
+        try moved.replacingOccurrences(of: "- [ ] Butter\n", with: "- [ ] Butter\n    - the salted one\n").write(to: groceries, atomically: true, encoding: .utf8)
+        let manager = workspace.fileUndoManager
+        try await until { manager.groupingLevel == 0 }
+        manager.undo()
+        await workspace.todosWritten()
+        // Back among those in no note, and in the note as it is now, with what was typed: in both, lost from neither.
+        XCTAssertEqual(loose(workspace), "- [ ] Butter\n")
+        XCTAssertTrue(try String(contentsOf: groceries, encoding: .utf8).contains("- [ ] Butter\n    - the salted one\n"))
+    }
+
+    func testAMoveLeavesATodoChangedMeanwhileInBoth() async throws {
+        let workspace = try await makeWorkspace(loose: "- [ ] Butter\n")
+        let url = try XCTUnwrap(workspace.looseTodos.url)
+        let butter = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Butter" })
+        // Another device adds a line under it while it is going into the note.
+        workspace.betweenMoveSteps = {
+            try? "- [ ] Butter\n    - the salted one\n".write(to: url, atomically: true, encoding: .utf8)
+        }
+        await workspace.moveTodo(butter.reference, toNote: groceries)?.value
+        XCTAssertTrue(try String(contentsOf: groceries, encoding: .utf8).contains("- [ ] Butter\n"))
+        XCTAssertEqual(loose(workspace), "- [ ] Butter\n    - the salted one\n", "that line isn't lost")
     }
 
     func testANoteThatIsGoneKeepsTheTodo() async throws {

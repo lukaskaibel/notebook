@@ -364,9 +364,15 @@ public final class NotebookAppDelegate: NSObject, NSApplicationDelegate {
             let workspace = Workspace.shared
             workspace.saveAll(quitting: true)
             guard NoteDocument.isWriting || workspace.isWritingTodos else { return .terminateNow }
+            // The to-dos are waited for ten seconds at most: quitting never gets stuck.
+            let reply = QuitReply()
             Task { @MainActor in
                 await workspace.todosWritten()
-                NoteDocument.whenAllWritten { NSApp.reply(toApplicationShouldTerminate: true) }
+                reply.send()
+            }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(10))
+                reply.send()
             }
             return .terminateLater
         }
@@ -399,6 +405,18 @@ public final class NotebookAppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             Workspace.shared.continueActivity(userActivity)
         }
+    }
+}
+
+/// Lets quitting go on once, when the to-dos are written or the wait for them is over, and the notes are written.
+@MainActor
+private final class QuitReply {
+    private var isSent = false
+
+    func send() {
+        guard !isSent else { return }
+        isSent = true
+        NoteDocument.whenAllWritten { NSApp.reply(toApplicationShouldTerminate: true) }
     }
 }
 #endif

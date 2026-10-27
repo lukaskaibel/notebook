@@ -168,7 +168,8 @@ final class ReminderNotifications: NSObject, UNUserNotificationCenterDelegate {
                 try? await center.add(UNNotificationRequest(identifier: job.identifier + ".place", content: Self.content(for: job, place: true), trigger: trigger))
             }
             #endif
-            await Self.armPlaces(prefix: Self.todoPrefix, center: center, keepingFired: Set(jobs.map { $0.identifier + ".place" }))
+            // While a file's to-dos are unknown, the places of theirs that came stay known as come.
+            await Self.armPlaces(prefix: Self.todoPrefix, center: center, keepingFired: keeping == nil ? Set(jobs.map { $0.identifier + ".place" }) : nil)
         }
         last = task
         return task

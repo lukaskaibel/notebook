@@ -73,7 +73,6 @@ final class TodoList {
 
     /// The to-dos in no note were read again.
     func update(loose: LooseTodos.Snapshot) {
-        isLooseUnread = false
         self.loose = loose
         isWanted = true
         guard task == nil else { return }
@@ -98,13 +97,16 @@ final class TodoList {
         task = nil
         self.cache = cache
         shownLoose = loose
+        // Their notifications are scheduled from `items` again, now that it has them.
+        let wasUnread = isLooseUnread
+        if loose != nil { isLooseUnread = false }
         var fresh = fresh
         applyPatches(to: &fresh, read: true)
         let changed = fresh != items
         if changed { items = fresh }
         let becameReady = ready && !isReady
         if becameReady { isReady = true }
-        if changed || becameReady { onChange?() }
+        if changed || becameReady || wasUnread != isLooseUnread { onChange?() }
         readNext()
     }
 
