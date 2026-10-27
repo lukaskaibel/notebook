@@ -95,8 +95,9 @@ versions follow [semantic versioning](https://semver.org).
   of it.
 - Turning the iPad no longer rebuilds the window a moment after the turn, with the toolbar and the note jumping and, in
   portrait, the sidebar left lying over the note, dimming it. Turned to portrait with a note open, the sidebar now
-  slides out of the way, and back in when you turn the iPad to landscape; put away by hand, it stays away. Shown in
-  portrait, it sits next to the note rather than over it.
+  slides out of the way, and back in when you turn the iPad to landscape; put away by hand, it stays away. Opened in
+  portrait with a note, Notebook shows the note without it. Shown in portrait, it sits next to the note rather than
+  over it.
 - In the Mac's sidebar, Tab now goes on into the note that is open, with the caret where it was, as Tab goes from the
   list to the note in Notes and Mail. Moving a file to the Trash from the sidebar opens the next file in its folder, or
   the one before it at the end, as Notes shows the next note; before, the note opened before it came back, wherever it

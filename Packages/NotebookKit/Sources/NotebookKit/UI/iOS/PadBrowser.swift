@@ -12,7 +12,8 @@ struct PadBrowser: View {
     @FocusState private var isSearchFocused: Bool
     /// Wide enough for the sidebar next to the page: an iPad in landscape, or a large window.
     @State private var isWide = true
-    /// The width was seen once: the sidebar is set for it without sliding, as the window first appears.
+    /// The width was seen once, and the split view made for it: a split view changes what it shows as it first
+    /// appears back to what it was made with.
     @State private var hasMeasured = false
     @Bindable private var settings = NotebookSettings.shared
 
@@ -20,24 +21,26 @@ struct PadBrowser: View {
         // One split view, whatever the width: choosing between two styles as the iPad turned or a window was resized
         // made a new one after each turn, with the page jumping and the sidebar left lying over it. Where there isn't
         // room for both, the sidebar makes way for the page instead, as Files' does.
-        splitView
-            // Room for the sidebar, a column of text and the outline: an iPad in landscape. In portrait, even the
-            // 13-inch one's, the text would get too narrow with all three. Narrowing, it goes a little below that, so
-            // a Stage Manager window dragged about the edge doesn't take the sidebar away and back again each time.
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
-                let wide = width >= (hasMeasured && isWide ? 1060 : 1100)
-                guard !hasMeasured || wide != isWide else { return }
-                isWide = wide
-                if hasMeasured {
-                    withAnimation { fitSidebar() }
-                } else {
-                    // The note open at launch, or the window coming back from phone width, has no sidebar to slide off.
-                    hasMeasured = true
-                    var still = Transaction()
-                    still.disablesAnimations = true
-                    withTransaction(still) { fitSidebar() }
-                }
+        ZStack {
+            // Made once the width is known, already without the sidebar where it has to make way: the note open at
+            // launch in portrait, or a window coming back from phone width, has none next to it or sliding off.
+            if hasMeasured { splitView }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Room for the sidebar, a column of text and the outline: an iPad in landscape. In portrait, even the 13-inch
+        // one's, the text would get too narrow with all three. Narrowing, it goes a little below that, so a Stage
+        // Manager window dragged about the edge doesn't take the sidebar away and back again each time.
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            let wide = width >= (hasMeasured && isWide ? 1060 : 1100)
+            guard !hasMeasured || wide != isWide else { return }
+            isWide = wide
+            if hasMeasured {
+                withAnimation { fitSidebar() }
+            } else {
+                fitSidebar()
+                hasMeasured = true
             }
+        }
         .overlay {
             PaletteHost(workspace: workspace, actions: PaletteActions(
                 openSettings: { _ in showsSettings = true },
