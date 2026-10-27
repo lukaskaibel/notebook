@@ -298,6 +298,8 @@ struct NoteEditorHost: UIViewRepresentable {
 
 final class EditorContainer: UIView {
     let editor: EditorController
+    /// The screen whose bars follow the text view, while this has the editor.
+    private weak var barsController: UIViewController?
 
     init(editor: EditorController) {
         self.editor = editor
@@ -337,16 +339,27 @@ final class EditorContainer: UIView {
         while let next = responder?.next {
             if let controller = next as? UIViewController, controller.parent is UINavigationController {
                 controller.setContentScrollView(textView, for: [.top, .bottom])
+                barsController = controller
                 return
             }
             responder = next
         }
     }
 
+    /// The iPad's page shows a PDF, a picture or To-dos where the note was, on the same screen: its bars go back to
+    /// what that shows, rather than following a text view that isn't there. A screen that took the editor already
+    /// named it for itself.
+    private func resignContentScrollView() {
+        guard let controller = barsController, controller.contentScrollView(for: .top) === editor.textView else { return }
+        controller.setContentScrollView(nil, for: [.top, .bottom])
+        barsController = nil
+    }
+
     /// The screen with the editor goes, often before the next one takes the editor: the keyboard is kept for it.
     override func willMove(toWindow newWindow: UIWindow?) {
         super.willMove(toWindow: newWindow)
         guard newWindow == nil, editor.view.superview === self else { return }
+        resignContentScrollView()
         editor.beginMove()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [editor] in editor.finishMoveIfNowhere() }
     }
