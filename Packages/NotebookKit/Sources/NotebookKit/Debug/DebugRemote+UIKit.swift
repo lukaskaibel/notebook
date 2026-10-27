@@ -265,13 +265,12 @@ enum DebugRemote {
         case "dismiss":
             log("dismissing renaming \(workspace.renaming?.lastPathComponent ?? "-") deleting \(workspace.deleting?.lastPathComponent ?? "-") problem \(workspace.problem?.title ?? "-")")
             workspace.renaming = nil
-            workspace.deleting = nil
+            if let url = workspace.deleting { workspace.answerDeleting(url, delete: false) }
             workspace.problem = nil
         case "deletenow":
-            if let url = workspace.deleting { workspace.deleteImmediately(url) }
-            workspace.deleting = nil
+            if let url = workspace.deleting { workspace.answerDeleting(url, delete: true) }
         case "trash":
-            if let url = url(argument) { workspace.moveToTrash(url) }
+            if let url = url(argument) { workspace.trash(url) }
         case "keyundo", "keyredo":
             // keyundo, keyredo: ⌘Z and ⇧⌘Z on a keyboard, as UIKit sends them: from the first responder, or the window
             // without one, up to what takes them. Says where they went and what Undo would have said.

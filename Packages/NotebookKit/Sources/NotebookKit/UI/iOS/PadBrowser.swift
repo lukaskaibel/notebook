@@ -36,6 +36,7 @@ struct PadBrowser: View {
         }
         .modifier(FileAlerts(workspace: workspace, newFolderIn: $newFolderIn))
         .modifier(AppleNotesImporter(workspace: workspace))
+        .background(alignment: .topLeading) { FileUndoFocus(workspace: workspace).frame(width: 0, height: 0) }
         .sheet(isPresented: $showsSettings) { TouchSettings(workspace: workspace) }
         .folderImporter(isPresented: $addsLocation, workspace: workspace)
         #if DEBUG

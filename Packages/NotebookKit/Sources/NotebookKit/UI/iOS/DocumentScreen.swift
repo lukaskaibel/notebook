@@ -197,7 +197,7 @@ struct DocumentScreen: View {
                         .disabled(!isLoaded)
                 }
                 Section {
-                    Button(role: .destructive) { workspace.moveToTrash(url) } label: { Label("Delete", systemImage: "trash") }
+                    Button(role: .destructive) { workspace.trash(url) } label: { Label("Delete", systemImage: "trash") }
                 }
             } else {
                 if !isInSplitView {

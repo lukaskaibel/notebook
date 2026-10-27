@@ -205,6 +205,13 @@ public final class Workspace: NSObject {
     /// The names files get while they are renamed, by path: shown until the rename is done, so a row never shows the
     /// old name again in between.
     private(set) var newNames: [String: String] = [:]
+    /// Files on their way to the Trash, by path: gone from the lists on iPhone and iPad as soon as you ask, with the
+    /// swipe or the menu that asked, as in Notes, rather than once the disk has done it. Counted, as the same file can
+    /// be asked to go twice.
+    private(set) var leaving: [String: Int] = [:]
+    /// Files Notebook put in the Trash or deleted, by path, which search may still find until it has read their
+    /// folders again.
+    @ObservationIgnored var thrownAwayPaths = Set<String>()
     /// The changes to files Undo and Redo would take next, in order (`Workspace+Undo`).
     @ObservationIgnored let fileUndoLog = FileUndoLog()
     /// Where those changes are kept without a window to keep them (tests).
@@ -212,8 +219,13 @@ public final class Workspace: NSObject {
     /// The new note that is open, made a moment ago: left empty, it goes away, and so does its New Note in Undo.
     @ObservationIgnored weak var newNoteChange: FileChange?
     #if os(iOS)
-    /// What Notebook knew about a file it couldn't put in the Trash, before it closed it: for deleting it for good.
-    @ObservationIgnored var rememberedForDeleting: FileChange.Remembered?
+    /// What Notebook knew about files it couldn't put in the Trash, before it closed them, by path: for deleting them
+    /// for good.
+    @ObservationIgnored var rememberedForDeleting: [String: FileChange.Remembered] = [:]
+    /// More files to delete for good, to ask about once the question about `deleting` is answered.
+    @ObservationIgnored var toAskAboutDeleting: [URL] = []
+    /// What takes the focus after a change to files, for Shake to Undo and ⌘Z to reach it (`FileUndoFocus`).
+    @ObservationIgnored weak var fileUndoView: FileUndoView?
     #endif
 
     public override init() {
@@ -1097,12 +1109,12 @@ public final class Workspace: NSObject {
     }
 
     var favoriteURLs: [URL] {
-        favorites.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) }
+        favorites.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) && !isLeaving($0) }
     }
 
     /// The files opened last, newest first, without the one that is open: for File › Open Recent and search.
     var recentURLs: [URL] {
-        recents.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) && $0 != currentURL }
+        recents.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) && $0 != currentURL && !isLeaving($0) }
     }
 
     func clearRecents() {
@@ -1633,22 +1645,44 @@ public final class Workspace: NSObject {
         }
     }
 
-    /// Moves a file or folder to the Trash. The task says whether it could (on iPhone and iPad a place may have no
-    /// Recently Deleted).
+    /// Moves a file or folder to the Trash. The task says whether it could. On iPhone and iPad it goes from the lists at
+    /// once, and the note you are in closes at once, its screen going back as its row goes; where a place has no
+    /// Recently Deleted, you are asked whether to delete it for good, and it stays out of the lists while you are.
     @discardableResult
     func trash(_ url: URL) -> Task<Bool, Never> {
         guard !isLinkedFolder(url) else { beep(); return Task { false } }
         let change = keepForUndo(FileChange(.trash, "Move to Trash", from: url))
+        #if os(iOS)
+        let open = currentURL.flatMap { FileNode.isSameOrInside($0, url) ? $0 : nil }
+        if open != nil { closeThrownAway() }
+        beginLeaving(url)
+        #endif
         return changeFiles { [self] follow in
+            #if os(iOS)
+            let asked = url
+            #endif
             let url = follow(url)
             change.remembered = remembered(url)
+            #if os(iOS)
+            // Closed already, it opens again with Undo all the same.
+            if let open { change.remembered?.openFile = follow(open) }
+            #endif
             let trashed = await trashNow(url)
             // Moved to the Trash with nowhere to say it went, it can't be put back.
             changeDone(change, from: url, to: trashed.place)
             if !trashed.done { beep() }
             #if os(iOS)
-            // Deleted for good next, after asking (`moveToTrash`): Undo brings it back from there as it was now, open.
-            if !trashed.done { rememberedForDeleting = change.remembered }
+            if !trashed.done, FileManager.default.fileExists(atPath: url.path) {
+                // Deleted for good next, once you say so: Undo brings it back from there as it was now, open.
+                rememberedForDeleting[url.path] = change.remembered
+                askToDelete(url)
+                if url != asked {
+                    beginLeaving(url)
+                    endLeaving(asked)
+                }
+            } else {
+                endLeaving(asked, animated: !trashed.done)
+            }
             #endif
             return trashed.done
         }
@@ -1658,11 +1692,7 @@ public final class Workspace: NSObject {
     /// note is in it. Says where in the Trash it went.
     func trashNow(_ url: URL) async -> (done: Bool, place: URL?) {
         let wasCurrent = currentURL.map { FileNode.isSameOrInside($0, url) } ?? false
-        if wasCurrent {
-            note?.close()
-            note = nil
-            currentURL = nil
-        }
+        if wasCurrent { closeThrownAway() }
         // What was typed in notes there goes along to the Trash, rather than coming back where they were.
         await NoteDocument.save(atOrInside: url)
         let trashed = await Task.detached(priority: .userInitiated, operation: { FileOperations.moveToTrash(url) }).value
@@ -1676,31 +1706,99 @@ public final class Workspace: NSObject {
         return trashed
     }
 
+    /// Closes the open note, which goes to the Trash or is deleted, or is in a folder that does: what was typed is
+    /// saved first (`NoteDocument.save(atOrInside:)`). On iPhone and iPad its screen keeps a picture of it as it goes.
+    private func closeThrownAway() {
+        #if os(iOS)
+        keepSnapshot()
+        #endif
+        note?.close()
+        note = nil
+        currentURL = nil
+    }
+
     #if os(iOS)
     /// Deletes for good, after you agreed to it: only where there is no Recently Deleted. Undo still brings it back
-    /// while Notebook is open.
+    /// while Notebook is open. It is out of the lists until it is done.
     func deleteImmediately(_ url: URL) {
         let change = keepForUndo(FileChange(.trash, "Delete", from: url))
+        beginLeaving(url)
         changeFiles { [self] follow in
+            let asked = url
             let url = follow(url)
-            let known = rememberedForDeleting.flatMap { $0.path == url.path ? $0 : nil }
-            rememberedForDeleting = nil
+            let known = rememberedForDeleting.removeValue(forKey: url.path) ?? rememberedForDeleting.removeValue(forKey: asked.path)
             change.remembered = known ?? remembered(url)
             let deleted = await deleteNow(url)
             changeDone(change, from: url, to: deleted.place)
             if !deleted.done { beep() }
+            endLeaving(asked, animated: !deleted.done)
         }
     }
 
     /// Deletes for good, in a change to files under way, and says where it waits for Undo, if anywhere.
     func deleteNow(_ url: URL) async -> (done: Bool, place: URL?) {
-        if let current = currentURL, FileNode.isSameOrInside(current, url) { closeFile() }
+        if let current = currentURL, FileNode.isSameOrInside(current, url) { closeThrownAway() }
         await NoteDocument.save(atOrInside: url)
         let deleted = await Task.detached(priority: .userInitiated, operation: { FileOperations.delete(url) }).value
         if deleted.done { thrownAway(url) }
         return deleted
     }
+
+    /// Asks whether to delete a file for good that couldn't go to the Trash, or once the question asked now is
+    /// answered.
+    private func askToDelete(_ url: URL) {
+        if deleting == nil { deleting = url } else { toAskAboutDeleting.append(url) }
+    }
+
+    /// The answer to "Delete immediately?": deleted for good, or back in the lists where it was. Then the next file
+    /// waiting for the question, once this alert has gone.
+    func answerDeleting(_ url: URL, delete: Bool) {
+        if deleting == url { deleting = nil }
+        if delete { deleteImmediately(url) } else { rememberedForDeleting[url.path] = nil }
+        endLeaving(url, animated: !delete)
+        guard !toAskAboutDeleting.isEmpty else { return }
+        let next = toAskAboutDeleting.removeFirst()
+        Task {
+            // An alert asked for while the one before is still going away doesn't show.
+            try? await Task.sleep(for: .seconds(0.5))
+            deleting = next
+        }
+    }
     #endif
+
+    /// Takes a file out of the lists, with the animation of the swipe or menu that asked, until `endLeaving`.
+    func beginLeaving(_ url: URL) {
+        let key = HiddenFolders.withoutPrivate(url.standardizedFileURL.path)
+        withAnimation { leaving[key, default: 0] += 1 }
+    }
+
+    /// The file has gone from where it was, or is to show again, `animated` sliding back in, as it couldn't go.
+    func endLeaving(_ url: URL, animated: Bool = false) {
+        let key = HiddenFolders.withoutPrivate(url.standardizedFileURL.path)
+        guard let count = leaving[key] else { return }
+        if animated {
+            withAnimation { leaving[key] = count > 1 ? count - 1 : nil }
+        } else {
+            leaving[key] = count > 1 ? count - 1 : nil
+        }
+    }
+
+    /// Whether a file is on its way to the Trash, or in a folder that is: the lists leave it out.
+    func isLeaving(_ url: URL) -> Bool {
+        guard !leaving.isEmpty else { return false }
+        let path = HiddenFolders.withoutPrivate(url.standardizedFileURL.path)
+        return leaving.keys.contains { path == $0 || path.hasPrefix($0 + "/") }
+    }
+
+    /// Whether a file has gone to the Trash or is on its way there, itself or a folder it was in, for lists that don't
+    /// follow the folders: search, which may find it until its folder has been read again. One back at its place, put
+    /// back from the Trash, is there.
+    func isThrownAway(_ url: URL) -> Bool {
+        if isLeaving(url) { return true }
+        guard !thrownAwayPaths.isEmpty else { return false }
+        let path = HiddenFolders.withoutPrivate(url.standardizedFileURL.path)
+        return thrownAwayPaths.contains { path == $0 || path.hasPrefix($0 + "/") } && !FileManager.default.fileExists(atPath: url.path)
+    }
 
     /// A file thrown away: forgotten everywhere, and gone from the sidebar at once.
     private func thrownAway(_ url: URL) {
@@ -1709,6 +1807,7 @@ public final class Workspace: NSObject {
         defaultFolderMoved(from: url, to: nil)
         favorites.removeAll { HiddenFolders.withoutPrivate($0) == HiddenFolders.withoutPrivate(url.path) }
         if !temporaryLocations { UserDefaults.standard.set(favorites, forKey: "favorites") }
+        thrownAwayPaths.insert(HiddenFolders.withoutPrivate(url.standardizedFileURL.path))
         showChanges(in: [url.deletingLastPathComponent()], removing: [url])
     }
 

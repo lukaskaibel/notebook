@@ -280,6 +280,57 @@ final class FileChangeTests: XCTestCase {
         assertNothingOnTheMainThread()
     }
 
+    /// A file on its way to the Trash, or a folder it is in, is out of Recent and Favorites until it has gone, and back
+    /// in them if it couldn't go. The same file asked to go twice is out until both are done.
+    func testFilesOnTheirWayToTheTrashLeaveTheLists() async throws {
+        let (workspace, _) = try await makeSidebar()
+        workspace.open(draft)
+        workspace.open(other)
+        workspace.open(chart)
+        workspace.toggleFavorite(draft)
+        XCTAssertEqual(workspace.recentURLs.map(\.lastPathComponent), ["Other.md", "Draft.md"])
+
+        workspace.beginLeaving(papers)
+        XCTAssertTrue(workspace.isLeaving(draft))
+        XCTAssertTrue(workspace.isLeaving(papers))
+        XCTAssertFalse(workspace.isLeaving(archive))
+        XCTAssertFalse(workspace.isLeaving(library.appendingPathComponent("Papers copy/Draft.md")))
+        XCTAssertEqual(workspace.recentURLs, [])
+        XCTAssertEqual(workspace.favoriteURLs, [])
+
+        workspace.beginLeaving(papers)
+        workspace.endLeaving(papers)
+        XCTAssertTrue(workspace.isLeaving(draft), "asked twice, done once")
+        // "/private/var/…" and "/var/…" are one folder.
+        workspace.endLeaving(URL(fileURLWithPath: HiddenFolders.withoutPrivate(papers.path)), animated: true)
+        XCTAssertFalse(workspace.isLeaving(draft))
+        XCTAssertEqual(workspace.recentURLs.map(\.lastPathComponent), ["Other.md", "Draft.md"])
+        XCTAssertEqual(workspace.favoriteURLs.map(\.lastPathComponent), ["Draft.md"])
+    }
+
+    /// Search finds a note thrown away until it has read its folder again: it is left out of the results meanwhile,
+    /// and so is what was in a folder thrown away. Put back from the Trash, it is there again.
+    func testSearchLeavesOutWhatWasThrownAway() async throws {
+        let (workspace, _) = try await makeSidebar()
+        let manager = workspace.fileUndoManager
+        XCTAssertFalse(workspace.isThrownAway(other))
+        let trashed = await workspace.trash(other).value
+        XCTAssertTrue(trashed)
+        XCTAssertTrue(workspace.isThrownAway(other))
+        XCTAssertFalse(workspace.isThrownAway(draft))
+
+        try await until("the group closed") { manager.groupingLevel == 0 }
+        manager.undo()
+        try await until("put back") { self.exists(self.other) }
+        await workspace.changeFiles { _ in }.value
+        XCTAssertFalse(workspace.isThrownAway(other), "back where it was")
+
+        let folderTrashed = await workspace.trash(papers).value
+        XCTAssertTrue(folderTrashed)
+        XCTAssertTrue(workspace.isThrownAway(draft), "in a folder thrown away")
+        XCTAssertFalse(workspace.isThrownAway(archive))
+    }
+
     /// A note thrown away a moment after it was left, while what was typed in it is still being written: that goes
     /// along to the Trash, and the note doesn't come back where it was.
     func testWhatWasTypedGoesAlongToTheTrash() async throws {

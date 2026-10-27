@@ -64,6 +64,15 @@ versions follow [semantic versioning](https://semver.org).
   This iPhone uses, so its notes can be opened, shared and backed up from there. It was missing.
 - The sidebar on the Mac no longer scrolls back to the open note each time it is saved while you look at another part
   of it.
+- On iPhone and iPad, deleting a note works smoothly, as in Notes. On iOS 27 deleting could hang, after which
+  nothing happened, and no other change to files went through either until Notebook was opened again. Now the note
+  leaves the list at once, with the swipe or the menu, rather than once the disk or iCloud has moved it, also when
+  you delete several one after another, and it doesn't come back for a moment where it was. Delete in the ⋯ menu of
+  the note you are in goes back to its folder with the note still showing as it slides away, instead of an empty
+  page, and the note doesn't turn up in Recent, Favorites or search on its way out. Where a place has no Recently
+  Deleted, the note stays out of the list while Notebook asks whether to delete it for good, and comes back if you
+  cancel. Shake to Undo, and ⌘Z on an iPhone with a keyboard, now bring back a note deleted from a list; nothing
+  answered them there before, as nothing in a list has the focus.
 
 ## [1.0.0] – not released yet
 

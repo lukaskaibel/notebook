@@ -158,10 +158,29 @@ enum FileOperations {
     static func moveToTrash(_ url: URL) -> (done: Bool, place: URL?) {
         debugWait("trashed", url)
         var result: (done: Bool, place: URL?) = (false, nil)
+        #if os(iOS)
+        // On iPhone and iPad the move to Recently Deleted is coordinated by the system, on a thread of its own: inside a
+        // coordinated write of ours it would wait for that write to end, which waits for it, for good.
+        for attempt in 1...2 {
+            var place: NSURL?
+            do {
+                try FileManager.default.trashItem(at: url, resultingItemURL: &place)
+                result = (true, place as URL?)
+                break
+            } catch let error as CocoaError where error.code == .featureUnsupported && attempt == 1 {
+                // Right after Notebook is installed or updated, the system may not have the Recently Deleted of its own
+                // folder ready yet, and says there is none: once more, a moment later.
+                Thread.sleep(forTimeInterval: 0.3)
+            } catch {
+                break
+            }
+        }
+        #else
         NSFileCoordinator().coordinate(writingItemAt: url, options: .forDeleting, error: nil) { url in
             var place: NSURL?
             if (try? FileManager.default.trashItem(at: url, resultingItemURL: &place)) != nil { result = (true, place as URL?) }
         }
+        #endif
         return result
     }
 

@@ -136,6 +136,8 @@ extension Workspace {
         editor.textView.breakUndoCoalescing()
         #else
         editor.openStep = nil
+        // Once the swipe or menu that asked is done, and a note it closed has gone.
+        DispatchQueue.main.async { [weak self] in self?.fileUndoView?.takeFocusIfFree() }
         #endif
         return change
     }

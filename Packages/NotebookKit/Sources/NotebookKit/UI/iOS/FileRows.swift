@@ -130,7 +130,7 @@ extension FileNode {
 extension Workspace {
     /// What a folder shows: nothing until it has been read, which happens off the main thread when first asked for
     /// (with the folders on the way to it), and again whenever files change in it. Hidden folders stay out unless their
-    /// location shows them.
+    /// location shows them, and so do files on their way to the Trash.
     func visibleChildren(of folder: URL) -> [FileNode] {
         _ = treeVersion
         guard let node = node(for: folder, reading: false) else {
@@ -138,7 +138,8 @@ extension Workspace {
             return []
         }
         read([node])
-        return shownChildren(of: node, in: location(containing: folder))
+        let children = shownChildren(of: node, in: location(containing: folder))
+        return leaving.isEmpty ? children : children.filter { !isLeaving($0.url) }
     }
 
     /// Whether a folder has been read, so a list says "Empty" only when it is.
@@ -271,20 +272,8 @@ struct FileActions: View {
             }
         } else if !isLinked {
             Section {
-                Button(role: .destructive) { workspace.moveToTrash(url) } label: { Label("Delete", systemImage: "trash") }
+                Button(role: .destructive) { workspace.trash(url) } label: { Label("Delete", systemImage: "trash") }
             }
-        }
-    }
-}
-
-extension Workspace {
-    /// Deletes a file the way the Files app does: to Recently Deleted, or, where a place has none, for good after
-    /// asking.
-    func moveToTrash(_ url: URL) {
-        let trashing = trash(url)
-        Task {
-            guard await !trashing.value, !isLinkedFolder(url), FileManager.default.fileExists(atPath: url.path) else { return }
-            deleting = url
         }
     }
 }
@@ -347,16 +336,20 @@ struct SearchResultsList: View {
 
     var body: some View {
         ForEach(workspace.searchSession.sections) { section in
-            Section {
-                ForEach(section.items) { item in
-                    Button { open(item.result) } label: { row(item) }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            if let url = item.result.url { FileActions(workspace: workspace, url: url) }
-                        }
+            // Without what was just deleted, which search finds until it has read the folder again.
+            let items = section.items.filter { item in item.result.url.map { !workspace.isThrownAway($0) } ?? true }
+            if !items.isEmpty {
+                Section {
+                    ForEach(items) { item in
+                        Button { open(item.result) } label: { row(item) }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                if let url = item.result.url { FileActions(workspace: workspace, url: url) }
+                            }
+                    }
+                } header: {
+                    if let title = section.title { Text(title) }
                 }
-            } header: {
-                if let title = section.title { Text(title) }
             }
         }
     }
@@ -454,13 +447,11 @@ struct FileAlerts: ViewModifier {
                     .presentationDetents([.medium, .large])
             }
             .sheet(item: $workspace.moving) { file in MoveSheet(workspace: workspace, url: file.url) }
-            .alert(deleteTitle, isPresented: Binding(get: { workspace.deleting != nil }, set: { if !$0 { workspace.deleting = nil } })) {
-                Button("Cancel", role: .cancel) { workspace.deleting = nil }
-                Button("Delete", role: .destructive) {
-                    if let url = workspace.deleting { workspace.deleteImmediately(url) }
-                    workspace.deleting = nil
-                }
-            } message: {
+            .alert(deleteTitle, isPresented: Binding(get: { workspace.deleting != nil }, set: { if !$0 { workspace.deleting = nil } }),
+                   presenting: workspace.deleting) { url in
+                Button("Cancel", role: .cancel) { workspace.answerDeleting(url, delete: false) }
+                Button("Delete", role: .destructive) { workspace.answerDeleting(url, delete: true) }
+            } message: { _ in
                 Text("This place has no Recently Deleted folder, so it is deleted right away.")
             }
             .alert(workspace.problem?.title ?? "", isPresented: Binding(get: { workspace.problem != nil }, set: { if !$0 { workspace.problem = nil } }), presenting: workspace.problem) { _ in
