@@ -243,6 +243,8 @@ struct FormatMenu: View {
 
     var body: some View {
         Button {
+            // As Attach does: in a note you haven't put the caret in, the styles are for its last line.
+            editor.placeCaretForToolbar()
             editor.beginEditing()
             isShown = true
         } label: {
@@ -390,12 +392,38 @@ struct SnapshotView: UIViewRepresentable {
 
 extension EditorController {
     /// Puts the caret back where it was and does something there, from a button of a toolbar: the keyboard comes up
-    /// as it would for a tap in the text.
+    /// as it would for a tap in the text. In a note you haven't put the caret in, a checklist starts on a new line at
+    /// its end, as in Notes, rather than making its first line a to-do.
     func beginEditing(then command: FormatCommand? = nil) {
         if !isFocused {
+            if command == .checklist, !hasPlacedCaret {
+                startChecklistAtEnd()
+                makeTextFirstResponder()
+                return
+            }
             makeTextFirstResponder()
         }
         if let command { perform(command) }
+    }
+
+    /// The caret is somewhere you put it, also at the very start, or where Back took you: not just where the note
+    /// opened.
+    var hasPlacedCaret: Bool { isFocused || caretWasPlaced }
+
+    /// What a toolbar button adds goes at the end of a note you haven't put the caret in, as in Notes: a picture
+    /// from Attach, say, rather than above the note's first line.
+    func placeCaretForToolbar() {
+        guard !hasPlacedCaret, storage.length > 0 else { return }
+        setSelection(NSRange(location: storage.length, length: 0))
+    }
+
+    /// A new to-do on a line of its own after the note's last line, with the caret in it, as one step of Undo.
+    private func startChecklistAtEnd() {
+        let end = storage.length
+        let endsOnEmptyLine = end == 0 || (text as NSString).substring(from: end - 1) == "\n"
+        let added = (endsOnEmptyLine ? "" : "\n") + "- [ ] "
+        replace(NSRange(location: end, length: 0), with: added, select: NSRange(location: end + (added as NSString).length, length: 0),
+                actionName: "Checklist")
     }
 
     /// The Done button: the keyboard goes away, the note is saved as you type anyway.

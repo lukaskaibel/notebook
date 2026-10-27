@@ -44,7 +44,8 @@ extension Workspace {
 
     private func write(_ note: SharedNote, files: URL) async -> Bool {
         if case .endOf(let path) = note.destination {
-            let url = URL(fileURLWithPath: path)
+            // Shared before an update of the app, which moved its folder and the notes in it.
+            let url = URL(fileURLWithPath: Self.rerooted(path))
             let exists = await Task.detached { FileManager.default.fileExists(atPath: url.path) }.value
             // Gone since, no longer in a location, or not a note at all: a note of its own instead.
             if exists, Self.isNote(url), location(containing: url) != nil { return await append(note, files: files, to: url) }
