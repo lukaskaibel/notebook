@@ -9,8 +9,9 @@ struct TodosView: View {
     let workspace: Workspace
     /// On the iPad, next to the sidebar: Back and Forward in the bar, as a note has them.
     var isInSplitView = false
-    /// Rows just ticked: they stay a moment, ticked, before they go, and a second click unticks them.
-    @State private var ticked: [String: (row: TodoRow, section: TodoSection.Kind)] = [:]
+    /// Rows just ticked: they stay a moment, ticked, where they were, before they go, and a second click unticks them.
+    /// With the rows of their group as they were then, to keep their place.
+    @State private var ticked: [String: (row: TodoRow, section: TodoSection.Kind, order: [String])] = [:]
     @State private var isDragging = false
     @State private var dropTarget: TodoSection.Kind?
     /// The to-do being edited.
@@ -22,10 +23,18 @@ struct TodosView: View {
     /// What shows of the list above the keyboard, and where the to-do being edited is in it.
     @State private var shown: ClosedRange<CGFloat>?
     @State private var editingFrame: CGRect?
+    /// The row swiped to show Delete: one at a time.
+    @State private var swiped: String?
+    /// The text size of Settings: the rows are made again at the new size when it changes.
+    @Environment(\.dynamicTypeSize) private var typeSize
     #else
     /// Where the to-do being edited is in the window, and what watches for a click outside it.
     @State private var editingFrame: CGRect?
     @State private var clickWatcher: Any?
+    /// The row selected, as in Reminders: by a click beside a to-do's words, or left so by Return or Escape. Delete
+    /// deletes it, Return edits it, ↑ and ↓ select the next.
+    @State private var selected: String?
+    @FocusState private var isListFocused: Bool
     #endif
 
     var body: some View {
@@ -54,12 +63,25 @@ struct TodosView: View {
             .padding(.bottom, 60)
             .frame(maxWidth: .infinity)
             .coordinateSpace(.named(Self.space))
+            #if os(iOS)
+            .id(typeSize)
+            #endif
             // A click beside the to-dos is done editing.
             .background {
                 Color.clear
                     .contentShape(.rect)
                     .onTapGesture { endEditing() }
             }
+            #if os(macOS)
+            .focusable(interactions: .edit)
+            .focused($isListFocused)
+            .focusEffectDisabled()
+            .onKeyPress(phases: .down) { listKey($0) }
+            .onDeleteCommand { deleteSelected() }
+            .onChange(of: isListFocused) { _, focused in
+                if !focused, focus == nil { selected = nil }
+            }
+            #endif
         }
         .scrollContentBackground(.hidden)
         .background(Color.theme(Theme.panel).ignoresSafeArea())
@@ -76,6 +98,10 @@ struct TodosView: View {
             reveal(proxy)
         }
         .onChange(of: editingFrame) { reveal(proxy) }
+        // Scrolled, a row swiped open closes, as in Reminders.
+        .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { old, new in
+            if swiped != nil, abs(new - old) > 1 { swiped = nil }
+        }
         #endif
         .onDragSessionUpdated { session in
             switch session.phase {
@@ -99,6 +125,9 @@ struct TodosView: View {
             workspace.todoEditing = editing
             #if os(macOS)
             watchClicks(editing != nil)
+            #else
+            // Done editing: Shake to Undo and ⌘Z reach the to-dos' changes, unless something else is typed in now.
+            if editing == nil { workspace.takeUndoFocusIfFree() }
             #endif
         }
         #if DEBUG
@@ -119,6 +148,8 @@ struct TodosView: View {
         // In the bar once the page's own title has scrolled up under it, as a note's.
         .navigationTitle(workspace.isTitleScrolledAway ? "To-dos" : "")
         .navigationBarTitleDisplayMode(.inline)
+        // Shaken, Undo, as in Reminders: nothing in To-dos takes the focus but a to-do being edited.
+        .onAppear { workspace.takeUndoFocusIfFree() }
         // Reminders' buttons above the keyboard: a date, a time, a place, and sub-to-dos. They come as the editing
         // begins, a moment before the keyboard, fading in as they rise with it; not over the keyboard of a popover's
         // field, which is in this view too.
@@ -145,7 +176,8 @@ struct TodosView: View {
         #endif
     }
 
-    // The sizes of the system's lists on each: Reminders' on the Mac and on iPhone and iPad.
+    // The sizes of the system's lists on each: Reminders' on the Mac and on iPhone and iPad, where they grow with the
+    // text size of Settings, as Reminders' do.
     #if os(macOS)
     static let width: CGFloat = 680
     static let margin: CGFloat = 52
@@ -153,16 +185,26 @@ struct TodosView: View {
     static let titleSize: CGFloat = 14
     static let notesSize: CGFloat = 12.5
     static let metaSize: CGFloat = 12
+    static let headerSize: CGFloat = 30
+    static let dateSize: CGFloat = 12.5
     /// How far each level of the lines under a to-do goes in.
     static let indentStep: CGFloat = 20
     #else
     static let width: CGFloat = 680
     static let margin: CGFloat = 20
-    static let sectionSize: CGFloat = 19
-    static let titleSize: CGFloat = 17
-    static let notesSize: CGFloat = 15
-    static let metaSize: CGFloat = 14
-    static let indentStep: CGFloat = 24
+    static var sectionSize: CGFloat { scaled(19, .title3) }
+    static var titleSize: CGFloat { scaled(17, .body) }
+    static var notesSize: CGFloat { scaled(15, .subheadline) }
+    static var metaSize: CGFloat { scaled(14, .footnote) }
+    static var headerSize: CGFloat { scaled(30, .largeTitle) }
+    static var dateSize: CGFloat { scaled(12.5, .footnote) }
+    static var indentStep: CGFloat { scaled(24, .body) }
+
+    /// A size at the standard text size, at the text size chosen in Settings.
+    static func scaled(_ size: CGFloat, _ style: UIFont.TextStyle) -> CGFloat {
+        let traits = UITraitCollection(preferredContentSizeCategory: UIApplication.shared.preferredContentSizeCategory)
+        return UIFontMetrics(forTextStyle: style).scaledValue(for: size, compatibleWith: traits)
+    }
     #endif
 
     // MARK: - What it shows
@@ -180,7 +222,7 @@ struct TodosView: View {
     private var shownSections: [TodoSection] {
         var byKind = Dictionary(uniqueKeysWithValues: sections.map { ($0.kind, $0) })
         for (id, kept) in ticked.sorted(by: { $0.key < $1.key }) where byKind.values.allSatisfy({ !$0.rows.contains { $0.id == id } }) {
-            byKind[kept.section, default: TodoSection(kind: kept.section, rows: [])].rows.append(kept.row)
+            TodoGroups.keep(kept.row, in: &byKind[kept.section, default: TodoSection(kind: kept.section, rows: [])].rows, order: kept.order)
         }
         if isDragging {
             for kind in TodoSection.Kind.allCases where kind != .overdue && byKind[kind] == nil {
@@ -193,10 +235,10 @@ struct TodosView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("To-dos")
-                .font(.system(size: 30, weight: .bold))
+                .font(.system(size: Self.headerSize, weight: .bold))
                 .foregroundStyle(Color.theme(Theme.text))
             Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)))
-                .font(.system(size: 12.5))
+                .font(.system(size: Self.dateSize))
                 .foregroundStyle(Color.theme(Theme.textTertiary))
         }
         #if os(macOS)
@@ -244,6 +286,9 @@ struct TodosView: View {
     /// Edits a to-do, the caret this many UTF-16 units into its words, or at their end. Its line for notes and its
     /// buttons come in once it shows (`TodoEditor`).
     private func startEditing(_ item: TodoList.Item, at offset: Int?) {
+        #if os(macOS)
+        selected = nil
+        #endif
         if let editing, editing.isEditing(item) { return }
         endEditing(animated: false)
         closing = nil
@@ -289,9 +334,17 @@ struct TodosView: View {
     }
 
     /// Done editing: what was typed is written at once, and the line for notes and the buttons go before the row
-    /// shows the to-do as it is now.
-    private func endEditing(animated: Bool = true) {
+    /// shows the to-do as it is now. `selecting`: on the Mac the row is selected then.
+    private func endEditing(animated: Bool = true, selecting: Bool = false) {
         guard let session = editing else { return }
+        #if os(macOS)
+        if selecting {
+            DispatchQueue.main.async {
+                selected = rowID(of: session, in: shownSections)
+                if selected != nil { isListFocused = true }
+            }
+        }
+        #endif
         guard animated else {
             editing = nil
             focus = nil
@@ -366,9 +419,28 @@ struct TodosView: View {
                 } edit: { item, offset in
                     startEditing(item, at: offset)
                 } endEditing: {
-                    endEditing()
+                    // Return or Escape: on the Mac the row stays selected.
+                    endEditing(selecting: true)
+                } delete: {
+                    delete(slot.row)
                 }
+                #if os(iOS)
+                .modifier(TodoSwipe(id: slot.row.id, swiped: $swiped, isEnabled: slot.editing == nil && slot.row.isTodo && ticked[slot.row.id] == nil) {
+                    delete(slot.row)
+                })
+                #endif
                 .modifier(TodoDragging(id: Self.dragPrefix + slot.row.id, title: title(of: slot.row), isEnabled: slot.editing == nil))
+                #if os(macOS)
+                .background {
+                    if selected == slot.row.id, slot.editing == nil {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(isListFocused ? Color.accentColor.opacity(0.16) : Color.primary.opacity(0.07))
+                            .padding(.horizontal, -8)
+                    }
+                }
+                // A click beside its words selects it; beside the fields of one being edited, it stays edited.
+                .onTapGesture { if slot.editing == nil { select(slot.row) } }
+                #endif
                 .id(slot.id)
                 // Ticked, it goes a few seconds later: it fades and the rows under it close up.
                 .transition(.asymmetric(insertion: .opacity, removal: .opacity.combined(with: .scale(scale: 0.97, anchor: .leading))))
@@ -425,7 +497,8 @@ struct TodosView: View {
             if case .todo(let item) = row { workspace.untickTodo(item.reference, to: item.todo.mark) }
             return
         }
-        withAnimation(Theme.quick) { ticked[row.id] = (row, section) }
+        let order = shownSections.first { $0.kind == section }?.rows.map(\.id) ?? []
+        withAnimation(Theme.quick) { ticked[row.id] = (row, section, order) }
         switch row {
         case .todo(let item):
             // What was typed is written first.
@@ -444,6 +517,66 @@ struct TodosView: View {
 
     /// How long a row ticked off stays, ticked, before it goes: time to see it done, or to untick it.
     static let tickedFor: Double = 3
+
+    // MARK: - Deleting
+
+    /// Deletes a to-do from its note, with the lines under it: its row goes at once. What was typed in it is written
+    /// first, so the line deleted is the line as it is now.
+    private func delete(_ row: TodoRow) {
+        guard case .todo(let item) = row else { return }
+        if let editing, editing.isEditing(item) { endEditing(animated: false) }
+        #if os(iOS)
+        if swiped == row.id { swiped = nil }
+        #endif
+        ticked[row.id] = nil
+        withAnimation(Theme.spring) { _ = workspace.deleteTodo(item.reference) }
+    }
+
+    #if os(macOS)
+    // MARK: - The row selected
+
+    private func select(_ row: TodoRow?) {
+        endEditing()
+        selected = row?.id
+        if row != nil { isListFocused = true }
+    }
+
+    private func deleteSelected() {
+        guard editing == nil, let selected, let row = shownSections.flatMap(\.rows).first(where: { $0.id == selected }), row.isTodo else { return beep() }
+        // The one after it is selected next, as in Reminders.
+        let rows = shownSections.flatMap(\.rows).filter(\.isTodo)
+        let index = rows.firstIndex { $0.id == selected } ?? 0
+        let next = rows[safe: index + 1] ?? rows[safe: index - 1]
+        delete(row)
+        self.selected = next?.id
+    }
+
+    /// The keys of the row selected; the keys of a to-do being edited are its fields'.
+    private func listKey(_ press: KeyPress) -> KeyPress.Result {
+        guard editing == nil, let selected else { return .ignored }
+        let rows = shownSections.flatMap(\.rows)
+        guard let index = rows.firstIndex(where: { $0.id == selected }) else {
+            self.selected = nil
+            return .ignored
+        }
+        switch press.key {
+        // Delete comes as U+007F on the Mac.
+        case .delete, .deleteForward, KeyEquivalent("\u{7F}"):
+            deleteSelected()
+        case .upArrow, .downArrow:
+            guard let next = rows[safe: index + (press.key == .upArrow ? -1 : 1)] else { return .handled }
+            withAnimation(Theme.quick) { self.selected = next.id }
+        case .return:
+            guard case .todo(let item) = rows[index] else { return .ignored }
+            startEditing(item, at: nil)
+        case .escape:
+            withAnimation(Theme.quick) { self.selected = nil }
+        default:
+            return .ignored
+        }
+        return .handled
+    }
+    #endif
 
     // MARK: - Dragging
 
@@ -537,9 +670,14 @@ struct TodoRowView: View {
     /// A click on a to-do's words: edit it, the caret this many UTF-16 units in, or at the end.
     var edit: (TodoList.Item, Int?) -> Void
     var endEditing: () -> Void
+    /// Deletes the to-do from its note.
+    var delete: () -> Void
     @State private var isHovered = false
     @State private var isPicking = false
     @State private var titleWidth: CGFloat = 0
+    #if os(iOS)
+    @State private var rowWidth: CGFloat = 0
+    #endif
 
     /// At most this many lines under a to-do show while it isn't edited.
     static let shownLines = 6
@@ -604,10 +742,32 @@ struct TodoRowView: View {
         .contentShape(.rect)
         #if os(macOS)
         .onHover { isHovered = $0 }
-        #endif
         .contextMenu { menu }
+        #else
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
+        .contextMenu { menu } preview: { preview }
+        #endif
         .accessibilityElement(children: .contain)
     }
+
+    #if os(iOS)
+    /// Touched and held, the row lifts on a card of its own, as a reminder does, rather than its words alone over the
+    /// list.
+    private var preview: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            TodoCircle(mark: isTicked ? .done : mark)
+            VStack(alignment: .leading, spacing: 3) {
+                titleText
+                lines
+                meta
+            }
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 14)
+        .frame(width: rowWidth + 28, alignment: .leading)
+        .background(Color.theme(Theme.panel))
+    }
+    #endif
 
     private var mark: TaskMark {
         if case .todo(let item) = row { item.todo.mark } else { .open }
@@ -642,6 +802,10 @@ struct TodoRowView: View {
             }
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(row.isNote ? "Opens the note" : "Edits the to-do")
+            // Swiping, for VoiceOver.
+            .accessibilityActions {
+                if row.isTodo { Button("Delete", role: .destructive, action: delete) }
+            }
     }
 
     /// The lines under a to-do: sub-to-dos with a circle to tick, points, words.
@@ -672,15 +836,18 @@ struct TodoRowView: View {
                 Label(when, systemImage: row.hasTime ? "bell.fill" : "calendar")
                     .foregroundStyle(row.isOverdue && !isTicked ? Color.red : Color.theme(Theme.textSecondary))
                     .onTapGesture { ask() }
+                    .todoMetaLabel(row.isOverdue && !isTicked ? "Overdue, " + when : when, opensPicker: true)
             }
             if let place = row.place {
                 Label(place.leaving ? "Leaving " + place.name : place.name, systemImage: "location.fill")
                     .onTapGesture { ask(.place) }
+                    .todoMetaLabel(place.leaving ? "Leaving " + place.name : "Arriving at " + place.name, opensPicker: true)
             }
             if case .todo(let item) = row {
                 ForEach(item.todo.fields.filter { [.priority, .repeats, .scheduled, .start].contains($0.kind) }, id: \.self) { field in
                     Label(field.label(), systemImage: field.symbol)
                         .lineLimit(1)
+                        .todoMetaLabel(field.kind == .repeats ? "Repeats " + field.label() : field.label())
                 }
             }
             switch row {
@@ -767,11 +934,16 @@ struct TodoRowView: View {
             }
             Button { workspace.setTodoMark(item.reference, .cancelled) } label: { Label("Mark as Cancelled", systemImage: "xmark.circle") }
         }
+        if row.isTodo {
+            Divider()
+            Button(role: .destructive, action: delete) { Label("Delete", systemImage: "trash") }
+        }
     }
 }
 
 extension TodoRow {
     var isNote: Bool { if case .note = self { true } else { false } }
+    var isTodo: Bool { !isNote }
 }
 
 /// A line under a to-do as To-dos shows it: a sub-to-do with a circle to tick, a point, a number, or words.
@@ -869,8 +1041,8 @@ struct TodoCircle: View {
     static let side: CGFloat = 18
     static let lift: CGFloat = 5
     #else
-    static let side: CGFloat = 22
-    static let lift: CGFloat = 6
+    static var side: CGFloat { TodosView.scaled(22, .body) }
+    static var lift: CGFloat { TodosView.scaled(6, .body) }
     #endif
 
     var body: some View {
@@ -926,6 +1098,16 @@ struct TodoMetaLabelStyle: LabelStyle {
             configuration.icon.imageScale(.small)
             configuration.title
         }
+    }
+}
+
+extension View {
+    /// Read by VoiceOver as these words, without the symbol before them: it would read a bell as "Notifications" and
+    /// a calendar as "Calendar".
+    func todoMetaLabel(_ words: String, opensPicker: Bool = false) -> some View {
+        accessibilityElement(children: .ignore)
+            .accessibilityLabel(words)
+            .accessibilityAddTraits(opensPicker ? .isButton : [])
     }
 }
 

@@ -59,9 +59,15 @@ versions follow [semantic versioning](https://semver.org).
     a year.
   - **Merges and conflicts:** before a change from elsewhere is merged in or a conflict is settled, both texts are
     kept, so the one you didn't keep can be brought back.
+- Delete a to-do in To-dos, as in Reminders: swipe it to the left on iPhone and iPad and tap Delete, or swipe it all
+  the way across; on the Mac, click beside its words to select it and press Delete, and ↑, ↓ and Return move the
+  selection and edit; and Delete in its menu everywhere. Its line goes from its note with the lines under it, and one
+  Undo puts them back where they were.
+- Shake the iPhone in To-dos to undo what you did to a to-do last, a deletion, a tick or a new date, as in Reminders.
 
 ### Changed
 
+- To-dos on iPhone and iPad follows the text size you choose in Settings, as Reminders does.
 - On iPhone and iPad, a note's text follows the system's text size (Display & Brightness › Text Size, or Larger Text in
   Accessibility), as the text of Notes and other apps does: the size you chose in Settings › Text is the size at the
   standard text size, and the note is larger or smaller from there. The title, headings, checkboxes, maths and the line
@@ -85,6 +91,10 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- A to-do ticked in To-dos stays in its place for the three seconds it shows ticked, rather than jumping to the end of
+  its group.
+- VoiceOver reads a to-do's date, place and repeat in To-dos as words, such as "Overdue, Yesterday", rather than the
+  names of their symbols, "Calendar" and "Notifications".
 - On iPhone and iPad, after Notebook is updated, the notes kept in its own folder (On My iPhone › Notebook) keep their
   favourites, reminders, hidden folders and places in Recent, and the default folder stays chosen. iOS moves an app's
   folder with each update, and Notebook looked for them where they had been. A reminder's notification from before the
