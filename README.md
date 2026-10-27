@@ -414,7 +414,8 @@ screens.
   on Top keeps folders above the files either way. The dates come with the folder as it is read, so a large folder
   sorts at once.
 - **iPhone and iPad.** The same editor, search and file handling, with screens made for each: one folder per screen
-  on the iPhone, the sidebar on the iPad. Pick iCloud Drive or any folder in the Files app's picker, or keep notes on
+  on the iPhone, the sidebar on the iPad, next to the note in landscape and out of its way in portrait as the iPad
+  turns. Pick iCloud Drive or any folder in the Files app's picker, or keep notes on
   the device, in On My iPhone › Notebook. A bar above the keyboard, whose tools you choose, formats, links and adds
   photos, scans and files, with buttons for where the caret is on its left; Aa opens the Format panel as in Notes.
   Deleting moves to Recently Deleted; where a place has none, Notebook asks before it deletes, and Undo (⌘Z) still
