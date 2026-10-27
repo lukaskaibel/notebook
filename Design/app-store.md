@@ -69,7 +69,7 @@ is reserved in the library, uploaded, committed and placed (`fastlane/asset_libr
 placement shows there now; the version must exist and still be open for changes. Check the result in App Store
 Connect's Preview (iPhone and iPad, portrait and landscape) before submitting the version. The posters are set in
 `STORE_MEDIA` in the Fastfile: the header's finished lines 1.5 seconds before its end, the search result's open note
-at 4 seconds, and 5 seconds into each preview.
+at 4 seconds, Kyoto trip in each preview (5 seconds into the iPhone's, 2 into the iPad's, 3 into the Mac's).
 
 ## Once, in App Store Connect
 

@@ -131,6 +131,17 @@ enum DebugRemote {
             HardwareKeyboard.shared.override = argument == "on" ? true : argument == "off" ? false : nil
             let keyboard = HardwareKeyboard.shared
             log("keyboard \(keyboard.isInUse ? "in use" : "not in use"): attached \(keyboard.isAttached), touch keyboard shown \(keyboard.isTouchKeyboardShown), shortcuts alone \(keyboard.isShortcutsAlone), bottom inset \(editor.textView.contentInset.bottom), bar \((editor.textView.inputAccessoryView as? WritingBar)?.isTucked == true ? "tucked" : "up")")
+        case "touchkeyboard":
+            // touchkeyboard hide|show: no touch keyboard and no shortcuts bar under the note, as on an iPad with a
+            // keyboard attached and its shortcuts turned off, which a simulator without the Simulator app's window
+            // can't have otherwise; with `keyboard on` for the rest of the app.
+            let view = editor.textView
+            view.inputView = argument == "hide" ? UIView(frame: .zero) : nil
+            if argument == "hide" {
+                view.inputAssistantItem.leadingBarButtonGroups = []
+                view.inputAssistantItem.trailingBarButtonGroups = []
+            }
+            view.reloadInputViews()
         case "keyboardframe":
             // keyboardframe <height>: a keyboard notification ending that tall at the bottom of the screen, 0 for none
             // at all, as a keyboard with keys or a floating one sends; then what the app makes of it.
@@ -163,6 +174,9 @@ enum DebugRemote {
             editor.findInNote()
         case "blurall":
             editor.textView.window?.endEditing(true)
+        case "resign":
+            // Puts the keyboard away from whatever has it, such as the search field, leaving what was typed.
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         case "type":
             for character in argument.replacingOccurrences(of: "\\n", with: "\n") { editor.debugType(String(character)) }
         case "key":

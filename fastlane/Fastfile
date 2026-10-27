@@ -530,9 +530,9 @@ STORE_MEDIA = [
     group: "IPHONE_DYNAMIC_ISLAND_LARGE_PROFILE", category: "APP_SCREENSHOTS_AND_PREVIEWS", frame: "00:00:05:00",
     name: "iPhone preview" },
   { file: "build/app-store-media/previews/ipad.mp4", platform: "IOS", type: "APP_PREVIEW", group: "IPAD_13_PROFILE",
-    category: "APP_SCREENSHOTS_AND_PREVIEWS", frame: "00:00:05:00", name: "iPad preview" },
+    category: "APP_SCREENSHOTS_AND_PREVIEWS", frame: "00:00:02:00", name: "iPad preview" },
   { file: "build/app-store-media/previews/mac.mp4", platform: "MAC_OS", type: "APP_PREVIEW", group: "MAC_PROFILE",
-    category: "APP_SCREENSHOTS_AND_PREVIEWS", frame: "00:00:05:00", name: "Mac preview" }
+    category: "APP_SCREENSHOTS_AND_PREVIEWS", frame: "00:00:03:00", name: "Mac preview" }
 ].freeze
 
 def api_token
