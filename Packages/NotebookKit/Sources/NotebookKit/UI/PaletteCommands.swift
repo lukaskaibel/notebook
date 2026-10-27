@@ -191,14 +191,21 @@ extension Workspace {
         #endif
 
         let view = "View"
-        list.append(PaletteCommand(id: "sidebar", title: isSidebarVisible ? "Hide Sidebar" : "Show Sidebar", symbol: "sidebar.left", section: view,
-                                   keys: ["⌃", "⌘", "S"]) { [self] in
-            withAnimation(Theme.spring) { isSidebarVisible.toggle() }
-        })
-        list.append(PaletteCommand(id: "outline", title: isOutlineVisible ? "Hide Outline" : "Show Outline", symbol: "sidebar.right", section: view,
-                                   keys: ["⌃", "⌘", "I"], keywords: ["inspector", "headings"]) { [self] in
-            withAnimation(Theme.spring) { isOutlineVisible.toggle() }
-        })
+        #if os(iOS)
+        let hasColumns = !showsPhoneScreens
+        #else
+        let hasColumns = true
+        #endif
+        if hasColumns {
+            list.append(PaletteCommand(id: "sidebar", title: isSidebarVisible ? "Hide Sidebar" : "Show Sidebar", symbol: "sidebar.left", section: view,
+                                       keys: ["⌃", "⌘", "S"]) { [self] in
+                withAnimation(Theme.spring) { isSidebarVisible.toggle() }
+            })
+            list.append(PaletteCommand(id: "outline", title: isOutlineVisible ? "Hide Outline" : "Show Outline", symbol: "sidebar.right", section: view,
+                                       keys: ["⌃", "⌘", "I"], keywords: ["inspector", "headings"]) { [self] in
+                withAnimation(Theme.spring) { isOutlineVisible.toggle() }
+            })
+        }
         if hasHiddenFolders {
             list.append(PaletteCommand(id: "hidden", title: showsAllHiddenFolders ? "Hide Hidden Folders" : "Show Hidden Folders",
                                        symbol: showsAllHiddenFolders ? "eye.slash" : "eye", section: view, keys: ["⇧", "⌘", "."]) { [self] in

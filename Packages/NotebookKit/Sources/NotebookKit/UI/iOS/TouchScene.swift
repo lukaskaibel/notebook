@@ -53,6 +53,7 @@ struct TouchRootView: View {
             }
         }
         .tint(Color.theme(Theme.accent))
+        .onChange(of: sizeClass, initial: true) { _, size in workspace.showsPhoneScreens = size == .compact }
         .quickLookPreview($workspace.quickLookURL)
         .alert(conflictTitle, isPresented: Binding(get: { workspace.note?.conflict != nil }, set: { _ in }), presenting: workspace.note?.conflict) { _ in
             Button("Keep Both") { workspace.resolveConflict(.keepBoth) }
@@ -112,7 +113,8 @@ struct TouchCommands: Commands {
                 Label(workspace.isOutlineVisible ? "Hide Outline" : "Show Outline", systemImage: "sidebar.right")
             }
             .keyboardShortcut("i", modifiers: [.command, .control])
-            .disabled(workspace.currentURL == nil || workspace.showsTodos)
+            // The iPhone's screens, in a window as narrow as a phone, have it in the note's ⋯ menu instead.
+            .disabled(workspace.currentURL == nil || workspace.showsTodos || workspace.showsPhoneScreens)
             // The Finder's shortcut for its hidden files.
             Button { withAnimation { workspace.toggleAllHiddenFolders() } } label: {
                 Label(workspace.showsAllHiddenFolders ? "Hide Hidden Folders" : "Show Hidden Folders",

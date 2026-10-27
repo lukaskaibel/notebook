@@ -94,6 +94,8 @@ versions follow [semantic versioning](https://semver.org).
 - On an iPad with a keyboard, the keys ⌘K shows next to its commands now all work: ⇧⌘N makes a folder, ⌘P prints the
   note, and ⌘+, ⌘− and ⌘0 change the text size. They are in the menu bar too, with Show Outline (⌃⌘I) in its View
   menu. ⌘K called deleting a note Move to Trash, with a ⌘⌫ that did nothing; it says Delete now, as the ⋯ menu does.
+  Where the iPhone's screens show, as in an iPad window as narrow as a phone, it no longer offers the sidebar and the
+  outline, which those screens don't have; the note's ⋯ menu has its outline there.
 - The sidebar on the Mac no longer scrolls back to the open note each time it is saved while you look at another part
   of it.
 - In the Mac's sidebar, Tab now goes on into the note that is open, with the caret where it was, as Tab goes from the

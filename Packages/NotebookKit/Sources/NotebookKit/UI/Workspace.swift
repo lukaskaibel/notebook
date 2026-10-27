@@ -160,6 +160,8 @@ public final class Workspace: NSObject {
     var settingsRequest = 0
     var locationRequest = 0
     var newFolderRequest = 0
+    /// The window is as narrow as a phone and shows the iPhone's screens, which have no sidebar or outline to show.
+    var showsPhoneScreens = false
     /// The folder Import from Apple Notes puts the notes in, while the Files app's picker asks for them.
     var appleNotesImportFolder: URL?
     #endif
