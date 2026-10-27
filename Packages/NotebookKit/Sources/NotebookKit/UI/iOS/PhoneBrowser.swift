@@ -53,6 +53,7 @@ struct PhoneBrowser: View {
         }
         .modifier(FileAlerts(workspace: workspace, newFolderIn: $newFolderIn))
         .modifier(AppleNotesImporter(workspace: workspace))
+        .background(alignment: .topLeading) { FileUndoFocus(workspace: workspace).frame(width: 0, height: 0) }
         .onChange(of: workspace.newFolderRequest) { _, _ in newFolderIn = workspace.folderForNewNote ?? workspace.locations.first?.url }
         .onAppear {
             // Back where you were: in the note you had open, with its folders behind it.
@@ -315,7 +316,9 @@ struct FolderScreen: View {
                     .contextMenu { FileActions(workspace: workspace, url: node.url) { newFolderIn = $0 } }
                     .swipeActions(edge: .trailing) {
                         if !node.isLinked {
-                            Button(role: .destructive) { workspace.moveToTrash(node.url) } label: { Label("Delete", systemImage: "trash") }
+                            // Red as in Notes and Mail: a destructive swipe would take the app's ink instead.
+                            Button(role: .destructive) { workspace.trash(node.url) } label: { Label("Delete", systemImage: "trash") }
+                                .tint(.red)
                             Button { workspace.moving = MovingFile(url: node.url) } label: { Label("Move", systemImage: "folder") }
                                 .tint(.indigo)
                         }

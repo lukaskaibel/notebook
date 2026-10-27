@@ -285,13 +285,18 @@ enum DebugRemote {
         case "dismiss":
             log("dismissing renaming \(workspace.renaming?.lastPathComponent ?? "-") deleting \(workspace.deleting?.lastPathComponent ?? "-") problem \(workspace.problem?.title ?? "-")")
             workspace.renaming = nil
-            workspace.deleting = nil
+            if let url = workspace.deleting { workspace.answerDeleting(url, delete: false) }
             workspace.problem = nil
         case "deletenow":
-            if let url = workspace.deleting { workspace.deleteImmediately(url) }
-            workspace.deleting = nil
+            if let url = workspace.deleting { workspace.answerDeleting(url, delete: true) }
+        case "notrash":
+            // notrash on|off: every place as one without Recently Deleted, or as it is.
+            UserDefaults.standard.set(argument != "off", forKey: "NotebookNoRecentlyDeleted")
+        case "asking":
+            // asking: the file "Delete immediately?" asks about now, and those after it.
+            log("asking \(workspace.deleting?.lastPathComponent ?? "-") then \(workspace.deleteQuestions.waiting.map(\.lastPathComponent))")
         case "trash":
-            if let url = url(argument) { workspace.moveToTrash(url) }
+            if let url = url(argument) { workspace.trash(url) }
         case "keyundo", "keyredo":
             // keyundo, keyredo: ⌘Z and ⇧⌘Z on a keyboard, as UIKit sends them: from the first responder, or the window
             // without one, up to what takes them. Says where they went and what Undo would have said.
