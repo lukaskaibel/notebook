@@ -98,6 +98,11 @@ versions follow [semantic versioning](https://semver.org).
   outline, which those screens don't have; the note's ⋯ menu has its outline there.
 - The sidebar on the Mac no longer scrolls back to the open note each time it is saved while you look at another part
   of it.
+- Turning the iPad no longer rebuilds the window a moment after the turn, with the toolbar and the note jumping and, in
+  portrait, the sidebar left lying over the note, dimming it. Turned to portrait with a note open, the sidebar now
+  slides out of the way, and back in when you turn the iPad to landscape; put away by hand, it stays away. Opened in
+  portrait with a note, Notebook shows the note without it. Shown in portrait, it sits next to the note rather than
+  over it.
 - On iPhone and iPad, the folder Keep Notes on This iPhone uses is called On My iPhone (On My iPad) on the first screen,
   in search and in Settings, also where you chose it before. It was called "Documents", its folder's name on disk.
 - On iPhone and iPad, a list no longer says "No additional text" under notes Notebook hasn't read yet, as on the first
