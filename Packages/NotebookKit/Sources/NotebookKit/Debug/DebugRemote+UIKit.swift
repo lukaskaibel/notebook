@@ -129,7 +129,15 @@ enum DebugRemote {
             // keyboard on|off|auto: as if a keyboard were attached to the iPhone or iPad, or not.
             HardwareKeyboard.shared.override = argument == "on" ? true : argument == "off" ? false : nil
             let keyboard = HardwareKeyboard.shared
-            log("keyboard \(keyboard.isInUse ? "in use" : "not in use"): attached \(keyboard.isAttached), touch keyboard shown \(keyboard.isTouchKeyboardShown)")
+            log("keyboard \(keyboard.isInUse ? "in use" : "not in use"): attached \(keyboard.isAttached), touch keyboard shown \(keyboard.isTouchKeyboardShown), shortcuts alone \(keyboard.isShortcutsAlone), bottom inset \(editor.textView.contentInset.bottom), bar \((editor.textView.inputAccessoryView as? WritingBar)?.isTucked == true ? "tucked" : "up")")
+        case "keyboardframe":
+            // keyboardframe <height>: a keyboard notification ending that tall at the bottom of the screen, 0 for none
+            // at all, as a keyboard with keys or a floating one sends; then what the app makes of it.
+            guard let screen = editor.textView.window?.screen.bounds, let height = numbers.first else { return }
+            let frame = height == 0 ? CGRect.zero : CGRect(x: 0, y: screen.height - height, width: screen.width, height: height)
+            NotificationCenter.default.post(name: UIResponder.keyboardWillChangeFrameNotification, object: nil, userInfo: [UIResponder.keyboardFrameEndUserInfoKey: NSValue(cgRect: frame)])
+            let keyboard = HardwareKeyboard.shared
+            log("keyboard \(keyboard.isInUse ? "in use" : "not in use"): attached \(keyboard.isAttached), touch keyboard shown \(keyboard.isTouchKeyboardShown), shortcuts alone \(keyboard.isShortcutsAlone), bottom inset \(editor.textView.contentInset.bottom), bar \((editor.textView.inputAccessoryView as? WritingBar)?.isTucked == true ? "tucked" : "up")")
         case "tapcaret":
             // tapcaret <index>: the caret put there by a tap, which the editor may move (unlike `select`).
             if let index = numbers.first.map(Int.init) { editor.textView.selectedRange = NSRange(location: index, length: 0) }
@@ -149,6 +157,11 @@ enum DebugRemote {
             if editor.isEditingTitle { editor.textView.titleField.deleteBackward() } else if editor.selection == NSRange(location: 0, length: 0) { editor.textView.deleteBackward() } else { editor.debugBackspace() }
         case "blur":
             editor.endEditing()
+        case "findinnote":
+            // Find in Note's bar; `blurall` then takes the keyboard away from its field and leaves the bar docked.
+            editor.findInNote()
+        case "blurall":
+            editor.textView.window?.endEditing(true)
         case "type":
             for character in argument.replacingOccurrences(of: "\\n", with: "\n") { editor.debugType(String(character)) }
         case "key":
