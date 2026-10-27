@@ -97,6 +97,10 @@ versions follow [semantic versioning](https://semver.org).
 - On the iPhone's welcome screen, the last lines no longer run under the Choose a Folder button.
 - On the iPhone, going back to the first screen from a note no longer pushes its list down once you are there: the note
   you were in is already at the top of Recent while you go back.
+- In the Mac's sidebar, Tab now goes on into the note that is open, with the caret where it was, as Tab goes from the
+  list to the note in Notes and Mail. Moving a file to the Trash from the sidebar opens the next file in its folder, or
+  the one before it at the end, as Notes shows the next note; before, the note opened before it came back, wherever it
+  was, and the sidebar jumped there. VoiceOver calls the outline next to the note "Outline", not "Sidebar".
 
 ## [1.0.0] – not released yet
 
