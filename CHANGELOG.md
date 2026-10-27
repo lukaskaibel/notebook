@@ -49,9 +49,15 @@ versions follow [semantic versioning](https://semver.org).
     a year.
   - **Merges and conflicts:** before a change from elsewhere is merged in or a conflict is settled, both texts are
     kept, so the one you didn't keep can be brought back.
+- Delete a to-do in To-dos, as in Reminders: swipe it to the left on iPhone and iPad and tap Delete, or swipe it all
+  the way across; on the Mac, click beside its words to select it and press Delete, and ↑, ↓ and Return move the
+  selection and edit; and Delete in its menu everywhere. Its line goes from its note with the lines under it, and one
+  Undo puts them back where they were.
+- Shake the iPhone in To-dos to undo what you did to a to-do last, a deletion, a tick or a new date, as in Reminders.
 
 ### Changed
 
+- To-dos on iPhone and iPad follows the text size you choose in Settings, as Reminders does.
 - Notes are saved in the background, on the Mac, iPhone and iPad: a slow disk, or iCloud holding a note while it puts
   in another device's version, no longer makes the window wait when you pause typing, leave a note or switch apps.
   What you type meanwhile is saved right after. A note you have just left is still written, and quitting, renaming,
@@ -59,6 +65,10 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- A to-do ticked in To-dos stays in its place for the three seconds it shows ticked, rather than jumping to the end of
+  its group.
+- VoiceOver reads a to-do's date, place and repeat in To-dos as words, such as "Overdue, Yesterday", rather than the
+  names of their symbols, "Calendar" and "Notifications".
 - A note open in the main window and in a window of its own no longer makes Notebook hang as you type in one of them.
   Each window now shows what was typed in the other, and quitting with both open quits.
 - Leaving a note a moment after another device changed the same lines no longer loses what you typed since the last

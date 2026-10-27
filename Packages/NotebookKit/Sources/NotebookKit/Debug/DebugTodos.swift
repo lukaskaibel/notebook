@@ -16,6 +16,7 @@ import UserNotifications
 ///     datetodo <yyyy-MM-dd[THH:mm] | none> <words>  gives it a day (and a time), or takes it away
 ///     placetodo <name> <latitude> <longitude> <words>  gives it a place to arrive at
 ///     movetodo <today|tomorrow|week|later|none> <words>  as dragging it into that group
+///     deletetodo <words>                         deletes it from its note, as Delete in its menu does
 ///     opentodo <words>                           opens its note at it
 ///     remindtodo [date|place] <words>            Remind Me for it (the popover or the sheet), or on the Mac the
 ///                                                dropdown for its date or place, as its pills open them
@@ -99,6 +100,10 @@ enum DebugTodos {
             guard let kind = kinds[split[0]], let day = TodoSection.day(for: kind) else { log("movetodo: no group \(split[0])"); break }
             workspace.move(.todo(item), to: day)
             log("movetodo \(item.todo.text) to \(split[0])")
+        case "deletetodo":
+            guard let item = find(argument) else { log("deletetodo: no to-do “\(argument)”"); break }
+            workspace.deleteTodo(item.reference)
+            log("deletetodo \(item.todo.text) in \(item.note)")
         case "opentodo":
             guard let item = find(argument) else { log("opentodo: no to-do “\(argument)”"); break }
             workspace.openTodo(item.reference)
