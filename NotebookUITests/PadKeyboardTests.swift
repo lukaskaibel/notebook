@@ -45,7 +45,7 @@ final class PadKeyboardTests: XCTestCase {
         waitForValue(note, lacking: "- Groceries")
     }
 
-    /// ⌘F finds in the note, as on the Mac and in Notes, also before the note has the keyboard; ⌥⌘F searches every note.
+    /// ⌘F finds in the note, as on the Mac and in Notes; ⌥⌘F puts the caret in Search, which finds in every note.
     func testFindAndSearchFromTheKeyboard() throws {
         try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "the menu bar's shortcuts are the iPad's")
         app = XCUIApplication()
@@ -55,20 +55,20 @@ final class PadKeyboardTests: XCTestCase {
 
         tap("Personal")
         tap("Weekend")
-        XCTAssertTrue(app.textViews["Note"].firstMatch.waitForExistence(timeout: 10), app.debugDescription)
-        var report: [String] = []
-        let find = app.searchFields["find.searchField"]
-        app.typeKey("f", modifierFlags: .command)
-        report.append("unfocused ⌘F: \(find.waitForExistence(timeout: 3))")
-        if find.exists { app.buttons["find.doneButton"].tap() }
+        let note = app.textViews["Note"].firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 10), app.debugDescription)
         app.typeKey("f", modifierFlags: [.command, .option])
-        sleep(1)
-        report.append("⌥⌘F: " + app.debugDescription.split(separator: "\n").filter { $0.contains("SearchField") }.joined(separator: " | "))
-        app.textViews["Note"].firstMatch.tap()
-        sleep(1)
+        // Search has the caret: the tree says so, which the field's attributes don't.
+        var searching = false
+        for _ in 0..<10 where !searching {
+            sleep(1)
+            searching = app.debugDescription.split(separator: "\n").contains { $0.contains("label: 'Search'") && $0.contains("Keyboard Focused") }
+        }
+        XCTAssertTrue(searching, "⌥⌘F: no caret in Search")
+
+        note.tap()
         app.typeKey("f", modifierFlags: .command)
-        report.append("focused ⌘F: \(find.waitForExistence(timeout: 3))")
-        XCTFail(report.joined(separator: "; "))
+        XCTAssertTrue(app.searchFields["find.searchField"].waitForExistence(timeout: 5), "⌘F: no find bar in the note")
     }
 
     /// A row of the sidebar, a button or anything else, by its name.

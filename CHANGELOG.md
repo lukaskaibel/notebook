@@ -62,12 +62,13 @@ versions follow [semantic versioning](https://semver.org).
 
 - The Mac's Edit menu has what Notes' has for writing. Edit › Find finds in the note you're in, in a find bar under the
   toolbar: Find (⌘F), Find and Replace (⇧⌘F), Find Next and Previous (⌘G, ⇧⌘G), Use Selection for Find and Jump to
-  Selection (⌘J). Searching every note, as Notes searches its list, moved to ⌥⌘F, on the iPad too, where ⌘F also
-  finds in the note now. Spelling and Grammar checks the note (⌘;), shows the spelling panel, and turns checking as you
-  type, grammar and correcting as you go on or off for every note; Transformations makes words upper case, lower case
-  or capitalized, and Speech reads the note aloud. Replace, Transformations and Speech take the words you see: a
-  picture's file, a link's address and the Markdown around them stay as they are. Edit › Attach File… (⇧⌘A) puts
-  pictures, PDFs and other files in at the caret, stored next to the note as if dropped there.
+  Selection (⌘J). Searching every note, as Notes searches its list, moved to ⌥⌘F. On the iPad too: ⌘F finds in the
+  note you're typing in, and ⌥⌘F searches while you aren't typing (while you are, it is the system's Find and Replace).
+  Spelling and Grammar checks the note (⌘;), shows the spelling panel, and turns checking as you type, grammar and
+  correcting as you go on or off for every note; Transformations makes words upper case, lower case or capitalized, and
+  Speech reads the note aloud. Replace, Transformations and Speech take the words you see: a picture's file, a link's
+  address and the Markdown around them stay as they are. Edit › Attach File… (⇧⌘A) puts pictures, PDFs and other
+  files in at the caret, stored next to the note as if dropped there.
 - File › Duplicate (⌘D), Rename and Move to Trash on the Mac, as in Notes, for the note in the window you're working in.
   Move to Trash closes a note's own window, and Undo in the main window opens it again. With Settings in front or the
   main window closed, these and Edit's commands for the note are dimmed rather than acting on a note you can't see.

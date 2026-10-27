@@ -693,8 +693,9 @@ or click the bell that comes up after it as you point at it; in To-dos, right-cl
 mark it in progress or cancelled, or open its note. As you point at a location's name, a folder with a plus comes up
 next to it for a new folder at its top, and, when the location has hidden folders, an eye that shows them.
 
-On an iPad with a keyboard, ⌘N, ⌘Z and ⇧⌘Z, ⌘F and ⌥⌘F, ⌘K, ⇧⌘R, ⌘[ and ⌘], ⌃⌘I, ⇧⌘. and the shortcuts for writing work as
-on the Mac. On iPhone and iPad:
+On an iPad with a keyboard, ⌘N, ⌘Z and ⇧⌘Z, ⌘K, ⇧⌘R, ⌘[ and ⌘], ⌃⌘I, ⇧⌘. and the shortcuts for writing work as on the
+Mac. While you type in a note, ⌘F finds in it and ⌥⌘F is the system's Find and Replace; otherwise ⌥⌘F searches. On
+iPhone and iPad:
 
 | Gesture | Action |
 | --- | --- |
