@@ -344,6 +344,16 @@ public final class Workspace: NSObject {
         locationsChanged(resolving: true, reading: last.map { [$0] } ?? [])
         if let last, FileManager.default.fileExists(atPath: last) {
             open(URL(fileURLWithPath: last))
+        } else if let last {
+            #if os(iOS)
+            // Updated from a version that didn't keep where the app's folder was: the survey finds out, from a location
+            // in it, and the note opens then, unless you opened another.
+            whenSurveyed { [weak self] in
+                guard let self, currentURL == nil else { return }
+                let moved = Self.rerooted(last)
+                if moved != last, FileManager.default.fileExists(atPath: moved) { open(URL(fileURLWithPath: moved)) }
+            }
+            #endif
         }
     }
 
