@@ -35,7 +35,8 @@ final class LooseTodosTests: XCTestCase {
     }
 
     private func until(_ condition: () -> Bool) async throws {
-        for _ in 0..<200 where !condition() {
+        let end = Date().addingTimeInterval(TestRun.patience)
+        while !condition(), Date() < end {
             try await Task.sleep(for: .milliseconds(25))
         }
         XCTAssertTrue(condition(), "timed out")
@@ -124,7 +125,7 @@ final class LooseTodosTests: XCTestCase {
         editing.end()
         workspace.keepNewTodo(editing.current)
         // Return is an event of its own: Undo takes back one at a time.
-        try await Task.sleep(for: .milliseconds(50))
+        try await until { workspace.fileUndoManager.groupingLevel == 0 }
         let second = try XCTUnwrap(workspace.addTodo(due: today))
         XCTAssertEqual(workspace.current(second.reference).source, "- [ ] \(date)", "the second is not the first")
         let next = TodoEditing(workspace: workspace, item: second)
@@ -222,8 +223,8 @@ final class LooseTodosTests: XCTestCase {
         let original = try String(contentsOf: groceries, encoding: .utf8)
         workspace.moveTodo(butter.reference, toNote: groceries)
         // Undo before the move is written waits for it.
-        try await Task.sleep(for: .milliseconds(30))
         let manager = workspace.fileUndoManager
+        try await until { manager.groupingLevel == 0 }
         XCTAssertEqual(manager.undoActionName, "Move to Note")
         manager.undo()
         await workspace.todosWritten()
@@ -267,7 +268,7 @@ final class LooseTodosTests: XCTestCase {
         await workspace.moveTodo(rice.reference, toNote: trip)?.value
         try await until { controller.editor.text == "- [ ] Pack the adapter\n- [ ] Rice\n" }
         XCTAssertNotEqual(controller.window?.undoManager?.undoActionName, "Move to Note")
-        try await Task.sleep(for: .milliseconds(30))
+        try await until { workspace.fileUndoManager.groupingLevel == 0 }
         workspace.fileUndoManager.undo()
         await workspace.todosWritten()
         try await until { controller.editor.text == "- [ ] Pack the adapter\n" }
