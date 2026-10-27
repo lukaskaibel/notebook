@@ -170,8 +170,9 @@ enum DebugRemote {
         case "firstresponder":
             log("firstresponder \(window?.firstResponder.map { String(describing: type(of: $0)) } ?? "none")")
         case "makekey":
-            // The window key, as a click on it makes it, while the app stays in the background.
+            // The window key and main, as a click on it makes it, while the app stays in the background.
             window?.makeKey()
+            window?.makeMain()
             log("makekey: key \(window?.isKeyWindow == true), first responder \(window?.firstResponder.map { String(describing: type(of: $0)) } ?? "none")")
         case "focus":
             if let editor { window?.makeFirstResponder(editor.textView) }
@@ -448,7 +449,7 @@ enum DebugRemote {
             // windows: the windows open, a note's own windows with their file and how many tabs they are in.
             for window in NSApp.windows where window.isVisible && !(window is NSPanel) {
                 let file = (window.windowController as? FileWindowController).map { " file=\($0.url.path) tabs=\(window.tabbedWindows?.count ?? 1)" } ?? ""
-                log("window \"\(window.title)\"\(file)")
+                log("window \"\(window.title)\" id=\(window.identifier?.rawValue ?? "none")\(file)")
             }
         case "openfile":
             FileWindows.shared.open(URL(fileURLWithPath: argument))
@@ -470,8 +471,31 @@ enum DebugRemote {
             // front: which window is in front and what the menus act on there.
             if let workspace {
                 let key = NSApp.keyWindow
-                log("front key=\"\(key?.title ?? "none")\" mainOpen=\(workspace.isMainWindowOpen) visibleNote=\(workspace.hasVisibleNote) responder=\(key?.firstResponder.map { String(describing: type(of: $0)) } ?? "none") fileUndo=\(workspace.fileUndoManager === window?.undoManager ? "window" : "other")")
+                log("front key=\"\(key?.title ?? "none")\" main=\"\(NSApp.mainWindow?.title ?? "none")\" mainOpen=\(workspace.isMainWindowOpen) other=\(workspace.isOtherWindowInFront) fileNote=\(workspace.keyFileNote?.url.lastPathComponent ?? "none") file=\(workspace.fileInFront?.lastPathComponent ?? "none") hasNote=\(workspace.hasNoteInFront) visibleNote=\(workspace.hasVisibleNote) active=\(workspace.activeEditor()?.title ?? "none") fileUndo=\(workspace.fileUndoManager === window?.undoManager ? "window" : "other")")
             }
+        case "replaceall":
+            // replaceall <find>|<replace>: types both in the note's find bar, as you would, and clicks All.
+            guard let editor else { break }
+            let parts = argument.components(separatedBy: "|")
+            func send(_ action: NSTextFinder.Action) {
+                let item = NSMenuItem()
+                item.tag = action.rawValue
+                editor.textView.performTextFinderAction(item)
+            }
+            send(.showReplaceInterface)
+            func fields(in view: NSView) -> [NSTextField] { view.subviews.flatMap { ($0 as? NSTextField).map { [$0] } ?? fields(in: $0) } }
+            let found = editor.scrollView.findBarView.map(fields(in:))?.filter(\.isEditable) ?? []
+            guard found.count >= 2, parts.count == 2 else { log("replaceall: \(found.count) fields"); break }
+            for (field, text) in zip(found, parts) {
+                field.stringValue = text
+                NotificationCenter.default.post(name: NSControl.textDidChangeNotification, object: field)
+                if let action = field.action { NSApp.sendAction(action, to: field.target, from: field) }
+            }
+            send(.replaceAll)
+            log("replaceall: done, fields \(found.map(\.stringValue))")
+        case "becomemain":
+            // becomemain <title>: that window becomes the one you work in, as a click on it makes it (Settings, say).
+            if let found = NSApp.windows.first(where: { $0.isVisible && $0.title == argument }) { FileWindows.becameMain(found) } else { log("becomemain: no \(argument)") }
         case "resignactive":
             // resignactive: what switching to another app tells Notebook (it never is the active app here).
             NotificationCenter.default.post(name: NSApplication.willResignActiveNotification, object: NSApp)
@@ -655,7 +679,7 @@ enum DebugRemote {
             }
             log("set \(argument)")
         case "searchfocus":
-            // searchfocus: the caret in the toolbar's search field, as ⌘F puts it there.
+            // searchfocus: the caret in the toolbar's search field, as ⌥⌘F puts it there.
             workspace?.search.focus()
         case "palette":
             // palette: opens or closes ⌘K; palette rows: what it lists.

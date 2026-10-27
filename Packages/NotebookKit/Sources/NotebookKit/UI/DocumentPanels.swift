@@ -11,7 +11,8 @@ import SwiftUI
 /// (`MoveToSubmenu`), on iPhone and iPad they are listed in a sheet, as Files and Notes ask where to move.
 struct MoveToMenu: View {
     let workspace: Workspace
-    let url: URL
+    /// None on the Mac with no file in front, which dims it.
+    let url: URL?
 
     var body: some View {
         #if os(macOS)
@@ -21,7 +22,7 @@ struct MoveToMenu: View {
             Label("Move To", systemImage: "folder")
         }
         #else
-        Button { workspace.moving = MovingFile(url: url) } label: { Label("Move", systemImage: "folder") }
+        Button { if let url { workspace.moving = MovingFile(url: url) } } label: { Label("Move", systemImage: "folder") }
         #endif
     }
 }
@@ -43,7 +44,7 @@ struct EmptyState: View {
             Label("No Note Open", systemImage: "doc.text")
         } description: {
             #if os(macOS)
-            Text("Pick a note in the sidebar, press ⌘N for a new one, ⌘F to search or ⌘K to run a command.")
+            Text("Pick a note in the sidebar, press ⌘N for a new one, ⌥⌘F to search or ⌘K to run a command.")
             #else
             Text("Pick a note in the sidebar, or start a new one.")
             #endif

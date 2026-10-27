@@ -45,6 +45,32 @@ final class PadKeyboardTests: XCTestCase {
         waitForValue(note, lacking: "- Groceries")
     }
 
+    /// ⌘F finds in the note, as on the Mac and in Notes, also before the note has the keyboard; ⌥⌘F searches every note.
+    func testFindAndSearchFromTheKeyboard() throws {
+        try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "the menu bar's shortcuts are the iPad's")
+        app = XCUIApplication()
+        app.launchArguments = ["-NotebookLibrary", "~/Documents/UITests-\(UUID().uuidString)", "-NotebookLibraryName", "Library", "-NotebookDemo", "YES",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+
+        tap("Personal")
+        tap("Weekend")
+        XCTAssertTrue(app.textViews["Note"].firstMatch.waitForExistence(timeout: 10), app.debugDescription)
+        var report: [String] = []
+        let find = app.searchFields["find.searchField"]
+        app.typeKey("f", modifierFlags: .command)
+        report.append("unfocused ⌘F: \(find.waitForExistence(timeout: 3))")
+        if find.exists { app.buttons["find.doneButton"].tap() }
+        app.typeKey("f", modifierFlags: [.command, .option])
+        sleep(1)
+        report.append("⌥⌘F: " + app.debugDescription.split(separator: "\n").filter { $0.contains("SearchField") }.joined(separator: " | "))
+        app.textViews["Note"].firstMatch.tap()
+        sleep(1)
+        app.typeKey("f", modifierFlags: .command)
+        report.append("focused ⌘F: \(find.waitForExistence(timeout: 3))")
+        XCTFail(report.joined(separator: "; "))
+    }
+
     /// A row of the sidebar, a button or anything else, by its name.
     private func tap(_ label: String, file: StaticString = #filePath, line: UInt = #line) {
         let element = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label)).firstMatch

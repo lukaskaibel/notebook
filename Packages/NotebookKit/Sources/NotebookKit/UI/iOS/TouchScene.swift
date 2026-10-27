@@ -104,9 +104,20 @@ struct TouchCommands: Commands {
             .keyboardShortcut(".", modifiers: [.command, .shift])
             .disabled(!workspace.hasHiddenFolders)
         }
+        // ⌘F finds in the note, as on the Mac and in Notes, wherever the keyboard is; Search is ⌥⌘F. In a group of
+        // their own: UIKit's Find menu, which only reaches a note with the keyboard, keeps its own in place of them.
+        CommandGroup(after: .pasteboard) {
+            let canFind = workspace.note?.isLoaded == true
+            Button { workspace.editor.findInNote() } label: { Label("Find in Note…", systemImage: "magnifyingglass") }
+                .keyboardShortcut("f", modifiers: .command)
+                .disabled(!canFind)
+            Button { workspace.editor.findInNote(replacing: true) } label: { Label("Find and Replace…", systemImage: "arrow.left.arrow.right") }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
+                .disabled(!canFind)
+        }
         CommandMenu("Go") {
             Button { workspace.searchRequest += 1 } label: { Label("Search", systemImage: "magnifyingglass") }
-                .keyboardShortcut("f", modifiers: .command)
+                .keyboardShortcut("f", modifiers: [.command, .option])
             Button { workspace.togglePalette() } label: { Label("Command Palette", systemImage: "command") }
                 .keyboardShortcut("k", modifiers: .command)
                 .disabled(workspace.locations.isEmpty)

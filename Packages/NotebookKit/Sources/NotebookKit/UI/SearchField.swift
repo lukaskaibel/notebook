@@ -3,9 +3,9 @@ import AppKit
 import SwiftUI
 
 /// The search field in the toolbar: the system's search field with the system's suggestions menu below it. It finds
-/// files and folders by name, headings, and words in notes, PDFs and pictures; ⌘F puts the caret in it, arrow keys and
-/// Return pick a result. The search runs in the background (`SearchSession`), and the menu gets its results when they
-/// are there, so typing never waits for it.
+/// files and folders by name, headings, and words in notes, PDFs and pictures; ⌥⌘F puts the caret in it, arrow keys
+/// and Return pick a result. The search runs in the background (`SearchSession`), and the menu gets its results when
+/// they are there, so typing never waits for it.
 @MainActor
 final class SearchController: NSObject, NSTextSuggestionsDelegate, NSSearchFieldDelegate {
     typealias SuggestionItemType = SearchResult
@@ -36,7 +36,7 @@ final class SearchController: NSObject, NSTextSuggestionsDelegate, NSSearchField
         session.onResults = { [weak self] sections in self?.answer(sections) }
     }
 
-    /// ⌘F, also from a note in a window of its own.
+    /// Go › Search (⌥⌘F), also from a note in a window of its own.
     func focus() {
         guard let window = field.window else { return }
         if NSApp.isActive, !window.isKeyWindow { window.makeKeyAndOrderFront(nil) }

@@ -81,15 +81,18 @@ public struct NotebookScene: Scene {
                 }
                 Divider()
                 // The file of the window you are working in, a note's own window or this one, as in Notes.
-                if let url = workspace.fileInFront {
-                    MoveToMenu(workspace: workspace, url: url)
-                    Button { workspace.duplicate(url) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
-                        .keyboardShortcut("d", modifiers: .command)
-                    Button { workspace.renameInFront() } label: { Label("Rename", systemImage: "pencil") }
-                        .disabled(!workspace.hasNoteInFront)
-                    // Without ⌘⌫, which deletes to the start of the line as you type; the sidebar takes it.
-                    Button { workspace.trash(url) } label: { Label("Move to Trash", systemImage: "trash") }
-                }
+                // Dimmed with Settings in front or the main window closed: no file to act on.
+                let file = workspace.fileInFront
+                MoveToMenu(workspace: workspace, url: file)
+                    .disabled(file == nil)
+                Button { if let file { workspace.duplicate(file) } } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
+                    .keyboardShortcut("d", modifiers: .command)
+                    .disabled(file == nil)
+                Button { workspace.renameInFront() } label: { Label("Rename", systemImage: "pencil") }
+                    .disabled(!workspace.hasNoteInFront)
+                // Without ⌘⌫, which deletes to the start of the line as you type; the sidebar takes it.
+                Button { if let file { workspace.trash(file) } } label: { Label("Move to Trash", systemImage: "trash") }
+                    .disabled(file == nil)
                 if workspace.revertNote != nil {
                     Menu {
                         Button("Last Opened") { workspace.revertToLastOpened() }
@@ -140,8 +143,9 @@ public struct NotebookScene: Scene {
                     .keyboardShortcut("0", modifiers: .command)
             }
             CommandMenu("Go") {
+                // ⌘F finds in the note, as in Notes, whose search of its list is ⌥⌘F too.
                 Button { workspace.inMainWindow { workspace.search.focus() } } label: { Label("Search…", systemImage: "magnifyingglass") }
-                    .keyboardShortcut("f", modifiers: .command)
+                    .keyboardShortcut("f", modifiers: [.command, .option])
                 Button { workspace.inMainWindow { workspace.togglePalette() } } label: { Label("Command Palette…", systemImage: "command") }
                     .keyboardShortcut("k", modifiers: .command)
                     .disabled(workspace.locations.isEmpty)
@@ -185,7 +189,7 @@ public struct NotebookScene: Scene {
                     Label(workspace.isDrawing ? "Stop Drawing" : "Drawing", systemImage: "pencil.tip.crop.circle")
                 }
                 // The main window's: a note's own window has no pens to draw with.
-                .disabled(workspace.note == nil || workspace.keyFileNote != nil)
+                .disabled(!workspace.isMainWindowInFront || workspace.note == nil)
                 Divider()
                 formatButton(.indent, #selector(MarkdownTextView.indentLines(_:)), "]", [.command, .option], name: "Increase Indent")
                 formatButton(.outdent, #selector(MarkdownTextView.outdentLines(_:)), "[", [.command, .option], name: "Decrease Indent")
@@ -210,7 +214,8 @@ public struct NotebookScene: Scene {
 }
 
 /// Edit › Find, Spelling and Grammar, Transformations and Speech, as every Mac text app has them. Find finds in the
-/// note (⌘F is search, which finds in every note); Substitutions are left out, as Markdown needs its quotes and dashes.
+/// note (Go › Search, ⌥⌘F, finds in every note); Substitutions are left out, as Markdown needs its quotes and
+/// dashes.
 private struct TextCommands: View {
     let workspace: Workspace
     @Bindable var settings: NotebookSettings
@@ -218,8 +223,8 @@ private struct TextCommands: View {
     var body: some View {
         let hasNote = workspace.hasNoteInFront
         Menu {
-            Button("Find in Note…") { workspace.find(.showFindInterface) }
-                .keyboardShortcut("f", modifiers: [.command, .option])
+            Button("Find…") { workspace.find(.showFindInterface) }
+                .keyboardShortcut("f", modifiers: .command)
             Button("Find and Replace…") { workspace.find(.showReplaceInterface) }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
             Button("Find Next") { workspace.find(.nextMatch) }

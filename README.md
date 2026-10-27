@@ -144,7 +144,7 @@ GitHub's and Obsidian's `> [!note]` style get their colour and symbol.
 
 ### Find anything
 
-The search field in the toolbar (⌘F) finds notes, files and folders by name, the headings in notes, and words in notes
+The search field in the toolbar (⌥⌘F) finds notes, files and folders by name, the headings in notes, and words in notes
 and PDFs, with the page they're on. It also reads the words in pictures, in scanned PDFs and in the handwriting of
 drawings, so a photographed receipt or a scanned letter turns up too. Type several words in any order; notes that have
 them together come first. A result opens where it was found: the note scrolled to the words with them selected (they
@@ -624,8 +624,8 @@ exported it rather than when you wrote it.
 | ⇧⌘N | New folder in the current folder, named in place |
 | ⌘D | Duplicate the note |
 | ⌘Z, ⇧⌘Z | Undo and redo: typing, and changes to files (the Trash, a rename, a move, a new note or folder), newest first |
-| ⌘F | Search |
-| ⌥⌘F, ⇧⌘F | Find in the note, find and replace; ⌘G and ⇧⌘G for the next and previous |
+| ⌘F, ⇧⌘F | Find in the note, find and replace; ⌘G and ⇧⌘G for the next and previous |
+| ⌥⌘F | Search every note, as Notes searches its list |
 | ⌘K | Search and run commands; `>` for commands only |
 | ⇧⌘R | To-dos |
 | ⌘[ and ⌘], or swipe between pages | Back and forward; the swipe follows System Settings, as in Safari |
@@ -693,7 +693,7 @@ point at it; in To-dos, right-click a row to move it to another day, mark it in 
 note. As you point at a location's name, a folder with a plus comes up next to it for a new folder at its top, and, when
 the location has hidden folders, an eye that shows them.
 
-On an iPad with a keyboard, ⌘N, ⌘Z and ⇧⌘Z, ⌘F, ⌘K, ⇧⌘R, ⌘[ and ⌘], ⌃⌘I, ⇧⌘. and the shortcuts for writing work as
+On an iPad with a keyboard, ⌘N, ⌘Z and ⇧⌘Z, ⌘F and ⌥⌘F, ⌘K, ⇧⌘R, ⌘[ and ⌘], ⌃⌘I, ⇧⌘. and the shortcuts for writing work as
 on the Mac. On iPhone and iPad:
 
 | Gesture | Action |

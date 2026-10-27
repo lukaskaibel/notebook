@@ -134,10 +134,13 @@ public final class Workspace: NSObject {
     #if os(macOS)
     /// The main window is open: it can be closed while Notebook keeps running.
     var isMainWindowOpen = false
-    /// Commands for the main window given while it was closed (⌘N, ⌘F): they run once it is there again.
+    /// Commands for the main window given while it was closed (⌘N, ⌘K): they run once it is there again.
     @ObservationIgnored private var waitingForWindow: [() -> Void] = []
     /// The note in its own window that you are working in, for Revert To; nil while it's the main window.
     var keyFileNote: NoteDocument?
+    @ObservationIgnored weak var keyFileWindow: FileWindowController?
+    /// Another window, such as Settings, is the one you are working in: the File and Edit menus have no note there.
+    var isOtherWindowInFront = false
     @ObservationIgnored weak var sidebar: SidebarController?
     /// Remind Me… while it is open, so another one takes its place.
     @ObservationIgnored weak var reminderPopover: NSPopover?
@@ -156,7 +159,7 @@ public final class Workspace: NSObject {
     var quickLookURL: URL?
     /// Something that couldn't be done, for an alert.
     var problem: Problem?
-    /// Counts ⌘F, which puts the caret in the search field.
+    /// Counts Search (⌥⌘F), which puts the caret in the search field.
     var searchRequest = 0
     #if os(iOS)
     /// Counts the times ⌘K asked for Settings and for Add Location, which the screens show.
@@ -1682,7 +1685,13 @@ public final class Workspace: NSObject {
     @discardableResult
     func trash(_ url: URL) -> Task<Bool, Never> {
         guard !isLinkedFolder(url) else { beep(); return Task { false } }
+        #if os(macOS)
+        // Trashed from its own window, which closes: Undo is the main window's, and opens the window again.
+        let closing = keyFileWindow.map { FileNode.isSameOrInside($0.url, url) } == true
+        let change = keepForUndo(FileChange(.trash, "Move to Trash", from: url), in: closing ? mainUndoManager : nil)
+        #else
         let change = keepForUndo(FileChange(.trash, "Move to Trash", from: url))
+        #endif
         return changeFiles { [self] follow in
             let url = follow(url)
             let remembered = remembered(url)
@@ -1710,6 +1719,10 @@ public final class Workspace: NSObject {
             note = nil
             currentURL = nil
         }
+        #if os(macOS)
+        // Their own windows close; what was typed there is saved first.
+        FileWindows.shared.close(atOrInside: url)
+        #endif
         // What was typed in notes there goes along to the Trash, rather than coming back where they were.
         await NoteDocument.save(atOrInside: url)
         let trashed = await Task.detached(priority: .userInitiated, operation: { FileOperations.moveToTrash(url) }).value
@@ -1831,15 +1844,24 @@ public final class Workspace: NSObject {
         }
     }
 
-    /// A note you can see, for Print and Export: in a note's own window, or the main window's while that is open.
-    var hasVisibleNote: Bool { keyFileNote != nil || isMainWindowOpen && note != nil }
+    /// The main window is the one you are working in: open, with no note's own window or Settings in front of it.
+    var isMainWindowInFront: Bool { keyFileNote == nil && isMainWindowOpen && !isOtherWindowInFront }
 
-    /// The note in the window you are working in: a file window's, or this window's.
+    /// A note you can see, for Print and Export: in a note's own window, or the main window's while that is in front.
+    var hasVisibleNote: Bool { keyFileNote != nil || isMainWindowInFront && note != nil }
+
+    /// The window SwiftUI shows this scene in, the one with the sidebar.
+    func isMainWindow(_ window: NSWindow) -> Bool {
+        window === sidebar?.outline.window || window.identifier?.rawValue.hasPrefix("main") == true
+    }
+
+    /// The note in the window you are working in, also with a sheet over it: a note's own window's, or this window's.
+    /// None with Settings in front or this window closed.
     func activeEditor() -> (editor: EditorController, title: String, window: NSWindow?)? {
-        if let key = NSApp.keyWindow, let controller = key.windowController as? FileWindowController {
-            return (controller.editor, controller.url.deletingPathExtension().lastPathComponent, key)
+        if keyFileNote != nil, let controller = keyFileWindow {
+            return (controller.editor, controller.url.deletingPathExtension().lastPathComponent, controller.window)
         }
-        guard note != nil else { return nil }
+        guard isMainWindowInFront, note != nil else { return nil }
         return (editor, currentTitle, editor.textView.window)
     }
 
