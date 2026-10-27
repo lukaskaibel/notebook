@@ -473,6 +473,12 @@ enum DebugRemote {
                 let body = page.flatMap { text in (text.string as NSString).range(of: "\n").location < text.length - 1 ? text.attribute(.font, at: (text.string as NSString).range(of: "\n").location + 1, effectiveRange: nil) as? UIFont : nil }
                 log("exportpdf pages \(PDFDocument(data: data)?.pageCount ?? 0) text \(body?.pointSize ?? 0) on screen \(EditorStyle.bodySize)")
             }
+        case "searchrequest":
+            // searchrequest: what Go › Search (⌥⌘F) asks for: the caret in the sidebar's search field.
+            workspace.searchRequest += 1
+        case "focused":
+            // focused: what has the keyboard, and how many times Search was asked for.
+            log("focused \(UIResponder.focused.map { String(describing: type(of: $0)) } ?? "nothing") searches \(workspace.searchRequest) findBar \(editor.textView.findInteraction?.isFindNavigatorVisible == true)")
         case "barscroll":
             // Which scroll view the bars of each screen follow: the note's text view, another, or none.
             let windows = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }
