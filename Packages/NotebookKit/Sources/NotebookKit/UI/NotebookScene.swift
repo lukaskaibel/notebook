@@ -278,15 +278,6 @@ private struct MainWindowItem: View {
     }
 }
 
-/// Window › Notebook: brings the main window to the front, and opens it again after it was closed.
-private struct MainWindowItem: View {
-    @Environment(\.openWindow) private var openWindow
-
-    var body: some View {
-        Button("Notebook") { openWindow(id: "main") }
-    }
-}
-
 /// Settings, in the system's tabbed window: where notes live, how they are set, what the sidebar shows, the app icon.
 struct SettingsView: View {
     let workspace: Workspace
