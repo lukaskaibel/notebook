@@ -28,14 +28,12 @@ final class HiddenFolderTests: XCTestCase {
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: desktop)
         XCTAssertEqual(lchflags(link.path, UInt32(UF_HIDDEN)), 0)
         UserDefaults.standard.set(drive.path, forKey: "NotebookICloudDrive")
-        defaults = UserDefaults(suiteName: "notebook-hidden-tests")
-        defaults.removePersistentDomain(forName: "notebook-hidden-tests")
+        defaults = TestRun.settings()
     }
 
     override func tearDown() async throws {
         UserDefaults.standard.removeObject(forKey: "NotebookICloudDrive")
         UserDefaults.standard.removeObject(forKey: "NotebookLibrary")
-        defaults.removePersistentDomain(forName: "notebook-hidden-tests")
         try? FileManager.default.removeItem(at: base)
     }
 
@@ -52,9 +50,7 @@ final class HiddenFolderTests: XCTestCase {
         workspace.start()
         workspace.openFolder(drive)
         let sidebar = SidebarController(workspace: workspace)
-        for _ in 0..<100 where workspace.index.isBuilding || workspace.index.entry(for: old) == nil {
-            try await Task.sleep(for: .milliseconds(50))
-        }
+        try await TestRun.wait(while: { workspace.index.isBuilding || workspace.index.entry(for: old) == nil })
         let location = try XCTUnwrap(workspace.location(containing: drive))
         return (workspace, sidebar, location)
     }

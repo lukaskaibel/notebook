@@ -242,5 +242,10 @@ extension MarkdownTextView {
     @objc func addLink(_ sender: Any?) { controller?.insertLink() }
     @objc func indentLines(_ sender: Any?) { controller?.indent(by: 1) }
     @objc func outdentLines(_ sender: Any?) { controller?.indent(by: -1) }
+
+    // Spelling and Grammar in the context menu sets it for every note, as the Edit menu does.
+    override func toggleContinuousSpellChecking(_ sender: Any?) { NotebookSettings.shared.checksSpelling.toggle() }
+    override func toggleGrammarChecking(_ sender: Any?) { NotebookSettings.shared.checksGrammar.toggle() }
+    override func toggleAutomaticSpellingCorrection(_ sender: Any?) { NotebookSettings.shared.correctsSpelling.toggle() }
 }
 #endif

@@ -60,6 +60,28 @@ final class PadKeyboardTests: XCTestCase {
         newFolder.buttons["Cancel"].tap()
     }
 
+    /// ⌘F finds in the note, as on the Mac and in Notes; ⌥⌘F puts the caret in Search, which finds in every note.
+    func testFindAndSearchFromTheKeyboard() throws {
+        try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "the menu bar's shortcuts are the iPad's")
+        launch()
+        tap("Personal")
+        tap("Weekend")
+        let note = app.textViews["Note"].firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 10), app.debugDescription)
+        app.typeKey("f", modifierFlags: [.command, .option])
+        // Search has the caret: the tree says so, which the field's attributes don't.
+        var searching = false
+        for _ in 0..<10 where !searching {
+            sleep(1)
+            searching = app.debugDescription.split(separator: "\n").contains { $0.contains("label: 'Search'") && $0.contains("Keyboard Focused") }
+        }
+        XCTAssertTrue(searching, "⌥⌘F: no caret in Search: " + app.debugDescription.split(separator: "\n").filter { $0.contains("SearchField") || $0.contains("Keyboard Focused") }.joined(separator: " | "))
+
+        note.tap()
+        app.typeKey("f", modifierFlags: .command)
+        XCTAssertTrue(app.searchFields["find.searchField"].waitForExistence(timeout: 5), "⌘F: no find bar in the note")
+    }
+
     /// The app on fresh sample notes in its own home folder (a `~` is the app's home in the Simulator).
     private func launch() {
         app = XCUIApplication()

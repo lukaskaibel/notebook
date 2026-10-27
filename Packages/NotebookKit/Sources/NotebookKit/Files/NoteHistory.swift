@@ -52,7 +52,7 @@ final class NoteHistory: @unchecked Sendable {
 
     static let shared: NoteHistory = {
         // Tests never write into the app's own history.
-        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+        if ProcessInfo.isTesting {
             return NoteHistory(local: FileManager.default.temporaryDirectory.appendingPathComponent("Notebook history \(UUID().uuidString)", isDirectory: true))
         }
         return NoteHistory(local: defaultLocalFolder, cloud: .container)

@@ -431,8 +431,8 @@ extension EditorController {
         textView.endEditing(true)
     }
 
-    func findInNote() {
-        textView.findInteraction?.presentFindNavigator(showingReplace: false)
+    func findInNote(replacing: Bool = false) {
+        textView.findInteraction?.presentFindNavigator(showingReplace: replacing)
     }
 }
 #endif

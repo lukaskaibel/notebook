@@ -50,7 +50,7 @@ final class VersionHistoryTests: XCTestCase {
         return (workspace, try XCTUnwrap(window.undoManager))
     }
 
-    private func until(_ what: String, seconds: Double = 5, _ condition: () -> Bool) async throws {
+    private func until(_ what: String, seconds: Double = TestRun.patience, _ condition: () -> Bool) async throws {
         let end = Date().addingTimeInterval(seconds)
         while !condition() {
             guard Date() < end else { return XCTFail("never: \(what)") }
@@ -325,8 +325,9 @@ final class VersionHistoryTests: XCTestCase {
         _ = FileWindows.shared
         let controller = FileWindowController(url: draft)
         let window = try XCTUnwrap(controller.window)
+        // The window you work in is AppKit's main window, which a sheet over it leaves as it is.
         func becameKey(_ window: NSWindow?) {
-            NotificationCenter.default.post(name: NSWindow.didBecomeKeyNotification, object: window)
+            NotificationCenter.default.post(name: NSWindow.didBecomeMainNotification, object: window)
         }
         becameKey(window)
         XCTAssertTrue(Workspace.shared.keyFileNote === controller.noteDocument)

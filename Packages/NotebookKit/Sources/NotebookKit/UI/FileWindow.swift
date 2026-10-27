@@ -11,17 +11,35 @@ public final class FileWindows {
     private var controllers: [String: FileWindowController] = [:]
 
     private init() {
-        // Revert To acts on the note of the window you are in: whichever became key, or the one its sheet is over.
-        NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { notification in
+        // The File and Edit menus and Revert To act on the note of the window you are working in: AppKit's main window,
+        // which a sheet over it, or a panel such as Spelling, leaves as it is.
+        NotificationCenter.default.addObserver(forName: NSWindow.didBecomeMainNotification, object: nil, queue: .main) { notification in
             guard let window = notification.object as? NSWindow else { return }
-            MainActor.assumeIsolated { Self.becameKey(window) }
+            MainActor.assumeIsolated { Self.becameMain(window) }
         }
     }
 
-    static func becameKey(_ window: NSWindow) {
+    static func becameMain(_ window: NSWindow) {
         var window = window
         while let below = window.sheetParent ?? window.parent { window = below }
-        Workspace.shared.keyFileNote = (window.windowController as? FileWindowController)?.noteDocument
+        let workspace = Workspace.shared
+        let controller = window.windowController as? FileWindowController
+        workspace.keyFileWindow = controller
+        if workspace.keyFileNote !== controller?.noteDocument { workspace.keyFileNote = controller?.noteDocument }
+        // Settings, say: no note to act on.
+        let other = controller == nil && !workspace.isMainWindow(window)
+        if workspace.isOtherWindowInFront != other { workspace.isOtherWindowInFront = other }
+    }
+
+    /// The notes at or inside a file or folder that are open in windows of their own.
+    func urls(atOrInside url: URL) -> [URL] {
+        controllers.values.map(\.url).filter { FileNode.isSameOrInside($0, url) }
+    }
+
+    /// Closes the windows of the notes at or inside a file or folder going to the Trash; what was typed in them is
+    /// saved first, where they are.
+    func close(atOrInside url: URL) {
+        for controller in controllers.values where FileNode.isSameOrInside(controller.url, url) { controller.close() }
     }
 
     public func open(_ url: URL) {
@@ -156,7 +174,10 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
     }
 
     func windowWillClose(_ notification: Notification) {
-        if Workspace.shared.keyFileNote === note { Workspace.shared.keyFileNote = nil }
+        if Workspace.shared.keyFileNote === note {
+            Workspace.shared.keyFileNote = nil
+            Workspace.shared.keyFileWindow = nil
+        }
         VersionsWindow.close(over: window)
         editor.endDrawing()
         note.update(text: editor.text)

@@ -95,11 +95,11 @@ address. A PDF or any other file on a line of its own becomes a card with a prev
   <img alt="Further down the Kyoto note: a plan with a dashed link to the note Nara that doesn't exist yet, a web link with its pencil, a highlight, a Good to know callout, a table of days and areas, and a card for Flight tickets.pdf" src="Design/screenshots/objects-light.webp">
 </picture>
 
-Paste or drop a picture, from the Finder, Photos or Safari, and it's saved next to the note, in a hidden `.assets`
-folder, as PNG or JPEG so that other apps can show it. Drag a picture or file card to another place in the note to move
-it, or into another note, a folder in the sidebar, the Finder or another app for a copy. Delete it from the note and the
-file goes to the Trash once you leave the note, unless another note in the folder still uses it. Move a note to another
-folder and its pictures move along.
+Paste or drop a picture, from the Finder, Photos or Safari, or choose it with Attach File (Edit › Attach File… on the
+Mac), and it's saved next to the note, in a hidden `.assets` folder, as PNG or JPEG so that other apps can show it. Drag
+a picture or file card to another place in the note to move it, or into another note, a folder in the sidebar, the
+Finder or another app for a copy. Delete it from the note and the file goes to the Trash once you leave the note, unless
+another note in the folder still uses it. Move a note to another folder and its pictures move along.
 
 ### Drawings
 
@@ -144,7 +144,7 @@ GitHub's and Obsidian's `> [!note]` style get their colour and symbol.
 
 ### Find anything
 
-The search field in the toolbar (⌘F) finds notes, files and folders by name, the headings in notes, and words in notes
+The search field in the toolbar (⌥⌘F) finds notes, files and folders by name, the headings in notes, and words in notes
 and PDFs, with the page they're on. It also reads the words in pictures, in scanned PDFs and in the handwriting of
 drawings, so a photographed receipt or a scanned letter turns up too. Type several words in any order; notes that have
 them together come first. Names are found loosely too, best first: by the first letters of their words ("kytr" for
@@ -644,8 +644,10 @@ exported it rather than when you wrote it.
 | --- | --- |
 | ⌘N | New note in the current folder, or with none, in the default folder |
 | ⇧⌘N | New folder in the current folder, named in place |
+| ⌘D | Duplicate the note |
 | ⌘Z, ⇧⌘Z | Undo and redo: typing, and changes to files (the Trash, a rename, a move, a new note or folder), newest first |
-| ⌘F | Search |
+| ⌘F, ⇧⌘F | Find in the note, find and replace; ⌘G and ⇧⌘G for the next and previous |
+| ⌥⌘F | Search every note, as Notes searches its list |
 | ⌘K | Search and run commands; `>` for commands only |
 | ⇧⌘R | To-dos |
 | ⌘[ and ⌘], or swipe between pages | Back and forward; the swipe follows System Settings, as in Safari |
@@ -671,6 +673,7 @@ While writing:
 | ⇧⌘L | Checklist |
 | ⇧⌘U | Mark as checked |
 | ⇧⌘7, ⇧⌘9 | Bulleted list, numbered list |
+| ⇧⌘A | Attach a file: pictures, PDFs and other files go in at the caret |
 | ⌘' | Block quote |
 | Tab, ⇧Tab | Nest or un-nest a list item (in code: indent) |
 | ⌥⌘] and ⌥⌘[ | Increase and decrease indent |
@@ -722,8 +725,9 @@ or click the bell that comes up after it as you point at it; in To-dos, right-cl
 mark it in progress or cancelled, open its note or move one in no note into a note, or delete it. As you point at a location's name, a folder with a plus
 comes up next to it for a new folder at its top, and, when the location has hidden folders, an eye that shows them.
 
-On an iPad with a keyboard, ⌘N, ⇧⌘N, ⌘Z and ⇧⌘Z, ⌘F, ⌘K, ⇧⌘R, ⌘[ and ⌘], ⌃⌘S, ⌃⌘I, ⇧⌘., ⌘+, ⌘− and ⌘0, ⌘P and
-the shortcuts for writing work as on the Mac. On iPhone and iPad:
+On an iPad with a keyboard, ⌘N, ⇧⌘N, ⌘Z and ⇧⌘Z, ⌘K, ⇧⌘R, ⌘[ and ⌘], ⌃⌘S, ⌃⌘I, ⇧⌘., ⌘+, ⌘− and ⌘0, ⌘P and the
+shortcuts for writing work as on the Mac. While you type in a note, ⌘F finds in it and ⌥⌘F is the system's Find and
+Replace; otherwise ⌥⌘F searches. On iPhone and iPad:
 
 | Gesture | Action |
 | --- | --- |
@@ -817,7 +821,8 @@ changes the text itself. Changes to files are kept for Undo in the window's undo
 on the Mac next to the text's own, in the order they were made; on iPhone and iPad the editor's history weighs them
 against its own by when each was made.
 
-Run the tests (they use off-screen windows and temporary folders, and touch none of your files):
+Run the tests (they use off-screen windows, temporary folders and settings of their own, and touch none of your files,
+so several runs can go at once):
 
 ```bash
 cd Packages/NotebookKit && swift test

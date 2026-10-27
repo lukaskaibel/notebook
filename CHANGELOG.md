@@ -73,6 +73,19 @@ versions follow [semantic versioning](https://semver.org).
   one Markdown checklist in its own iCloud folder, next to the versions of notes, so your other devices have them too;
   it never shows among your notes, in search or in Spotlight.
 
+- The Mac's Edit menu has what Notes' has for writing. Edit › Find finds in the note you're in, in a find bar under the
+  toolbar: Find (⌘F), Find and Replace (⇧⌘F), Find Next and Previous (⌘G, ⇧⌘G), Use Selection for Find and Jump to
+  Selection (⌘J). Searching every note, as Notes searches its list, moved to ⌥⌘F. On the iPad too: ⌘F finds in the
+  note you're typing in, and ⌥⌘F searches while you aren't typing (while you are, it is the system's Find and Replace).
+  Spelling and Grammar checks the note (⌘;), shows the spelling panel, and turns checking as you type, grammar and
+  correcting as you go on or off for every note; Transformations makes words upper case, lower case or capitalized, and
+  Speech reads the note aloud. Replace, Transformations and Speech take the words you see: a picture's file, a link's
+  address and the Markdown around them stay as they are. Edit › Attach File… (⇧⌘A) puts pictures, PDFs and other
+  files in at the caret, stored next to the note as if dropped there.
+- File › Duplicate (⌘D), Rename and Move to Trash on the Mac, as in Notes, for the note in the window you're working in.
+  Move to Trash closes a note's own window, and Undo in the main window opens it again. With Settings in front or the
+  main window closed, these and Edit's commands for the note are dimmed rather than acting on a note you can't see.
+
 ### Changed
 
 - To-dos on iPhone and iPad follows the text size you choose in Settings, as Reminders does.
@@ -100,6 +113,8 @@ versions follow [semantic versioning](https://semver.org).
 ### Fixed
 
 - To-dos opens at once with hundreds of open to-dos, rather than after a few seconds: only the rows that show are made.
+- A picture no longer goes to the Trash when its link in the note changes case, say after editing the note in another
+  app: the Mac's disk finds the picture whatever the case, and now Notebook does too.
 - A to-do ticked in To-dos stays in its place for the three seconds it shows ticked, rather than jumping to the end of
   its group.
 - VoiceOver reads a to-do's date, place and repeat in To-dos as words, such as "Overdue, Yesterday", rather than the
@@ -147,6 +162,9 @@ versions follow [semantic versioning](https://semver.org).
   outline, which those screens don't have; the note's ⋯ menu has its outline there.
 - The sidebar on the Mac no longer scrolls back to the open note each time it is saved while you look at another part
   of it.
+- On the Mac, File › Move To moved the note in the main window while a note's own window was in front; it now moves the
+  note you're working in. The Format menu's commands are dimmed while no note is open to format, rather than doing
+  nothing.
 - On iPhone and iPad, deleting a note works smoothly, as in Notes. On iOS 27 deleting could hang, after which
   nothing happened, and no other change to files went through either until Notebook was opened again. Now the note
   leaves the list at once, with the swipe or the menu, rather than once the disk or iCloud has moved it, also when

@@ -11,6 +11,7 @@ final class WidgetDataTests: XCTestCase {
     private var errands: URL { library.appendingPathComponent("Errands.md") }
     private var trip: URL { library.appendingPathComponent("Travel/Kyoto trip.md") }
     private var window: NSWindow?
+    private var workspaces: [Workspace] = []
 
     override func setUp() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("notebook-widgets-\(UUID().uuidString)").standardizedFileURL
@@ -50,19 +51,25 @@ final class WidgetDataTests: XCTestCase {
     override func tearDown() async throws {
         for key in ["NotebookLibrary", "NotebookLibraryName", "expandedFolders"] { UserDefaults.standard.removeObject(forKey: key) }
         window?.close()
+        // What they still write for the widgets is written before the folder changes under it.
+        for workspace in workspaces {
+            workspace.widgets.refresh?.cancel()
+            workspace.widgets.written()
+        }
         WidgetData.folder = nil
         try? FileManager.default.removeItem(at: library.deletingLastPathComponent())
     }
 
     private func makeWorkspace() -> Workspace {
         let workspace = Workspace()
+        workspaces.append(workspace)
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
         self.window = window
         window.contentView = workspace.editor.view
         return workspace
     }
 
-    private func until(_ what: String, seconds: Double = 10, _ condition: () -> Bool) async throws {
+    private func until(_ what: String, seconds: Double = TestRun.patience, _ condition: () -> Bool) async throws {
         let end = Date().addingTimeInterval(seconds)
         while !condition() {
             guard Date() < end else { return XCTFail("never: \(what)") }

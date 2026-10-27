@@ -35,7 +35,8 @@ final class SearchIndexTests: XCTestCase {
     }
 
     private func waitUntil(_ condition: () -> Bool) async throws {
-        for _ in 0..<250 where !condition() { try await Task.sleep(for: .milliseconds(20)) }
+        let end = Date().addingTimeInterval(TestRun.patience)
+        while !condition(), Date() < end { try await Task.sleep(for: .milliseconds(20)) }
         XCTAssertTrue(condition(), "waited in vain")
     }
 
@@ -116,11 +117,13 @@ final class SearchIndexTests: XCTestCase {
         let (index, _) = try await makeIndex()
         XCTAssertGreaterThan(index.count, 10_000)
         let note = library.appendingPathComponent("Folder 0/File 0-0.md")
-        let start = Date()
-        for number in 0..<200 {
-            XCTAssertNotNil(index.resolve("File \(number % 100)-\(number / 2)", from: note))
+        try assertFast("200 links", under: 0.1) {
+            Timing.measure {
+                for number in 0..<200 {
+                    XCTAssertNotNil(index.resolve("File \(number % 100)-\(number / 2)", from: note))
+                }
+            }
         }
-        XCTAssertLessThan(Date().timeIntervalSince(start), 0.1, "200 links")
     }
 
     /// Move To lists a folder made after the index was built, once it has been sorted in.

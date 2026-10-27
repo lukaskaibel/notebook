@@ -299,7 +299,7 @@ enum DemoLibrary {
         Offer from the agency: [[Offer.pdf]]
 
         """)
-        write("Projects/Design/Meeting notes.md", "# Kick-off\n\n- Keep it **minimal**\n- Notes are plain files\n- ⌘F finds everything\n")
+        write("Projects/Design/Meeting notes.md", "# Kick-off\n\n- Keep it **minimal**\n- Notes are plain files\n- ⌥⌘F finds everything\n")
         write("University/Linear algebra/Week 3.md", """
         ## Eigenvalues
         λ is an eigenvalue of $A$ when there is a vector that $A$ only stretches:

@@ -32,9 +32,15 @@ let package = Package(
             resources: [.copy("Resources/NotebookIcon")],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        // Settings and a folder of each test run's own, as the tests are loaded: every `swift test` on a Mac runs as
+        // xctest and would share xctest's settings with every other run at the same time.
+        .target(
+            name: "NotebookTestSupport",
+            path: "Tests/NotebookTestSupport"
+        ),
         .testTarget(
             name: "NotebookKitTests",
-            dependencies: ["NotebookKit", "NotebookCapture"],
+            dependencies: ["NotebookKit", "NotebookCapture", "NotebookTestSupport"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
     ]
