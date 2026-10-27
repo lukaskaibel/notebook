@@ -96,6 +96,11 @@ public final class Workspace: NSObject {
         get { columnVisibility != .detailOnly }
         set { columnVisibility = newValue ? .all : .detailOnly }
     }
+    #if os(iOS)
+    /// The iPad's sidebar was put away for want of room, so it comes back once the window is wide again, also after the
+    /// window was as narrow as a phone and showed the iPhone's screens.
+    @ObservationIgnored var sidebarHiddenForWidth = false
+    #endif
     /// The outline of the open note, on the right. On the iPad it starts hidden, leaving the note the room.
     var isOutlineVisible = UserDefaults.standard.object(forKey: "showsOutline") as? Bool ?? Workspace.showsOutlineAtFirst {
         didSet { UserDefaults.standard.set(isOutlineVisible, forKey: "showsOutline") }
@@ -162,9 +167,13 @@ public final class Workspace: NSObject {
     /// Counts Search (⌥⌘F), which puts the caret in the search field.
     var searchRequest = 0
     #if os(iOS)
-    /// Counts the times ⌘K asked for Settings and for Add Location, which the screens show.
+    /// Counts the times ⌘K asked for Settings and Add Location, and ⌘K or the menu bar for New Folder, which the screens
+    /// show.
     var settingsRequest = 0
     var locationRequest = 0
+    var newFolderRequest = 0
+    /// The window is as narrow as a phone and shows the iPhone's screens, which have no sidebar or outline to show.
+    var showsPhoneScreens = false
     /// The folder Import from Apple Notes puts the notes in, while the Files app's picker asks for them.
     var appleNotesImportFolder: URL?
     #endif
@@ -409,7 +418,8 @@ public final class Workspace: NSObject {
                 saves = true
             }
             // On My iPhone is known by its bookmark, which a new location has only now.
-            if let name = Location.placeName(for: locations[index].url, bookmark: locations[index].bookmark) ?? survey.name, name != locations[index].name {
+            if let name = Location.placeName(for: locations[index].url, bookmark: locations[index].bookmark, among: locations) ?? survey.name,
+               name != locations[index].name {
                 locations[index].name = name
                 saves = true
                 reloadsAll = true
@@ -423,6 +433,11 @@ public final class Workspace: NSObject {
                     changed.append(node)
                 }
             }
+        }
+        // On My iPhone itself, known only now, renames Notebook's own folder, another location.
+        if nameLocations() {
+            saves = true
+            reloadsAll = true
         }
         if saves, !temporaryLocations { LocationStore.save(locations) }
         // An older lookup's files are as good as any, but only the newest knows every location.
@@ -456,8 +471,9 @@ public final class Workspace: NSObject {
     public func addLocation(_ url: URL) {
         let url = url.standardizedFileURL
         guard !locations.contains(where: { $0.path == url.path }) else { return }
-        let location = LocationStore.make(for: url)
+        let location = LocationStore.make(for: url, besides: locations)
         locations.append(location)
+        nameLocations()
         if !temporaryLocations { LocationStore.save(locations) }
         locationsChanged(new: location.id)
         #if os(macOS)
@@ -486,8 +502,23 @@ public final class Workspace: NSObject {
         return true
     }
 
+    /// Names the folders that are places of their own again, as `Location.placeName` names them by the others: a
+    /// location added or removed can rename another. True when a name changed.
+    @discardableResult
+    private func nameLocations() -> Bool {
+        var changed = false
+        for index in locations.indices {
+            guard let name = Location.placeName(for: locations[index].url, bookmark: locations[index].bookmark, among: locations),
+                  name != locations[index].name else { continue }
+            locations[index].name = name
+            changed = true
+        }
+        return changed
+    }
+
     public func removeLocation(_ id: UUID) {
         locations.removeAll { $0.id == id }
+        nameLocations()
         if !temporaryLocations { LocationStore.save(locations) }
         locationsChanged()
         // Its notes leave the widgets, and Edit Widget.
@@ -1143,8 +1174,13 @@ public final class Workspace: NSObject {
     }
 
     /// The files opened last, newest first, without the one that is open: for File › Open Recent and search.
-    var recentURLs: [URL] {
-        recents.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) && $0 != currentURL }
+    var recentURLs: [URL] { recentURLs(includingOpen: false) }
+
+    /// What you opened last, newest first. Without the open note, which a menu or search has no need to offer, unless
+    /// it is `includingOpen`: the iPhone's first screen shows it while you are in it, so the screen you go back to has
+    /// its row already, rather than putting it in once you are there.
+    func recentURLs(includingOpen: Bool) -> [URL] {
+        recents.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) && (includingOpen || $0 != currentURL) }
     }
 
     func clearRecents() {
