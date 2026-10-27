@@ -91,6 +91,11 @@ versions follow [semantic versioning](https://semver.org).
   the lists of files go on over a few lines, as in the Files app, rather than losing their middle ("Gett…kan").
 - On iPhone and iPad, the Files app shows On My iPhone › Notebook (On My iPad › Notebook), the folder Keep Notes on
   This iPhone uses, so its notes can be opened, shared and backed up from there. It was missing.
+- On an iPad with a keyboard, the keys ⌘K shows next to its commands now all work: ⇧⌘N makes a folder, ⌘P prints the
+  note, and ⌘+, ⌘− and ⌘0 change the text size. They are in the menu bar too, with Show Outline (⌃⌘I) in its View
+  menu. ⌘K called deleting a note Move to Trash, with a ⌘⌫ that did nothing; it says Delete now, as the ⋯ menu does.
+  Where the iPhone's screens show, as in an iPad window as narrow as a phone, it no longer offers the sidebar and the
+  outline, which those screens don't have; the note's ⋯ menu has its outline there.
 - The sidebar on the Mac no longer scrolls back to the open note each time it is saved while you look at another part
   of it.
 - Turning the iPad no longer rebuilds the window a moment after the turn, with the toolbar and the note jumping and, in
@@ -98,6 +103,13 @@ versions follow [semantic versioning](https://semver.org).
   slides out of the way, and back in when you turn the iPad to landscape; put away by hand, it stays away. Opened in
   portrait with a note, Notebook shows the note without it. Shown in portrait, it sits next to the note rather than
   over it.
+- On iPhone and iPad, the folder Keep Notes on This iPhone uses is called On My iPhone (On My iPad) on the first screen,
+  in search and in Settings, also where you chose it before. It was called "Documents", its folder's name on disk.
+- On iPhone and iPad, a list no longer says "No additional text" under notes Notebook hasn't read yet, as on the first
+  launch with many notes: it shows their dates until their first lines come in.
+- On the iPhone's welcome screen, the last lines no longer run under the Choose a Folder button.
+- On the iPhone, going back to the first screen from a note no longer pushes its list down once you are there: the note
+  you were in is already at the top of Recent while you go back.
 - In the Mac's sidebar, Tab now goes on into the note that is open, with the caret where it was, as Tab goes from the
   list to the note in Notes and Mail. Moving a file to the Trash from the sidebar opens the next file in its folder, or
   the one before it at the end, as Notes shows the next note; before, the note opened before it came back, wherever it
