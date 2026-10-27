@@ -206,6 +206,11 @@ public final class Workspace: NSObject {
     @ObservationIgnored private var surveys = 0
     @ObservationIgnored private var surveysDone = 0
     @ObservationIgnored private var afterSurvey: [() -> Void] = []
+    #if os(iOS)
+    /// The first launch of a version that keeps where the app's Documents folder is: a location the survey finds moved
+    /// says where it was before.
+    @ObservationIgnored private var learnsFormerDocuments = false
+    #endif
     /// The file to show in the sidebar once the folders down to it have been read.
     @ObservationIgnored private var revealing: URL?
     @ObservationIgnored private var pendingFolders = Set<String>()
@@ -431,10 +436,8 @@ public final class Workspace: NSObject {
             guard let index = locations.firstIndex(where: { $0.id == survey.id }) else { continue }
             if survey.url.path != locations[index].path {
                 #if os(iOS)
-                // In the app's Documents folder, which an update moved.
-                if let former = Self.formerDocuments(moved: locations[index].path, to: survey.url.path, documents: Self.documentsPath) {
-                    follow(movedDocuments: former)
-                }
+                // In the app's Documents folder, which the update from a version that didn't keep where it was moved.
+                if learnsFormerDocuments, let former = survey.formerDocuments { follow(movedDocuments: former) }
                 #endif
                 // Moved since last time: the bookmark found it.
                 locations[index].path = survey.url.path
@@ -479,6 +482,13 @@ public final class Workspace: NSObject {
         updateHiddenPaths()
         index.rebuild(locations)
         scheduleReminders()
+        #if os(iOS)
+        if learnsFormerDocuments {
+            // Known from now on, also if no location said where it was before.
+            learnsFormerDocuments = false
+            UserDefaults.standard.set(Self.documentsPath, forKey: "documentsFolder")
+        }
+        #endif
         let waiting = afterSurvey
         afterSurvey = []
         waiting.forEach { $0() }
@@ -1004,6 +1014,11 @@ public final class Workspace: NSObject {
         #endif
     }
 
+    /// A to-do kept by its note's path, where it is now.
+    nonisolated static func rerooted(_ todo: TodoReference) -> TodoReference {
+        TodoReference(url: URL(fileURLWithPath: rerooted(todo.url.path)), line: todo.line, source: todo.source)
+    }
+
     /// `path`, when it is in one of the folders `former`, in the same place in `documents`; otherwise as it is.
     nonisolated static func rerooted(_ path: String, from former: [String], into documents: String) -> String {
         let plain = HiddenFolders.withoutPrivate(path)
@@ -1027,6 +1042,15 @@ public final class Workspace: NSObject {
         return folder
     }
 
+    /// The earlier Documents folder a location was in (`formerDocuments(moved:to:documents:)`), when that folder is gone,
+    /// as an app's is after an update: a folder you moved in from another app's leaves that app's in place. Off the main
+    /// thread.
+    nonisolated static func movedByUpdate(_ old: String, to new: String, documents: String) -> String? {
+        guard old != new, let former = formerDocuments(moved: old, to: new, documents: documents),
+              !FileManager.default.fileExists(atPath: former) else { return nil }
+        return former
+    }
+
     /// `path` as it stays when an update of the app moves its Documents folder (`documents`): from there, when it is in
     /// it.
     nonisolated static func lastingPath(_ path: String, documents: String) -> String {
@@ -1046,12 +1070,15 @@ public final class Workspace: NSObject {
     }
 
     /// At launch: the Documents folder isn't where it was last time when an update of the app moved it. Before 1.1
-    /// nothing kept where it was, and a location in it says it once its bookmark finds it (`surveyed`).
+    /// nothing kept where it was, and a location in it says it once its bookmark finds it (`surveyed`), which then
+    /// keeps where it is.
     private func followMovedFolder() {
-        let documents = Self.documentsPath
-        let last = UserDefaults.standard.string(forKey: "documentsFolder")
-        UserDefaults.standard.set(documents, forKey: "documentsFolder")
-        if let last { follow(movedDocuments: last) }
+        guard let last = UserDefaults.standard.string(forKey: "documentsFolder") else {
+            learnsFormerDocuments = true
+            return
+        }
+        follow(movedDocuments: last)
+        UserDefaults.standard.set(Self.documentsPath, forKey: "documentsFolder")
     }
 
     /// What is kept by path in `former`, an earlier Documents folder of this device, follows it to the one now: the
@@ -1060,7 +1087,6 @@ public final class Workspace: NSObject {
     private func follow(movedDocuments former: String) {
         let documents = Self.documentsPath
         guard HiddenFolders.withoutPrivate(former) != HiddenFolders.withoutPrivate(documents), !Self.formerDocuments.contains(former) else { return }
-        UserDefaults.standard.set(Array(([former] + Self.formerDocuments).prefix(8)), forKey: "formerDocuments")
         let moved = { (path: String) in Self.rerooted(path, from: [former], into: documents) }
         if favorites.contains(where: { moved($0) != $0 }) {
             favorites = favorites.map(moved)
@@ -1081,6 +1107,8 @@ public final class Workspace: NSObject {
             hidden.move(folder, to: HiddenFolders.withoutPrivate(documents))
             reminders.move(folder, to: HiddenFolders.withoutPrivate(documents))
         }
+        // Last: stopped before here, the next launch does it all again.
+        UserDefaults.standard.set(Array(([former] + Self.formerDocuments).prefix(8)), forKey: "formerDocuments")
     }
     #endif
 

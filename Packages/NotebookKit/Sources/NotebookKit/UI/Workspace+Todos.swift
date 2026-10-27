@@ -545,6 +545,8 @@ extension Workspace {
         start()
         whenSurveyed { [weak self] in
             guard let self else { return }
+            // From a notification shown before an update of the app, which moved its folder: known now.
+            let todo = Self.rerooted(todo)
             guard FileManager.default.fileExists(atPath: todo.url.path) else { return beep() }
             showWindow?()
             #if os(macOS)

@@ -25,6 +25,8 @@ struct LocationSurvey: Sendable {
     var bookmark: Data?
     /// The name the Finder gives a new location's folder.
     var name: String?
+    /// The app's Documents folder of before an update, which moved this location from there and is gone.
+    var formerDocuments: String?
     var linked: [LinkedFolder]
     /// The location's top, when it had to be read (again).
     var top: [FileNode.Listing]?
@@ -39,6 +41,9 @@ struct LocationSurvey: Sendable {
             survey.url = url
             survey.bookmark = resolved.fresh
         }
+        #if os(iOS)
+        survey.formerDocuments = Workspace.movedByUpdate(job.url.path, to: url.path, documents: Workspace.documentsPath)
+        #endif
         if job.isNew {
             let made = LocationStore.bookmark(for: url)
             survey.bookmark = made.bookmark
