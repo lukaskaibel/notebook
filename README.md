@@ -576,7 +576,8 @@ there are.
 
 On iPhone and iPad, **Choose a Folder** opens the Files app's picker: pick iCloud Drive itself to have everything you
 write on the Mac, or any folder in it or on the device. **Keep Notes on This iPhone** (or iPad) uses Notebook's own
-folder, which the Files app shows under On My iPhone › Notebook. Add more in Settings, from the ⋯ menu.
+folder, which the Files app shows under On My iPhone › Notebook and Notebook calls On My iPhone. Add more in Settings,
+from the ⋯ menu.
 
 To look around without your own notes, choose **Try Sample Notes…** on the first screen. It writes made-up notes, a
 drawing, pictures and PDFs to a new folder Sample Notes, in the folder you pick on the Mac and in Notebook's own folder
