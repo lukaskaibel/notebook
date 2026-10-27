@@ -259,17 +259,17 @@ in To-dos to mark it in progress or cancelled.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/todos-dark.webp">
-  <img alt="To-dos selected at the top of the sidebar, with 4 next to it. The list shows Overdue with Return the library books from yesterday in red; Today with Water the plants, every week, Pick up the dry cleaning at 5:30 PM, its two notes under it, and Send the map to Mia at 7:00 PM; Tomorrow with Book a table for Saturday, in no note, the note Questions for Dr. Weber and Market shopping, with its sub-to-dos Tomatoes and basil, Burrata and Bags, ticked, under it; then Next 7 Days and Later. Each row has a circle to tick it and the note it is in, and each group but Overdue ends with New To-do" src="Design/screenshots/todos-light.webp">
+  <img alt="To-dos selected at the top of the sidebar, with 4 next to it. The list shows Overdue with Return the library books from yesterday in red; Today with Water the plants, every week, Pick up the dry cleaning at a time later in the day, its two notes under it, and Send the map to Mia later still; Tomorrow with Book a table for Saturday, in no note, the note Questions for Dr. Weber and Market shopping, with its sub-to-dos Tomatoes and basil, Burrata and Bags, ticked, under it; then Next 7 Days and Later. Each row has a circle to tick it and the note it is in, and each group but Overdue ends with New To-do" src="Design/screenshots/todos-light.webp">
 </picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/todo-editing-dark.webp">
-  <img alt="Pick up the dry cleaning being edited in To-dos: a Notes line in small grey letters under its words, its two points, and below them capsules: Today and 5:30 PM in blue, each with an ×, and grey symbols for a place and a sub-to-do, with the note Errands at the end of the row. Under Today a glass dropdown is open with “thursday in 3 weeks” typed in its field and Thursday in 3 Weeks lit under it, with its date" src="Design/screenshots/todo-editing-light.webp">
+  <img alt="Pick up the dry cleaning being edited in To-dos: a Notes line in small grey letters under its words, its two points, and below them capsules: Today and its time in blue, each with an ×, and grey symbols for a place and a sub-to-do, with the note Errands at the end of the row. Under Today a glass dropdown is open with “thursday in 3 weeks” typed in its field and Thursday in 3 Weeks lit under it, with its date" src="Design/screenshots/todo-editing-light.webp">
 </picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/todo-reminder-dark.webp">
-  <img alt="The note Errands, its to-dos followed by pills: Yesterday in red, Today 5:30 PM, the pharmacy at Rosenthaler Platz and a day next month on Renew the passport, which is half done, with a sub-to-do ticked and one not under it; every week and Today on Water the plants; Sell the old bike is cancelled, grey and struck through. Remind Me is open for Buy plasters, with Date and Time off and Location on: the pharmacy on a map with the circle around it, and Arriving or Leaving" src="Design/screenshots/todo-reminder-light.webp">
+  <img alt="The note Errands, its to-dos followed by pills: Yesterday in red, Today with a time, the pharmacy at Rosenthaler Platz and a day next month on Renew the passport, which is half done, with a sub-to-do ticked and one not under it; every week and Today on Water the plants; Sell the old bike is cancelled, grey and struck through. Remind Me is open for Buy plasters, with Date and Time off and Location on: the pharmacy on a map with the circle around it, and Arriving or Leaving" src="Design/screenshots/todo-reminder-light.webp">
 </picture>
 
 ### Remind me of a note

@@ -33,6 +33,17 @@ enum DemoLibrary {
         return TodoDue(date, time: hour != nil).markdown
     }
 
+    /// A time later today, at the next half hour `hours` from now but no later than `latest` (hour, minute): the to-dos
+    /// due today stay under Today whenever the samples are made, also in the evening, rather than turning overdue at a
+    /// fixed hour.
+    private static func later(by hours: Int, latest: (Int, Int), now: Date = .now) -> String {
+        let calendar = Calendar.current
+        let minutes = calendar.component(.hour, from: now) * 60 + calendar.component(.minute, from: now) + hours * 60
+        let at = min((minutes + 29) / 30 * 30, latest.0 * 60 + latest.1)
+        let date = calendar.date(bySettingHour: at / 60, minute: at % 60, second: 0, of: now) ?? now
+        return TodoDue(date, time: true).markdown
+    }
+
     static let pharmacy = TodoPlace(name: "Pharmacy at Rosenthaler Platz", latitude: 52.529_6, longitude: 13.401_3)
 
     /// Earlier versions of the Kyoto trip, written on a Mac and an iPhone over the last two weeks, to show version
@@ -166,9 +177,9 @@ enum DemoLibrary {
         Small things for this week, each with when (or where) it should come up.
 
         - [ ] Return the library books \(due(-1))
-        - [ ] Pick up the dry cleaning \(due(0, 17, 30))
+        - [ ] Pick up the dry cleaning \(later(by: 2, latest: (23, 0)))
             - The ticket is in the blue jacket
-            - Closes at 6
+            - Two shirts and the grey coat
         - [ ] Buy plasters \(pharmacy.markdown)
         - [/] Renew the passport \(due(24))
             - [x] Two photos from the booth at the station
@@ -217,7 +228,7 @@ enum DemoLibrary {
 
         ![Drawing](.assets/Getting%20to%20the%20ryokan%20drawing.png)
 
-        - [ ] Send the map to Mia \(due(0, 19))
+        - [ ] Send the map to Mia \(later(by: 3, latest: (23, 30)))
         - [x] Ask about a late check-in
 
         """)

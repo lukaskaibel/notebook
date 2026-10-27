@@ -2,8 +2,9 @@
 # Takes the App Store screenshots of the iPhone and iPad app on the sample notes, ten each, with a caption above the
 # screen: a 6.9-inch iPhone (1320 x 2868) and a 13-inch iPad (2064 x 2752), mostly light and a few dark, with a clean
 # status bar. They end up in Design/screenshots/app-store/{iphone,ipad} as 01-… to 10-…, in the store's order.
-#   Tools/app-store-screenshots.sh            both
-#   Tools/app-store-screenshots.sh iphone     one of them
+#   Tools/app-store-screenshots.sh                         both
+#   Tools/app-store-screenshots.sh iphone                  one of them
+#   Tools/app-store-screenshots.sh both 04-todos 05-widgets   only those slots, keeping the others
 # Builds a Debug copy under a bundle identifier of its own and installs it afresh for every picture, on simulators of
 # the script's own (made the first time, on iOS 27.0, which has the iPhone 17 Pro Max), each time on new sample notes
 # (Files/DemoLibrary.swift). The scene is set up through the debug remote (Debug/DebugRemote+UIKit.swift), as in
@@ -17,6 +18,10 @@ cd "$(dirname "$0")/.."
 python3 -c "import PIL, numpy" 2>/dev/null || { echo "Needs Pillow and NumPy: pip3 install pillow numpy" >&2; exit 1; }
 
 only=${1:-}
+[ "$only" = both ] && only=""
+# The slots to take; all of them when none are named.
+slots=" ${*:2} "
+wanted() { [ "$slots" = "  " ] || [[ "$slots" == *" $1 "* ]]; }
 work=build/app-store-screenshots/ios
 raw=$work/raw
 out=Design/screenshots/app-store
@@ -95,6 +100,7 @@ layout() {
 shot() {
   local udid=$1 device=$2 name=$3 theme=$4 line=$5 smaller=$6
   shift 6
+  wanted "$name" || return 0
   launch "$udid" "$theme" "$@"
   sleep 1
   xcrun simctl io "$udid" screenshot "$raw/$device/$name.png" > /dev/null 2>&1
@@ -108,6 +114,7 @@ shot() {
 widgets() {
   local udid=$1 device=$2 name=$3 line=$4 smaller=$5 commands=$work/remote
   shift 5
+  wanted "$name" || return 0
   xcrun simctl shutdown "$udid"
   rm -f ~/Library/Developer/CoreSimulator/Devices/"$udid"/data/Library/SpringBoard/IconState.plist
   xcrun simctl boot "$udid"
@@ -170,7 +177,7 @@ if [ "$only" != ipad ]; then
   echo "iPhone…"
   iphone=$(simulator "Notebook App Store iPhone" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max)
   mkdir -p "$out/iphone" "$raw/iphone"
-  rm -f "$out/iphone"/*.png
+  [ "$slots" = "  " ] && rm -f "$out/iphone"/*.png
   # Each scene waits a few seconds first, until the sample notes are read and their links found.
   shot "$iphone" iphone 01-note light "The ease of Notes." "$notes" "wait 6" "open Travel/Kyoto trip.md" "wait 3"
   # One folder per screen, as in the Files app: the notes among the trip's PDFs and photo.
@@ -203,7 +210,7 @@ if [ "$only" != iphone ]; then
   echo "iPad…"
   ipad=$(simulator "Notebook App Store iPad" com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB)
   mkdir -p "$out/ipad" "$raw/ipad"
-  rm -f "$out/ipad"/*.png
+  [ "$slots" = "  " ] && rm -f "$out/ipad"/*.png
   # In portrait the note fills the screen; it shows its outline where it has headings.
   shot "$ipad" ipad 01-note light "The ease of Notes." "$notes" "wait 8" "open Travel/Kyoto trip.md" "outline" "wait 3"
   # The sidebar next to the note, the trip's folder open with its PDFs and photo among the notes.
