@@ -294,6 +294,8 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     public func textViewDidBeginEditing(_ textView: UITextView) {
         // A tap in the text while drawing stops drawing and puts the caret there.
         if isDrawing { endDrawing() }
+        // Before the keyboard comes up, for the bar to come up with it as it should be.
+        updateCaretContext()
         delegate?.editorEditingDidChange(self)
     }
 
@@ -429,7 +431,10 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         let hiding = notification.name == UIResponder.keyboardWillHideNotification
         // Taller than the bar above it: the touch keyboard, not just the bar a keyboard with keys leaves.
         let bar = textView.inputAccessoryView?.bounds.height ?? 0
-        HardwareKeyboard.shared.isTouchKeyboardShown = !hiding && keyboard.intersects(window.bounds) && keyboard.height - bar > 120
+        let isOnScreen = !hiding && keyboard.intersects(window.bounds)
+        HardwareKeyboard.shared.isTouchKeyboardShown = isOnScreen && keyboard.height - bar > 120
+        // The bar and the keyboard's shortcuts came up without the touch keyboard, which only a keyboard with keys does.
+        if isOnScreen, !HardwareKeyboard.shared.isTouchKeyboardShown { HardwareKeyboard.shared.shortcutsCameAlone() }
         let overlap = hiding ? 0 : max(0, frame.maxY - keyboard.minY - textView.safeAreaInsets.bottom)
         guard textView.contentInset.bottom != overlap else { return }
         textView.contentInset.bottom = overlap

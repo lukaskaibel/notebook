@@ -47,6 +47,12 @@ final class HardwareKeyboard {
         isAttached = true
     }
 
+    /// The keyboard's shortcuts came up without the touch keyboard, as they do for a keyboard that hasn't told the
+    /// game controller framework yet (one just attached, the Simulator's): there is one.
+    func shortcutsCameAlone() {
+        isAttached = true
+    }
+
     private func changed() {
         NotificationCenter.default.post(name: Self.didChange, object: nil)
     }
