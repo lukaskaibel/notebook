@@ -30,27 +30,11 @@ struct PaletteActions {
     var addLocation: () -> Void
 }
 
-/// How well `text` matches `query` typed loosely: its letters in order, more for letters in a row and at the start of
-/// words. Nil when they aren't all there. As in Issues.
+/// How well `text` matches `query`, as search ranks names: what was typed in it, or loosely, its letters in order or
+/// a letter wrong (`FuzzyMatch`). Nil when it doesn't.
 func fuzzyScore(_ query: String, _ text: String) -> Int? {
-    let q = Array(SearchIndex.fold(query).filter { !$0.isWhitespace })
-    guard !q.isEmpty else { return 0 }
-    let t = Array(SearchIndex.fold(text))
-    var score = 0
-    var qi = 0
-    var streak = 0
-    for (ti, character) in t.enumerated() where qi < q.count {
-        if character == q[qi] {
-            streak += 1
-            score += 2 + streak * 2
-            if ti == 0 || !t[ti - 1].isLetter && !t[ti - 1].isNumber { score += 6 }
-            qi += 1
-        } else {
-            streak = 0
-        }
-    }
-    guard qi == q.count else { return nil }
-    return score - t.count / 8
+    guard let query = SearchCorpus.Query(query) else { return 0 }
+    return SearchCorpus.score(SearchIndex.fold(text), query)
 }
 
 @MainActor

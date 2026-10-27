@@ -134,7 +134,7 @@ struct CommandPalette: View {
 
     private func configure() {
         if case .move = mode {
-            search.limits = SearchCorpus.Limits(files: 0, folders: 30, headings: 0, texts: 0, pictures: 0)
+            search.limits = SearchCorpus.Limits(files: 0, folders: 30, headings: 0, texts: 0, pictures: 0, others: 0)
             search.offersNewNote = false
         } else {
             search.limits = SearchCorpus.Limits(files: 6, folders: 4, headings: 4, texts: 8, pictures: 4)
@@ -275,22 +275,32 @@ struct CommandPalette: View {
         }
         // The results that go with what was typed: while they are on their way, the last ones stay.
         let results = search.sections
-        let found = matching(commands, trimmed).prefix(8).map { commandRow($0, section: "Commands") }
+        // Commands only a bit like what was typed go last, as names do: "del" has its letters in Show Hidden Folders.
+        let scored = scoredMatching(commands, trimmed)
+        let found = scored.filter { $0.score >= FuzzyMatch.goodScore }.prefix(8).map { commandRow($0.command, section: "Commands") }
+        let similar = scored.filter { $0.score < FuzzyMatch.goodScore }.prefix(3).map { commandRow($0.command, section: "Similar Commands") }
         // A command named like what was typed comes first; otherwise after the files and folders.
         let folded = SearchIndex.fold(trimmed)
         let commandFirst = found.first.map { row in
             SearchIndex.fold(row.title).split(separator: " ").contains { $0.hasPrefix(folded) }
         } ?? false
         let names = results.filter { $0.title == "Files" || $0.title == "Folders" }
-        let rest = results.filter { $0.title != "Files" && $0.title != "Folders" }
-        return commandFirst ? found + resultRows(results) : resultRows(names) + found + resultRows(rest)
+        let rest = results.filter { $0.title != "Files" && $0.title != "Folders" && $0.title != nil }
+        // New Note, at the very end.
+        let new = results.filter { $0.title == nil }
+        let first = commandFirst ? found + resultRows(names) : resultRows(names) + found
+        return first + resultRows(rest) + similar + resultRows(new)
     }
 
     private func matching(_ commands: [PaletteCommand], _ filter: String) -> [PaletteCommand] {
         guard !filter.isEmpty else { return commands }
-        return commands.compactMap { command in command.score(filter).map { (command, $0) } }
+        return scoredMatching(commands, filter).map(\.command)
+    }
+
+    /// The commands that match, best first.
+    private func scoredMatching(_ commands: [PaletteCommand], _ filter: String) -> [(command: PaletteCommand, score: Int)] {
+        commands.compactMap { command in command.score(filter).map { (command, $0) } }
             .sorted { $0.1 > $1.1 }
-            .map(\.0)
     }
 
     private func commandRow(_ command: PaletteCommand, section: String) -> PaletteRow {

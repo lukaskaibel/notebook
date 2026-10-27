@@ -75,6 +75,54 @@ final class SearchTests: XCTestCase {
         XCTAssertEqual(try search(index, "trip kyoto").files.map(\.name), ["Kyoto trip"], "every word, in any order")
     }
 
+    /// Names are found loosely, as fzf and Spotlight find them: their letters in order, best at the start of words and
+    /// together, or with a letter wrong. Good matches are listed with the files; names that only have the letters in
+    /// order somewhere come last, below the notes with the words in them, rather than crowding the files (#216).
+    func testNamesAreFoundLooselyTheWeakOnesLast() async throws {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        try write("Travel/Kyoto trip.md", "Five days.\n", modified: start)
+        try write("Travel/Getting to the ryokan.md", "By train.\n", modified: start)
+        try write("Work/Workout family chapter notes 13.md", "Squats.\n", modified: start.addingTimeInterval(60))
+        try write("Work/Summary workout launch 23.md", "Done.\n", modified: start.addingTimeInterval(60))
+        try write("Packing.md", "For Kyoto, pack light.\n", modified: start)
+        let index = try await makeIndex()
+
+        var results = try search(index, "kyo")
+        XCTAssertEqual(results.files.map(\.name), ["Kyoto trip"], "only the name with it in it among the files")
+        XCTAssertEqual(results.texts.map(\.item.name), ["Packing"])
+        XCTAssertEqual(results.others.map(\.name), ["Workout family chapter notes 13"], "wor-k-out famil-y chapter n-o-tes, last")
+
+        XCTAssertEqual(try search(index, "kytr").files.map(\.name), ["Kyoto trip"], "the starts of its words")
+        XCTAssertEqual(try search(index, "gttr").files.map(\.name), ["Getting to the ryokan"])
+        XCTAssertEqual(try search(index, "ryokna").files.map(\.name), ["Getting to the ryokan"], "two letters swapped")
+        XCTAssertEqual(try search(index, "kyoot trip").files.map(\.name), ["Kyoto trip"], "a word with a letter wrong, the other right")
+        results = try search(index, "ryokan")
+        XCTAssertEqual(results.files.map(\.name), ["Getting to the ryokan"])
+        XCTAssertEqual(results.others.map(\.name), ["Summary workout launch 23"], "summa-ry-, w-o-r-k-out, l-a-u-n-ch")
+        XCTAssertTrue(try search(index, "ky").others.isEmpty, "two letters are in order in most names")
+
+        let sections = SearchSection.sections(for: try search(index, "kyo"), query: try XCTUnwrap(SearchCorpus.Query("kyo")))
+        XCTAssertEqual(sections.map(\.title), ["Files", "In Notes and PDFs", "Similar Names", nil])
+    }
+
+    func testLooseMatchesAreScoredByHowTheLettersAreFound() {
+        func quality(_ word: String, _ name: String) -> Double? { FuzzyMatch.quality([word], in: name) }
+        XCTAssertEqual(quality("kyoto", "my kyoto trip"), 1, "as it is")
+        XCTAssertGreaterThanOrEqual(quality("kytr", "kyoto trip") ?? 0, FuzzyMatch.good)
+        XCTAssertGreaterThan(quality("kytr", "kyoto trip") ?? 0, quality("kytr", "sky tree") ?? 0, "at word starts rather than inside")
+        XCTAssertLessThan(quality("kyo", "workout family chapter notes 13") ?? 1, FuzzyMatch.good)
+        XCTAssertEqual(quality("ryokna", "getting to the ryokan"), FuzzyMatch.oneTypo, "swapped")
+        XCTAssertEqual(quality("recieve", "how to receive"), FuzzyMatch.oneTypo)
+        XCTAssertEqual(quality("bugdet", "budget 2026"), FuzzyMatch.oneTypo)
+        XCTAssertGreaterThanOrEqual(quality("quaterly", "quarterly plan") ?? 0, FuzzyMatch.good, "a letter left out")
+        XCTAssertEqual(quality("photosinthesis", "photosynthesis notes"), FuzzyMatch.oneTypo, "a letter changed")
+        XCTAssertEqual(quality("photosinthesys", "photosynthesis"), FuzzyMatch.twoTypos, "two in a long word")
+        XCTAssertNil(quality("lyoto", "kyoto trip"), "the first letter is right")
+        XCTAssertNil(quality("kyp", "kyoto"), "no typos in short words")
+        XCTAssertNil(quality("trp", "party"), "the letters in order")
+        XCTAssertNotNil(quality("日ノ", "日本語のノート"), "letters of more than one byte")
+    }
+
     /// A name that is exactly what was typed comes first wherever it is in the corpus, the last one included.
     func testTheLastNameMatchesWhole() throws {
         func entry(_ name: String, modified: TimeInterval) -> SearchIndex.Entry {
@@ -182,6 +230,8 @@ final class SearchTests: XCTestCase {
         XCTAssertNotNil(fuzzyScore("nf", "New Folder"))
         XCTAssertNil(fuzzyScore("fn", "New Folder"))
         XCTAssertGreaterThan(fuzzyScore("new", "New Note") ?? 0, fuzzyScore("new", "Show Only Notes, Not Files") ?? 0)
+        XCTAssertGreaterThanOrEqual(fuzzyScore("seting", "Settings") ?? 0, FuzzyMatch.goodScore, "a letter left out")
+        XCTAssertLessThan(fuzzyScore("del", "Show Hidden Folders") ?? 0, FuzzyMatch.goodScore, "only a bit like it, so last")
         let command = PaletteCommand(id: "trash", title: "Move to Trash", symbol: "trash", section: "", keywords: ["delete"]) {}
         XCTAssertNotNil(command.score("dele"))
     }

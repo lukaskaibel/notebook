@@ -15,13 +15,15 @@ final class SearchBenchmarkTests: XCTestCase {
         start = CACurrentMediaTime()
         let corpus = index.currentCorpus()
         print(String(format: "corpus of %d files and %d texts in %.0f ms", corpus.items.count, corpus.documents.count, (CACurrentMediaTime() - start) * 1000))
-        for word in ["meeting", "photosynthesis", "zebra", "quarterly budget"] {
+        // The last ones match only loosely: with letters wrong, or by the starts of words.
+        for word in ["meeting", "photosynthesis", "zebra", "quarterly budget", "meetnig", "photosinthesis", "qrtly bdgt"] {
             var line = "\(word):"
             for end in 1...word.count {
                 guard let query = SearchCorpus.Query(String(word.prefix(end))) else { continue }
                 start = CACurrentMediaTime()
                 let results = corpus.search(query)
-                line += String(format: " %@=%.1f(%d/%d)", query.text, (CACurrentMediaTime() - start) * 1000, results.files.count, results.texts.count)
+                line += String(format: " %@=%.1f(%d/%d/%d)", query.text, (CACurrentMediaTime() - start) * 1000, results.files.count,
+                               results.texts.count, results.others.count)
             }
             print(line)
         }

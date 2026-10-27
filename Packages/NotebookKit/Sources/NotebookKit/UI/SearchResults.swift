@@ -50,8 +50,8 @@ struct SearchItem: Identifiable, Hashable {
     }
 }
 
-/// The results in their sections: Recent, Files, Folders, Headings, In Notes and PDFs, In Pictures and Drawings, and
-/// New Note. The Mac's search field shows them in its suggestions menu, ⌘K in its list, iPhone and iPad in a list.
+/// The results in their sections: Recent, Files, Folders, Headings, In Notes and PDFs, In Pictures and Drawings,
+/// Similar Names, and New Note. The Mac's search field shows them in its suggestions menu, ⌘K in its list, iPhone and iPad in a list.
 struct SearchSection: Identifiable {
     var title: String?
     var items: [SearchItem]
@@ -112,6 +112,12 @@ struct SearchSection: Identifiable {
                 }
                 return SearchItem(result: result, title: title, place: hit.item.place, kind: hit.item.kind, symbol: symbol,
                                   snippet: hit.snippet, matches: hit.matches)
+            }))
+        }
+        // Last: names with the letters typed, not much like it, for when nothing above is what you were looking for.
+        if !results.others.isEmpty {
+            sections.append(SearchSection(title: "Similar Names", items: results.others.map { item in
+                SearchItem(result: .file(item.url), title: item.name, place: item.place, kind: item.kind, isInCloud: item.isInCloud)
             }))
         }
         if newNote {

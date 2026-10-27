@@ -943,14 +943,7 @@ public final class SearchIndex {
             let before = name.utf8[name.utf8.index(name.utf8.startIndex, offsetBy: offset - 1)]
             return before == UInt8(ascii: " ") || before == UInt8(ascii: "-") || before == UInt8(ascii: "_") ? 60 : 40
         }
-        var letters = name.unicodeScalars.makeIterator()
-        for wanted in query.unicodeScalars {
-            while true {
-                guard let letter = letters.next() else { return nil }
-                if letter == wanted { break }
-            }
-        }
-        return 10
+        return FuzzyMatch.quality([query], in: name).map(FuzzyMatch.score)
     }
 
     /// Where `query` is in `text`, in bytes. Both are folded alike, so their bytes match where their letters do; this
