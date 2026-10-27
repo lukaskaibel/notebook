@@ -21,6 +21,12 @@ final class FileWatcher {
         Stream.queue.async { stream.stop() }
     }
 
+    /// Calls `done` on the main queue once every watcher made so far is watching: what changes from then on is told
+    /// about. For tests, which change files elsewhere as soon as the locations have been read.
+    static func whenWatching(_ done: @escaping @Sendable () -> Void) {
+        Stream.queue.async { DispatchQueue.main.async(execute: done) }
+    }
+
     /// The event stream, only touched on `queue`, where it is started, stopped and tells about changes.
     private final class Stream: @unchecked Sendable {
         static let queue = DispatchQueue(label: "Notebook file events", qos: .utility)

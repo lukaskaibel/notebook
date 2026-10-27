@@ -30,7 +30,7 @@ final class NoteLoadingTests: XCTestCase {
     }
 
     /// Runs the main queue until `condition` holds, for at most `timeout` seconds.
-    private func waitUntil(_ timeout: TimeInterval = 5, _ condition: () -> Bool) {
+    private func waitUntil(_ timeout: TimeInterval = TestRun.patience, _ condition: () -> Bool) {
         let end = Date().addingTimeInterval(timeout)
         while !condition(), Date() < end { RunLoop.main.run(until: Date().addingTimeInterval(0.01)) }
     }

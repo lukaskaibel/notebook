@@ -851,7 +851,7 @@ public final class Workspace: NSObject {
     /// Reading the text in pictures, scans and drawings, or not, from Settings.
     func readTextInPictures(_ reads: Bool) {
         // Never in tests: they make pictures of their own and look at search before it could have read them.
-        guard reads, ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else {
+        guard reads, !ProcessInfo.isTesting else {
             recognizer.stop()
             return
         }

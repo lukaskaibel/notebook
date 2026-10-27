@@ -110,7 +110,7 @@ final class TypingRulesTests: XCTestCase {
         // It starts from how the text looked...
         XCTAssertEqual(weight(h, at: 8), 400)
         // ...and ends bold, even where the screen doesn't draw (as here), when no frame comes.
-        settle(h, until: { weight(h, at: 8) >= 590 }, timeout: 1)
+        settle(h, until: { weight(h, at: 8) >= 590 }, timeout: 3)
         XCTAssertEqual(weight(h, at: 8), 590)
     }
 

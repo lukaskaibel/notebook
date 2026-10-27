@@ -67,7 +67,7 @@ final class LinkFollowingTests: XCTestCase {
         return (workspace, try XCTUnwrap(window.undoManager))
     }
 
-    private func until(_ what: String, seconds: Double = 5, _ condition: () -> Bool) async throws {
+    private func until(_ what: String, seconds: Double = TestRun.patience, _ condition: () -> Bool) async throws {
         let end = Date().addingTimeInterval(seconds)
         while !condition() {
             guard Date() < end else { return XCTFail("never: \(what)") }

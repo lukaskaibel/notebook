@@ -24,7 +24,7 @@ final class SharedNotesTests: XCTestCase {
         try Data([0xFF, 0xD8, 0xFF]).write(to: given.appendingPathComponent("Torii.jpg"))
         try Data("%PDF-1.4".utf8).write(to: given.appendingPathComponent("Tickets.pdf"))
         SharedNotes.folder = outbox
-        SharedNotes.defaults = UserDefaults(suiteName: "notebook-shared-tests")
+        SharedNotes.defaults = TestRun.settings()
         UserDefaults.standard.set(library.path, forKey: "NotebookLibrary")
         UserDefaults.standard.set("Notes", forKey: "NotebookLibraryName")
         UserDefaults.standard.removeObject(forKey: "expandedFolders")
@@ -35,7 +35,6 @@ final class SharedNotesTests: XCTestCase {
             UserDefaults.standard.removeObject(forKey: key)
         }
         window?.close()
-        SharedNotes.defaults?.removePersistentDomain(forName: "notebook-shared-tests")
         SharedNotes.defaults = nil
         SharedNotes.folder = nil
         try? FileManager.default.removeItem(at: library.deletingLastPathComponent())
@@ -60,7 +59,7 @@ final class SharedNotesTests: XCTestCase {
         return note
     }
 
-    private func until(_ what: String, seconds: Double = 5, _ condition: () -> Bool) async throws {
+    private func until(_ what: String, seconds: Double = TestRun.patience, _ condition: () -> Bool) async throws {
         let end = Date().addingTimeInterval(seconds)
         while !condition() {
             guard Date() < end else { return XCTFail("never: \(what)") }

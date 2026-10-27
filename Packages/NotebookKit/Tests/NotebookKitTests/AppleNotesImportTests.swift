@@ -524,7 +524,7 @@ final class AppleNotesImportTests: XCTestCase {
         XCTAssertTrue(exists(inbox.appendingPathComponent(".assets/mine.png")), "a picture that was there went too")
     }
 
-    private func until(_ what: String, seconds: Double = 5, _ condition: () -> Bool) async throws {
+    private func until(_ what: String, seconds: Double = TestRun.patience, _ condition: () -> Bool) async throws {
         let end = Date().addingTimeInterval(seconds)
         while !condition() {
             guard Date() < end else { return XCTFail("never: \(what)") }
