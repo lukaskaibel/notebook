@@ -43,6 +43,8 @@ final class VersionHistoryTests: XCTestCase {
         window.contentView!.addSubview(sidebar.scrollView)
         workspace.editor.view.frame = NSRect(x: 260, y: 0, width: 640, height: 600)
         window.contentView!.addSubview(workspace.editor.view)
+        // As the app's window says once it is there: the menus act on its note.
+        workspace.mainWindowOpened()
         try await until("the library was read") { workspace.hasReadLocations && workspace.reader.isIdle }
         for folder in [papers, archive] {
             await withCheckedContinuation { done in workspace.readFolders(to: folder, including: true) { done.resume() } }
@@ -320,29 +322,39 @@ final class VersionHistoryTests: XCTestCase {
         _ = workspace
     }
 
-    func testRevertToFollowsTheWindowThatBecameKey() async throws {
+    /// Revert To, like the File and Edit menus, acts on the window you are working in: AppKit's main window, which a
+    /// sheet over it leaves as it is.
+    func testRevertToFollowsTheWindowThatBecameMain() async throws {
         _ = try await makeWindow()
         _ = FileWindows.shared
         let controller = FileWindowController(url: draft)
         let window = try XCTUnwrap(controller.window)
-        func becameKey(_ window: NSWindow?) {
-            NotificationCenter.default.post(name: NSWindow.didBecomeKeyNotification, object: window)
+        func becameMain(_ window: NSWindow?) {
+            NotificationCenter.default.post(name: NSWindow.didBecomeMainNotification, object: window)
         }
-        becameKey(window)
+        becameMain(window)
         XCTAssertTrue(Workspace.shared.keyFileNote === controller.noteDocument)
+        XCTAssertTrue(Workspace.shared.keyFileWindow === controller)
         // Its sheet up, such as the versions': still the window you are working in.
         let sheet = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 100), styleMask: [.titled], backing: .buffered, defer: false)
         window.beginSheet(sheet, completionHandler: nil)
         try await until("the sheet is up") { window.attachedSheet != nil }
-        becameKey(sheet)
+        becameMain(sheet)
         XCTAssertTrue(Workspace.shared.keyFileNote === controller.noteDocument, "the sheet's window is still the one")
-        // The main window next, the note window's sheet still up: the main window's note.
-        becameKey(self.window)
+        // Settings, say: no note to act on.
+        let settings = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 200), styleMask: [.titled], backing: .buffered, defer: false)
+        becameMain(settings)
         XCTAssertNil(Workspace.shared.keyFileNote)
-        becameKey(window)
+        XCTAssertTrue(Workspace.shared.isOtherWindowInFront)
+        // The main window next, the note window's sheet still up: the main window's note.
+        becameMain(self.window)
+        XCTAssertNil(Workspace.shared.keyFileNote)
+        becameMain(window)
+        XCTAssertFalse(Workspace.shared.isOtherWindowInFront)
         window.endSheet(sheet)
         window.close()
         XCTAssertNil(Workspace.shared.keyFileNote, "closed")
+        XCTAssertNil(Workspace.shared.keyFileWindow)
     }
 
     func testRevertToFollowsTheNoteWindowYouAreIn() async throws {
