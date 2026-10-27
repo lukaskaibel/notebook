@@ -69,6 +69,9 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- On the iPhone, Checklist in the bar at the bottom of a note you haven't tapped into starts a new to-do at the end of
+  the note, as in Notes, rather than making its first paragraph a to-do; and a photo, scan or file from Attach goes at
+  the end of the note rather than above its first line.
 - A note open in the main window and in a window of its own no longer makes Notebook hang as you type in one of them.
   Each window now shows what was typed in the other, and quitting with both open quits.
 - Leaving a note a moment after another device changed the same lines no longer loses what you typed since the last

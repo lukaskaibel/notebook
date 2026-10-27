@@ -170,7 +170,12 @@ struct AttachmentMenu: View {
     var body: some View {
         Menu {
             ForEach(AttachmentSource.available) { source in
-                Button { AttachmentPicker.shared.present(source, for: editor) } label: { Label(source.name, systemImage: source.symbol) }
+                Button {
+                    editor.placeCaretForToolbar()
+                    AttachmentPicker.shared.present(source, for: editor)
+                } label: {
+                    Label(source.name, systemImage: source.symbol)
+                }
             }
         } label: {
             Label("Attach", systemImage: "paperclip")
