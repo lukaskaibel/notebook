@@ -1,9 +1,15 @@
-// The widgets' extension: New Note on the Home Screen, the Lock Screen and the Mac's desktop, and in Control Center.
+// The widgets' extension: New Note, Today's to-dos and a note of your choice as widgets, and New Note in Control Center.
 // It is built with the app and goes inside it, so it takes the app's version, team and signing.
 #include "Shared.xcconfig"
 
 PRODUCT_BUNDLE_IDENTIFIER = $(NOTEBOOK_BUNDLE_IDENTIFIER).Widgets
 
-// On the Mac every extension runs in the sandbox, in every build. It needs nothing else, on iPhone and iPad nothing.
-CODE_SIGN_ENTITLEMENTS[sdk=macosx*] = Config/Extension-macOS.entitlements
-CODE_SIGN_ENTITLEMENTS[sdk=iphone*] =
+// On the Mac every extension runs in the sandbox, in every build. The App Group, where the app keeps the to-dos and
+// notes the widgets show, wherever the app has it (Shared.xcconfig).
+NOTEBOOK_WIDGETS_MAC_ENTITLEMENTS = Config/Extension-macOS.entitlements
+NOTEBOOK_WIDGETS_MAC_ENTITLEMENTS[config=AppStore] = Config/AppGroup-macOS.entitlements
+CODE_SIGN_ENTITLEMENTS[sdk=macosx*] = $(NOTEBOOK_WIDGETS_MAC_ENTITLEMENTS)
+NOTEBOOK_WIDGETS_IOS_ENTITLEMENTS =
+NOTEBOOK_WIDGETS_IOS_ENTITLEMENTS[sdk=iphonesimulator*] = Config/AppGroup.entitlements
+NOTEBOOK_WIDGETS_IOS_ENTITLEMENTS[config=AppStore] = Config/AppGroup.entitlements
+CODE_SIGN_ENTITLEMENTS[sdk=iphone*] = $(NOTEBOOK_WIDGETS_IOS_ENTITLEMENTS)

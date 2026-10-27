@@ -6,7 +6,7 @@ PRODUCT_BUNDLE_IDENTIFIER = $(NOTEBOOK_BUNDLE_IDENTIFIER).Share
 
 // The App Group wherever the app has it (Shared.xcconfig); on the Mac the sandbox in every build.
 NOTEBOOK_SHARE_MAC_ENTITLEMENTS = Config/Extension-macOS.entitlements
-NOTEBOOK_SHARE_MAC_ENTITLEMENTS[config=AppStore] = Config/Share-macOS.entitlements
+NOTEBOOK_SHARE_MAC_ENTITLEMENTS[config=AppStore] = Config/AppGroup-macOS.entitlements
 CODE_SIGN_ENTITLEMENTS[sdk=macosx*] = $(NOTEBOOK_SHARE_MAC_ENTITLEMENTS)
 NOTEBOOK_SHARE_IOS_ENTITLEMENTS =
 NOTEBOOK_SHARE_IOS_ENTITLEMENTS[sdk=iphonesimulator*] = Config/AppGroup.entitlements
