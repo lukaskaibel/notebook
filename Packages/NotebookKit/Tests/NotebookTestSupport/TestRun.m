@@ -1,5 +1,7 @@
 #import "NotebookTestSupport.h"
+#import <errno.h>
 #import <objc/runtime.h>
+#import <signal.h>
 #import <unistd.h>
 
 // Every `swift test` on a Mac runs as xctest, so every test run shares xctest's settings (com.apple.dt.xctest.tool),
@@ -17,17 +19,31 @@ NSURL *NotebookTestRunFolder(void) {
     return runFolder;
 }
 
+static NSString *const prefix = @"notebook-test-run-";
+
 static void removeRunFolder(void) {
     [settings removePersistentDomainForName:settingsPath];
     [NSFileManager.defaultManager removeItemAtURL:runFolder error:nil];
+}
+
+// The folders of runs that ended without getting to `removeRunFolder`: crashed, killed or stopped with Ctrl-C. A run
+// whose process is still there, this Mac's other test runs, keeps its own.
+static void removeFoldersOfEndedRuns(void) {
+    NSString *temporary = NSTemporaryDirectory();
+    for (NSString *name in [NSFileManager.defaultManager contentsOfDirectoryAtPath:temporary error:nil]) {
+        if (![name hasPrefix:prefix]) continue;
+        pid_t pid = (pid_t)[[name substringFromIndex:prefix.length] intValue];
+        if (pid <= 0 || kill(pid, 0) == 0 || errno != ESRCH) continue;
+        [NSFileManager.defaultManager removeItemAtPath:[temporary stringByAppendingPathComponent:name] error:nil];
+    }
 }
 
 @implementation NSUserDefaults (NotebookTestRun)
 
 // As the tests are loaded, before any of them runs.
 + (void)load {
-    NSString *name = [NSString stringWithFormat:@"notebook-test-run-%d-%@", getpid(),
-                      [NSUUID.UUID.UUIDString substringToIndex:8]];
+    removeFoldersOfEndedRuns();
+    NSString *name = [NSString stringWithFormat:@"%@%d-%@", prefix, getpid(), [NSUUID.UUID.UUIDString substringToIndex:8]];
     runFolder = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:name] isDirectory:YES];
     [NSFileManager.defaultManager createDirectoryAtURL:runFolder withIntermediateDirectories:YES attributes:nil error:nil];
     // A suite named by a path keeps its settings in that file (plus .plist), not in ~/Library/Preferences.

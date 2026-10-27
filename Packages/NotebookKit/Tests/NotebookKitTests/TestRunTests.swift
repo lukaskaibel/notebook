@@ -19,4 +19,14 @@ final class TestRunTests: XCTestCase {
         XCTAssertNil(SearchIndex.storeURL(), "the kept index")
         XCTAssertNil(SearchIndex.storeURL(library: "/tmp/Notes", name: "Spotlight", in: .applicationSupportDirectory), "Spotlight's record")
     }
+
+    /// Work that takes no processor time but waits, as on a lock or the disk, is too slow where the Mac has cores to
+    /// spare.
+    func testATimingSeesTheMainThreadWait() throws {
+        guard Timing.loadPerCore <= Timing.idle else {
+            throw XCTSkip(String(format: "the Mac has a load of %.1f per core", Timing.loadPerCore))
+        }
+        XCTExpectFailure("the main thread waited")
+        try assertFast("waiting", under: 0.016) { Timing.measure { Thread.sleep(forTimeInterval: 0.05) } }
+    }
 }

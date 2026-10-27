@@ -31,7 +31,7 @@ final class EditorSmoothnessTests: XCTestCase {
 
     /// A keystroke fits in one frame, however long the note. Timed in the main thread's processor time, the work a
     /// keystroke takes: other test runs and builds on the Mac add the time it waits for a core, which says nothing
-    /// about the editor.
+    /// about the editor. On a Mac with cores to spare, the time that passes shows a keystroke that waits for something.
     func testTypingInLongNoteIsFast() throws {
         let long = EditorHarness(longNote(sections: 150))
         XCTAssertGreaterThan(long.text.count, 40_000)
@@ -44,18 +44,19 @@ final class EditorSmoothnessTests: XCTestCase {
         }
     }
 
-    /// What a keystroke at the caret takes on average, laid out, in processor time.
-    private func keystroke(in h: EditorHarness) -> TimeInterval {
+    /// What a keystroke at the caret takes on average, laid out.
+    private func keystroke(in h: EditorHarness) -> Timing.Sample {
         let caret = h.selection.location
-        var times: [Double] = []
+        var times: [Timing.Sample] = []
         for character in "quick brown fox " {
-            let start = Timing.threadTime()
-            h.textView.insertText(String(character), replacementRange: h.textView.selectedRange())
-            h.editor.layoutManager.ensureLayout(forCharacterRange: NSRange(location: caret, length: min(200, h.editor.storage.length - caret)))
-            times.append(Timing.threadTime() - start)
+            times.append(Timing.measure {
+                h.textView.insertText(String(character), replacementRange: h.textView.selectedRange())
+                h.editor.layoutManager.ensureLayout(forCharacterRange: NSRange(location: caret, length: min(200, h.editor.storage.length - caret)))
+            })
         }
-        let average = times.reduce(0, +) / Double(times.count)
-        print(String(format: "typing in a %d character note: average %.1f ms, worst %.1f ms", h.text.count, average * 1000, (times.max() ?? 0) * 1000))
+        let average = times.reduce(Timing.Sample(processor: 0, wall: 0), +) / times.count
+        print(String(format: "typing in a %d character note: average %.1f ms (%.1f ms passed), worst %.1f ms", h.text.count,
+                     average.processor * 1000, average.wall * 1000, (times.map(\.processor).max() ?? 0) * 1000))
         return average
     }
 

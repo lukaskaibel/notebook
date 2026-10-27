@@ -118,11 +118,11 @@ final class SearchIndexTests: XCTestCase {
         XCTAssertGreaterThan(index.count, 10_000)
         let note = library.appendingPathComponent("Folder 0/File 0-0.md")
         try assertFast("200 links", under: 0.1) {
-            let start = Timing.threadTime()
-            for number in 0..<200 {
-                XCTAssertNotNil(index.resolve("File \(number % 100)-\(number / 2)", from: note))
+            Timing.measure {
+                for number in 0..<200 {
+                    XCTAssertNotNil(index.resolve("File \(number % 100)-\(number / 2)", from: note))
+                }
             }
-            return Timing.threadTime() - start
         }
     }
 
