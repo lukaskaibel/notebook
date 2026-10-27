@@ -446,6 +446,15 @@ enum DebugRemote {
         case "closefile":
             // closefile: closes the last of the notes' own windows, as its close button does.
             FileWindows.shared.windows.last?.performClose(nil)
+        case "front":
+            // front: which window is in front and what the menus act on there.
+            if let workspace {
+                let key = NSApp.keyWindow
+                log("front key=\"\(key?.title ?? "none")\" mainOpen=\(workspace.isMainWindowOpen) visibleNote=\(workspace.hasVisibleNote) responder=\(key?.firstResponder.map { String(describing: type(of: $0)) } ?? "none") fileUndo=\(workspace.fileUndoManager === window?.undoManager ? "window" : "other")")
+            }
+        case "resignactive":
+            // resignactive: what switching to another app tells Notebook (it never is the active app here).
+            NotificationCenter.default.post(name: NSApplication.willResignActiveNotification, object: NSApp)
         case "closemain":
             // closemain: closes the main window, as its close button does.
             window?.performClose(nil)

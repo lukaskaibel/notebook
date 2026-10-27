@@ -110,6 +110,19 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         outline.reloadData()
         expandSections()
         restoreExpansion([])
+        revealCurrent()
+    }
+
+    /// The main window opened again (it had been closed): what is open shows selected, as when the window closed.
+    private func revealCurrent() {
+        if workspace.showsTodos { return selectTodos() }
+        guard let url = workspace.selectedFolder ?? workspace.currentURL else { return }
+        reveal(url, select: true)
+        // Scrolled to once the sidebar has its size in the window.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.outline.selectedRow >= 0 else { return }
+            self.outline.scrollRowToVisible(self.outline.selectedRow)
+        }
     }
 
     // MARK: - Items
