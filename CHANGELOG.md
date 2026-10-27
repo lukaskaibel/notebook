@@ -88,6 +88,13 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Changed
 
+- In To-dos on iPhone and iPad, Date, Time and Location in the bar above the keyboard no longer open a sheet that takes
+  the keyboard away. The bar becomes a field to type in, with the keyboard still up, and the choices rise above it on
+  glass: type "next week on Thursday", "fri 9am" or a place's name and tap what it reads, or Return; × leaves it as it
+  was. The keyboard goes straight back to the to-do. Home and Work, when their address is still to choose, and Choose
+  a Day… slide in as a page of their own, with the way back at the top, as a menu's submenu does.
+- A to-do being edited in To-dos stays where it is when you give it another day; it moves to that day's group once
+  you're done, as in Reminders.
 - To-dos on iPhone and iPad follows the text size you choose in Settings, as Reminders does.
 - On iPhone and iPad, a note's text follows the system's text size (Display & Brightness › Text Size, or Larger Text in
   Accessibility), as the text of Notes and other apps does: the size you chose in Settings › Text is the size at the
@@ -112,6 +119,10 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- On iPhone and iPad, To-dos no longer scrolls when you tap a to-do to edit it, or a line under it, unless the keyboard
+  would cover it; then it scrolls just far enough. The new to-do's circle sits on the line of its words rather than
+  above them, and so does a new sub-to-do's, which now opens smoothly under the others.
+- Choosing a date by typing reads "next week on Thursday" and "Thursday next week", as next Thursday.
 - To-dos opens at once with hundreds of open to-dos, rather than after a few seconds: only the rows that show are made.
 - A picture no longer goes to the Trash when its link in the note changes case, say after editing the note in another
   app: the Mac's disk finds the picture whatever the case, and now Notebook does too.

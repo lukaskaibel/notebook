@@ -21,6 +21,9 @@ struct TodoEditor: View {
                 .font(.system(size: TodosView.titleSize))
                 .foregroundStyle(Color.theme(Theme.text))
                 .focused(focus, equals: .title)
+                #if os(iOS)
+                .emptyFieldBaseline(editing.title.isEmpty, size: TodosView.titleSize)
+                #endif
                 #if os(macOS)
                 // In the window you click in, SwiftUI can leave the keyboard with the window as the field appears; it
                 // noticed at the next redraw, such as a move of the pointer, and the editing ended.
@@ -70,6 +73,9 @@ struct TodoEditor: View {
                     .foregroundStyle(color(value.kind))
                     .strikethrough(value.kind == .todo(.cancelled))
                     .focused(focus, equals: .line(value.id))
+                    #if os(iOS)
+                    .emptyFieldBaseline(value.words.isEmpty, size: TodosView.notesSize)
+                    #endif
                     .onChange(of: value.words) { _, words in wordsChanged(value.id, words) }
                     .onKeyPress(phases: .down) { lineKey($0, value.id) }
             } else {
@@ -189,6 +195,20 @@ struct TodoEditor: View {
     }
 }
 
+#if os(iOS)
+extension View {
+    /// Where the first line of words of an empty field would sit: an empty field gives no baseline, and the circle
+    /// beside a new to-do went up to the field's top, above its placeholder.
+    func emptyFieldBaseline(_ isEmpty: Bool, size: CGFloat) -> some View {
+        alignmentGuide(.firstTextBaseline) { d in
+            // A line's baseline is its font's ascent down, on a whole pixel, as a field with words puts it.
+            let scale = UITraitCollection.current.displayScale
+            return isEmpty ? (UIFont.systemFont(ofSize: size).ascender * scale).rounded(.up) / scale : d[.firstTextBaseline]
+        }
+    }
+}
+#endif
+
 extension TextSelection {
     /// A caret, not words selected.
     var isInsertion: Bool {
@@ -245,7 +265,7 @@ struct TodoEditBar: View {
             } content: {
                 TodoPlaceDropdown(place: schedule.place, pick: editing.setPlace) { picking = nil }
             }
-            TodoChip(symbol: "checklist", title: "Add Sub-to-do") { editing.addTodo() }
+            TodoChip(symbol: "checklist", title: "Add Sub-to-do") { withAnimation(Theme.spring) { editing.addTodo() } }
             Spacer(minLength: 8)
             Group {
                 if let noteName {
@@ -357,13 +377,18 @@ struct TodoChip: View {
 #if os(iOS)
 /// Reminders' buttons above the keyboard while a to-do is edited, laid out as the bar in a note is: across the screen
 /// in a capsule of glass, its day, its time and its place, each a grey symbol until it is set and then what it is set
-/// to, in the accent colour as the note's pills show it; each opens a popover from the to-do's row to type in or tap
-/// (a sheet on iPhone). Then a sub-to-do, and in a line under the words, moving that line out or in. At the right end,
-/// on its own, the button that hides the keyboard, which is done.
+/// to, in the accent colour as the note's pills show it. Then a sub-to-do, and in a line under the words, moving that
+/// line out or in. At the right end, on its own, the button that hides the keyboard, which is done.
+///
+/// A tap on the day, the time or the place turns the bar into a field to type it in, grown out of the bar's glass,
+/// with the choices on glass above it: the keyboard stays up throughout, and goes back to the to-do after.
 struct TodoKeyboardBar: View {
     let editing: TodoEditing
     let focus: TodoFocus?
+    /// How tall the choices above the bar can be.
+    var room: CGFloat
     var done: () -> Void
+    @Namespace private var glass
 
     /// What can show its value in words.
     private enum Part {
@@ -372,19 +397,28 @@ struct TodoKeyboardBar: View {
 
     var body: some View {
         let schedule = editing.schedule
-        HStack(spacing: WritingBar.spacing) {
-            // The values in words while they fit; a place's name gives way first, then the day and the time.
-            ViewThatFits(in: .horizontal) {
-                buttons(due: schedule.due, place: schedule.place, words: [.day, .time, .place])
-                buttons(due: schedule.due, place: schedule.place, words: [.day, .time])
-                buttons(due: schedule.due, place: schedule.place, words: [])
+        GlassEffectContainer(spacing: WritingBar.spacing) {
+            HStack(spacing: WritingBar.spacing) {
+                if let kind = editing.picking {
+                    picker(kind, due: schedule.due, place: schedule.place)
+                } else {
+                    // The values in words while they fit; a place's name gives way first, then the day and the time.
+                    ViewThatFits(in: .horizontal) {
+                        buttons(due: schedule.due, place: schedule.place, words: [.day, .time, .place])
+                        buttons(due: schedule.due, place: schedule.place, words: [.day, .time])
+                        buttons(due: schedule.due, place: schedule.place, words: [])
+                    }
+                    .padding(.horizontal, 6)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: WritingBar.barHeight)
+                    .glassEffect(.regular.interactive(), in: .capsule)
+                    .glassEffectID("bar", in: glass)
+                    HideKeyboardButton(action: done)
+                        .glassEffectID("circle", in: glass)
+                }
             }
-            .padding(.horizontal, 6)
-            .frame(maxWidth: .infinity)
-            .frame(height: WritingBar.barHeight)
-            .glassEffect(.regular.interactive(), in: .capsule)
-            HideKeyboardButton(action: done)
         }
+        .environment(\.pickerBar, PickerBar(glass: glass, room: room))
         .frame(maxWidth: WritingBar.barWidth(for: .infinity))
         .padding(.horizontal, 12)
         .padding(.top, WritingBar.topGap)
@@ -393,6 +427,26 @@ struct TodoKeyboardBar: View {
         .animation(UIAccessibility.isReduceMotionEnabled ? nil : Theme.spring, value: schedule.due)
         .animation(UIAccessibility.isReduceMotionEnabled ? nil : Theme.spring, value: schedule.place)
         .animation(UIAccessibility.isReduceMotionEnabled ? nil : Theme.spring, value: focus)
+        #if DEBUG
+        .onReceive(NotificationCenter.default.publisher(for: DebugTodos.pick)) { note in
+            guard !editing.isEnded else { return }
+            switch note.object as? String {
+            case "date": editing.pick(.day)
+            case "time": editing.pick(.time)
+            case "place": editing.pick(.place)
+            default: editing.donePicking()
+            }
+        }
+        #endif
+    }
+
+    @ViewBuilder
+    private func picker(_ kind: TodoEditing.Pick, due: TodoDue?, place: TodoPlace?) -> some View {
+        switch kind {
+        case .day: TodoDatePicker(due: due, pick: editing.setDue, close: editing.donePicking)
+        case .time: TodoTimePicker(due: due, pick: editing.setDue, close: editing.donePicking)
+        case .place: TodoPlaceDropdown(place: place, pick: editing.setPlace, close: editing.donePicking)
+        }
     }
 
     private func buttons(due: TodoDue?, place: TodoPlace?, words: Set<Part>) -> some View {
@@ -409,10 +463,11 @@ struct TodoKeyboardBar: View {
                    value: place.map { $0.leaving ? "Leaving " + $0.name : $0.name }, inWords: words.contains(.place)) {
                 editing.pick(.place)
             }
-            button("Add Sub-to-do", symbol: "checklist") { editing.addTodo() }
+            // The new line opens under the others, which make room for it, rather than all at once.
+            button("Add Sub-to-do", symbol: "checklist") { withAnimation(Theme.spring) { editing.addTodo() } }
             if case .line(let id) = focus {
-                button("Move Out", symbol: "decrease.indent") { editing.outdent(id) }
-                button("Move In", symbol: "increase.indent") { editing.indent(id) }
+                button("Move Out", symbol: "decrease.indent") { withAnimation(Theme.spring) { editing.outdent(id) } }
+                button("Move In", symbol: "increase.indent") { withAnimation(Theme.spring) { editing.indent(id) } }
             }
         }
     }
@@ -452,48 +507,6 @@ struct TodoKeyboardBar: View {
         .accessibilityLabel(name)
         .accessibilityValue(value ?? "")
         .transition(.opacity)
-    }
-}
-
-/// The popover for a to-do's day, time or place, from its row while it is edited: it outlives the bar above the
-/// keyboard, which goes as soon as the popover's field takes the keyboard. On iPhone a sheet.
-struct TodoPickPopover: ViewModifier {
-    let editing: TodoEditing?
-
-    func body(content: Content) -> some View {
-        content
-            .popover(item: Binding(get: { editing?.picking }, set: { editing?.picking = $0 })) { kind in
-                if let editing {
-                    let schedule = editing.schedule
-                    ScrollView {
-                        switch kind {
-                        case .day: TodoDatePicker(due: schedule.due, pick: editing.setDue) { editing.picking = nil }
-                        case .time: TodoTimePicker(due: schedule.due, pick: editing.setDue) { editing.picking = nil }
-                        case .place: TodoPlaceDropdown(place: schedule.place, pick: editing.setPlace) { editing.picking = nil }
-                        }
-                    }
-                    .scrollBounceBehavior(.basedOnSize)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-                }
-            }
-            .onChange(of: editing?.picking) { _, new in
-                // The keyboard goes back to the to-do once the popover is closed.
-                guard let editing, new == nil else { return }
-                editing.isChoosing = false
-                editing.refocus()
-            }
-            #if DEBUG
-            .onReceive(NotificationCenter.default.publisher(for: DebugTodos.pick)) { note in
-                guard let editing, !editing.isEnded else { return }
-                switch note.object as? String {
-                case "date": editing.pick(.day)
-                case "time": editing.pick(.time)
-                case "place": editing.pick(.place)
-                default: editing.picking = nil
-                }
-            }
-            #endif
     }
 }
 #endif

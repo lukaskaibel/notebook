@@ -72,20 +72,41 @@ final class TodoEditing {
             && lines.allSatisfy { !$0.isEditable || $0.words.trimmingCharacters(in: .whitespaces).isEmpty }
     }
 
-    /// What a popover can change of it: its day, its time, its place.
+    /// The group it was in when editing began, and the rows of the group then: it stays there while it is edited, as
+    /// in Reminders, and goes to the group of a day set from its buttons once it is done.
+    @ObservationIgnored var home: (kind: TodoSection.Kind, order: [String])?
+
+    /// What the picker above the keyboard can change of it: its day, its time, its place.
     enum Pick: Identifiable {
         case day, time, place
         var id: Self { self }
     }
 
-    /// The popover open for its day, time or place (iPhone and iPad; the Mac's dropdowns keep their own).
+    /// The picker open above the keyboard for its day, time or place (iPhone and iPad; the Mac's dropdowns keep their
+    /// own). Its field has the keyboard meanwhile.
     var picking: Pick?
 
-    /// Opens the popover for its day, time or place, with what was typed written first.
+    /// Opens the picker for its day, time or place, with what was typed written first. Its field takes the keyboard
+    /// over from the to-do, which keeps it up.
     func pick(_ kind: Pick) {
         isChoosing = true
         commit()
-        picking = kind
+        withAnimation(Theme.spring) { picking = kind }
+    }
+
+    /// Done picking: the keyboard goes back to the to-do first, and the picker goes once it is there (`TodosView`), so
+    /// the keyboard doesn't go down in between. When the to-do can't take it, the picker goes anyway.
+    func donePicking() {
+        guard picking != nil else { return }
+        refocus()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.closePicker() }
+    }
+
+    /// The picker goes: the to-do has the keyboard back.
+    func closePicker() {
+        guard picking != nil else { return }
+        isChoosing = false
+        withAnimation(Theme.spring) { picking = nil }
     }
     /// Asks To-dos to put the keyboard where `focus` says.
     private(set) var focusRequest = 0

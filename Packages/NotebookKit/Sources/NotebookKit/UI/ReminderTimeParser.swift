@@ -119,12 +119,13 @@ enum ReminderTimeParser {
         }
 
         /// "thursday in 3 weeks", "in 3 weeks on thursday", "fri in 2w": that weekday in the week the count ends in.
+        /// "next week on thursday" and "thursday next week" are next Thursday.
         private func weekdayInCount(_ words: [String], isLast: Bool) -> [Day] {
             var found: [Day] = []
             for split in words.indices.dropFirst() {
                 var head = Array(words[..<split]), tail = Array(words[split...])
                 // The weekday first, or the count first.
-                let weekdayFirst = tail.first == "in" || tail.first?.hasPrefix("+") == true
+                let weekdayFirst = tail.first == "in" || tail.first == "next" || tail.first?.hasPrefix("+") == true
                 if !weekdayFirst, tail.first == "on" { tail.removeFirst() }
                 if weekdayFirst, head.first == "on" { head.removeFirst() }
                 let weekdayWords = weekdayFirst ? head : tail
@@ -137,6 +138,10 @@ enum ReminderTimeParser {
                           let day = (0..<7).map({ self.day($0, from: week.start) }).first(where: { calendar.component(.weekday, from: $0) == weekday + 1 }),
                           day >= today else { continue }
                     found.append(Day(title: "\(weekdayName(day)) \(counted.title?.prefix(1).lowercased() ?? "")\(counted.title?.dropFirst() ?? "")", start: day, isNamed: true))
+                }
+                if Self.matches(["next week"], countWords.joined(separator: " "), isLast: isLast && weekdayFirst),
+                   let day = (0..<7).map({ self.day($0, from: nextWeek) }).first(where: { calendar.component(.weekday, from: $0) == weekday + 1 }) {
+                    found.append(Day(title: "Next " + weekdayName(day), start: day, isNamed: true))
                 }
             }
             return found

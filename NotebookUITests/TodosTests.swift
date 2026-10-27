@@ -99,7 +99,7 @@ final class TodosTests: XCTestCase {
         XCTAssertTrue(app.textFields["To-do"].firstMatch.waitForNonExistence(timeout: 10), app.debugDescription)
         let plumber = row("Plumber")
         XCTAssertTrue(plumber.waitForExistence(timeout: 10), app.debugDescription)
-        XCTAssertTrue(row("Milk").exists, app.debugDescription)
+        XCTAssertTrue(row("Milk").waitForExistence(timeout: 10), app.debugDescription)
         shot("6-added")
 
         // Into a note, picked in ⌘K.

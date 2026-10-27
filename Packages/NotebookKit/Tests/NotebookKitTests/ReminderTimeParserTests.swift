@@ -155,6 +155,13 @@ final class ReminderTimeParserTests: XCTestCase {
         XCTAssertEqual(try first("saturday in 2 weeks evening").date, at(7, 11, 18))
         // As you type the unit.
         XCTAssertEqual(try first("fri in 2 we").date, at(6, 11, 9))
+        // Next week's: next Thursday, Thursday 29 October.
+        for text in ["next week on thursday", "next week thursday", "thursday next week", "thu next week", "next week on thu", "thursday next we"] {
+            XCTAssertEqual(try first(text).date, at(29, 10, 9), text)
+            XCTAssertEqual(try first(text).title, "Next Thursday", text)
+        }
+        XCTAssertEqual(try day("next week on monday").date, at(26, 10, 0))
+        XCTAssertEqual(try first("next week on friday evening").date, at(30, 10, 18))
     }
 
     /// A to-do's date: a day stays a day, today too, and a time makes it a time.
