@@ -1,8 +1,8 @@
 import XCTest
 
 /// Deleting notes on the iPhone and iPad as you would: a swipe, the context menu, the ⋯ menu of an open note, several in
-/// a row, Undo right after, in search. The row goes at once, as in Notes, while the disk is slow (`-NotebookSlowWrites`),
-/// and nothing comes back. Every test starts the app on fresh sample notes in its own home folder, so nothing of yours
+/// a row, in search. The row goes at once, as in Notes, while the disk is slow (`-NotebookSlowWrites`), and nothing
+/// comes back. (Undo isn't here: ⌘Z typed by a test reaches only a text field, and a test can't shake.) Every test starts the app on fresh sample notes in its own home folder, so nothing of yours
 /// is touched. With `TEST_RUNNER_PACE=<seconds>` the tests wait that long between steps, for a recording of the screen.
 final class DeleteFlowUITests: XCTestCase {
     var app: XCUIApplication!
@@ -104,25 +104,6 @@ final class DeleteFlowUITests: XCTestCase {
         pause(4)
         for name in ["Budget", "Getting to the ryokan", "Kyoto trip"] { assertGone(name, within: 0.1) }
         assertShown("Flight tickets.pdf", within: 0.1)
-    }
-
-    /// ⌘Z right after: the note comes back to where it was.
-    func testUndoRightAfter() throws {
-        launch(slowWrites: 1)
-        tap("Inbox")
-        pause()
-        if isPad {
-            row("Gift ideas").press(forDuration: 1.2)
-        } else {
-            row("Gift ideas").swipeLeft()
-        }
-        tap("Delete")
-        assertGone("Gift ideas", within: 0.8)
-        pause(0.3)
-        app.typeKey("z", modifierFlags: .command)
-        assertShown("Gift ideas", within: 6)
-        pause(3)
-        assertShown("Gift ideas", within: 0.1)
     }
 
     /// Search showing the note, and Delete from its context menu there: gone from the results too.
