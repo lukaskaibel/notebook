@@ -325,6 +325,9 @@ final class EditorContainer: UIView {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
+        // Back from a screen pushed over the note that left it the editor (a folder from a link): its bars follow the
+        // text view again, which they stopped doing when it went.
+        if window != nil, editor.view.superview === self { becomeContentScrollView() }
         claim()
     }
 
