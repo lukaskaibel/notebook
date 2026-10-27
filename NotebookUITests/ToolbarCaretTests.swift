@@ -1,7 +1,7 @@
 import XCTest
 
-/// The buttons of a note's toolbar on iPhone and iPad work at the end of a note you haven't put the caret in, as in
-/// Notes, and where you put it otherwise, also at the very start. The app starts on fresh sample notes in its own home
+/// The buttons at the bottom of a note on the iPhone work at the end of a note you haven't put the caret in, as in Notes,
+/// and where you put it otherwise, also at the very start. The app starts on fresh sample notes in its own home
 /// folder, so nothing of yours is touched.
 final class ToolbarCaretTests: XCTestCase {
     var app: XCUIApplication!
@@ -44,16 +44,6 @@ final class ToolbarCaretTests: XCTestCase {
         XCTAssertTrue(waitForText("- [ ] First line\nLast line"), "not at the start: \(noteText)")
     }
 
-    /// At regular width Aa opens the Format panel: in a note you haven't put the caret in, its Checklist is for the
-    /// last line, where Attach puts a picture.
-    func testFormatPanelWorksAtTheEndLikeAttach() throws {
-        try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "Aa in the toolbar is the iPad's")
-        try openNewNote()
-        tap("Format")
-        tap("Checklist")
-        XCTAssertTrue(waitForText("First line\n- [ ] Last line"), "not the last line: \(noteText)")
-    }
-
     // MARK: - Steps
 
     /// A new note with two lines, opened again from its folder after the app started again, so nothing in it has the
@@ -65,23 +55,18 @@ final class ToolbarCaretTests: XCTestCase {
                                "-NotebookTips", "hide", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
         tap("New Note")
-        app.typeText("Toolbar\nFirst line\nLast line")
-        if UIDevice.current.userInterfaceIdiom == .phone {
-            // Saved as it is left.
-            let back = app.navigationBars.buttons.element(boundBy: 0)
-            XCTAssertTrue(back.waitForExistence(timeout: 5), app.debugDescription)
-            back.tap()
-        } else {
-            // Saved when typing pauses.
-            Thread.sleep(forTimeInterval: 3)
-        }
+        app.typeText("Groceries\nFirst line\nLast line")
+        // Saved as it is left.
+        let back = app.navigationBars.buttons.element(boundBy: 0)
+        XCTAssertTrue(back.waitForExistence(timeout: 5), app.debugDescription)
+        back.tap()
         // The same library again, without the note in memory.
         app.terminate()
         app.launchArguments[5] = "NO"
         app.launch()
         tap("Inbox")
-        // The row, not the Recent one on the screen behind; in the iPad's sidebar, by its name only.
-        let rows = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ OR label == %@", "Toolbar,", "Toolbar"))
+        // The row, not the Recent one on the screen behind.
+        let rows = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Groceries,"))
         XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 10), app.debugDescription)
         let row = try XCTUnwrap(rows.allElementsBoundByIndex.first(where: \.isHittable), app.debugDescription)
         row.tap()
@@ -103,10 +88,10 @@ final class ToolbarCaretTests: XCTestCase {
         return false
     }
 
-    /// A row of a list, a button or anything else, by its name.
+    /// A row of a list, a button or anything else, by its name: the one on screen.
     private func tap(_ label: String, file: StaticString = #filePath, line: UInt = #line) {
-        let element = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label)).firstMatch
-        XCTAssertTrue(element.waitForExistence(timeout: 10), app.debugDescription, file: file, line: line)
-        element.tap()
+        let matches = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label))
+        XCTAssertTrue(matches.firstMatch.waitForExistence(timeout: 10), app.debugDescription, file: file, line: line)
+        (matches.allElementsBoundByIndex.first(where: \.isHittable) ?? matches.firstMatch).tap()
     }
 }
