@@ -11,11 +11,38 @@ struct PadBrowser: View {
     @State private var addsLocation = false
     @FocusState private var isSearchFocused: Bool
     /// Wide enough for the sidebar next to the page: an iPad in landscape, or a large window.
-    @State private var isWide = true
-    /// The width was seen once, and the split view made for it: a split view changes what it shows as it first
-    /// appears back to what it was made with.
-    @State private var hasMeasured = false
+    @State private var isWide: Bool
+    /// The width is known, and the split view made for it: a split view changes what it shows as it first appears
+    /// back to what it was made with, so the sidebar has to be away from the start where it makes way.
+    @State private var hasMeasured: Bool
+    /// The split view is made without the sidebar, which the workspace hears of once the width is measured.
+    @State private var startsWithoutSidebar: Bool
     @Bindable private var settings = NotebookSettings.shared
+
+    init(workspace: Workspace) {
+        _workspace = Bindable(workspace)
+        // The window's own width is known before anything in it is laid out, so the split view is made at once, for
+        // it: no empty frame as the iPad's layout takes over from the iPhone's screens or the welcome screen.
+        let width = Self.windowWidth
+        let wide = width.map { $0 >= Self.wide } ?? true
+        _isWide = State(initialValue: wide)
+        _hasMeasured = State(initialValue: width != nil)
+        _startsWithoutSidebar = State(initialValue: !wide && (workspace.currentURL != nil || workspace.showsTodos))
+    }
+
+    /// From this wide on there is room for the sidebar, a column of text and the outline: an iPad in landscape. In
+    /// portrait, even the 13-inch one's, the text would get too narrow with all three. Narrowing, the sidebar goes a
+    /// little below it, so a Stage Manager window dragged about the edge doesn't take it away and back each time.
+    private static let wide: CGFloat = 1100
+    private static let narrow: CGFloat = 1060
+
+    /// The width of the window Notebook is in, when that is sure: there is one window, or all are as wide. A view
+    /// can't tell which window it is in before it is laid out, and a new one next to another, active one could be
+    /// made for the other's width; it then waits for its first measure.
+    private static var windowWidth: CGFloat? {
+        let widths = Set(UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.effectiveGeometry.coordinateSpace.bounds.width })
+        return widths.count == 1 ? widths.first : nil
+    }
 
     var body: some View {
         // One split view, whatever the width: choosing between two styles as the iPad turned or a window was resized
@@ -27,11 +54,14 @@ struct PadBrowser: View {
             if hasMeasured { splitView }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Room for the sidebar, a column of text and the outline: an iPad in landscape. In portrait, even the 13-inch
-        // one's, the text would get too narrow with all three. Narrowing, it goes a little below that, so a Stage
-        // Manager window dragged about the edge doesn't take the sidebar away and back again each time.
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
-            let wide = width >= (hasMeasured && isWide ? 1060 : 1100)
+            let wide = width >= (hasMeasured && isWide ? Self.narrow : Self.wide)
+            if startsWithoutSidebar {
+                // Made without it: now the workspace's too, and it comes back as the window widens.
+                startsWithoutSidebar = false
+                workspace.columnVisibility = .detailOnly
+                workspace.sidebarHiddenForWidth = true
+            }
             guard !hasMeasured || wide != isWide else { return }
             isWide = wide
             if hasMeasured {
@@ -51,6 +81,7 @@ struct PadBrowser: View {
         .onChange(of: workspace.newFolderRequest) { _, _ in newFolderIn = newFolderParent }
         .modifier(FileAlerts(workspace: workspace, newFolderIn: $newFolderIn))
         .modifier(AppleNotesImporter(workspace: workspace))
+        .background(alignment: .topLeading) { FileUndoFocus(workspace: workspace).frame(width: 0, height: 0) }
         .sheet(isPresented: $showsSettings) { TouchSettings(workspace: workspace) }
         .folderImporter(isPresented: $addsLocation, workspace: workspace)
         #if DEBUG
@@ -108,15 +139,20 @@ struct PadBrowser: View {
         workspace.selectedFolder ?? workspace.folderForNewNote ?? workspace.locations.first?.url
     }
 
+    /// The sidebar's place: away from the start where it makes way as the window first appears.
+    private var columnVisibility: Binding<NavigationSplitViewVisibility> {
+        Binding(get: { startsWithoutSidebar ? .detailOnly : workspace.columnVisibility }, set: { workspace.columnVisibility = $0 })
+    }
+
     private var splitView: some View {
-        NavigationSplitView(columnVisibility: $workspace.columnVisibility) {
+        NavigationSplitView(columnVisibility: columnVisibility) {
             PadSidebar(workspace: workspace, query: query, newFolderIn: $newFolderIn)
                 .navigationTitle("Notebook")
                 .searchable(text: $query, placement: .sidebar, prompt: "Search")
                 .onChange(of: query, initial: true) { _, query in workspace.searchSession.update(query) }
                 .searchFocused($isSearchFocused)
                 .onSubmit(of: .search) {
-                    if let first = workspace.searchSession.sections.first?.items.first { workspace.open(first.result) }
+                    if let first = SearchSection.firstToOpen(in: workspace.searchSession.sections) { workspace.open(first.result) }
                 }
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {

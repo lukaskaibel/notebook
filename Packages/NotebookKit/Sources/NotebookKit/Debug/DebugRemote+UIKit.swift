@@ -1,4 +1,5 @@
 #if DEBUG && os(iOS)
+import PDFKit
 import PencilKit
 import SwiftUI
 import UIKit
@@ -222,6 +223,12 @@ enum DebugRemote {
             argument == "hide" ? editor.hideFormatPanel() : editor.showFormatPanel()
         case "scroll":
             editor.setScrollTop((numbers.first ?? 0) - editor.topInset)
+        case "place":
+            // place [index]: the first character showing (or that one), and how far below the bars its line starts:
+            // what a change of text size keeps.
+            let index = numbers.first.map { Int($0) } ?? editor.firstVisibleCharacter()
+            let text = (editor.text as NSString).substring(from: index).prefix(16).replacingOccurrences(of: "\n", with: "⏎")
+            log("place \(index) “\(text)” at \(Int((editor.yPosition(of: index) - editor.visibleRect.minY - editor.topInset).rounded())) header \(Int(editor.textView.headerHeight))")
         case "scrollto":
             editor.scroll(to: editor.outline[safe: Int(numbers.first ?? 0)], animated: false)
         case "undo":
@@ -278,13 +285,18 @@ enum DebugRemote {
         case "dismiss":
             log("dismissing renaming \(workspace.renaming?.lastPathComponent ?? "-") deleting \(workspace.deleting?.lastPathComponent ?? "-") problem \(workspace.problem?.title ?? "-")")
             workspace.renaming = nil
-            workspace.deleting = nil
+            if let url = workspace.deleting { workspace.answerDeleting(url, delete: false) }
             workspace.problem = nil
         case "deletenow":
-            if let url = workspace.deleting { workspace.deleteImmediately(url) }
-            workspace.deleting = nil
+            if let url = workspace.deleting { workspace.answerDeleting(url, delete: true) }
+        case "notrash":
+            // notrash on|off: every place as one without Recently Deleted, or as it is.
+            UserDefaults.standard.set(argument != "off", forKey: "NotebookNoRecentlyDeleted")
+        case "asking":
+            // asking: the file "Delete immediately?" asks about now, and those after it.
+            log("asking \(workspace.deleting?.lastPathComponent ?? "-") then \(workspace.deleteQuestions.waiting.map(\.lastPathComponent))")
         case "trash":
-            if let url = url(argument) { workspace.moveToTrash(url) }
+            if let url = url(argument) { workspace.trash(url) }
         case "keyundo", "keyredo":
             // keyundo, keyredo: ⌘Z and ⇧⌘Z on a keyboard, as UIKit sends them: from the first responder, or the window
             // without one, up to what takes them. Says where they went and what Undo would have said.
@@ -452,6 +464,15 @@ enum DebugRemote {
             log("cursorview caret \(position.map { view.caretRect(for: $0).integral } ?? .null): \(drawn.joined(separator: "; "))")
         case "views":
             if let window = editor.textView.window { log(describe(window, depth: 0, limit: Int(numbers.first ?? 6))) }
+        case "exportpdf":
+            // exportpdf <path>: the open note as Share › PDF and Print make it; its pages and the size of its text there.
+            Task {
+                guard let data = await NoteExporter.pdfData(for: editor, title: editor.titleText) else { return log("exportpdf failed") }
+                try? data.write(to: URL(fileURLWithPath: (argument as NSString).expandingTildeInPath))
+                let page = PDFDocument(data: data)?.page(at: 0)?.attributedString
+                let body = page.flatMap { text in (text.string as NSString).range(of: "\n").location < text.length - 1 ? text.attribute(.font, at: (text.string as NSString).range(of: "\n").location + 1, effectiveRange: nil) as? UIFont : nil }
+                log("exportpdf pages \(PDFDocument(data: data)?.pageCount ?? 0) text \(body?.pointSize ?? 0) on screen \(EditorStyle.bodySize)")
+            }
         case "barscroll":
             // Which scroll view the bars of each screen follow: the note's text view, another, or none.
             let windows = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }
