@@ -365,6 +365,15 @@ extension Workspace {
         todoRewrites[Self.rewriteKey(todo)] = changed
     }
 
+    /// Whether what is asked for comes from To-dos: it shows in this window, and on the Mac no other window is in front.
+    private var isInTodos: Bool {
+        #if os(macOS)
+        showsTodos && (NSApp.keyWindow == nil || NSApp.keyWindow === sidebar?.outline.window)
+        #else
+        showsTodos
+        #endif
+    }
+
     /// The editor that shows a note with its text in: this window's, or on the Mac a window of its own.
     func editorShowing(_ url: URL) -> EditorController? {
         let target = url.standardizedFileURL
@@ -445,6 +454,9 @@ extension Workspace {
             }
             if rewrites { rewrote(todo, to: changed) }
             todos.patch(shown.todo, to: shown.source, under: shown.under)
+            // A note open in a window of its own on the Mac keeps the edit's Undo there: the window this was asked
+            // from undoes it too, as one step.
+            if editor !== self.editor, isInTodos { keepTodoChangeForUndo(actionName) { undo(changed) } }
             // From a notification the app may only have a moment: the note is written now, not after a pause.
             saveNote(showing: todo.url)
             outcome?(.written)
@@ -484,6 +496,10 @@ extension Workspace {
         }
         manager.setActionName(actionName)
         if opens { manager.endUndoGrouping() }
+        #if os(iOS)
+        // Shake to Undo and ⌘Z reach it, as they reach a change to files.
+        takeUndoFocusIfFree()
+        #endif
         return target
     }
 
@@ -547,6 +563,11 @@ extension Workspace {
                 return nil
             }
             saveNote(showing: todo.url)
+            // Redo deletes it again. The editor keeps its edit with its own Undo (on iPhone and iPad, or a note in a
+            // window of its own), not the one this Undo came from, unless they are one (the main window's note).
+            if editor.textView.undoManager !== fileUndoManager {
+                keepTodoChangeForUndo("Delete To-do") { [weak self] in self?.deleteTodo(todo) }
+            }
             return nil
         }
         let kept = keepTodoChangeForUndo("Delete To-do") { [weak self] in self?.deleteTodo(todo) }

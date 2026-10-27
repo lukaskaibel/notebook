@@ -187,6 +187,33 @@ final class TodoListTests: XCTestCase {
         XCTAssertFalse(workspace.todos.items.contains { $0.todo.text == "Call Dr. Weber" })
     }
 
+    #if os(macOS)
+    /// The note open in a window of its own: the edit is made there, and To-dos' own Undo takes it back and Redo deletes
+    /// it again, as one step each.
+    func testDeletingATodoWhoseNoteIsOpenInItsOwnWindow() async throws {
+        let workspace = try await makeWorkspace()
+        workspace.showTodos()
+        let original = try String(contentsOf: doctor, encoding: .utf8)
+        FileWindows.shared.open(doctor)
+        let controller = try XCTUnwrap(FileWindows.shared.windows.compactMap { $0.windowController as? FileWindowController }.first { FileNode.samePath($0.url, doctor) })
+        defer { controller.window?.close() }
+        try await until { controller.isLoaded }
+        let call = try XCTUnwrap(workspace.todos.items.first { $0.todo.text == "Call Dr. Weber" })
+        workspace.deleteTodo(call.reference)
+        XCTAssertEqual(controller.editor.text, "# Doctor\n\n- [x] Book the taxi\n")
+        let manager = workspace.fileUndoManager
+        XCTAssertFalse(manager === controller.window?.undoManager, "another window's")
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(manager.undoActionName, "Delete To-do")
+        manager.undo()
+        XCTAssertEqual(controller.editor.text, original)
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertTrue(manager.canRedo)
+        manager.redo()
+        XCTAssertEqual(controller.editor.text, "# Doctor\n\n- [x] Book the taxi\n")
+    }
+    #endif
+
     // MARK: - Repeating to-dos
 
     private var plants: URL { library.appendingPathComponent("Plants.md") }

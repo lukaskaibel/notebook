@@ -25,8 +25,6 @@ struct TodosView: View {
     @State private var editingFrame: CGRect?
     /// The row swiped to show Delete: one at a time.
     @State private var swiped: String?
-    /// Changed when no to-do is edited any more: Shake to Undo takes the focus again.
-    @State private var undoFocus = 0
     /// The text size of Settings: the rows are made again at the new size when it changes.
     @Environment(\.dynamicTypeSize) private var typeSize
     #else
@@ -128,7 +126,8 @@ struct TodosView: View {
             #if os(macOS)
             watchClicks(editing != nil)
             #else
-            if editing == nil { undoFocus += 1 }
+            // Done editing: Shake to Undo and ⌘Z reach the to-dos' changes, unless something else is typed in now.
+            if editing == nil { workspace.takeUndoFocusIfFree() }
             #endif
         }
         #if DEBUG
@@ -149,8 +148,8 @@ struct TodosView: View {
         // In the bar once the page's own title has scrolled up under it, as a note's.
         .navigationTitle(workspace.isTitleScrolledAway ? "To-dos" : "")
         .navigationBarTitleDisplayMode(.inline)
-        // Shaken, Undo, as in Reminders.
-        .background { ShakeToUndo(workspace: workspace, focusing: undoFocus) }
+        // Shaken, Undo, as in Reminders: nothing in To-dos takes the focus but a to-do being edited.
+        .onAppear { workspace.takeUndoFocusIfFree() }
         // Reminders' buttons above the keyboard: a date, a time, a place, and sub-to-dos. They come as the editing
         // begins, a moment before the keyboard, fading in as they rise with it; not over the keyboard of a popover's
         // field, which is in this view too.
