@@ -22,7 +22,9 @@ public struct RootView: View {
         .onAppear {
             // Opening a folder from a file window, or with this one closed, brings this window back.
             workspace.showWindow = { [openWindow] in openWindow(id: "main") }
+            workspace.mainWindowOpened()
         }
+        .onDisappear { workspace.isMainWindowOpen = false }
     }
 }
 

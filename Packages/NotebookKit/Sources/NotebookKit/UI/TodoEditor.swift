@@ -425,7 +425,9 @@ struct TodoKeyboardBar: View {
         return Button(action: action) {
             HStack(spacing: 4) {
                 Image(systemName: symbol)
-                    .font(.system(size: value == nil ? 18 : words == nil ? 15 : 13, weight: value == nil ? .regular : .semibold))
+                    // Unset, as big as the tools of the bar in a note.
+                    .font(.system(size: value == nil ? 17 : words == nil ? 15 : 13, weight: value == nil ? .regular : .semibold))
+                    .imageScale(value == nil ? .large : .medium)
                 if let words {
                     // A place's long name, cut short.
                     Text(words)
