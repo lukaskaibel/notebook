@@ -76,7 +76,8 @@ final class SearchIndexTests: XCTestCase {
         for query in ["pl", "plan", "p", "an", "pln", "xyz"] {
             let q = SearchIndex.fold(query)
             let all = index.entries.filter { $0.kind != .folder }.compactMap { entry -> (Int, SearchIndex.Entry)? in
-                SearchIndex.score(entry.foldedName, q).map { ($0 + (entry.kind == .note ? 5 : 0), entry) }
+                // Names only a bit like it aren't among the files.
+                SearchIndex.score(entry.foldedName, q).flatMap { $0 >= FuzzyMatch.goodScore ? ($0 + (entry.kind == .note ? 5 : 0), entry) : nil }
             }
             let sorted = all.sorted { a, b in
                 if a.0 != b.0 { return a.0 > b.0 }
@@ -97,13 +98,15 @@ final class SearchIndexTests: XCTestCase {
         XCTAssertEqual(SearchIndex.score("my-trip", "trip"), 60)
         XCTAssertEqual(SearchIndex.score("mytrip", "trip"), 40)
         XCTAssertEqual(SearchIndex.score("ütrip", "trip"), 40, "after a letter of two bytes")
-        XCTAssertEqual(SearchIndex.score("telematics ws24", "tlmtcs"), 10)
-        XCTAssertNil(SearchIndex.score("trip", "trips"))
+        XCTAssertLessThan(SearchIndex.score("telematics ws24", "tlmtcs") ?? 99, 30, "the letters in order, below a name with it in it")
+        XCTAssertGreaterThanOrEqual(SearchIndex.score("trip plan", "tp") ?? 0, FuzzyMatch.goodScore, "at the starts of its words")
+        XCTAssertGreaterThanOrEqual(SearchIndex.score("trip", "trips") ?? 0, FuzzyMatch.goodScore, "a letter too many")
+        XCTAssertNil(SearchIndex.score("trip", "tro"), "none wrong in a word of three")
         XCTAssertNil(SearchIndex.score("plan", "nalp"))
         XCTAssertEqual(SearchIndex.score(SearchIndex.fold("Äußere Wendung"), SearchIndex.fold("äuß")), 80)
         XCTAssertEqual(SearchIndex.score(SearchIndex.fold("Notizen für Montag"), SearchIndex.fold("FÜR")), 60)
         XCTAssertEqual(SearchIndex.score("日本語のノート", "ノート"), 40)
-        XCTAssertEqual(SearchIndex.score("日本語のノート", "日ノ"), 10)
+        XCTAssertNotNil(SearchIndex.score("日本語のノート", "日ノ"))
     }
 
     /// A link is looked up by its name, not by going through every file: thousands of files make no difference.

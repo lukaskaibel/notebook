@@ -147,10 +147,12 @@ GitHub's and Obsidian's `> [!note]` style get their colour and symbol.
 The search field in the toolbar (⌘F) finds notes, files and folders by name, the headings in notes, and words in notes
 and PDFs, with the page they're on. It also reads the words in pictures, in scanned PDFs and in the handwriting of
 drawings, so a photographed receipt or a scanned letter turns up too. Type several words in any order; notes that have
-them together come first. A result opens where it was found: the note scrolled to the words with them selected (they
+them together come first. Names are found loosely too, best first: by the first letters of their words ("kytr" for
+Kyoto trip) or with a letter wrong ("ryokna" for the ryokan); names that only have the letters somewhere in them come
+last, under Similar Names. A result opens where it was found: the note scrolled to the words with them selected (they
 bounce as Find does in Safari), a PDF at its page, a heading, or the picture in a note. Return opens the first match,
-and the last suggestion is always a new note with what you typed as its name. With an empty field, it lists what you
-opened last.
+and the last suggestion is always a new note with what you typed as its name; with nothing but similar names found,
+Return makes that note. With an empty field, it lists what you opened last.
 
 Search runs in the background on every core, a few milliseconds a letter even in a whole iCloud Drive, so typing never
 waits for it; the results stay until the new ones are there. Notebook keeps what it has read between launches, so search
@@ -345,7 +347,8 @@ The window is built from the system's own pieces: a source-list sidebar, a toolb
 share menu, an inspector, Settings, alerts, PDFKit, AVKit and Quick Look. It follows the system's light or dark
 appearance. The inspector shows a note's outline, with the section you're reading marked and a word count; a click on
 a heading scrolls there. In Settings › Text you pick the typeface (San Francisco, New York, Rounded or Monospaced,
-each shown in itself), the size, the line spacing and the line width. The icon is a leather notebook, and Settings › App Icon makes it yours:
+each shown in itself), the size, the line spacing and the line width; on iPhone and iPad the system's text size makes
+notes larger or smaller on top of that, as it does the text of other apps (not in a PDF or printout). The icon is a leather notebook, and Settings › App Icon makes it yours:
 pick the leather, the elastic band, the ribbon and the background, and the Dock shows your notebook while the app is
 open. Links, the caret and folders are in ink blue to go with it, or in the accent colour you chose in System Settings.
 
@@ -369,8 +372,10 @@ hold it for everything else.
 
 The iPad has the Mac's layout: the sidebar with its folders opening in place, the note next to it, and the outline in
 an inspector. In portrait the sidebar steps aside once you have picked a note. With a keyboard, the Mac's shortcuts
-work, the menu bar has the Mac's File, View, Go and Format menus, and the marks show next to the caret as on the Mac. Drag pictures from Photos into a note, or files onto a folder in
-the sidebar. A window as narrow as a phone gets the iPhone's screens.
+work, the menu bar has the Mac's File, View, Go and Format menus, the marks show next to the caret as on the Mac, and
+the bar above the keyboard steps aside, as in Notes: Aa, attachments and the pencil are in the toolbar at the top. Drag
+pictures from Photos into a note, or files onto a folder in the sidebar. A window as narrow as a phone gets the iPhone's
+screens.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/devices-dark.webp">
@@ -416,8 +421,8 @@ the sidebar. A window as narrow as a phone gets the iPhone's screens.
   turns. Pick iCloud Drive or any folder in the Files app's picker, or keep notes on
   the device, in On My iPhone › Notebook. A bar above the keyboard, whose tools you choose, formats, links and adds
   photos, scans and files, with buttons for where the caret is on its left; Aa opens the Format panel as in Notes.
-  Deleting moves to Recently Deleted; where a place has none, Notebook asks before it deletes, and Undo (⌘Z) still
-  brings it back while Notebook is open.
+  Deleting moves to Recently Deleted, and the file leaves the list at once, as in Notes; where a place has none,
+  Notebook asks before it deletes, and Undo (shake, or ⌘Z) still brings it back while Notebook is open.
 - **Hidden folders.** Right-click a folder you don't want to see, such as one another app keeps in iCloud Drive, and
   choose Hide Folder, or on iPhone and iPad touch and hold it. It leaves the sidebar, search and Move To, and stays
   hidden on your other Macs, iPhones and iPads through iCloud. The eye next to the location's name, or ⇧⌘., shows
