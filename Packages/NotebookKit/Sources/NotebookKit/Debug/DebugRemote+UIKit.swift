@@ -439,6 +439,17 @@ enum DebugRemote {
             log("cursorview caret \(position.map { view.caretRect(for: $0).integral } ?? .null): \(drawn.joined(separator: "; "))")
         case "views":
             if let window = editor.textView.window { log(describe(window, depth: 0, limit: Int(numbers.first ?? 6))) }
+        case "barscroll":
+            // Which scroll view the bars of each screen follow: the note's text view, another, or none.
+            let windows = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }
+            func screens(_ controller: UIViewController) -> [UIViewController] {
+                [controller] + controller.children.flatMap(screens) + (controller.presentedViewController.map(screens) ?? [])
+            }
+            for controller in windows.compactMap(\.rootViewController).flatMap(screens) where controller.parent is UINavigationController {
+                let view = controller.contentScrollView(for: .top)
+                log("barscroll \(type(of: controller)): \(view === editor.textView ? "the note's text view" : view.map { "\(type(of: $0))" } ?? "none")"
+                    + (view === editor.textView && editor.textView.window == nil ? ", not in a window" : ""))
+            }
         case "drawing", "drawstroke", "drawinfo", "drawundo", "drawredo":
             log(editor.debugDrawing(command, argument))
         case "drawpolicy":
