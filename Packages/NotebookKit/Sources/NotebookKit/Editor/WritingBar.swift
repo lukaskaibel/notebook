@@ -1,3 +1,53 @@
+import CoreGraphics
+
+/// How the bar above the keyboard shares out its width: on the left the buttons for where the caret is, as many as
+/// leave the tools room; then the capsule of tools, a page of them at a time, every tool as wide as the others; on the
+/// right the button that hides the keyboard. Without UIKit, so it can be tried on the Mac too.
+struct WritingBarLayout: Equatable {
+    /// Room above the capsule, the capsule, and the gap between it and the keyboard: Notes' measures.
+    static let topGap: CGFloat = 6
+    static let barHeight: CGFloat = 48
+    static let keyboardGap: CGFloat = 12
+    static let height = topGap + barHeight + keyboardGap
+    /// About a fingertip per tool; a page holds as many as fit.
+    static let toolWidth: CGFloat = 53
+    static let spacing: CGFloat = 8
+    /// Between the buttons for where the caret is, close enough for their glass to flow together.
+    static let caretSpacing: CGFloat = 6
+
+    /// The bar spans the screen on an iPhone, less its margins; on a wider screen it stops at about ten tools.
+    static func barWidth(for available: CGFloat) -> CGFloat {
+        max(toolWidth, min(available - 24, 620))
+    }
+
+    /// How many of the buttons for the caret show, and how wide they are together.
+    let caretCount: Int
+    let caretWidth: CGFloat
+    /// The capsule of tools.
+    let toolsWidth: CGFloat
+    let perPage: Int
+    let pageCount: Int
+
+    var slotWidth: CGFloat { toolsWidth / CGFloat(perPage) }
+
+    init(width: CGFloat, caretTools: Int, tools: Int) {
+        // Less the button that hides the keyboard.
+        let full = Self.barWidth(for: width) - Self.barHeight - Self.spacing
+        // As many as leave the tools room for two of theirs.
+        let room = Int((full - 2 * Self.toolWidth - Self.spacing + Self.caretSpacing) / (Self.barHeight + Self.caretSpacing))
+        caretCount = min(caretTools, max(0, room))
+        caretWidth = caretCount == 0 ? 0 : CGFloat(caretCount) * (Self.barHeight + Self.caretSpacing) - Self.caretSpacing
+        toolsWidth = full - (caretCount == 0 ? 0 : caretWidth + Self.spacing)
+        perPage = max(1, Int(toolsWidth / Self.toolWidth))
+        pageCount = max(1, (tools + perPage - 1) / perPage)
+    }
+
+    /// The page to show when the pages change, the one you were on while there is one.
+    func page(_ page: Int) -> Int {
+        min(max(0, page), pageCount - 1)
+    }
+}
+
 #if os(iOS)
 import SwiftUI
 import UIKit
@@ -149,46 +199,93 @@ enum CaretTool: CaseIterable, Identifiable {
 /// caret is come and go, each a circle of glass of its own; on the right, always, the button that hides the keyboard.
 @MainActor
 final class WritingBar: UIView {
-    /// Room above the capsule, the capsule, and the gap between it and the keyboard.
-    static let topGap: CGFloat = 6
-    static let barHeight: CGFloat = 44
-    static let keyboardGap: CGFloat = 10
-    static let height = topGap + barHeight + keyboardGap
-    /// About a fingertip per tool; a page holds as many as fit.
-    static let toolWidth: CGFloat = 56
-    static let spacing: CGFloat = 8
-    /// Between the buttons for where the caret is, close enough for their glass to flow together.
-    static let caretSpacing: CGFloat = 6
+    static let topGap = WritingBarLayout.topGap
+    static let barHeight = WritingBarLayout.barHeight
+    static let keyboardGap = WritingBarLayout.keyboardGap
+    static let height = WritingBarLayout.height
+    static let spacing = WritingBarLayout.spacing
+    static let caretSpacing = WritingBarLayout.caretSpacing
+    /// How far above its glass the note fades out under the bar, which the line being written keeps clear of.
+    static let fadeReach: CGFloat = 24
 
-    /// The bar spans the screen on an iPhone, less its margins; on a wider screen it stops at about ten tools.
     static func barWidth(for available: CGFloat) -> CGFloat {
-        max(toolWidth, min(available - 24, 620))
+        WritingBarLayout.barWidth(for: available)
     }
 
     private let host: UIHostingController<WritingBarView>
     private weak var editor: EditorController?
+    private let presence = WritingBarPresence()
 
     init(editor: EditorController) {
         self.editor = editor
-        host = UIHostingController(rootView: WritingBarView(editor: editor))
+        host = UIHostingController(rootView: WritingBarView(editor: editor, presence: presence))
         super.init(frame: CGRect(x: 0, y: 0, width: 400, height: Self.height))
-        autoresizingMask = [.flexibleWidth]
+        // As tall as it says it is, which is nothing while it steps aside.
+        autoresizingMask = [.flexibleWidth, .flexibleHeight]
         backgroundColor = .clear
         host.view.backgroundColor = .clear
         host.safeAreaRegions = []
         host.view.frame = bounds
         host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         addSubview(host.view)
+        // The note fades out under the bar, as under Notes', rather than running sharp up to its glass.
+        let edge = UIScrollEdgeElementContainerInteraction()
+        edge.scrollView = editor.textView
+        edge.edge = .bottom
+        host.view.addInteraction(edge)
         // Touch and hold the bar to change it. SwiftUI's context menu doesn't come up in the keyboard's window.
         addInteraction(UIContextMenuInteraction(delegate: self))
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardChanged), name: HardwareKeyboard.didChange, object: nil)
+        editor.textView.registerForTraitChanges([UITraitHorizontalSizeClass.self]) { [weak self] (_: UITextView, _) in self?.keyboardChanged() }
+    }
+
+    /// Put above the keyboard, now that the note has a window to know its width by, or taken away with it. The bar
+    /// comes and goes as it is: its buttons for the caret change with a spring only once it has come up.
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        presence.isSettled = false
+        guard window != nil else { return }
+        tuck()
+        presence.arrivals += 1
+        let arrival = presence.arrivals
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self, window != nil, presence.arrivals == arrival else { return }
+            presence.isSettled = true
+        }
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
-    override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: Self.height) }
+    /// Typing on keys where the toolbar at the top has Format, Attach and Drawing, as on an iPad, the bar steps aside
+    /// as Notes' does, and only the keyboard's own shortcuts stay. It is back with the touch keyboard.
+    private(set) var isTucked = false {
+        didSet {
+            guard isTucked != oldValue else { return }
+            invalidateIntrinsicContentSize()
+            host.view.isHidden = isTucked
+            guard !isTucked, window != nil else { return }
+            // Back as the touch keyboard comes, fading in where it will be as the keyboard does on an iPad. This runs in
+            // the keyboard's own animation, which would take the bar from shown to hidden as well.
+            UIView.performWithoutAnimation { host.view.alpha = 0 }
+            UIView.animate(withDuration: 0.35, delay: 0, options: .curveEaseInOut) { self.host.view.alpha = 1 }
+        }
+    }
+
+    /// Leaving with the keyboard, the bar stays as it is.
+    @objc private func keyboardChanged() {
+        guard window == nil || editor?.textView.isFirstResponder == true else { return }
+        tuck()
+    }
+
+    private func tuck() {
+        isTucked = HardwareKeyboard.shared.isInUse && editor?.textView.traitCollection.horizontalSizeClass == .regular
+    }
+
+    override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: isTucked ? 0 : Self.height) }
 
     /// Only the capsule takes touches: the strip around it belongs to the note.
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        guard !isTucked else { return false }
         let width = Self.barWidth(for: bounds.width)
         let capsule = CGRect(x: (bounds.width - width) / 2, y: Self.topGap, width: width, height: Self.barHeight)
         return capsule.insetBy(dx: -4, dy: -4).contains(point)
@@ -228,23 +325,27 @@ extension EditorController {
     }
 }
 
+/// Whether the bar is up above the keyboard, rather than coming up with it or going away.
+@MainActor
+@Observable
+final class WritingBarPresence {
+    var isSettled = false
+    @ObservationIgnored var arrivals = 0
+}
+
 struct WritingBarView: View {
     let editor: EditorController
-    @State private var page: Int? = 0
+    let presence: WritingBarPresence
+    @State private var page = 0
+    @State private var position = ScrollPosition(x: 0)
 
     var body: some View {
         GeometryReader { proxy in
-            // Less the button that hides the keyboard.
-            let full = WritingBar.barWidth(for: proxy.size.width) - WritingBar.barHeight - WritingBar.spacing
-            let caret = editor.caretContext
-            // As many as leave the tools room for two of theirs.
-            let room = Int((full - 2 * WritingBar.toolWidth - WritingBar.spacing + WritingBar.caretSpacing) / (WritingBar.barHeight + WritingBar.caretSpacing))
-            let caretTools = Array(CaretTool.tools(for: caret).prefix(max(0, room)))
-            let caretWidth = caretTools.isEmpty ? 0 : CGFloat(caretTools.count) * (WritingBar.barHeight + WritingBar.caretSpacing) - WritingBar.caretSpacing
-            let width = full - (caretTools.isEmpty ? 0 : caretWidth + WritingBar.spacing)
+            let wanted = CaretTool.tools(for: editor.caretContext)
             // The tools, and Edit after the last of them.
-            let pages = Self.pages(of: NotebookSettings.shared.writingBarTools.filter(\.isAvailable).map(Optional.some) + [nil], width: width)
-            let perPage = pages.first?.count ?? 1
+            let tools = NotebookSettings.shared.writingBarTools.filter(\.isAvailable).map(Optional.some) + [nil]
+            let layout = WritingBarLayout(width: proxy.size.width, caretTools: wanted.count, tools: tools.count)
+            let caretTools = Array(wanted.prefix(layout.caretCount))
             HStack(spacing: WritingBar.spacing) {
                 if !caretTools.isEmpty {
                     GlassEffectContainer(spacing: WritingBar.caretSpacing) {
@@ -255,49 +356,51 @@ struct WritingBarView: View {
                             }
                         }
                     }
-                    .frame(width: caretWidth, height: WritingBar.barHeight)
+                    .frame(width: layout.caretWidth, height: WritingBar.barHeight)
                     .transition(.scale(scale: 0.4, anchor: .leading).combined(with: .opacity))
                 }
-                tools(pages: pages, perPage: perPage, width: width)
+                self.tools(tools, layout: layout)
                 HideKeyboardButton { editor.endEditing() }
             }
             .frame(maxWidth: .infinity)
             .padding(.top, WritingBar.topGap)
-            .animation(UIAccessibility.isReduceMotionEnabled ? nil : .spring(duration: Theme.keyboardBarSpring.duration, bounce: Theme.keyboardBarSpring.bounce), value: caretTools)
-            // Fewer pages when the buttons for the caret take room: stay on one that is there.
-            .onChange(of: pages.count) { _, count in
-                if let current = page, current >= count { page = max(0, count - 1) }
+            .animation(!presence.isSettled || UIAccessibility.isReduceMotionEnabled ? nil : .spring(duration: Theme.keyboardBarSpring.duration, bounce: Theme.keyboardBarSpring.bounce), value: caretTools)
+            // Pages as wide as the capsule is now, and fewer when the buttons for the caret take room: stay on the one
+            // you were on.
+            .onChange(of: layout) { _, layout in
+                page = layout.page(page)
+                position.scrollTo(x: CGFloat(page) * layout.toolsWidth)
             }
         }
     }
 
-    /// The capsule of tools, a page at a time.
-    private func tools(pages: [[WritingTool?]], perPage: Int, width: CGFloat) -> some View {
+    /// The capsule of tools, a page at a time. One row of them, so a tool that moves to another page as the buttons
+    /// for the caret come and go slides there rather than fading out on one page and in on the other.
+    private func tools(_ tools: [WritingTool?], layout: WritingBarLayout) -> some View {
         ScrollView(.horizontal) {
             HStack(spacing: 0) {
-                ForEach(pages.indices, id: \.self) { index in
-                    HStack(spacing: 0) {
-                        ForEach(pages[index], id: \.self) { tool in
-                            if let tool { button(tool) } else { editButton }
-                        }
-                        // The last page keeps the others' spacing.
-                        ForEach(0..<max(0, perPage - pages[index].count), id: \.self) { _ in
-                            Color.clear.frame(maxWidth: .infinity)
-                        }
+                ForEach(tools, id: \.self) { tool in
+                    Group {
+                        if let tool { button(tool) } else { editButton }
                     }
-                    .containerRelativeFrame(.horizontal)
-                    .id(index)
+                    .frame(width: layout.slotWidth)
                 }
             }
-            .scrollTargetLayout()
+            // The last page as wide as the others, so it pages as they do.
+            .frame(width: CGFloat(layout.pageCount) * layout.toolsWidth, alignment: .leading)
         }
         .scrollTargetBehavior(.paging)
         .scrollIndicators(.hidden)
-        .scrollPosition(id: $page)
-        .scrollDisabled(pages.count < 2)
-        .frame(width: width, height: WritingBar.barHeight)
+        .scrollPosition($position)
+        .onScrollGeometryChange(for: Int.self) { geometry in
+            Int((geometry.contentOffset.x / max(1, geometry.containerSize.width)).rounded())
+        } action: { _, shown in
+            page = shown
+        }
+        .scrollDisabled(layout.pageCount < 2)
+        .frame(width: layout.toolsWidth, height: WritingBar.barHeight)
         .overlay(alignment: .bottom) {
-            if pages.count > 1 { dots(count: pages.count) }
+            if layout.pageCount > 1 { dots(count: layout.pageCount) }
         }
         .clipShape(.capsule)
         .glassEffect(.regular.interactive(), in: .capsule)
@@ -309,7 +412,7 @@ struct WritingBarView: View {
         let isOn = tool.style != nil
         return Button { perform(tool) } label: {
             Image(systemName: tool == .remind && editor.caretContext.hasReminder ? "bell.fill" : tool.symbol)
-                .font(.system(size: 17, weight: isOn ? .semibold : .medium))
+                .writingBarSymbol()
                 .foregroundStyle(isOn ? Color.white : Color.primary)
                 .frame(width: WritingBar.barHeight, height: WritingBar.barHeight)
                 .contentShape(.circle)
@@ -331,17 +434,12 @@ struct WritingBarView: View {
         }
     }
 
-    static func pages<Tool>(of tools: [Tool], width: CGFloat) -> [[Tool]] {
-        let perPage = max(1, Int(width / WritingBar.toolWidth))
-        return stride(from: 0, to: tools.count, by: perPage).map { Array(tools[$0..<min($0 + perPage, tools.count)]) }
-    }
-
     /// Which page of tools this is, small at the capsule's lower edge.
     private func dots(count: Int) -> some View {
         HStack(spacing: 4) {
             ForEach(0..<count, id: \.self) { index in
                 Circle()
-                    .fill(Color.primary.opacity(index == (page ?? 0) ? 0.5 : 0.15))
+                    .fill(Color.primary.opacity(index == page ? 0.5 : 0.15))
                     .frame(width: 4, height: 4)
             }
         }
@@ -372,7 +470,7 @@ struct WritingBarView: View {
     private var editButton: some View {
         Button { editor.editWritingBar() } label: {
             Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 18))
+                .writingBarSymbol()
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .contentShape(.rect)
@@ -383,7 +481,7 @@ struct WritingBarView: View {
 
     private func icon(_ tool: WritingTool) -> some View {
         Image(systemName: tool.symbol)
-            .font(.system(size: 18))
+            .writingBarSymbol()
             .foregroundStyle(.primary)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(.rect)
@@ -412,7 +510,7 @@ struct HideKeyboardButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "keyboard.chevron.compact.down")
-                .font(.system(size: 17, weight: .medium))
+                .writingBarSymbol()
                 .foregroundStyle(Color.primary)
                 .frame(width: WritingBar.barHeight, height: WritingBar.barHeight)
                 .contentShape(.circle)
@@ -420,6 +518,14 @@ struct HideKeyboardButton: View {
         .buttonStyle(.plain)
         .glassEffect(.regular.interactive(), in: .circle)
         .accessibilityLabel("Hide Keyboard")
+    }
+}
+
+extension Image {
+    /// A symbol of a bar above the keyboard, as Notes draws its tools and as toolbars draw theirs: the size of the
+    /// text, at the large scale.
+    func writingBarSymbol() -> some View {
+        font(.system(size: 17)).imageScale(.large)
     }
 }
 #endif

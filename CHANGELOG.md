@@ -62,10 +62,26 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Changed
 
+- On iPhone and iPad, a note's text follows the system's text size (Display & Brightness › Text Size, or Larger Text in
+  Accessibility), as the text of Notes and other apps does: the size you chose in Settings › Text is the size at the
+  standard text size, and the note is larger or smaller from there. The title, headings, checkboxes, maths and the line
+  with the date grow with it, and a note that is open follows a change at once, keeping your place. A PDF or a printout
+  of a note stays at the size from Settings › Text.
 - Notes are saved in the background, on the Mac, iPhone and iPad: a slow disk, or iCloud holding a note while it puts
   in another device's version, no longer makes the window wait when you pause typing, leave a note or switch apps.
   What you type meanwhile is saved right after. A note you have just left is still written, and quitting, renaming,
   moving or putting it in the Trash waits for it, so what you typed goes along.
+- Search and ⌘K find names loosely, as Spotlight does, and put the best first: by the starts of their words ("kytr"
+  finds Kyoto trip), and with a letter or two wrong ("ryokna" finds Getting to the ryokan, "seting" finds Settings).
+  In a big library, names that only have the letters typed somewhere in them ("kyo" in Workout family notes) no longer
+  crowd the files above the notes with the words in them: they come last, under Similar Names, and such commands
+  under Similar Commands. Suggestions for a link after [[ take only names with what was typed in them, so they keep
+  up as you type in any library.
+- On iPhone and iPad, the bar above the keyboard has the size of Notes': its symbols are as big as Notes' tools, its
+  glass is 48 points tall and sits 12 points above the keyboard, and on an iPhone a page holds one more tool. The note
+  fades out under it, as under Notes', while the line you write stays clear above the fade. On an iPad with a keyboard
+  attached it steps aside, as Notes' does, leaving the keyboard's own shortcuts; Format, attachments and the pencil are
+  in the toolbar at the top. It comes back with the touch keyboard.
 
 ### Fixed
 
@@ -74,6 +90,10 @@ versions follow [semantic versioning](https://semver.org).
   the end of the note rather than above its first line. On the iPad, and on a large iPhone held sideways, a style from
   Aa in the toolbar of such a note is for its last line, where Attach adds. A picker you cancel leaves the note as it
   was.
+- Maths on a line of its own grows and shrinks with the size chosen in Settings › Text, as maths within a line does.
+  It stayed at one size.
+- On iPhone and iPad, a note fades out under the bars at the top and bottom as you scroll, as in Notes, rather than
+  running sharp under the toolbar's buttons and stopping at a hard line under the title.
 - A note open in the main window and in a window of its own no longer makes Notebook hang as you type in one of them.
   Each window now shows what was typed in the other, and quitting with both open quits.
 - Leaving a note a moment after another device changed the same lines no longer loses what you typed since the last
@@ -96,8 +116,44 @@ versions follow [semantic versioning](https://semver.org).
   the lists of files go on over a few lines, as in the Files app, rather than losing their middle ("Gett…kan").
 - On iPhone and iPad, the Files app shows On My iPhone › Notebook (On My iPad › Notebook), the folder Keep Notes on
   This iPhone uses, so its notes can be opened, shared and backed up from there. It was missing.
+- On an iPad with a keyboard, the keys ⌘K shows next to its commands now all work: ⇧⌘N makes a folder, ⌘P prints the
+  note, and ⌘+, ⌘− and ⌘0 change the text size. They are in the menu bar too, with Show Outline (⌃⌘I) in its View
+  menu. ⌘K called deleting a note Move to Trash, with a ⌘⌫ that did nothing; it says Delete now, as the ⋯ menu does.
+  Where the iPhone's screens show, as in an iPad window as narrow as a phone, it no longer offers the sidebar and the
+  outline, which those screens don't have; the note's ⋯ menu has its outline there.
 - The sidebar on the Mac no longer scrolls back to the open note each time it is saved while you look at another part
   of it.
+- On iPhone and iPad, deleting a note works smoothly, as in Notes. On iOS 27 deleting could hang, after which
+  nothing happened, and no other change to files went through either until Notebook was opened again. Now the note
+  leaves the list at once, with the swipe or the menu, rather than once the disk or iCloud has moved it, also when
+  you delete several one after another, and it doesn't come back for a moment where it was. Delete in the ⋯ menu of
+  the note you are in goes back to its folder with the note still showing as it slides away, instead of an empty
+  page, and the note doesn't turn up in Recent, Favorites or search on its way out. Where a place has no Recently
+  Deleted, the note stays out of the list while Notebook asks whether to delete it for good, and comes back if you
+  cancel. Shake to Undo, and ⌘Z on an iPhone with a keyboard, now bring back a note deleted from a list; nothing
+  answered them there before, as nothing in a list has the focus. The Delete behind a swiped row is red, as in Notes
+  and Mail, and no longer blue.
+- Closing Notebook's window on the Mac no longer quits it. As in Notes, Notebook keeps running: its icon in the Dock and
+  the new Window › Notebook bring the window back, with the note you had open.
+- On the Mac, ⌘N in a note's own window made the new note in the main window behind it, so nothing seemed to happen.
+  New Note, New Folder, Open Recent, Search, ⌘K, To-dos, Back and Forward now bring the main window to the front, and
+  open it again if it was closed.
+- Turning the iPad no longer rebuilds the window a moment after the turn, with the toolbar and the note jumping and, in
+  portrait, the sidebar left lying over the note, dimming it. Turned to portrait with a note open, the sidebar now
+  slides out of the way, and back in when you turn the iPad to landscape; put away by hand, it stays away. Opened in
+  portrait with a note, Notebook shows the note without it. Shown in portrait, it sits next to the note rather than
+  over it.
+- On iPhone and iPad, the folder Keep Notes on This iPhone uses is called On My iPhone (On My iPad) on the first screen,
+  in search and in Settings, also where you chose it before. It was called "Documents", its folder's name on disk.
+- On iPhone and iPad, a list no longer says "No additional text" under notes Notebook hasn't read yet, as on the first
+  launch with many notes: it shows their dates until their first lines come in.
+- On the iPhone's welcome screen, the last lines no longer run under the Choose a Folder button.
+- On the iPhone, going back to the first screen from a note no longer pushes its list down once you are there: the note
+  you were in is already at the top of Recent while you go back.
+- On iPhone and iPad, when the buttons for where the caret is come or go in the bar above the keyboard, the tools that
+  move onto the first page or off it slide there, rather than showing twice for a moment. The bar also comes up with
+  the keyboard already as it should be for where you tap, and goes away with it as it was, rather than its buttons
+  popping in after it or shrinking away as it leaves.
 - In the Mac's sidebar, Tab now goes on into the note that is open, with the caret where it was, as Tab goes from the
   list to the note in Notes and Mail. Moving a file to the Trash from the sidebar opens the next file in its folder, or
   the one before it at the end, as Notes shows the next note; before, the note opened before it came back, wherever it

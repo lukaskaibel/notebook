@@ -53,6 +53,7 @@ struct TouchRootView: View {
             }
         }
         .tint(Color.theme(Theme.accent))
+        .onChange(of: sizeClass, initial: true) { _, size in workspace.showsPhoneScreens = size == .compact }
         .quickLookPreview($workspace.quickLookURL)
         .alert(conflictTitle, isPresented: Binding(get: { workspace.note?.conflict != nil }, set: { _ in }), presenting: workspace.note?.conflict) { _ in
             Button("Keep Both") { workspace.resolveConflict(.keepBoth) }
@@ -78,7 +79,8 @@ struct TouchRootView: View {
     }
 }
 
-/// The iPad's menu bar and keyboard shortcuts, as on the Mac. Bold and italic are the text view's own (⌘B, ⌘I).
+/// The iPad's menu bar and keyboard shortcuts, as on the Mac, so that what ⌘K shows next to a command works here too.
+/// Bold and italic are the text view's own (⌘B, ⌘I).
 struct TouchCommands: Commands {
     let workspace: Workspace
 
@@ -87,6 +89,14 @@ struct TouchCommands: Commands {
             Button { workspace.newNote() } label: { Label("New Note", systemImage: "square.and.pencil") }
                 .keyboardShortcut("n", modifiers: .command)
                 .disabled(workspace.locations.isEmpty)
+            Button { workspace.newFolderRequest += 1 } label: { Label("New Folder", systemImage: "folder.badge.plus") }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+                .disabled(workspace.locations.isEmpty)
+        }
+        CommandGroup(replacing: .printItem) {
+            Button { NoteExporter.print(workspace.editor, title: workspace.currentTitle) } label: { Label("Print…", systemImage: "printer") }
+                .keyboardShortcut("p", modifiers: .command)
+                .disabled(workspace.note?.isLoaded != true)
         }
         // The system's own reach only what has the focus; these reach the changes to files too (`Workspace+Undo`).
         CommandGroup(replacing: .undoRedo) {
@@ -95,14 +105,30 @@ struct TouchCommands: Commands {
             Button { workspace.redo() } label: { Label("Redo", systemImage: "arrow.uturn.forward") }
                 .keyboardShortcut("z", modifiers: [.command, .shift])
         }
-        // The Finder's shortcut for its hidden files, as on the Mac.
+        // After the system's Show Sidebar (⌃⌘S), as on the Mac.
         CommandGroup(after: .sidebar) {
+            Button {
+                withAnimation(Theme.spring) { workspace.isOutlineVisible.toggle() }
+            } label: {
+                Label(workspace.isOutlineVisible ? "Hide Outline" : "Show Outline", systemImage: "sidebar.right")
+            }
+            .keyboardShortcut("i", modifiers: [.command, .control])
+            // The iPhone's screens, in a window as narrow as a phone, have it in the note's ⋯ menu instead.
+            .disabled(workspace.currentURL == nil || workspace.showsTodos || workspace.showsPhoneScreens)
+            // The Finder's shortcut for its hidden files.
             Button { withAnimation { workspace.toggleAllHiddenFolders() } } label: {
                 Label(workspace.showsAllHiddenFolders ? "Hide Hidden Folders" : "Show Hidden Folders",
                       systemImage: workspace.showsAllHiddenFolders ? "eye.slash" : "eye")
             }
             .keyboardShortcut(".", modifiers: [.command, .shift])
             .disabled(!workspace.hasHiddenFolders)
+            Divider()
+            Button { NotebookSettings.shared.changeTextSize(by: 1) } label: { Label("Bigger", systemImage: "textformat.size.larger") }
+                .keyboardShortcut("+", modifiers: .command)
+            Button { NotebookSettings.shared.changeTextSize(by: -1) } label: { Label("Smaller", systemImage: "textformat.size.smaller") }
+                .keyboardShortcut("-", modifiers: .command)
+            Button { NotebookSettings.shared.typography.size = Typography().size } label: { Label("Actual Size", systemImage: "textformat.size") }
+                .keyboardShortcut("0", modifiers: .command)
         }
         CommandMenu("Go") {
             Button { workspace.searchRequest += 1 } label: { Label("Search", systemImage: "magnifyingglass") }
@@ -151,7 +177,7 @@ struct TouchWelcomeView: View {
                     .resizable()
                     .frame(width: 96, height: 96)
                     .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .padding(.top, 56)
+                    .padding(.top, 36)
                     .padding(.bottom, 20)
                     .accessibilityHidden(true)
                 Text("Your notes live in your folders")
@@ -168,13 +194,15 @@ struct TouchWelcomeView: View {
                     point("magnifyingglass", "Find anything", "Search finds names, notes, PDFs and text in pictures.")
                     point("icloud", "On every device", "iCloud Drive keeps your iPhone, iPad and Mac in step.")
                 }
-                .padding(.bottom, 40)
+                .padding(.bottom, 24)
             }
             .frame(maxWidth: 480)
             .padding(.horizontal, 28)
             .frame(maxWidth: .infinity)
         }
-        .safeAreaInset(edge: .bottom) {
+        // A bar, as the system's are: what scrolls under the buttons fades out instead of showing through them.
+        .scrollEdgeEffectStyle(.soft, for: .bottom)
+        .safeAreaBar(edge: .bottom) {
             VStack(spacing: 12) {
                 Button { picksFolder = true } label: {
                     Label("Choose a Folder", systemImage: "folder")
@@ -245,6 +273,7 @@ struct TouchSettings: View {
                         }
                         .swipeActions {
                             Button("Remove", role: .destructive) { workspace.removeLocation(location.id) }
+                                .tint(.red)
                         }
                     }
                     Button { addsLocation = true } label: { Label("Add Location", systemImage: "plus") }

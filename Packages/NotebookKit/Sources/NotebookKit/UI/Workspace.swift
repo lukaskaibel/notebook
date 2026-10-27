@@ -96,6 +96,11 @@ public final class Workspace: NSObject {
         get { columnVisibility != .detailOnly }
         set { columnVisibility = newValue ? .all : .detailOnly }
     }
+    #if os(iOS)
+    /// The iPad's sidebar was put away for want of room, so it comes back once the window is wide again, also after the
+    /// window was as narrow as a phone and showed the iPhone's screens.
+    @ObservationIgnored var sidebarHiddenForWidth = false
+    #endif
     /// The outline of the open note, on the right. On the iPad it starts hidden, leaving the note the room.
     var isOutlineVisible = UserDefaults.standard.object(forKey: "showsOutline") as? Bool ?? Workspace.showsOutlineAtFirst {
         didSet { UserDefaults.standard.set(isOutlineVisible, forKey: "showsOutline") }
@@ -132,6 +137,10 @@ public final class Workspace: NSObject {
     @ObservationIgnored var showWindow: (() -> Void)?
 
     #if os(macOS)
+    /// The main window is open: it can be closed while Notebook keeps running.
+    var isMainWindowOpen = false
+    /// Commands for the main window given while it was closed (⌘N, ⌘F): they run once it is there again.
+    @ObservationIgnored private var waitingForWindow: [() -> Void] = []
     /// The note in its own window that you are working in, for Revert To; nil while it's the main window.
     var keyFileNote: NoteDocument?
     @ObservationIgnored weak var sidebar: SidebarController?
@@ -155,14 +164,21 @@ public final class Workspace: NSObject {
     /// Counts ⌘F, which puts the caret in the search field.
     var searchRequest = 0
     #if os(iOS)
-    /// Counts the times ⌘K asked for Settings and for Add Location, which the screens show.
+    /// Counts the times ⌘K asked for Settings and Add Location, and ⌘K or the menu bar for New Folder, which the screens
+    /// show.
     var settingsRequest = 0
     var locationRequest = 0
+    var newFolderRequest = 0
+    /// The window is as narrow as a phone and shows the iPhone's screens, which have no sidebar or outline to show.
+    var showsPhoneScreens = false
     /// The folder Import from Apple Notes puts the notes in, while the Files app's picker asks for them.
     var appleNotesImportFolder: URL?
     #endif
-    /// A file to delete for good, once you said so, where there is no Recently Deleted to put it in.
-    var deleting: URL?
+    /// The files to delete for good, once you said so, where there is no Recently Deleted to put them in: asked about
+    /// one at a time.
+    var deleteQuestions = DeleteQuestions()
+    /// The file asked about now.
+    var deleting: URL? { deleteQuestions.asking }
     /// A note to set a reminder for, in a sheet.
     var reminderRequest: ReminderRequest?
     /// A to-do to set a reminder for, in a sheet.
@@ -219,6 +235,13 @@ public final class Workspace: NSObject {
     /// The names files get while they are renamed, by path: shown until the rename is done, so a row never shows the
     /// old name again in between.
     private(set) var newNames: [String: String] = [:]
+    /// Files on their way to the Trash, by path: gone from the lists on iPhone and iPad as soon as you ask, with the
+    /// swipe or the menu that asked, as in Notes, rather than once the disk has done it. Counted, as the same file can
+    /// be asked to go twice.
+    private(set) var leaving: [String: Int] = [:]
+    /// Files Notebook put in the Trash or deleted, by path, which search may still find until it has read their
+    /// folders again.
+    @ObservationIgnored var thrownAwayPaths = Set<String>()
     /// The changes to files Undo and Redo would take next, in order (`Workspace+Undo`).
     @ObservationIgnored let fileUndoLog = FileUndoLog()
     /// Where those changes are kept without a window to keep them (tests).
@@ -226,8 +249,11 @@ public final class Workspace: NSObject {
     /// The new note that is open, made a moment ago: left empty, it goes away, and so does its New Note in Undo.
     @ObservationIgnored weak var newNoteChange: FileChange?
     #if os(iOS)
-    /// What Notebook knew about a file it couldn't put in the Trash, before it closed it: for deleting it for good.
-    @ObservationIgnored var rememberedForDeleting: FileChange.Remembered?
+    /// What Notebook knew about files it couldn't put in the Trash, before it closed them, by path: for deleting them
+    /// for good.
+    @ObservationIgnored var rememberedForDeleting: [String: FileChange.Remembered] = [:]
+    /// What takes the focus after a change to files, for Shake to Undo and ⌘Z to reach it (`FileUndoFocus`).
+    @ObservationIgnored weak var fileUndoView: FileUndoView?
     #endif
 
     public override init() {
@@ -402,7 +428,8 @@ public final class Workspace: NSObject {
                 saves = true
             }
             // On My iPhone is known by its bookmark, which a new location has only now.
-            if let name = Location.placeName(for: locations[index].url, bookmark: locations[index].bookmark) ?? survey.name, name != locations[index].name {
+            if let name = Location.placeName(for: locations[index].url, bookmark: locations[index].bookmark, among: locations) ?? survey.name,
+               name != locations[index].name {
                 locations[index].name = name
                 saves = true
                 reloadsAll = true
@@ -416,6 +443,11 @@ public final class Workspace: NSObject {
                     changed.append(node)
                 }
             }
+        }
+        // On My iPhone itself, known only now, renames Notebook's own folder, another location.
+        if nameLocations() {
+            saves = true
+            reloadsAll = true
         }
         if saves, !temporaryLocations { LocationStore.save(locations) }
         // An older lookup's files are as good as any, but only the newest knows every location.
@@ -449,8 +481,9 @@ public final class Workspace: NSObject {
     public func addLocation(_ url: URL) {
         let url = url.standardizedFileURL
         guard !locations.contains(where: { $0.path == url.path }) else { return }
-        let location = LocationStore.make(for: url)
+        let location = LocationStore.make(for: url, besides: locations)
         locations.append(location)
+        nameLocations()
         if !temporaryLocations { LocationStore.save(locations) }
         locationsChanged(new: location.id)
         #if os(macOS)
@@ -479,8 +512,23 @@ public final class Workspace: NSObject {
         return true
     }
 
+    /// Names the folders that are places of their own again, as `Location.placeName` names them by the others: a
+    /// location added or removed can rename another. True when a name changed.
+    @discardableResult
+    private func nameLocations() -> Bool {
+        var changed = false
+        for index in locations.indices {
+            guard let name = Location.placeName(for: locations[index].url, bookmark: locations[index].bookmark, among: locations),
+                  name != locations[index].name else { continue }
+            locations[index].name = name
+            changed = true
+        }
+        return changed
+    }
+
     public func removeLocation(_ id: UUID) {
         locations.removeAll { $0.id == id }
+        nameLocations()
         if !temporaryLocations { LocationStore.save(locations) }
         locationsChanged()
         // Its notes leave the widgets, and Edit Widget.
@@ -1132,12 +1180,17 @@ public final class Workspace: NSObject {
     }
 
     var favoriteURLs: [URL] {
-        favorites.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) }
+        favorites.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) && !isLeaving($0) }
     }
 
     /// The files opened last, newest first, without the one that is open: for File › Open Recent and search.
-    var recentURLs: [URL] {
-        recents.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) && $0 != currentURL }
+    var recentURLs: [URL] { recentURLs(includingOpen: false) }
+
+    /// What you opened last, newest first. Without the open note, which a menu or search has no need to offer, unless
+    /// it is `includingOpen`: the iPhone's first screen shows it while you are in it, so the screen you go back to has
+    /// its row already, rather than putting it in once you are there.
+    func recentURLs(includingOpen: Bool) -> [URL] {
+        recents.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) && (includingOpen || $0 != currentURL) && !isLeaving($0) }
     }
 
     func clearRecents() {
@@ -1163,6 +1216,8 @@ public final class Workspace: NSObject {
         history = history.map(fix)
         relocation = (old.standardizedFileURL, new.standardizedFileURL, UUID())
         if let current = currentURL { currentURL = fix(current) }
+        // A file deleted while its rename was under way stays out of the lists under its new name.
+        if !leaving.isEmpty { leaving = Dictionary(leaving.map { (fix($0.key), $0.value) }, uniquingKeysWith: +) }
         // Else ⌘N would make the folder again under its old name, for the note.
         if let folder = selectedFolder { selectedFolder = fix(folder) }
         #if os(iOS)
@@ -1673,16 +1728,27 @@ public final class Workspace: NSObject {
         }
     }
 
-    /// Moves a file or folder to the Trash. The task says whether it could (on iPhone and iPad a place may have no
-    /// Recently Deleted).
+    /// Moves a file or folder to the Trash. The task says whether it could. On iPhone and iPad it goes from the lists at
+    /// once, and the note you are in closes at once, its screen going back as its row goes; where a place has no
+    /// Recently Deleted, you are asked whether to delete it for good, and it stays out of the lists while you are.
     @discardableResult
     /// `next`: the file to show if the one open goes, as the sidebar asks for the next row; else the last one before it.
     func trash(_ url: URL, next: URL? = nil) -> Task<Bool, Never> {
         guard !isLinkedFolder(url) else { beep(); return Task { false } }
         let change = keepForUndo(FileChange(.trash, "Move to Trash", from: url))
+        #if os(iOS)
+        let open = currentURL.flatMap { FileNode.isSameOrInside($0, url) ? $0 : nil }
+        if open != nil { closeThrownAway() }
+        beginLeaving(url)
+        #endif
         return changeFiles { [self] follow in
+            // Out of the lists under the name a rename before this gave it, too (`replacePath`).
             let url = follow(url)
-            let remembered = remembered(url)
+            var remembered = remembered(url)
+            #if os(iOS)
+            // Closed already, it opens again with Undo all the same.
+            if let open { remembered.openFile = follow(open) }
+            #endif
             change.remembered = remembered
             let trashed = await trashNow(url, next: next.map(follow))
             // Its versions wait in the History's Trash, for Undo, and a note made under its name starts without them.
@@ -1691,8 +1757,13 @@ public final class Workspace: NSObject {
             changeDone(change, from: url, to: trashed.place)
             if !trashed.done { beep() }
             #if os(iOS)
-            // Deleted for good next, after asking (`moveToTrash`): Undo brings it back from there as it was now, open.
-            if !trashed.done { rememberedForDeleting = change.remembered }
+            if !trashed.done, FileManager.default.fileExists(atPath: url.path) {
+                // Deleted for good next, once you say so: Undo brings it back from there as it was now, open.
+                rememberedForDeleting[url.path] = change.remembered
+                deleteQuestions.ask(url)
+            } else {
+                endLeaving(url, animated: !trashed.done)
+            }
             #endif
             return trashed.done
         }
@@ -1702,11 +1773,7 @@ public final class Workspace: NSObject {
     /// note is in it. Says where in the Trash it went.
     func trashNow(_ url: URL, next: URL? = nil) async -> (done: Bool, place: URL?) {
         let wasCurrent = currentURL.map { FileNode.isSameOrInside($0, url) } ?? false
-        if wasCurrent {
-            note?.close()
-            note = nil
-            currentURL = nil
-        }
+        if wasCurrent { closeThrownAway() }
         // What was typed in notes there goes along to the Trash, rather than coming back where they were.
         await NoteDocument.save(atOrInside: url)
         let trashed = await Task.detached(priority: .userInitiated, operation: { FileOperations.moveToTrash(url) }).value
@@ -1724,33 +1791,94 @@ public final class Workspace: NSObject {
         return trashed
     }
 
+    /// Closes the open note, which goes to the Trash or is deleted, or is in a folder that does: what was typed is
+    /// saved first (`NoteDocument.save(atOrInside:)`). On iPhone and iPad its screen keeps a picture of it as it goes.
+    private func closeThrownAway() {
+        #if os(iOS)
+        keepSnapshot()
+        #endif
+        note?.close()
+        note = nil
+        currentURL = nil
+    }
+
     #if os(iOS)
     /// Deletes for good, after you agreed to it: only where there is no Recently Deleted. Undo still brings it back
-    /// while Notebook is open.
+    /// while Notebook is open. It is out of the lists until it is done.
     func deleteImmediately(_ url: URL) {
         let change = keepForUndo(FileChange(.trash, "Delete", from: url))
+        change.forGood = true
+        beginLeaving(url)
         changeFiles { [self] follow in
+            let asked = url
             let url = follow(url)
-            let known = rememberedForDeleting.flatMap { $0.path == url.path ? $0 : nil }
-            rememberedForDeleting = nil
+            let known = rememberedForDeleting.removeValue(forKey: url.path) ?? rememberedForDeleting.removeValue(forKey: asked.path)
             let remembered = known ?? remembered(url)
             change.remembered = remembered
             let deleted = await deleteNow(url)
             if deleted.done { NoteHistory.shared.trash(url, as: remembered.history) }
             changeDone(change, from: url, to: deleted.place)
             if !deleted.done { beep() }
+            endLeaving(url, animated: !deleted.done)
         }
     }
 
     /// Deletes for good, in a change to files under way, and says where it waits for Undo, if anywhere.
     func deleteNow(_ url: URL) async -> (done: Bool, place: URL?) {
-        if let current = currentURL, FileNode.isSameOrInside(current, url) { closeFile() }
+        if let current = currentURL, FileNode.isSameOrInside(current, url) { closeThrownAway() }
         await NoteDocument.save(atOrInside: url)
         let deleted = await Task.detached(priority: .userInitiated, operation: { FileOperations.delete(url) }).value
         if deleted.done { thrownAway(url) }
         return deleted
     }
+
+    /// The answer to "Delete immediately?": deleted for good, or back in the lists where it was. Then the next file
+    /// waiting for the question, once this alert has gone.
+    func answerDeleting(_ url: URL, delete: Bool) {
+        deleteQuestions.answered(url)
+        if delete { deleteImmediately(url) } else { rememberedForDeleting[url.path] = nil }
+        endLeaving(url, animated: !delete)
+        Task {
+            // Once the alert has gone: one asked for meanwhile wouldn't show.
+            try? await Task.sleep(for: .seconds(0.5))
+            deleteQuestions.gone()
+        }
+    }
     #endif
+
+    /// Takes a file out of the lists, with the animation of the swipe or menu that asked, until `endLeaving`.
+    func beginLeaving(_ url: URL) {
+        let key = HiddenFolders.withoutPrivate(url.standardizedFileURL.path)
+        withAnimation { leaving[key, default: 0] += 1 }
+    }
+
+    /// The file has gone from where it was, or is to show again, `animated` sliding back in, as it couldn't go.
+    func endLeaving(_ url: URL, animated: Bool = false) {
+        let key = HiddenFolders.withoutPrivate(url.standardizedFileURL.path)
+        guard let count = leaving[key] else { return }
+        if animated {
+            withAnimation { leaving[key] = count > 1 ? count - 1 : nil }
+        } else {
+            leaving[key] = count > 1 ? count - 1 : nil
+        }
+    }
+
+    /// Whether a file is on its way to the Trash, or in a folder that is: the lists leave it out.
+    func isLeaving(_ url: URL) -> Bool {
+        guard !leaving.isEmpty else { return false }
+        let path = HiddenFolders.withoutPrivate(url.standardizedFileURL.path)
+        return leaving.keys.contains { path == $0 || path.hasPrefix($0 + "/") }
+    }
+
+    /// Whether a file has gone to the Trash or is on its way there, itself or a folder it was in, for lists that don't
+    /// follow the folders: search, which may find it until its folder has been read again. One back at its place, put
+    /// back from the Trash, is there.
+    func isThrownAway(_ url: URL) -> Bool {
+        if isLeaving(url) { return true }
+        guard !thrownAwayPaths.isEmpty else { return false }
+        let path = HiddenFolders.withoutPrivate(url.standardizedFileURL.path)
+        return thrownAwayPaths.contains { path == $0 || path.hasPrefix($0 + "/") } && !FileManager.default.fileExists(atPath: url.path)
+    }
 
     /// A file thrown away: forgotten everywhere, and gone from the sidebar at once.
     private func thrownAway(_ url: URL) {
@@ -1759,6 +1887,7 @@ public final class Workspace: NSObject {
         defaultFolderMoved(from: url, to: nil)
         favorites.removeAll { HiddenFolders.withoutPrivate($0) == HiddenFolders.withoutPrivate(url.path) }
         if !temporaryLocations { UserDefaults.standard.set(favorites, forKey: "favorites") }
+        thrownAwayPaths.insert(HiddenFolders.withoutPrivate(url.standardizedFileURL.path))
         widgetNoteThrownAway(url)
         showChanges(in: [url.deletingLastPathComponent()], removing: [url])
     }
@@ -1808,6 +1937,32 @@ public final class Workspace: NSObject {
         let name = FileManager.default.displayName(atPath: app.path)
         return name.hasSuffix(".app") ? String(name.dropLast(4)) : name
     }
+
+    /// Runs a command of the main window in it: brought to the front, or opened again first when it was closed, so what
+    /// the command shows (a new note, search) is there, and its Undo is the window's. A new note made behind a note's
+    /// own window seemed not to come.
+    func inMainWindow(_ action: @escaping () -> Void) {
+        if isMainWindowOpen {
+            // The sidebar is in the main window whatever it shows.
+            if sidebar?.outline.window?.isKeyWindow != true { showWindow?() }
+            return action()
+        }
+        waitingForWindow.append(action)
+        showWindow?()
+    }
+
+    /// The main window opened (again): the commands given while it was closed run, once its views are in it.
+    func mainWindowOpened() {
+        isMainWindowOpen = true
+        DispatchQueue.main.async { [self] in
+            let waiting = waitingForWindow
+            waitingForWindow = []
+            waiting.forEach { $0() }
+        }
+    }
+
+    /// A note you can see, for Print and Export: in a note's own window, or the main window's while that is open.
+    var hasVisibleNote: Bool { keyFileNote != nil || isMainWindowOpen && note != nil }
 
     /// The note in the window you are working in: a file window's, or this window's.
     func activeEditor() -> (editor: EditorController, title: String, window: NSWindow?)? {

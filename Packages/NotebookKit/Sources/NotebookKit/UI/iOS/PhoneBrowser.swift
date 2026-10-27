@@ -53,6 +53,8 @@ struct PhoneBrowser: View {
         }
         .modifier(FileAlerts(workspace: workspace, newFolderIn: $newFolderIn))
         .modifier(AppleNotesImporter(workspace: workspace))
+        .background(alignment: .topLeading) { FileUndoFocus(workspace: workspace).frame(width: 0, height: 0) }
+        .onChange(of: workspace.newFolderRequest) { _, _ in newFolderIn = workspace.folderForNewNote ?? workspace.locations.first?.url }
         .onAppear {
             // Back where you were: in the note you had open, with its folders behind it.
             if let url = workspace.currentURL, path.isEmpty { path = folders(to: url) + [Page(url: url, isFolder: false)] }
@@ -167,7 +169,9 @@ struct HomeScreen: View {
                         }
                     }
                 }
-                let recents = Array(workspace.recentURLs.prefix(3))
+                // With the note you are in: going back to this screen doesn't put its row in at the end and push the
+                // list down.
+                let recents = Array(workspace.recentURLs(includingOpen: true).prefix(3))
                 if !recents.isEmpty {
                     Section("Recent") {
                         ForEach(recents, id: \.self) { url in
@@ -284,7 +288,7 @@ struct HomeScreen: View {
 
     /// Return opens the best match, as on the Mac.
     private func submitSearch() {
-        guard let first = workspace.searchSession.sections.first?.items.first else { return }
+        guard let first = SearchSection.firstToOpen(in: workspace.searchSession.sections) else { return }
         open(first.result)
     }
 }
@@ -312,7 +316,9 @@ struct FolderScreen: View {
                     .contextMenu { FileActions(workspace: workspace, url: node.url) { newFolderIn = $0 } }
                     .swipeActions(edge: .trailing) {
                         if !node.isLinked {
-                            Button(role: .destructive) { workspace.moveToTrash(node.url) } label: { Label("Delete", systemImage: "trash") }
+                            // Red as in Notes and Mail: a destructive swipe would take the app's ink instead.
+                            Button(role: .destructive) { workspace.trash(node.url) } label: { Label("Delete", systemImage: "trash") }
+                                .tint(.red)
                             Button { workspace.moving = MovingFile(url: node.url) } label: { Label("Move", systemImage: "folder") }
                                 .tint(.indigo)
                         }
@@ -354,7 +360,7 @@ struct FolderScreen: View {
         .searchable(text: $query, isPresented: $isSearching, prompt: "Search")
         .onChange(of: query, initial: true) { _, query in workspace.searchSession.update(query) }
         .onSubmit(of: .search) {
-            if let first = workspace.searchSession.sections.first?.items.first { open(first.result) }
+            if let first = SearchSection.firstToOpen(in: workspace.searchSession.sections) { open(first.result) }
         }
         .refreshable { await workspace.readAgain(page.url) }
         #if DEBUG

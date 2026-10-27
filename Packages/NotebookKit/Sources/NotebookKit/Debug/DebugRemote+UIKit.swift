@@ -1,4 +1,5 @@
 #if DEBUG && os(iOS)
+import PDFKit
 import PencilKit
 import SwiftUI
 import UIKit
@@ -129,7 +130,15 @@ enum DebugRemote {
             // keyboard on|off|auto: as if a keyboard were attached to the iPhone or iPad, or not.
             HardwareKeyboard.shared.override = argument == "on" ? true : argument == "off" ? false : nil
             let keyboard = HardwareKeyboard.shared
-            log("keyboard \(keyboard.isInUse ? "in use" : "not in use"): attached \(keyboard.isAttached), touch keyboard shown \(keyboard.isTouchKeyboardShown)")
+            log("keyboard \(keyboard.isInUse ? "in use" : "not in use"): attached \(keyboard.isAttached), touch keyboard shown \(keyboard.isTouchKeyboardShown), shortcuts alone \(keyboard.isShortcutsAlone), bottom inset \(editor.textView.contentInset.bottom), bar \((editor.textView.inputAccessoryView as? WritingBar)?.isTucked == true ? "tucked" : "up")")
+        case "keyboardframe":
+            // keyboardframe <height>: a keyboard notification ending that tall at the bottom of the screen, 0 for none
+            // at all, as a keyboard with keys or a floating one sends; then what the app makes of it.
+            guard let screen = editor.textView.window?.screen.bounds, let height = numbers.first else { return }
+            let frame = height == 0 ? CGRect.zero : CGRect(x: 0, y: screen.height - height, width: screen.width, height: height)
+            NotificationCenter.default.post(name: UIResponder.keyboardWillChangeFrameNotification, object: nil, userInfo: [UIResponder.keyboardFrameEndUserInfoKey: NSValue(cgRect: frame)])
+            let keyboard = HardwareKeyboard.shared
+            log("keyboard \(keyboard.isInUse ? "in use" : "not in use"): attached \(keyboard.isAttached), touch keyboard shown \(keyboard.isTouchKeyboardShown), shortcuts alone \(keyboard.isShortcutsAlone), bottom inset \(editor.textView.contentInset.bottom), bar \((editor.textView.inputAccessoryView as? WritingBar)?.isTucked == true ? "tucked" : "up")")
         case "tapcaret":
             // tapcaret <index>: the caret put there by a tap, which the editor may move (unlike `select`).
             if let index = numbers.first.map(Int.init) { editor.textView.selectedRange = NSRange(location: index, length: 0) }
@@ -149,6 +158,11 @@ enum DebugRemote {
             if editor.isEditingTitle { editor.textView.titleField.deleteBackward() } else if editor.selection == NSRange(location: 0, length: 0) { editor.textView.deleteBackward() } else { editor.debugBackspace() }
         case "blur":
             editor.endEditing()
+        case "findinnote":
+            // Find in Note's bar; `blurall` then takes the keyboard away from its field and leaves the bar docked.
+            editor.findInNote()
+        case "blurall":
+            editor.textView.window?.endEditing(true)
         case "type":
             for character in argument.replacingOccurrences(of: "\\n", with: "\n") { editor.debugType(String(character)) }
         case "key":
@@ -209,6 +223,12 @@ enum DebugRemote {
             argument == "hide" ? editor.hideFormatPanel() : editor.showFormatPanel()
         case "scroll":
             editor.setScrollTop((numbers.first ?? 0) - editor.topInset)
+        case "place":
+            // place [index]: the first character showing (or that one), and how far below the bars its line starts:
+            // what a change of text size keeps.
+            let index = numbers.first.map { Int($0) } ?? editor.firstVisibleCharacter()
+            let text = (editor.text as NSString).substring(from: index).prefix(16).replacingOccurrences(of: "\n", with: "⏎")
+            log("place \(index) “\(text)” at \(Int((editor.yPosition(of: index) - editor.visibleRect.minY - editor.topInset).rounded())) header \(Int(editor.textView.headerHeight))")
         case "scrollto":
             editor.scroll(to: editor.outline[safe: Int(numbers.first ?? 0)], animated: false)
         case "undo":
@@ -265,13 +285,18 @@ enum DebugRemote {
         case "dismiss":
             log("dismissing renaming \(workspace.renaming?.lastPathComponent ?? "-") deleting \(workspace.deleting?.lastPathComponent ?? "-") problem \(workspace.problem?.title ?? "-")")
             workspace.renaming = nil
-            workspace.deleting = nil
+            if let url = workspace.deleting { workspace.answerDeleting(url, delete: false) }
             workspace.problem = nil
         case "deletenow":
-            if let url = workspace.deleting { workspace.deleteImmediately(url) }
-            workspace.deleting = nil
+            if let url = workspace.deleting { workspace.answerDeleting(url, delete: true) }
+        case "notrash":
+            // notrash on|off: every place as one without Recently Deleted, or as it is.
+            UserDefaults.standard.set(argument != "off", forKey: "NotebookNoRecentlyDeleted")
+        case "asking":
+            // asking: the file "Delete immediately?" asks about now, and those after it.
+            log("asking \(workspace.deleting?.lastPathComponent ?? "-") then \(workspace.deleteQuestions.waiting.map(\.lastPathComponent))")
         case "trash":
-            if let url = url(argument) { workspace.moveToTrash(url) }
+            if let url = url(argument) { workspace.trash(url) }
         case "keyundo", "keyredo":
             // keyundo, keyredo: ⌘Z and ⇧⌘Z on a keyboard, as UIKit sends them: from the first responder, or the window
             // without one, up to what takes them. Says where they went and what Undo would have said.
@@ -439,6 +464,26 @@ enum DebugRemote {
             log("cursorview caret \(position.map { view.caretRect(for: $0).integral } ?? .null): \(drawn.joined(separator: "; "))")
         case "views":
             if let window = editor.textView.window { log(describe(window, depth: 0, limit: Int(numbers.first ?? 6))) }
+        case "exportpdf":
+            // exportpdf <path>: the open note as Share › PDF and Print make it; its pages and the size of its text there.
+            Task {
+                guard let data = await NoteExporter.pdfData(for: editor, title: editor.titleText) else { return log("exportpdf failed") }
+                try? data.write(to: URL(fileURLWithPath: (argument as NSString).expandingTildeInPath))
+                let page = PDFDocument(data: data)?.page(at: 0)?.attributedString
+                let body = page.flatMap { text in (text.string as NSString).range(of: "\n").location < text.length - 1 ? text.attribute(.font, at: (text.string as NSString).range(of: "\n").location + 1, effectiveRange: nil) as? UIFont : nil }
+                log("exportpdf pages \(PDFDocument(data: data)?.pageCount ?? 0) text \(body?.pointSize ?? 0) on screen \(EditorStyle.bodySize)")
+            }
+        case "barscroll":
+            // Which scroll view the bars of each screen follow: the note's text view, another, or none.
+            let windows = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }
+            func screens(_ controller: UIViewController) -> [UIViewController] {
+                [controller] + controller.children.flatMap(screens) + (controller.presentedViewController.map(screens) ?? [])
+            }
+            for controller in windows.compactMap(\.rootViewController).flatMap(screens) where controller.parent is UINavigationController {
+                let view = controller.contentScrollView(for: .top)
+                log("barscroll \(type(of: controller)): \(view === editor.textView ? "the note's text view" : view.map { "\(type(of: $0))" } ?? "none")"
+                    + (view === editor.textView && editor.textView.window == nil ? ", not in a window" : ""))
+            }
         case "drawing", "drawstroke", "drawinfo", "drawundo", "drawredo":
             log(editor.debugDrawing(command, argument))
         case "drawpolicy":

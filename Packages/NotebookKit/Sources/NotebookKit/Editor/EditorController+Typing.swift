@@ -108,15 +108,16 @@ extension EditorController {
         #endif
     }
 
-    /// Brings the bar's buttons for where the caret is up to date.
+    /// Brings the bar's buttons for where the caret is up to date. While you don't write they stay as they are, so the
+    /// bar goes away with the keyboard as it was.
     func updateCaretContext() {
         #if os(iOS)
-        let editing = isFocused && !isWaitingForText && !isDrawing
-        let context = editing && isInProse ? MarkdownEditing.context(in: markdownState) : MarkdownEditing.Context()
+        guard isFocused, !isWaitingForText, !isDrawing else { return }
+        let context = isInProse ? MarkdownEditing.context(in: markdownState) : MarkdownEditing.Context()
         if caretContext.context != context { caretContext.context = context }
-        let link = editing ? linkTarget(at: selection) : nil
+        let link = linkTarget(at: selection)
         if caretContext.link != link { caretContext.link = link }
-        let todo = editing && context.isChecklist && !document.lines.isEmpty ? self.todo(onLine: document.lineIndex(containing: selection.location)) : nil
+        let todo = context.isChecklist && !document.lines.isEmpty ? self.todo(onLine: document.lineIndex(containing: selection.location)) : nil
         let hasReminder = todo.map { $0.due != nil || $0.place != nil } ?? false
         if caretContext.hasReminder != hasReminder { caretContext.hasReminder = hasReminder }
         #endif
