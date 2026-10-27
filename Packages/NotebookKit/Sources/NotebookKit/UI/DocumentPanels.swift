@@ -96,6 +96,8 @@ struct OutlinePanel: View {
                     }
                 }
                 .listStyle(.sidebar)
+                // VoiceOver calls a sidebar-style list "Sidebar", which is the files on the left.
+                .accessibilityLabel("Outline")
                 .onChange(of: workspace.currentHeading) { _, current in
                     withAnimation(Theme.quick) { proxy.scrollTo(current ?? -1) }
                 }
