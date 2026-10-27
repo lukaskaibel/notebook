@@ -102,6 +102,26 @@ final class LocationTests: XCTestCase {
         XCTAssertEqual(Location(id: UUID(), name: "File Provider Storage", path: device.path, bookmark: onDevice).onDeviceFolders, [])
     }
 
+    /// Notebook's own folder (Keep Notes on This iPhone) is On My iPhone, unless On My iPhone itself is a location too,
+    /// which has the folder in it: then it is Notebook, as the Files app shows it, and no two locations are named alike.
+    func testNotebooksOwnFolderIsNamedApartFromOnMyIPhone() {
+        let own = Location(id: UUID(), name: "Documents",
+                           path: "/var/mobile/Containers/Data/Application/0A1B2C3D-4E5F-6789-ABCD-EF0123456789/Documents", bookmark: nil)
+        let device = URL(fileURLWithPath: "/private/var/mobile/Containers/Shared/AppGroup/0A1B2C3D-4E5F-6789-ABCD-EF0123456789/File Provider Storage")
+        let bookmark = Data("book\u{0}fp:/3xefWl4FZpxAEjeAG2GfjmAOxOJQGq9x=/com.apple.FileProvider.LocalStorage//fid=144320352\u{0}".utf8)
+        let onMyIPhone = Location(id: UUID(), name: "On My iPhone", path: device.path, bookmark: bookmark)
+        let icloud = Location(id: UUID(), name: "Notes", path: drive.appendingPathComponent("Notes").path, bookmark: nil)
+
+        XCTAssertEqual(Location.ownFolderName(among: [own], device: "On My iPhone"), "On My iPhone")
+        XCTAssertEqual(Location.ownFolderName(among: [own, icloud], device: "On My iPhone"), "On My iPhone")
+        XCTAssertEqual(Location.ownFolderName(among: [own, onMyIPhone], device: "On My iPhone"), "Notebook")
+        XCTAssertEqual(Location.ownFolderName(among: [onMyIPhone, own, icloud], device: "On My iPad"), "Notebook")
+        // Its folder is known by its path alone, as the system writes it with or without "/private".
+        XCTAssertTrue(Location.isFolder(URL(fileURLWithPath: "/private" + own.path), own.url))
+        XCTAssertTrue(Location.isFolder(URL(fileURLWithPath: own.path + "/Journal/.."), own.url))
+        XCTAssertFalse(Location.isFolder(own.url.appendingPathComponent("Journal"), own.url))
+    }
+
     func testSidebarShowsLinkedFoldersAmongTheOthers() async throws {
         let workspace = try await makeWorkspace()
         guard let location = workspace.location(containing: drive), let root = workspace.root(for: location) else { return XCTFail("no iCloud Drive") }

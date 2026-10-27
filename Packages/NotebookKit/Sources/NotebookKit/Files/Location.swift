@@ -69,15 +69,31 @@ public struct Location: Identifiable, Codable, Equatable, Sendable {
     #endif
 
     /// The name of a folder that is a place of its own in the Finder or the Files app, iCloud Drive or On My iPhone,
-    /// which its folder on disk doesn't have. Nil for any other folder, which goes by its own. On My iPhone is known by
-    /// its bookmark, which a new location gets a moment after it is added.
+    /// which its folder on disk doesn't have, or Notebook's own folder on iPhone and iPad, named by the other
+    /// `locations` (`ownFolderName`). Nil for any other folder, which goes by its own. On My iPhone is known by its
+    /// bookmark, which a new location gets a moment after it is added. Nothing here reads the disk: names are given on
+    /// the main thread.
     @MainActor
-    static func placeName(for url: URL, bookmark: Data?) -> String? {
+    static func placeName(for url: URL, bookmark: Data?, among locations: [Location]) -> String? {
         if url.path == iCloudDrivePath || isICloudDriveRoot(url) { return "iCloud Drive" }
         #if os(iOS)
         if onDeviceFolders(url, bookmark: bookmark)?.isEmpty == true { return onDeviceName }
+        if isFolder(url, Workspace.onDeviceFolder) { return ownFolderName(among: locations, device: onDeviceName) }
         #endif
         return nil
+    }
+
+    /// Notebook's own folder, where Keep Notes on This iPhone keeps them: "Documents" on disk, which you never named.
+    /// It is On My iPhone (`device`), as Notes calls the notes it keeps on the device, unless On My iPhone itself is a
+    /// location too, which the folder is in: the Files app shows it as On My iPhone › Notebook, so then it is Notebook,
+    /// and no two locations have the same name.
+    static func ownFolderName(among locations: [Location], device: String) -> String {
+        locations.contains { $0.onDeviceFolders?.isEmpty == true } ? "Notebook" : device
+    }
+
+    /// Whether two folders are the same, by their paths alone ("/private/var" is "/var").
+    static func isFolder(_ url: URL, _ other: URL) -> Bool {
+        HiddenFolders.withoutPrivate(url.standardizedFileURL.path) == HiddenFolders.withoutPrivate(other.standardizedFileURL.path)
     }
 
     /// Where iCloud Drive is, worked out from the real home folder (the sandbox gives the app another one).
@@ -202,7 +218,9 @@ enum LocationStore {
               var locations = try? JSONDecoder().decode([Location].self, from: data) else { return [] }
         // Kept before Notebook knew On My iPhone, it was "File Provider Storage", its folder's name.
         for index in locations.indices {
-            if let name = Location.placeName(for: locations[index].url, bookmark: locations[index].bookmark) { locations[index].name = name }
+            if let name = Location.placeName(for: locations[index].url, bookmark: locations[index].bookmark, among: locations) {
+                locations[index].name = name
+            }
         }
         return locations
     }
@@ -212,9 +230,10 @@ enum LocationStore {
     }
 
     /// A location for a folder you just chose, to show at once: its bookmark comes from `bookmark(for:)`.
-    static func make(for url: URL) -> Location {
+    static func make(for url: URL, besides locations: [Location]) -> Location {
         startAccessing(url)
-        return Location(id: UUID(), name: Location.placeName(for: url, bookmark: nil) ?? url.lastPathComponent, path: url.standardizedFileURL.path, bookmark: nil)
+        return Location(id: UUID(), name: Location.placeName(for: url, bookmark: nil, among: locations) ?? url.lastPathComponent,
+                        path: url.standardizedFileURL.path, bookmark: nil)
     }
 
     /// The bookmark that finds the folder again next time, and the name the Finder gives it ("Dokumente" for

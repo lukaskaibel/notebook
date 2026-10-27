@@ -54,6 +54,7 @@ struct PhoneBrowser: View {
         .modifier(FileAlerts(workspace: workspace, newFolderIn: $newFolderIn))
         .modifier(AppleNotesImporter(workspace: workspace))
         .background(alignment: .topLeading) { FileUndoFocus(workspace: workspace).frame(width: 0, height: 0) }
+        .onChange(of: workspace.newFolderRequest) { _, _ in newFolderIn = workspace.folderForNewNote ?? workspace.locations.first?.url }
         .onAppear {
             // Back where you were: in the note you had open, with its folders behind it.
             if let url = workspace.currentURL, path.isEmpty { path = folders(to: url) + [Page(url: url, isFolder: false)] }
@@ -168,7 +169,9 @@ struct HomeScreen: View {
                         }
                     }
                 }
-                let recents = Array(workspace.recentURLs.prefix(3))
+                // With the note you are in: going back to this screen doesn't put its row in at the end and push the
+                // list down.
+                let recents = Array(workspace.recentURLs(includingOpen: true).prefix(3))
                 if !recents.isEmpty {
                     Section("Recent") {
                         ForEach(recents, id: \.self) { url in

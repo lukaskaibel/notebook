@@ -289,6 +289,7 @@ final class FileChangeTests: XCTestCase {
         workspace.open(chart)
         workspace.toggleFavorite(draft)
         XCTAssertEqual(workspace.recentURLs.map(\.lastPathComponent), ["Other.md", "Draft.md"])
+        XCTAssertTrue(workspace.recentURLs(includingOpen: true).contains(draft))
 
         workspace.beginLeaving(papers)
         XCTAssertTrue(workspace.isLeaving(draft))
@@ -296,6 +297,8 @@ final class FileChangeTests: XCTestCase {
         XCTAssertFalse(workspace.isLeaving(archive))
         XCTAssertFalse(workspace.isLeaving(library.appendingPathComponent("Papers copy/Draft.md")))
         XCTAssertEqual(workspace.recentURLs, [])
+        // Nor on the iPhone's first screen, which lists the open note too.
+        XCTAssertFalse(workspace.recentURLs(includingOpen: true).contains(draft))
         XCTAssertEqual(workspace.favoriteURLs, [])
 
         workspace.beginLeaving(papers)
