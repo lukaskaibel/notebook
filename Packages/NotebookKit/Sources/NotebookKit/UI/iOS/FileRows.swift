@@ -21,6 +21,7 @@ struct FileRow: View {
     var date: Date?
     /// A hidden folder, there while its location shows hidden folders.
     var isHidden = false
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         // Hidden folders show dimmed, as hidden files in the Files app and the Finder.
@@ -28,7 +29,9 @@ struct FileRow: View {
         Label {
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
-                    .lineLimit(1)
+                    // At the largest text sizes a name goes on over a few lines, as in Files, rather than losing its
+                    // middle.
+                    .lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
                     .truncationMode(.middle)
                     .foregroundStyle(dimmed || isInCloud ? .secondary : .primary)
                 if showsDetail, let detail {
@@ -84,7 +87,10 @@ struct FileRow: View {
         let entry = workspace.index.entry(for: url)
         let date = (self.date ?? entry?.modified).map(Self.shortDate)
         if kind == .note {
-            let start = entry?.text.map(Self.firstLine) ?? ""
+            // Until search has read the note (on the first launch, or while it is still in iCloud), only its date:
+            // "No additional text" is for a note that has none.
+            guard let text = entry?.text else { return date }
+            let start = Self.firstLine(text)
             return [date, start.isEmpty ? "No additional text" : start].compactMap { $0 }.joined(separator: "  ")
         }
         let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) }

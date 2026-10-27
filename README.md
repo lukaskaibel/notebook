@@ -369,9 +369,10 @@ hold it for everything else.
 
 The iPad has the Mac's layout: the sidebar with its folders opening in place, the note next to it, and the outline in
 an inspector. In portrait the sidebar steps aside once you have picked a note. With a keyboard, the Mac's shortcuts
-work, the menu bar has New Note, Go and Format, the marks show next to the caret as on the Mac, and the bar above the
-keyboard steps aside, as in Notes: Aa, attachments and the pencil are in the toolbar at the top. Drag pictures from Photos into a note, or files onto a folder in
-the sidebar. A window as narrow as a phone gets the iPhone's screens.
+work, the menu bar has the Mac's File, View, Go and Format menus, the marks show next to the caret as on the Mac, and
+the bar above the keyboard steps aside, as in Notes: Aa, attachments and the pencil are in the toolbar at the top. Drag
+pictures from Photos into a note, or files onto a folder in the sidebar. A window as narrow as a phone gets the iPhone's
+screens.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/devices-dark.webp">
@@ -577,7 +578,8 @@ there are.
 
 On iPhone and iPad, **Choose a Folder** opens the Files app's picker: pick iCloud Drive itself to have everything you
 write on the Mac, or any folder in it or on the device. **Keep Notes on This iPhone** (or iPad) uses Notebook's own
-folder, which the Files app shows under On My iPhone › Notebook. Add more in Settings, from the ⋯ menu.
+folder, which the Files app shows under On My iPhone › Notebook and Notebook calls On My iPhone. Add more in Settings,
+from the ⋯ menu.
 
 To look around without your own notes, choose **Try Sample Notes…** on the first screen. It writes made-up notes, a
 drawing, pictures and PDFs to a new folder Sample Notes, in the folder you pick on the Mac and in Notebook's own folder
@@ -691,8 +693,8 @@ or click the bell that comes up after it as you point at it; in To-dos, right-cl
 mark it in progress or cancelled, or open its note. As you point at a location's name, a folder with a plus comes up
 next to it for a new folder at its top, and, when the location has hidden folders, an eye that shows them.
 
-On an iPad with a keyboard, ⌘N, ⌘Z and ⇧⌘Z, ⌘F, ⌘K, ⇧⌘R, ⌘[ and ⌘], ⌃⌘I, ⇧⌘. and the shortcuts for writing work as
-on the Mac. On iPhone and iPad:
+On an iPad with a keyboard, ⌘N, ⇧⌘N, ⌘Z and ⇧⌘Z, ⌘F, ⌘K, ⇧⌘R, ⌘[ and ⌘], ⌃⌘S, ⌃⌘I, ⇧⌘., ⌘+, ⌘− and ⌘0, ⌘P and
+the shortcuts for writing work as on the Mac. On iPhone and iPad:
 
 | Gesture | Action |
 | --- | --- |
