@@ -5,6 +5,7 @@
 # A dry run only reads: App Store Connect's specs for each placement (its reference data), the app's library and the
 # version it would place on. Every request that would change something goes through `change`, which on a dry run
 # says what it would send instead of sending it.
+require "digest"
 require "json"
 require "net/http"
 require "open3"
@@ -14,6 +15,8 @@ class AssetLibrary
   HOST = "https://api.appstoreconnect.apple.com".freeze
   # Where a version can still be changed.
   EDITABLE = %w[PREPARE_FOR_SUBMISSION DEVELOPER_REJECTED REJECTED METADATA_REJECTED INVALID_BINARY].freeze
+  # How long App Store Connect may take to process a video before the lane stops; a later run takes up the same video.
+  PROCESSING = 20 * 60
 
   def initialize(token, bundle_id, dry_run:)
     @token = token
@@ -26,7 +29,8 @@ class AssetLibrary
   end
 
   def app_id
-    @app_id ||= get("/v1/apps", "filter[bundleId]" => @bundle_id).fetch("data").first&.fetch("id") ||
+    @app_id ||= get("/v1/apps", "filter[bundleId]" => @bundle_id).fetch("data")
+                .find { |app| app.dig("attributes", "bundleId") == @bundle_id }&.fetch("id") ||
                 raise("No app with the bundle identifier #{@bundle_id} in App Store Connect.")
   end
 
@@ -54,7 +58,7 @@ class AssetLibrary
   def localization(platform, version, locale)
     versions = get("/v1/apps/#{app_id}/appStoreVersions", "filter[platform]" => platform,
                                                          "filter[versionString]" => version).fetch("data")
-    found = versions.first
+    found = versions.find { |candidate| candidate.dig("attributes", "versionString") == version }
     return [nil, "#{platform} #{version} doesn't exist in App Store Connect yet"] unless found
 
     state = found.dig("attributes", "appStoreState")
@@ -65,11 +69,59 @@ class AssetLibrary
     chosen ? [chosen["id"], "#{platform} #{version} (#{locale})"] : [nil, "#{platform} #{version} has no #{locale}"]
   end
 
-  # Reserves the video in the library, uploads it in the parts App Store Connect asks for and commits it. Returns its
-  # id, or nil on a dry run.
-  def upload_video(file, category:, name:, frame: nil)
-    attributes = { fileName: File.basename(file), fileSize: File.size(file), category: category, referenceName: name }
-    attributes[:previewFrameTimeCode] = time_code(frame, file) if frame
+  # The video in the app's library, processed and ready to place: the one an earlier run uploaded, found by its
+  # reference name, which ends in a digest of the file, or else uploaded now. Its id, or nil on a dry run that would
+  # upload it.
+  def video(file, category:, name:, frame: nil)
+    reference = "#{name} (#{Digest::SHA256.file(file).hexdigest[0, 8]})"
+    code = frame && time_code(frame, file)
+    found = get("/v1/appAssetLibraries/#{library_id}/videos", "filter[referenceName]" => reference).fetch("data").find do |video|
+      video.dig("attributes", "referenceName") == reference && !%w[AWAITING_UPLOAD FAILED].include?(video.dig("attributes", "state"))
+    end
+    return upload_video(file, category: category, reference: reference, code: code) unless found
+
+    puts "  #{reference} is in the library already (#{found.dig('attributes', 'state')})"
+    if code && found.dig("attributes", "previewFrameTimeCode") != code
+      change(:patch, "/v1/appAssetLibraryVideos/#{found['id']}",
+             data: { type: "appAssetLibraryVideos", id: found["id"], attributes: { previewFrameTimeCode: code } })
+    end
+    processed(found["id"], file)
+  end
+
+  # Puts the video on the localization in place of what that placement type and group show there now. Where the
+  # group has room (three app previews), the new placement is made before the old ones go; a header's group holds one,
+  # so there the old one goes first, once the new video is processed. Only placements of this type and group are
+  # touched, as read back here rather than trusting the filters.
+  def place(video_id, placement_type, group, localization_id)
+    existing = get("/v1/appStoreVersionLocalizations/#{localization_id}/placements",
+                   "filter[placementType]" => placement_type, "filter[placementGroup]" => group, "include" => "video")
+               .fetch("data").select do |placement|
+                 placement.dig("attributes", "placementType") == placement_type &&
+                   placement.dig("attributes", "placementGroup") == group
+               end
+    placed, old = existing.partition { |placement| video_id && placement.dig("relationships", "video", "data", "id") == video_id }
+    room = placed.empty? && existing.size < limit(placement_type, group)
+    old.each { |placement| change(:delete, "/v1/appAssetLibraryPlacements/#{placement['id']}") } unless room
+    if placed.empty?
+      change(:post, "/v1/appAssetLibraryPlacements",
+             data: { type: "appAssetLibraryPlacements",
+                     attributes: { placementType: placement_type, placementGroup: group },
+                     relationships: { video: { data: { type: "appAssetLibraryVideos", id: video_id || "(new)" } },
+                                      appStoreVersionLocalization: { data: { type: "appStoreVersionLocalizations",
+                                                                             id: localization_id } } } })
+    else
+      puts "  placed there already"
+    end
+    old.each { |placement| change(:delete, "/v1/appAssetLibraryPlacements/#{placement['id']}") } if room
+  end
+
+  private
+
+  # Reserves the video in the library, uploads it in the parts App Store Connect asks for, commits it and waits for
+  # it to be processed. Its id, or nil on a dry run.
+  def upload_video(file, category:, reference:, code:)
+    attributes = { fileName: File.basename(file), fileSize: File.size(file), category: category, referenceName: reference }
+    attributes[:previewFrameTimeCode] = code if code
     reserved = change(:post, "/v1/appAssetLibraryVideos",
                       data: { type: "appAssetLibraryVideos", attributes: attributes,
                               relationships: { assetLibrary: { data: { type: "appAssetLibraries", id: library_id } } } })
@@ -79,31 +131,41 @@ class AssetLibrary
     send_parts(file, reserved.dig("data", "attributes", "uploadOperations"))
     change(:patch, "/v1/appAssetLibraryVideos/#{id}",
            data: { type: "appAssetLibraryVideos", id: id, attributes: { uploaded: true } })
-    # Processing goes on after this; a placement can be made meanwhile. Only a quick failure is waited for.
-    6.times do
-      state = get("/v1/appAssetLibraryVideos/#{id}").dig("data", "attributes")
-      raise "App Store Connect couldn't process #{File.basename(file)}: #{state['stateDetails']}" if state["state"] == "FAILED"
-      break if state["state"] == "PREPARE_FOR_SUBMISSION"
+    processed(id, file)
+  end
 
-      sleep(10)
+  # Waits until App Store Connect has processed the video: UPLOAD_COMPLETE while it works on it, then
+  # PREPARE_FOR_SUBMISSION (or a state of App Review's, for a video placed before). Fails when processing failed, or
+  # when it isn't done after PROCESSING, also when no state can be read at all.
+  def processed(id, file)
+    return id if @dry_run
+
+    deadline = Time.now + PROCESSING
+    loop do
+      attributes = get("/v1/appAssetLibraryVideos/#{id}").dig("data", "attributes") || {}
+      case attributes["state"]
+      when "FAILED"
+        raise "App Store Connect couldn't process #{File.basename(file)}: #{attributes['stateDetails'].inspect}. " \
+              "Delete video #{id} from the library and run the lane again."
+      when nil, "AWAITING_UPLOAD", "UPLOAD_COMPLETE", "PROCESSING"
+        nil
+      else
+        return id
+      end
+      if Time.now > deadline
+        raise "#{File.basename(file)} is still #{attributes['state'].inspect} after #{PROCESSING / 60} minutes; " \
+              "nothing was placed. Run the lane again later: it takes up the same video."
+      end
+      sleep(15)
     end
-    id
   end
 
-  # Puts the video on the localization in place of what that placement type and group show there now.
-  def place(video_id, placement_type, group, localization_id)
-    existing = get("/v1/appStoreVersionLocalizations/#{localization_id}/placements",
-                   "filter[placementType]" => placement_type, "filter[placementGroup]" => group).fetch("data")
-    existing.each { |placement| change(:delete, "/v1/appAssetLibraryPlacements/#{placement['id']}") }
-    change(:post, "/v1/appAssetLibraryPlacements",
-           data: { type: "appAssetLibraryPlacements",
-                   attributes: { placementType: placement_type, placementGroup: group },
-                   relationships: { video: { data: { type: "appAssetLibraryVideos", id: video_id || "(new)" } },
-                                    appStoreVersionLocalization: { data: { type: "appStoreVersionLocalizations",
-                                                                           id: localization_id } } } })
+  # How many placements of the type a group of a version's page holds, from the reference data.
+  def limit(placement_type, group)
+    reference.fetch("features").find { |feature| feature["featureId"] == "APP_STORE_VERSIONS" }
+             &.fetch("placementPolicies")&.find { |policy| policy["placementType"] == placement_type }
+             &.fetch("groupLimits")&.find { |limit| limit["groupIds"].include?(group) }&.fetch("maxCount") || 1
   end
-
-  private
 
   def reference
     @reference ||= get("/v1/appAssetLibraryRefData").fetch("data").first.fetch("attributes")

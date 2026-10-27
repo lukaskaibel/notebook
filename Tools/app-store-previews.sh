@@ -50,6 +50,22 @@ print(next((d['udid'] for d in devices if d['name'] == '$1'), ''))")
 
 now() { python3 -c "import time; print(f'{time.time():.3f}')"; }
 
+# On the way out, also when a step fails: no recording left running, and the simulator with its own status bar again
+# and shut down.
+udid="" recorder=""
+finish() {
+  if [ -n "$recorder" ]; then
+    kill -INT "$recorder" 2>/dev/null || true
+    wait "$recorder" 2>/dev/null || true
+  fi
+  if [ -n "$udid" ]; then
+    xcrun simctl terminate "$udid" $bundle_id 2>/dev/null || true
+    xcrun simctl status_bar "$udid" clear 2>/dev/null || true
+    xcrun simctl shutdown "$udid" 2>/dev/null || true
+  fi
+}
+trap finish EXIT
+
 # session <udid> <name>: the app installed afresh on new sample notes, in light, with a clean status bar, waiting
 # for commands; then the recording starts.
 session() {
@@ -108,6 +124,7 @@ stop() {
   sleep 0.8
   kill -INT "$recorder"
   wait "$recorder" 2>/dev/null || true
+  recorder=""
   xcrun simctl terminate "$udid" $bundle_id 2>/dev/null || true
   xcrun simctl status_bar "$udid" clear
 }

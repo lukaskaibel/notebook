@@ -60,16 +60,30 @@ front, so its window is drawn active: run them when nobody is working at the Mac
 it) and are placed on a version's English page, from where they go to App Review with the version.
 
 ```
-bundle exec fastlane store_media version:1.1.0               # checks each file against the specs, says what it would do
-bundle exec fastlane store_media version:1.1.0 upload:true   # uploads them and places them on 1.1.0
+bundle exec fastlane store_media version:1.1.0                            # checks each file, says what it would do
+bundle exec fastlane store_media version:1.1.0 upload:true                # uploads them and places them on 1.1.0
+bundle exec fastlane store_media version:1.1.0 upload:true platform:mac   # the Mac's preview alone (or platform:ios)
 ```
 
-Without `upload:true` the lane only reads: App Store Connect's specs, the library and the version. With it, each video
-is reserved in the library, uploaded, committed and placed (`fastlane/asset_library.rb`), in place of what that
-placement shows there now; the version must exist and still be open for changes. Check the result in App Store
-Connect's Preview (iPhone and iPad, portrait and landscape) before submitting the version. The posters are set in
-`STORE_MEDIA` in the Fastfile: the header's finished lines 1.5 seconds before its end, the search result's open note
-at 4 seconds, Kyoto trip in each preview (5 seconds into the iPhone's, 2 into the iPad's and the Mac's).
+The version is always named. Without `upload:true` the lane only reads: App Store Connect's specs, the library and the
+version. With it, every file is checked first (made, fitting the specs, its platform's version there and open for
+changes) and nothing goes up unless all of them pass. Then each video goes to the library and is placed
+(`fastlane/asset_library.rb`), in place of what that placement shows there now:
+
+- A video is uploaded once. Its reference name in the library ends in a digest of the file ("iPhone preview
+  (a1b2c3d4)"), so a second run uses the one already there, changing only its poster if that moved; a new cut is a new
+  video next to the old one, which can be deleted in the library once nothing shows it.
+- The lane waits until App Store Connect has processed the video (up to 20 minutes) and stops if processing failed,
+  before it touches the page. A run stopped there places nothing; run it again later.
+- A preview's group holds three, so the new placement is made before the old one is taken away. A header or search
+  result holds one, so there the old one goes first, a moment before the new one is placed.
+- Once iOS 1.1 is submitted its page is shut, so a Mac version that is still open takes its preview with
+  `platform:mac`.
+
+Check the result in App Store Connect's Preview (iPhone and iPad, portrait and landscape) before submitting the
+version. The posters are set in `STORE_MEDIA` in the Fastfile: the header's finished lines 1.5 seconds before its end,
+the search result's open note at 4 seconds, Kyoto trip in each preview (5 seconds into the iPhone's, 2 into the
+iPad's and the Mac's).
 
 ## Once, in App Store Connect
 
@@ -129,6 +143,12 @@ The app and the listing are in English (U.S.) only, for now (#27).
 
 `fastlane/metadata/en-US/release_notes.txt`, for users, from the changelog: what a version brings first, then the
 fixes most would notice. The first version had none.
+
+The texts and screenshots in the repository are for one version, `STORE_TEXTS_VERSION` in the Fastfile (1.1.0 now). An
+upload for an earlier version, such as Mac 1.0 sent back by App Review and uploaded again, leaves its What's New,
+promotional text, description and screenshots as App Store Connect has them, since 1.1's would describe what 1.0
+doesn't have; the subtitle, keywords and the other texts go up. With each release whose texts are rewritten,
+`STORE_TEXTS_VERSION` moves to it.
 
 ## A new version
 

@@ -12,7 +12,8 @@
 #   bundle exec fastlane beta          # build the Mac, iPhone and iPad apps and upload them to TestFlight
 #   bundle exec fastlane submit        # submit the builds uploaded by `beta` for review, after testing them
 #   bundle exec fastlane release       # build them, upload everything and submit both platforms for review
-#   bundle exec fastlane store_media   # check the header, search result and app previews (upload:true uploads them)
+#   bundle exec fastlane store_media version:1.1.0   # check the header, search result and app previews
+#                                                    # (upload:true uploads them, platform:ios or platform:mac one)
 #
 # `bundle exec fastlane ios <lane>` and `bundle exec fastlane mac <lane>` do one platform. The texts are in
 # fastlane/metadata and the screenshots in Design/screenshots/app-store. Design/app-store.md lists what has to be set
@@ -55,6 +56,12 @@ SCHEME = "Notebook"
 OUTPUT = File.join(ROOT, "build", "fastlane")
 METADATA = File.join(HERE, "metadata")
 SCREENSHOTS = File.join(ROOT, "Design", "screenshots", "app-store")
+# The version the texts in fastlane/metadata and the screenshots are for. Its What's New, the news in the promotional
+# text and the description, and pictures of what it added mean nothing for an earlier version, so an upload for one
+# (Mac 1.0 sent back by App Review, say) leaves those as App Store Connect has them. Moves on with each release whose
+# texts are rewritten.
+STORE_TEXTS_VERSION = "1.1.0"
+NEWS = %w[release_notes.txt promotional_text.txt description.txt].freeze
 
 # One app on two App Store platforms: how each is built and which screenshots belong to it. Both build the AppStore
 # configuration: only it has the sandbox on the Mac and the entitlements for iCloud's key-value store and Time
@@ -415,16 +422,28 @@ def review_contact(required: false)
 end
 
 # App Store Connect changes the notes for App Review only together with a whole contact. Without one in
-# fastlane/.env.secret, the notes already there stay as they are and the other texts go up.
+# fastlane/.env.secret, the notes already there stay as they are and the other texts go up. For a version before
+# STORE_TEXTS_VERSION, the NEWS texts stay as they are too; deliver leaves alone what has no file.
 def metadata_for(contact)
-  return METADATA if contact.size == 4
+  return METADATA if contact.size == 4 && !older_than_store_texts?
 
-  UI.important("No App Review contact in fastlane/.env.secret (REVIEW_*): the review notes in App Store Connect stay as they are.")
   staged = File.join(OUTPUT, "metadata")
   FileUtils.rm_rf(staged)
+  FileUtils.mkdir_p(OUTPUT)
   FileUtils.cp_r(METADATA, staged)
-  FileUtils.rm_rf(File.join(staged, "review_information"))
+  unless contact.size == 4
+    UI.important("No App Review contact in fastlane/.env.secret (REVIEW_*): the review notes in App Store Connect stay as they are.")
+    FileUtils.rm_rf(File.join(staged, "review_information"))
+  end
+  if older_than_store_texts?
+    UI.important("#{version} is before #{STORE_TEXTS_VERSION}, which the texts are for: #{NEWS.join(', ')} stay as they are.")
+    Dir[File.join(staged, "*", "{#{NEWS.join(',')}}")].each { |file| FileUtils.rm(file) }
+  end
   staged
+end
+
+def older_than_store_texts?
+  Gem::Version.new(version) < Gem::Version.new(STORE_TEXTS_VERSION)
 end
 
 # Makes sure the platform has this version in App Store Connect to fill in, as deliver would. While an earlier version
@@ -450,6 +469,10 @@ end
 def store_upload(platform, package: nil, submit: false, automatic_release: false, screenshots: true)
   config = PLATFORMS.fetch(platform)
   UI.header("#{config[:name]}: App Store #{version}")
+  if screenshots && older_than_store_texts?
+    UI.important("The screenshots are #{STORE_TEXTS_VERSION}'s: the ones in App Store Connect stay as they are for #{version}.")
+    screenshots = false
+  end
   prepare_store_version(platform)
   contact = review_contact(required: submit)
   options = {
@@ -542,28 +565,52 @@ def api_token
 end
 
 desc "Checks the header, the search result and the app previews against App Store Connect's specs, says where they'd go"
-desc "upload:true uploads them to the app's Asset Library and places them on this version (version:1.2.0 for another)"
+desc "version:1.1.0 is required. upload:true uploads them to the app's Asset Library and places them on that version's"
+desc "English page, once every one has passed; platform:ios or platform:mac takes one platform alone"
 lane :store_media do |options|
+  target = options[:version].to_s
+  UI.user_error!("Say which version they go on: version:1.1.0") if target.empty?
+  only = options[:platform] && { "ios" => "IOS", "mac" => "MAC_OS" }.fetch(options[:platform].to_s) do
+    UI.user_error!("platform: is ios or mac, not #{options[:platform]}")
+  end
   library = AssetLibrary.new(api_token, APP_ID, dry_run: !flag(options[:upload]))
-  target = options[:version] || version
   UI.message(library.dry_run? ? "Dry run: nothing is uploaded or changed." : "Uploading to App Store Connect.")
-  missing = []
+  # Every one is checked first: its file, its specs and a version that can still be changed. Nothing goes up unless
+  # all of them pass, so a run doesn't stop halfway with some placed and some not.
+  problems = []
+  ready = []
   STORE_MEDIA.each do |media|
+    next if only && media[:platform] != only
+
     file = File.join(ROOT, media[:file])
     unless File.exist?(file)
-      missing << media[:file]
+      problems << "#{media[:name]}: #{media[:file]} isn't made yet (see Design/app-store.md)"
       next
     end
-    spec = library.check_video(file, media[:type], media[:group])
+    begin
+      spec = library.check_video(file, media[:type], media[:group])
+    rescue StandardError => e
+      problems << "#{media[:name]}: #{e.message}"
+      next
+    end
     localization, where = library.localization(media[:platform], target, "en-US")
-    UI.message("#{media[:name]}: #{media[:file]} fits #{spec['shortName']}; " +
-               (localization ? "it goes on #{where}" : "nowhere to place it yet: #{where}"))
-    UI.user_error!("Nowhere to put #{media[:name]}: #{where}.") if localization.nil? && !library.dry_run?
-    video = library.upload_video(file, category: media[:category], name: media[:name], frame: media[:frame])
-    library.place(video, media[:type], media[:group], localization) if localization
+    if localization
+      UI.message("#{media[:name]}: #{media[:file]} fits #{spec['shortName']}; it goes on #{where}")
+      ready << media.merge(path: file, localization: localization)
+    else
+      problems << "#{media[:name]}: #{media[:file]} fits #{spec['shortName']}, but there's nowhere to place it: #{where}"
+    end
   end
-  UI.user_error!("Missing: #{missing.join(', ')}. Make them first (see Design/app-store.md).") if missing.any? && !library.dry_run?
-  UI.important("Not made yet: #{missing.join(', ')}") if missing.any?
+  if problems.any? && !library.dry_run?
+    UI.user_error!("Nothing was uploaded:\n#{problems.join("\n")}\n" \
+                   "platform:ios or platform:mac uploads one platform's alone, when only the other's version is shut.")
+  end
+  problems.each { |problem| UI.important(problem) }
+  ready.each do |media|
+    UI.message("#{media[:name]}:") if library.dry_run?
+    video = library.video(media[:path], category: media[:category], name: media[:name], frame: media[:frame])
+    library.place(video, media[:type], media[:group], media[:localization])
+  end
 end
 
 platform :ios do

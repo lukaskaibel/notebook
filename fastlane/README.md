@@ -75,7 +75,9 @@ submit:false stops before the submission, automatic_release:true releases them a
 
 Checks the header, the search result and the app previews against App Store Connect's specs, says where they'd go
 
-upload:true uploads them to the app's Asset Library and places them on this version (version:1.2.0 for another)
+version:1.1.0 is required. upload:true uploads them to the app's Asset Library and places them on that version's
+
+English page, once every one has passed; platform:ios or platform:mac takes one platform alone
 
 ----
 

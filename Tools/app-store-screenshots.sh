@@ -9,7 +9,9 @@
 # the script's own (made the first time, on iOS 27.0, which has the iPhone 17 Pro Max), each time on new sample notes
 # (Files/DemoLibrary.swift). The scene is set up through the debug remote (Debug/DebugRemote+UIKit.swift), as in
 # Tools/readme-images.sh, and taken with `simctl io screenshot` into build/app-store-screenshots/ios/raw; then
-# Tools/app-store-media/caption.py lays each out with its caption on the backdrop of the README pictures. The widgets
+# Tools/app-store-media/caption.py lays each out with its caption on the backdrop of the README pictures, in
+# build/app-store-screenshots/ios/framed until a device's pictures are all taken; only then do they replace the old
+# ones, so a run that stops leaves a whole set. The widgets
 # live on the Home Screen, which the app can't drive: a UI test (NotebookUITests/StoreMediaRemote.swift) adds them there
 # as a person would. One simulator runs at a time. Runs in the background; about twenty minutes.
 set -euo pipefail
@@ -24,6 +26,7 @@ slots=" ${*:2} "
 wanted() { [ "$slots" = "  " ] || [[ "$slots" == *" $1 "* ]]; }
 work=build/app-store-screenshots/ios
 raw=$work/raw
+framed=$work/framed
 out=Design/screenshots/app-store
 products=$work/DerivedData/Build/Products/Debug-iphonesimulator
 app=$products/Notebook.app
@@ -92,7 +95,7 @@ launch() {
 
 # layout <device> <name> <theme> <caption> <smaller line>: the raw picture with its caption, as the store takes it.
 layout() {
-  python3 Tools/app-store-media/caption.py "$raw/$1/$2.png" "$out/$1/$2.png" "$1" "$3" "$4" "$5"
+  python3 Tools/app-store-media/caption.py "$raw/$1/$2.png" "$framed/$1/$2.png" "$1" "$3" "$4" "$5"
   echo "$out/$1/$2.png"
 }
 
@@ -136,15 +139,33 @@ widgets() {
   layout "$device" "$name" light "$line" "$smaller"
 }
 
-# check <device> <width> <height>: ten pictures, each the size the App Store asks for.
+# check <folder> <width> <height> [<count>]: each picture the size the App Store asks for, and as many as there
+# should be.
 check() {
   local picture size count=0
-  for picture in "$out/$1"/*.png; do
+  for picture in "$1"/*.png; do
     size=$(sips -g pixelWidth -g pixelHeight -g hasAlpha "$picture" | awk '/pixel|hasAlpha/ { printf "%s ", $2 }')
     [ "$size" = "$2 $3 no " ] || { echo "$picture is ${size% }, not $2 x $3 without alpha." >&2; exit 1; }
     count=$((count + 1))
   done
-  [ $count = 10 ] || { echo "$out/$1 has $count pictures, not 10." >&2; exit 1; }
+  if [ -n "${4:-}" ] && [ $count != "$4" ]; then
+    echo "$1 has $count pictures, not $4." >&2
+    exit 1
+  fi
+}
+
+# keep <device> <width> <height>: the device's new pictures, checked, in place of the old ones: all ten of them, or
+# the slots named.
+keep() {
+  if [ "$slots" = "  " ]; then
+    check "$framed/$1" "$2" "$3" 10
+    rm -f "$out/$1"/*.png
+  else
+    check "$framed/$1" "$2" "$3"
+  fi
+  mkdir -p "$out/$1"
+  mv "$framed/$1"/*.png "$out/$1"/
+  check "$out/$1" "$2" "$3" 10
 }
 
 notes="Every note a Markdown file in your iCloud Drive."
@@ -176,8 +197,8 @@ ipad_widgets=("home" "wait 1.5" "home" "wait 2" "pressat 1.6 317 538" "wait 2" "
 if [ "$only" != ipad ]; then
   echo "iPhone…"
   iphone=$(simulator "Notebook App Store iPhone" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max)
-  mkdir -p "$out/iphone" "$raw/iphone"
-  [ "$slots" = "  " ] && rm -f "$out/iphone"/*.png
+  rm -rf "${framed:?}/iphone"
+  mkdir -p "$framed/iphone" "$raw/iphone"
   # Each scene waits a few seconds first, until the sample notes are read and their links found.
   shot "$iphone" iphone 01-note light "The ease of Notes." "$notes" "wait 6" "open Travel/Kyoto trip.md" "wait 3"
   # One folder per screen, as in the Files app: the notes among the trip's PDFs and photo.
@@ -201,7 +222,7 @@ if [ "$only" != ipad ]; then
     "wait 6" "open Travel/Kyoto trip.md" "wait 3" "scroll 700" "wait 4"
   # Last, since it starts the Home Screen afresh.
   widgets "$iphone" iphone 05-widgets "Notes on your Home Screen." "$widget" "${iphone_widgets[@]}"
-  check iphone 1320 2868
+  keep iphone 1320 2868
   xcrun simctl status_bar "$iphone" clear
   xcrun simctl shutdown "$iphone"
 fi
@@ -209,8 +230,8 @@ fi
 if [ "$only" != iphone ]; then
   echo "iPad…"
   ipad=$(simulator "Notebook App Store iPad" com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB)
-  mkdir -p "$out/ipad" "$raw/ipad"
-  [ "$slots" = "  " ] && rm -f "$out/ipad"/*.png
+  rm -rf "${framed:?}/ipad"
+  mkdir -p "$framed/ipad" "$raw/ipad"
   # In portrait the note fills the screen; it shows its outline where it has headings.
   shot "$ipad" ipad 01-note light "The ease of Notes." "$notes" "wait 8" "open Travel/Kyoto trip.md" "outline" "wait 3"
   # The sidebar next to the note, the trip's folder open with its PDFs and photo among the notes.
@@ -235,7 +256,7 @@ if [ "$only" != iphone ]; then
   shot "$ipad" ipad 10-blocks light "Tables, code and diagrams." "Drawn right in the note." \
     "wait 8" "open Projects/Notebook roadmap.md" "outline" "wait 3"
   widgets "$ipad" ipad 05-widgets "Notes on your Home Screen." "$widget" "${ipad_widgets[@]}"
-  check ipad 2064 2752
+  keep ipad 2064 2752
   xcrun simctl status_bar "$ipad" clear
   xcrun simctl shutdown "$ipad"
 fi
