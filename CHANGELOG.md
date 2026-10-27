@@ -79,11 +79,18 @@ versions follow [semantic versioning](https://semver.org).
   in another device's version, no longer makes the window wait when you pause typing, leave a note or switch apps.
   What you type meanwhile is saved right after. A note you have just left is still written, and quitting, renaming,
   moving or putting it in the Trash waits for it, so what you typed goes along.
+- On iPhone and iPad, the bar above the keyboard has the size of Notes': its symbols are as big as Notes' tools, its
+  glass is 48 points tall and sits 12 points above the keyboard, and on an iPhone a page holds one more tool. The note
+  fades out under it, as under Notes', while the line you write stays clear above the fade. On an iPad with a keyboard
+  attached it steps aside, as Notes' does, leaving the keyboard's own shortcuts; Format, attachments and the pencil are
+  in the toolbar at the top. It comes back with the touch keyboard.
 
 ### Fixed
 
 - A picture no longer goes to the Trash when its link in the note changes case, say after editing the note in another
   app: the Mac's disk finds the picture whatever the case, and now Notebook does too.
+- On iPhone and iPad, a note fades out under the bars at the top and bottom as you scroll, as in Notes, rather than
+  running sharp under the toolbar's buttons and stopping at a hard line under the title.
 - A note open in the main window and in a window of its own no longer makes Notebook hang as you type in one of them.
   Each window now shows what was typed in the other, and quitting with both open quits.
 - Leaving a note a moment after another device changed the same lines no longer loses what you typed since the last
@@ -133,6 +140,10 @@ versions follow [semantic versioning](https://semver.org).
 - On the iPhone's welcome screen, the last lines no longer run under the Choose a Folder button.
 - On the iPhone, going back to the first screen from a note no longer pushes its list down once you are there: the note
   you were in is already at the top of Recent while you go back.
+- On iPhone and iPad, when the buttons for where the caret is come or go in the bar above the keyboard, the tools that
+  move onto the first page or off it slide there, rather than showing twice for a moment. The bar also comes up with
+  the keyboard already as it should be for where you tap, and goes away with it as it was, rather than its buttons
+  popping in after it or shrinking away as it leaves.
 - In the Mac's sidebar, Tab now goes on into the note that is open, with the caret where it was, as Tab goes from the
   list to the note in Notes and Mail. Moving a file to the Trash from the sidebar opens the next file in its folder, or
   the one before it at the end, as Notes shows the next note; before, the note opened before it came back, wherever it

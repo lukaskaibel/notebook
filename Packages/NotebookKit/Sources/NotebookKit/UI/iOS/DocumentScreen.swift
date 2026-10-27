@@ -299,6 +299,8 @@ struct NoteEditorHost: UIViewRepresentable {
 
 final class EditorContainer: UIView {
     let editor: EditorController
+    /// The screen whose bars follow the text view, while this has the editor.
+    private weak var barsController: UIViewController?
 
     init(editor: EditorController) {
         self.editor = editor
@@ -319,17 +321,49 @@ final class EditorContainer: UIView {
         view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         addSubview(view)
         editor.endMove()
+        becomeContentScrollView()
     }
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
+        // Back from a screen pushed over the note that left it the editor (a folder from a link): its bars follow the
+        // text view again, which they stopped doing when it went.
+        if window != nil, editor.view.superview === self { becomeContentScrollView() }
         claim()
+    }
+
+    /// The bars blur and fade what scrolls under them, as in Notes, only over the scroll view their screen names, and
+    /// SwiftUI names none for a text view of UIKit's: without this the toolbar's buttons sit on sharp text and the
+    /// navigation bar draws a hard edge.
+    private func becomeContentScrollView() {
+        let textView = editor.textView
+        textView.topEdgeEffect.style = .soft
+        textView.bottomEdgeEffect.style = .soft
+        var responder: UIResponder? = self
+        while let next = responder?.next {
+            if let controller = next as? UIViewController, controller.parent is UINavigationController {
+                controller.setContentScrollView(textView, for: [.top, .bottom])
+                barsController = controller
+                return
+            }
+            responder = next
+        }
+    }
+
+    /// The iPad's page shows a PDF, a picture or To-dos where the note was, on the same screen: its bars go back to
+    /// what that shows, rather than following a text view that isn't there. A screen that took the editor already
+    /// named it for itself.
+    private func resignContentScrollView() {
+        guard let controller = barsController, controller.contentScrollView(for: .top) === editor.textView else { return }
+        controller.setContentScrollView(nil, for: [.top, .bottom])
+        barsController = nil
     }
 
     /// The screen with the editor goes, often before the next one takes the editor: the keyboard is kept for it.
     override func willMove(toWindow newWindow: UIWindow?) {
         super.willMove(toWindow: newWindow)
         guard newWindow == nil, editor.view.superview === self else { return }
+        resignContentScrollView()
         editor.beginMove()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [editor] in editor.finishMoveIfNowhere() }
     }
