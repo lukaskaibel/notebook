@@ -420,6 +420,7 @@ enum MarkdownStyler {
                     .underlineColor: Theme.accent.withAlphaComponent(0.35),
                 ], range: span.content)
                 s.addAttribute(.notebookLink, value: LinkTarget(.url(url)), range: span.range)
+                s.addAttribute(.notebookAddress, value: true, range: span.content)
                 markers(s, span)
             case .image(let source, _):
                 let url = fileURL(source, env: env)

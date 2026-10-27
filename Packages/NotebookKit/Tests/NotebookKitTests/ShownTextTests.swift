@@ -44,6 +44,29 @@ final class ShownTextTests: XCTestCase {
         XCTAssertTrue(h.textView.shouldReplaceCharacters(inRanges: [NSValue(range: h.range(of: "Kyoto"))], with: ["Nara"]))
     }
 
+    /// A web address written out is the link itself: Capitalize and Replace leave it as it is.
+    func testWebAddressesWrittenOutKeepTheirCase() {
+        let note = "See https://example.com/kyoto-guide and <https://example.com/ryokan> for the guide.\n"
+        let h = EditorHarness(note)
+        h.select(NSRange(location: 0, length: (h.text as NSString).length))
+        h.textView.capitalizeWord(nil)
+        XCTAssertEqual(h.text, "See https://example.com/kyoto-guide And <https://example.com/ryokan> For The Guide.\n")
+        let address = NSValue(range: (h.text as NSString).range(of: "kyoto"))
+        XCTAssertFalse(h.textView.shouldReplaceCharacters(inRanges: [address], with: ["nara"]))
+        XCTAssertTrue(h.text.contains("kyoto-guide"))
+    }
+
+    /// What replaces a match is text: a * there doesn't run the typing rule that wraps a selection in marks.
+    func testReplacingWithAMarkReplaces() {
+        let h = EditorHarness("Kyoto trip with a ryokan.\n")
+        let match = h.range(of: "ryokan")
+        h.select(match)
+        XCTAssertTrue(h.textView.shouldReplaceCharacters(inRanges: [NSValue(range: match)], with: ["*"]))
+        XCTAssertEqual(h.text, "Kyoto trip with a ryokan.\n", "wrapped in marks instead")
+        h.textView.replaceCharacters(in: match, with: "*")
+        XCTAssertEqual(h.text, "Kyoto trip with a *.\n")
+    }
+
     func testSpeechReadsWhatYouSee() {
         let h = EditorHarness(note)
         let spoken = h.editor.shownText(in: NSRange(location: 0, length: (h.text as NSString).length))

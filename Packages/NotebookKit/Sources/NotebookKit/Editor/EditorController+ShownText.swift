@@ -2,16 +2,17 @@
 import AppKit
 import AVFoundation
 
-/// What Edit › Find's Replace, Transformations and Speech work on: the text you see. The Markdown that isn't drawn (marks, a
-/// link's address, a picture's path) stays as it is: a picture whose path changed case, or a link whose address was
-/// replaced, would no longer be found.
+/// What Edit › Find's Replace, Transformations and Speech work on: the text you see. The Markdown that isn't drawn
+/// (marks, a link's address, a picture's path) stays as it is, and so does a web address written out: a picture whose
+/// path changed case, or a link whose address was replaced, would no longer be found.
 extension EditorController {
     /// The runs of a range that show as text: not hidden marks or addresses, nor what a picture, a table or a bullet is
-    /// drawn in place of.
-    func shownRuns(in range: NSRange) -> [NSRange] {
+    /// drawn in place of. `changing`: only what a change of case or Replace may touch, without web addresses.
+    func shownRuns(in range: NSRange, changing: Bool = false) -> [NSRange] {
         var runs: [NSRange] = []
         storage.enumerateAttributes(in: range) { attributes, run, _ in
             guard attributes[.notebookHidden] == nil, attributes[.notebookObject] == nil else { return }
+            if changing, attributes[.notebookAddress] != nil { return }
             if let last = runs.last, last.upperBound == run.location {
                 runs[runs.count - 1].length += run.length
             } else {
@@ -27,16 +28,16 @@ extension EditorController {
         return shownRuns(in: range).map { text.substring(with: $0) }.joined()
     }
 
-    /// All of a range shows as text.
-    func isShown(_ range: NSRange) -> Bool {
-        shownRuns(in: range) == [range]
+    /// All of a range shows as text that Replace may change.
+    func canReplace(_ range: NSRange) -> Bool {
+        shownRuns(in: range, changing: true) == [range]
     }
 
     /// Edit › Transformations: the words you see in the selection, or the word at the caret, changed by `transform`.
     func transformShownText(_ actionName: String, _ transform: (String) -> String) {
         var range = selection
         if range.length == 0 { range = textView.selectionRange(forProposedRange: range, granularity: .selectByWord) }
-        let runs = shownRuns(in: range)
+        let runs = shownRuns(in: range, changing: true)
         let text = storage.string as NSString
         let shown = runs.map { text.substring(with: $0) }
         // Changed together, so Capitalize sees a word whole across a bold mark; run by run where a letter becomes two
@@ -70,11 +71,14 @@ extension MarkdownTextView {
     @objc(shouldReplaceCharactersInRanges:withStrings:)
     func shouldReplaceCharacters(inRanges ranges: [NSValue], with strings: [String]) -> Bool {
         guard let controller else { return false }
-        let shown = zip(ranges.map(\.rangeValue), strings).filter { controller.isShown($0.0) }
+        let shown = zip(ranges.map(\.rangeValue), strings).filter { controller.canReplace($0.0) }
         if shown.count == ranges.count {
             let selector = #selector(shouldReplaceCharacters(inRanges:with:))
             typealias Original = @convention(c) (AnyObject, Selector, NSArray, NSArray) -> Bool
             guard let method = class_getMethodImplementation(NSTextView.self, selector) else { return true }
+            // What replaces a match is text, not typing: a * or = in it doesn't wrap the match in marks.
+            controller.isPerformingEdit = true
+            defer { controller.isPerformingEdit = false }
             return unsafeBitCast(method, to: Original.self)(self, selector, ranges as NSArray, strings as NSArray)
         }
         if !shown.isEmpty {

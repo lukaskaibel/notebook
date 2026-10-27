@@ -137,8 +137,9 @@ public final class Workspace: NSObject {
     @ObservationIgnored var showWindow: (() -> Void)?
 
     #if os(macOS)
-    /// The main window is open: it can be closed while Notebook keeps running.
-    var isMainWindowOpen = false
+    /// The main window is open: it can be closed while Notebook keeps running. Open until it says it closed: at launch
+    /// it is on its way, and tests have a window of their own.
+    var isMainWindowOpen = true
     /// Commands for the main window given while it was closed (⌘N, ⌘K): they run once it is there again.
     @ObservationIgnored private var waitingForWindow: [() -> Void] = []
     /// The note in its own window that you are working in, for Revert To; nil while it's the main window.
@@ -1956,6 +1957,7 @@ public final class Workspace: NSObject {
         if isMainWindowOpen {
             // The sidebar is in the main window whatever it shows.
             if sidebar?.outline.window?.isKeyWindow != true { showWindow?() }
+            workingInMainWindow()
             return action()
         }
         waitingForWindow.append(action)
@@ -1966,10 +1968,20 @@ public final class Workspace: NSObject {
     func mainWindowOpened() {
         isMainWindowOpen = true
         DispatchQueue.main.async { [self] in
+            moveUndoToMainWindow()
             let waiting = waitingForWindow
             waitingForWindow = []
+            if !waiting.isEmpty { workingInMainWindow() }
             waiting.forEach { $0() }
         }
+    }
+
+    /// The main window is the one you work in from now, before AppKit says so as it comes to the front: what its
+    /// command does (a new note) is kept for Undo there, not in the note's own window it came from.
+    private func workingInMainWindow() {
+        keyFileWindow = nil
+        if keyFileNote != nil { keyFileNote = nil }
+        if isOtherWindowInFront { isOtherWindowInFront = false }
     }
 
     /// The main window is the one you are working in: open, with no note's own window or Settings in front of it.
