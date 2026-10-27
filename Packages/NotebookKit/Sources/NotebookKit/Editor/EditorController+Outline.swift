@@ -120,16 +120,19 @@ extension EditorController {
         /// The top of what you saw, under the toolbar, in the text view's coordinates.
         var top: CGFloat
         var selection: NSRange
+        /// The caret was put there, rather than left where the note opened.
+        var caretWasPlaced = false
     }
 
     public var place: Place {
-        Place(top: visibleTop, selection: selection)
+        Place(top: visibleTop, selection: selection, caretWasPlaced: caretWasPlaced || isFocused)
     }
 
     /// Comes back to a place in the note, as Back and Forward do: the same caret, scrolled to the same spot.
     public func restore(_ place: Place) {
         guard place.selection.upperBound <= storage.length else { return }
         setSelection(place.selection)
+        caretWasPlaced = place.caretWasPlaced
         scroll(to: place)
         #if os(iOS)
         // The note may be on its way to another screen, whose bars come later and move it: it goes back there
