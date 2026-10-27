@@ -33,8 +33,22 @@ In the pull request, say which of these you updated and which you left alone on 
 
 ## Planning
 
-Notebook is planned in the GitHub project [Notebook](https://github.com/users/lukaskaibel/projects/4): milestones are
-versions (0.1.0, 0.2.0, …), larger pieces are issues labelled `epic` with sub-issues as their steps, and Status runs
-Inbox → Backlog → Todo → In Progress → In Review → Done. Work you find but don't do becomes an issue there (Inbox, or
-Backlog when it's clearly wanted). Link pull requests to their issue (`Closes #12`). When a version ships, close its
-milestone with what shipped and the tag in its description.
+Notebook is planned in the GitHub project [Notebook](https://github.com/users/lukaskaibel/projects/4); its README
+explains the board. In short:
+
+- **Milestones are versions** (1.2.0, 1.3.0, …), about a week apart. A milestone's due date is the day it should be in
+  the App Store, and its description says what it brings, for people who read it on GitHub.
+- **Epics** are issues labelled `epic`, one or two per version for its theme, with sub-issues as their steps. The
+  sub-issues carry the milestones; the roadmap draws the epic across them.
+- **Status** runs Inbox → Backlog → Todo → In Progress → In Review → Done. Issues in a version are Todo or later;
+  Backlog has no milestone.
+- **Priority:** Urgent (drop everything, such as data loss in a released version), High (the version waits for it),
+  Medium (planned), Low (moves to the next version if there's no time).
+- **Labels:** one of `bug`, `enhancement`, `documentation` or `release`, plus `mac` or `ios` when it concerns one
+  platform only, and `editor`, `accessibility` or `tests` where they fit.
+
+Work you find but don't do becomes an issue there, with labels and a priority: Inbox, or Backlog when it's clearly
+wanted, or straight into a version when it belongs there. Link pull requests to their issue (`Closes #12`) and set an
+issue to Done when its pull request is merged. When a version ships, close its milestone with what shipped and the tag
+in its description, move what's left to the next version, rename the board view (named after the version being built)
+and point its filter at the next one, and add a version a week after the last.
