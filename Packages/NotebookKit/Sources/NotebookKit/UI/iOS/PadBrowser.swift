@@ -12,21 +12,35 @@ struct PadBrowser: View {
     @FocusState private var isSearchFocused: Bool
     /// Wide enough for the sidebar next to the page: an iPad in landscape, or a large window.
     @State private var isWide = true
+    /// The width was seen once, and the split view made for it: a split view changes what it shows as it first
+    /// appears back to what it was made with.
+    @State private var hasMeasured = false
     @Bindable private var settings = NotebookSettings.shared
 
     var body: some View {
-        Group {
-            // As in Notes and Mail: in a narrower window the sidebar lies over the page rather than squeezing it,
-            // and gets out of the way once you have picked something.
-            if isWide {
-                splitView.navigationSplitViewStyle(.balanced)
+        // One split view, whatever the width: choosing between two styles as the iPad turned or a window was resized
+        // made a new one after each turn, with the page jumping and the sidebar left lying over it. Where there isn't
+        // room for both, the sidebar makes way for the page instead, as Files' does.
+        ZStack {
+            // Made once the width is known, already without the sidebar where it has to make way: the note open at
+            // launch in portrait, or a window coming back from phone width, has none next to it or sliding off.
+            if hasMeasured { splitView }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Room for the sidebar, a column of text and the outline: an iPad in landscape. In portrait, even the 13-inch
+        // one's, the text would get too narrow with all three. Narrowing, it goes a little below that, so a Stage
+        // Manager window dragged about the edge doesn't take the sidebar away and back again each time.
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            let wide = width >= (hasMeasured && isWide ? 1060 : 1100)
+            guard !hasMeasured || wide != isWide else { return }
+            isWide = wide
+            if hasMeasured {
+                withAnimation { fitSidebar() }
             } else {
-                splitView.navigationSplitViewStyle(.prominentDetail)
+                fitSidebar()
+                hasMeasured = true
             }
         }
-        // Room for the sidebar, a column of text and the outline: an iPad in landscape. In portrait, even the 13-inch
-        // one's, the text would get too narrow with all three.
-        .onGeometryChange(for: Bool.self) { $0.size.width >= 1100 } action: { isWide = $0 }
         .overlay {
             PaletteHost(workspace: workspace, actions: PaletteActions(
                 openSettings: { _ in showsSettings = true },
@@ -61,14 +75,32 @@ struct PadBrowser: View {
             isSearchFocused = true
         }
         .onChange(of: workspace.currentURL) { _, url in
-            if url != nil, !isWide, workspace.columnVisibility != .detailOnly {
-                withAnimation { workspace.columnVisibility = .detailOnly }
-            }
+            if url != nil { withAnimation { makeWayForPage() } }
         }
         .onChange(of: workspace.showsTodos) { _, shows in
-            if shows, !isWide, workspace.columnVisibility != .detailOnly {
-                withAnimation { workspace.columnVisibility = .detailOnly }
-            }
+            if shows { withAnimation { makeWayForPage() } }
+        }
+        .onChange(of: workspace.columnVisibility) { _, visibility in
+            // Shown by hand: it stays, whatever the width does next.
+            if visibility != .detailOnly { workspace.sidebarHiddenForWidth = false }
+        }
+    }
+
+    /// Where there isn't room for both, the sidebar goes once something is open: you have picked what you wanted.
+    private func makeWayForPage() {
+        guard !isWide, workspace.columnVisibility != .detailOnly else { return }
+        workspace.columnVisibility = .detailOnly
+        workspace.sidebarHiddenForWidth = true
+    }
+
+    /// Narrower, the sidebar makes way for what is open, as Files' does when the iPad turns to portrait; wider again,
+    /// it comes back if it went for want of room.
+    private func fitSidebar() {
+        if !isWide {
+            if workspace.currentURL != nil || workspace.showsTodos { makeWayForPage() }
+        } else if workspace.sidebarHiddenForWidth {
+            workspace.columnVisibility = .all
+            workspace.sidebarHiddenForWidth = false
         }
     }
 
