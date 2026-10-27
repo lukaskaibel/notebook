@@ -387,7 +387,7 @@ enum FileOperations {
             copy(name, as: newName)
             if let strokes = strokesName(of: name), let newStrokes = strokesName(of: newName) { copy(strokes, as: newStrokes) }
         }
-        guard !renamed.isEmpty, let expression = try? NSRegularExpression(pattern: "\\.assets/([^)\\s\\]|]+)") else { return (assets, false) }
+        guard !renamed.isEmpty, let expression = assetLinks else { return (assets, false) }
         let leaving = assets.subtracting(renamed.keys)
         let changed = rewrite(note) { text in
             let string = NSMutableString(string: text)
@@ -435,7 +435,9 @@ enum FileOperations {
             guard let text = NoteDocument.read(file) else { continue }
             used.formUnion(assetNames(in: text))
         }
-        for name in withDrawingStrokes(candidates).subtracting(withDrawingStrokes(used)) {
+        // A name in another case is the same file: a picture whose link was made upper case is still used.
+        let usedNames = Set(withDrawingStrokes(used).map { $0.lowercased() })
+        for name in withDrawingStrokes(candidates) where !usedNames.contains(name.lowercased()) {
             let url = folder.appendingPathComponent(".assets").appendingPathComponent(name)
             if FileManager.default.fileExists(atPath: url.path) { _ = trash(url) }
         }
@@ -448,9 +450,13 @@ enum FileOperations {
         })
     }
 
+    /// Where a note's Markdown points into `.assets`, the file name in the first group. The Mac's disks don't mind case,
+    /// so neither does this: a link made upper case still shows its picture.
+    private static let assetLinks = try? NSRegularExpression(pattern: "\\.assets/([^)\\s\\]|]+)", options: .caseInsensitive)
+
     /// The `.assets` files a note's Markdown points at, by file name.
     static func assetNames(in text: String) -> Set<String> {
-        guard let expression = try? NSRegularExpression(pattern: "\\.assets/([^)\\s\\]|]+)") else { return [] }
+        guard let expression = assetLinks else { return [] }
         var names = Set<String>()
         for match in expression.matches(in: text, range: NSRange(location: 0, length: (text as NSString).length)) {
             let raw = (text as NSString).substring(with: match.range(at: 1))

@@ -14,6 +14,9 @@ extension NSAttributedString.Key {
     static let notebookDecoration = NSAttributedString.Key("notebook.decoration")
     /// Where a click goes: a URL or a note.
     static let notebookLink = NSAttributedString.Key("notebook.link")
+    /// A web address shown as it is written (`https://…`, `<…>`): text you see, but the link's own, which Transformations
+    /// and Replace leave alone.
+    static let notebookAddress = NSAttributedString.Key("notebook.address")
     /// On the first `#` of a heading: its level, shown in the margin next to the caret.
     static let notebookHeading = NSAttributedString.Key("notebook.heading")
     /// How much of a Markdown mark shows while it folds in or out (`MarkdownRevealAnimator`): its opacity, 0 to 1.

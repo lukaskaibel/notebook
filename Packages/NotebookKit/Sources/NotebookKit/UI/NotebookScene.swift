@@ -43,6 +43,15 @@ public struct NotebookScene: Scene {
                 }
                 .disabled(!workspace.hasVisibleNote)
             }
+            CommandGroup(after: .pasteboard) {
+                Divider()
+                Button { workspace.attachFiles() } label: { Label("Attach File…", systemImage: "paperclip") }
+                    .keyboardShortcut("a", modifiers: [.command, .shift])
+                    .disabled(!workspace.hasNoteInFront)
+            }
+            CommandGroup(replacing: .textEditing) {
+                TextCommands(workspace: workspace, settings: settings)
+            }
             CommandGroup(replacing: .printItem) {
                 Button { workspace.printNote() } label: { Label("Print…", systemImage: "printer") }
                     .keyboardShortcut("p", modifiers: .command)
@@ -71,9 +80,19 @@ public struct NotebookScene: Scene {
                     Label("Open Recent", systemImage: "clock")
                 }
                 Divider()
-                if let url = workspace.currentURL {
-                    MoveToMenu(workspace: workspace, url: url)
-                }
+                // The file of the window you are working in, a note's own window or this one, as in Notes.
+                // Dimmed with Settings in front or the main window closed: no file to act on.
+                let file = workspace.fileInFront
+                MoveToMenu(workspace: workspace, url: file)
+                    .disabled(file == nil)
+                Button { if let file { workspace.duplicate(file) } } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
+                    .keyboardShortcut("d", modifiers: .command)
+                    .disabled(file == nil)
+                Button { workspace.renameInFront() } label: { Label("Rename", systemImage: "pencil") }
+                    .disabled(!workspace.hasNoteInFront)
+                // Without ⌘⌫, which deletes to the start of the line as you type; the sidebar takes it.
+                Button { if let file { workspace.trash(file) } } label: { Label("Move to Trash", systemImage: "trash") }
+                    .disabled(file == nil)
                 if workspace.revertNote != nil {
                     Menu {
                         Button("Last Opened") { workspace.revertToLastOpened() }
@@ -124,8 +143,9 @@ public struct NotebookScene: Scene {
                     .keyboardShortcut("0", modifiers: .command)
             }
             CommandMenu("Go") {
+                // ⌘F finds in the note, as in Notes, whose search of its list is ⌥⌘F too.
                 Button { workspace.inMainWindow { workspace.search.focus() } } label: { Label("Search…", systemImage: "magnifyingglass") }
-                    .keyboardShortcut("f", modifiers: .command)
+                    .keyboardShortcut("f", modifiers: [.command, .option])
                 Button { workspace.inMainWindow { workspace.togglePalette() } } label: { Label("Command Palette…", systemImage: "command") }
                     .keyboardShortcut("k", modifiers: .command)
                     .disabled(workspace.locations.isEmpty)
@@ -160,6 +180,7 @@ public struct NotebookScene: Scene {
                     Label("Mark as Checked", systemImage: "checkmark.circle")
                 }
                 .keyboardShortcut("u", modifiers: [.command, .shift])
+                .disabled(!workspace.hasNoteInFront)
                 formatButton(.bulletedList, #selector(MarkdownTextView.makeBulletedList(_:)), "7", [.command, .shift])
                 formatButton(.numberedList, #selector(MarkdownTextView.makeNumberedList(_:)), "9", [.command, .shift])
                 formatButton(.quote, #selector(MarkdownTextView.makeQuote(_:)), "'", .command)
@@ -167,7 +188,8 @@ public struct NotebookScene: Scene {
                 Button { workspace.editor.toggleDrawing() } label: {
                     Label(workspace.isDrawing ? "Stop Drawing" : "Drawing", systemImage: "pencil.tip.crop.circle")
                 }
-                .disabled(workspace.note == nil)
+                // The main window's: a note's own window has no pens to draw with.
+                .disabled(!workspace.isMainWindowInFront || workspace.note == nil)
                 Divider()
                 formatButton(.indent, #selector(MarkdownTextView.indentLines(_:)), "]", [.command, .option], name: "Increase Indent")
                 formatButton(.outdent, #selector(MarkdownTextView.outdentLines(_:)), "[", [.command, .option], name: "Decrease Indent")
@@ -187,6 +209,63 @@ public struct NotebookScene: Scene {
     private func formatButton(_ command: FormatCommand, _ action: Selector, _ key: Character, _ modifiers: EventModifiers, name: String? = nil) -> some View {
         Button { NSApp.sendAction(action, to: nil, from: nil) } label: { Label(name ?? command.name, systemImage: command.symbol) }
             .keyboardShortcut(KeyEquivalent(key), modifiers: modifiers)
+            .disabled(!workspace.hasNoteInFront)
+    }
+}
+
+/// Edit › Find, Spelling and Grammar, Transformations and Speech, as every Mac text app has them. Find finds in the
+/// note (Go › Search, ⌥⌘F, finds in every note); Substitutions are left out, as Markdown needs its quotes and
+/// dashes.
+private struct TextCommands: View {
+    let workspace: Workspace
+    @Bindable var settings: NotebookSettings
+
+    var body: some View {
+        let hasNote = workspace.hasNoteInFront
+        Menu {
+            Button("Find…") { workspace.find(.showFindInterface) }
+                .keyboardShortcut("f", modifiers: .command)
+            Button("Find and Replace…") { workspace.find(.showReplaceInterface) }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
+            Button("Find Next") { workspace.find(.nextMatch) }
+                .keyboardShortcut("g", modifiers: .command)
+            Button("Find Previous") { workspace.find(.previousMatch) }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
+            // Without ⌘E, which is Code.
+            Button("Use Selection for Find") { workspace.find(.setSearchString) }
+            Button("Jump to Selection") { workspace.jumpToSelection() }
+                .keyboardShortcut("j", modifiers: .command)
+        } label: {
+            Label("Find", systemImage: "magnifyingglass")
+        }
+        .disabled(!hasNote)
+        Menu {
+            Button("Show Spelling and Grammar") { workspace.sendToNote(#selector(NSText.showGuessPanel(_:))) }
+                .keyboardShortcut(":", modifiers: .command)
+            Button("Check Document Now") { workspace.sendToNote(#selector(NSText.checkSpelling(_:))) }
+                .keyboardShortcut(";", modifiers: .command)
+            Divider()
+            Toggle("Check Spelling While Typing", isOn: $settings.checksSpelling)
+            Toggle("Check Grammar With Spelling", isOn: $settings.checksGrammar)
+            Toggle("Correct Spelling Automatically", isOn: $settings.correctsSpelling)
+        } label: {
+            Label("Spelling and Grammar", systemImage: "textformat.abc.dottedunderline")
+        }
+        Menu {
+            Button("Make Upper Case") { NSApp.sendAction(#selector(NSResponder.uppercaseWord(_:)), to: nil, from: nil) }
+            Button("Make Lower Case") { NSApp.sendAction(#selector(NSResponder.lowercaseWord(_:)), to: nil, from: nil) }
+            Button("Capitalize") { NSApp.sendAction(#selector(NSResponder.capitalizeWord(_:)), to: nil, from: nil) }
+        } label: {
+            Label("Transformations", systemImage: "textformat")
+        }
+        .disabled(!hasNote)
+        Menu {
+            Button("Start Speaking") { workspace.sendToNote(#selector(NSTextView.startSpeaking(_:))) }
+            Button("Stop Speaking") { workspace.sendToNote(#selector(NSTextView.stopSpeaking(_:))) }
+        } label: {
+            Label("Speech", systemImage: "waveform")
+        }
+        .disabled(!hasNote)
     }
 }
 

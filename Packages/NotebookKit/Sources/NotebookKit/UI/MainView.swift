@@ -148,7 +148,7 @@ struct DocumentToolbar: ToolbarContent {
             SearchFieldItem(controller: workspace.search)
                 .frame(width: 190, height: 36)
                 .padding(.horizontal, 6)
-                .help("Search notes, files and pictures (⌘F)")
+                .help("Search notes, files and pictures (⌥⌘F)")
         }
         if !workspace.showsTodos {
             ToolbarSpacer(.fixed)
@@ -326,7 +326,7 @@ struct WelcomeView: View {
                 .padding(.bottom, 40)
             HStack(alignment: .top, spacing: 28) {
                 point("folder", "Plain files", "Every note is a .md file. Move it in Finder, open it anywhere.")
-                point("magnifyingglass", "Find anything", "⌘F finds names, words in notes and PDFs, and text in pictures.")
+                point("magnifyingglass", "Find anything", "⌥⌘F finds names, words in notes and PDFs, and text in pictures.")
                 point("icloud", "On every device", "iCloud Drive keeps your Mac, iPhone and iPad in step.")
             }
             .frame(maxWidth: 820)

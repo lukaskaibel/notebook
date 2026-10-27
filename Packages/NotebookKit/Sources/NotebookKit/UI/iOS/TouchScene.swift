@@ -130,9 +130,18 @@ struct TouchCommands: Commands {
             Button { NotebookSettings.shared.typography.size = Typography().size } label: { Label("Actual Size", systemImage: "textformat.size") }
                 .keyboardShortcut("0", modifiers: .command)
         }
+        // ⌘F finds in the note, as on the Mac and in Notes, and Search is ⌥⌘F. UIKit's own Find menu still reaches only
+        // a note with the keyboard, and takes ⌥⌘F for its Find and Replace while you type. Never dimmed: the menu bar
+        // doesn't hear of a note loading.
+        CommandGroup(after: .pasteboard) {
+            Button { workspace.editor.findInNote() } label: { Label("Find…", systemImage: "magnifyingglass") }
+                .keyboardShortcut("f", modifiers: .command)
+            Button { workspace.editor.findInNote(replacing: true) } label: { Label("Find and Replace…", systemImage: "arrow.left.arrow.right") }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
+        }
         CommandMenu("Go") {
             Button { workspace.searchRequest += 1 } label: { Label("Search", systemImage: "magnifyingglass") }
-                .keyboardShortcut("f", modifiers: .command)
+                .keyboardShortcut("f", modifiers: [.command, .option])
             Button { workspace.togglePalette() } label: { Label("Command Palette", systemImage: "command") }
                 .keyboardShortcut("k", modifiers: .command)
                 .disabled(workspace.locations.isEmpty)

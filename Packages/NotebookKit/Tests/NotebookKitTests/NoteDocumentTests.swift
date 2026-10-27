@@ -576,4 +576,40 @@ final class NoteDocumentTests: XCTestCase {
         FileOperations.cleanUpAssets(in: folder, candidates: ["photo.png"])
         XCTAssertTrue(FileManager.default.fileExists(atPath: assets.appendingPathComponent("photo.png").path))
     }
+
+    /// A link whose case changed (Make Upper Case on the whole note) still uses its picture, which the Mac's disk finds
+    /// whatever the case: it isn't thrown away as the note is left. One no note uses still goes.
+    func testPicturesStayWhenTheirLinksChangeCase() throws {
+        XCTAssertEqual(FileOperations.assetNames(in: "![](.ASSETS/PHOTO.PNG) [scan](.Assets/Scan%201.pdf)"), ["PHOTO.PNG", "Scan 1.pdf"])
+        let (note, url) = makeNote("![](.ASSETS/PHOTO.PNG)\n")
+        note.close()
+        let assets = url.deletingLastPathComponent().appendingPathComponent(".assets")
+        try FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
+        for name in ["photo.png", "photo.drawing", "unused.png"] { try Data([1]).write(to: assets.appendingPathComponent(name)) }
+        FileOperations.cleanUpAssets(in: url.deletingLastPathComponent(), candidates: ["photo.png", "unused.png"])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: assets.appendingPathComponent("photo.png").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: assets.appendingPathComponent("photo.drawing").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: assets.appendingPathComponent("unused.png").path))
+    }
+
+    /// A note moved next to another picture of its picture's name takes its own along under a new name, and its link
+    /// follows, whatever the link's case.
+    func testAMovedNotesLinkInAnotherCaseFollowsItsRenamedPicture() throws {
+        let (note, url) = makeNote("![](.ASSETS/photo.png)\n")
+        note.close()
+        let from = url.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: from.appendingPathComponent(".assets"), withIntermediateDirectories: true)
+        try Data([1]).write(to: from.appendingPathComponent(".assets/photo.png"))
+        let (other, there) = makeNote("")
+        other.close()
+        let target = there.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: target.appendingPathComponent(".assets"), withIntermediateDirectories: true)
+        try Data([2]).write(to: target.appendingPathComponent(".assets/photo.png"))
+        let moved = target.appendingPathComponent("Moved.md")
+        try FileManager.default.moveItem(at: url, to: moved)
+        let copied = FileOperations.copyAssets(of: moved, from: from)
+        XCTAssertTrue(copied.renamed)
+        XCTAssertEqual(onDisk(moved), "![](.ASSETS/photo%202.png)\n")
+        XCTAssertEqual(try Data(contentsOf: target.appendingPathComponent(".assets/photo 2.png")), Data([1]))
+    }
 }
