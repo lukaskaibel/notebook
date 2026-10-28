@@ -3,12 +3,13 @@ import QuickLook
 import SwiftUI
 import UIKit
 
-/// Markup of a PDF or picture as in Files: Quick Look with its pens, and what you draw saved into the file itself,
+/// Markup of a picture as in Files: Quick Look with its pens, and what you draw saved into the file itself,
 /// in its folder. (The share sheet's Markup asks where to save a copy.) The page shows the change as the file is
 /// written (see `FileLoadingView`).
 @MainActor
 enum Markup {
-    static func canMarkUp(_ kind: FileKind) -> Bool { kind == .pdf || kind == .image }
+    /// Pictures. PDFs are drawn on in place (`PDFDrawingSession`).
+    static func canMarkUp(_ kind: FileKind) -> Bool { kind == .image }
 
     static func open(_ url: URL, workspace: Workspace) {
         guard let root = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.keyWindow?.rootViewController }).first else {
@@ -74,6 +75,9 @@ enum Markup {
                 // Written in place, so the file keeps its tags, its colour and its place in the folder.
                 NSFileCoordinator().coordinate(writingItemAt: url, options: .forReplacing, error: &coordination) { url in
                     do { try Data(contentsOf: copy).write(to: url) } catch { failure = error }
+                }
+                if failure == nil, coordination == nil {
+                    await MainActor.run { FileLoading.didWrite(url) }
                 }
                 if let error = failure ?? coordination {
                     await MainActor.run {

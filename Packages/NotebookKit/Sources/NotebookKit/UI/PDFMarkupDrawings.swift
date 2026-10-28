@@ -1,38 +1,69 @@
 import PDFKit
 import PencilKit
 
-/// Handwriting from Apple's Markup (Files, Quick Look, Preview, the share sheet) drawn as sharp as the text around it.
+/// Handwriting on PDFs, from Apple's Markup (Files, Quick Look, Preview, the share sheet) and from drawing on a PDF
+/// in Notebook, drawn as sharp as the text around it.
 ///
 /// Markup saves a drawing as a stamp whose look is a picture at twice the page's size, which PDFKit stretches and
 /// blurs as soon as the page is shown larger. The strokes themselves are in the stamp too, in Markup's own entry
-/// (`/AAPL:AKExtras`), and Files and Preview draw those. So does Notebook: the stamp is hidden, and the page draws
-/// the strokes with its text, at the size they are shown. (An annotation of its own wouldn't do: PDFKit draws
-/// annotations once at the page's size, and stretches them too.) The file itself is never changed.
+/// (`/AAPL:AKExtras`), and Files and Preview draw those. Notebook keeps its own strokes in an entry of its own
+/// (`/NotebookDrawing`), next to a look made of lines that any app draws sharp. Either way the stamp is hidden, and the
+/// page draws the strokes with its text, at the size they are shown. (An annotation of its own wouldn't do: PDFKit
+/// draws annotations once at the page's size, and stretches them too.) Reading changes nothing in the file.
 enum MarkupDrawings {
     private static let extrasKey = PDFAnnotationKey(rawValue: "/AAPL:AKExtras")
     private static let annotationKey = "/AAPL:AKAnnotationV2"
+    /// Notebook's strokes: a PencilKit drawing, as Base64, measured from the top left of the page's crop box.
+    static let notebookKey = PDFAnnotationKey(rawValue: "/NotebookDrawing")
 
-    /// Draws the Markup drawings in `document` sharp. Called in the background, right after it was read, before
-    /// anything has looked at its pages.
+    /// Draws the strokes in `document` sharp. Called in the background, right after it was read, before anything has
+    /// looked at its pages.
     static func sharpen(_ document: PDFDocument, fileAt url: URL) {
-        // Most PDFs have none: their bytes say so without reading a page. Markup writes its entries uncompressed.
+        // Most PDFs have none: their bytes say so without reading a page. Both entries are written uncompressed.
         guard let data = try? Data(contentsOf: url, options: .alwaysMapped),
-              data.range(of: Data("AAPL:AKAnnotationV2".utf8)) != nil else { return }
+              data.range(of: Data("AAPL:AKAnnotationV2".utf8)) != nil || data.range(of: Data("NotebookDrawing".utf8)) != nil else { return }
         // Pages that can draw strokes, from the first one read.
         document.delegate = PageMaker.shared
         for index in 0..<document.pageCount {
             guard let page = document.page(at: index) as? DrawingPage else { continue }
             for annotation in page.annotations where annotation.shouldDisplay {
-                guard let (drawing, canvas) = drawing(in: annotation),
-                      let area = area(of: page, canvas: canvas) else { continue }
+                guard let found = strokes(in: annotation, on: page) else { continue }
                 annotation.shouldDisplay = false
-                page.drawings.append((drawing, area))
+                page.drawings.append(found)
             }
         }
     }
 
+    /// The strokes kept in an annotation, Markup's or Notebook's, and the box of the page they are measured in, from
+    /// its top left. None for any other annotation, and for strokes Notebook can't place on the page.
+    nonisolated static func strokes(in annotation: PDFAnnotation, on page: PDFPage) -> (drawing: PKDrawing, area: CGRect)? {
+        if let encoded = annotation.value(forAnnotationKey: notebookKey) as? String {
+            guard page.rotation == 0, let data = Data(base64Encoded: encoded, options: .ignoreUnknownCharacters),
+                  let drawing = try? PKDrawing(data: data) else { return nil }
+            return (drawing, page.bounds(for: .cropBox))
+        }
+        guard let (drawing, canvas) = markupDrawing(in: annotation), let area = area(of: page, canvas: canvas) else { return nil }
+        return (drawing, area)
+    }
+
+    /// All the strokes on a page as one drawing, measured from the top left of its crop box: what a canvas over the
+    /// page starts with.
+    static func drawing(on page: PDFPage) -> PKDrawing {
+        guard let page = page as? DrawingPage else { return PKDrawing() }
+        let crop = page.bounds(for: .cropBox)
+        return page.drawings.reduce(into: PKDrawing()) { all, found in
+            let offset = CGAffineTransform(translationX: found.area.minX - crop.minX, y: crop.maxY - found.area.maxY)
+            all.append(found.drawing.transformed(using: offset))
+        }
+    }
+
+    /// While a canvas over the page shows its strokes to change them, the page doesn't draw them too.
+    static func setEditing(_ editing: Bool, on page: PDFPage) {
+        (page as? DrawingPage)?.isEditing = editing
+    }
+
     /// The strokes Markup keeps in an annotation, and the size of the page they were drawn on.
-    private static func drawing(in annotation: PDFAnnotation) -> (PKDrawing, CGSize)? {
+    private nonisolated static func markupDrawing(in annotation: PDFAnnotation) -> (PKDrawing, CGSize)? {
         guard let extras = annotation.value(forAnnotationKey: extrasKey) as? [AnyHashable: Any],
               let encoded = extras[annotationKey] as? String,
               let archive = Data(base64Encoded: encoded, options: .ignoreUnknownCharacters),
@@ -48,7 +79,7 @@ enum MarkupDrawings {
 
     /// The page's box the drawing was made on: its strokes are measured from the box's top left. None for a turned
     /// page or one of another size, which keeps Markup's picture.
-    private static func area(of page: PDFPage, canvas: CGSize) -> CGRect? {
+    private nonisolated static func area(of page: PDFPage, canvas: CGSize) -> CGRect? {
         guard page.rotation == 0 else { return nil }
         return [PDFDisplayBox.cropBox, .mediaBox].lazy.map { page.bounds(for: $0) }.first { box in
             abs(box.width - canvas.width) < 1 && abs(box.height - canvas.height) < 1
@@ -82,28 +113,39 @@ private final class MarkupInk: NSObject, NSSecureCoding {
     func encode(with coder: NSCoder) {}
 }
 
-/// A page that draws Markup's strokes over itself, at the scale it is drawn at.
+/// A page that draws the strokes on it over itself, at the scale it is drawn at.
 private final class DrawingPage: PDFPage, @unchecked Sendable {
     typealias Drawing = (drawing: PKDrawing, area: CGRect)
-    private final class Drawings {
-        var list: [Drawing] = []
+    private final class State {
+        var drawings: [Drawing] = []
+        var isEditing = false
     }
     nonisolated(unsafe) private static var key: UInt8 = 0
 
-    /// The strokes, and the box of the page they are measured in, from its top left. Set before the page is shown.
     /// Kept beside the page: PDFKit makes its pages without the initializer that would set a property of its own.
+    private var state: State {
+        if let state = objc_getAssociatedObject(self, &Self.key) as? State { return state }
+        let state = State()
+        objc_setAssociatedObject(self, &Self.key, state, .OBJC_ASSOCIATION_RETAIN)
+        return state
+    }
+
+    /// The strokes, and the box of the page they are measured in, from its top left. Set before the page is shown.
     var drawings: [Drawing] {
-        get { (objc_getAssociatedObject(self, &Self.key) as? Drawings)?.list ?? [] }
-        set {
-            let drawings = Drawings()
-            drawings.list = newValue
-            objc_setAssociatedObject(self, &Self.key, drawings, .OBJC_ASSOCIATION_RETAIN)
-        }
+        get { state.drawings }
+        set { state.drawings = newValue }
+    }
+
+    /// A canvas over the page shows the strokes meanwhile. The view showing the page draws it again only when given
+    /// its document again.
+    var isEditing: Bool {
+        get { state.isEditing }
+        set { state.isEditing = newValue }
     }
 
     override func draw(with box: PDFDisplayBox, to context: CGContext) {
         super.draw(with: box, to: context)
-        guard !drawings.isEmpty else { return }
+        guard !drawings.isEmpty, !isEditing else { return }
         context.saveGState()
         defer { context.restoreGState() }
         // PDFKit draws the page in its own space; it goes into the box's, as annotations do.

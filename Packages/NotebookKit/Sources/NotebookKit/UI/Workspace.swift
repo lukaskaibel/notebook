@@ -168,6 +168,8 @@ public final class Workspace: NSObject {
     private(set) var revealRequest: (url: URL, select: Bool, id: UUID)?
     /// A new folder to name, or a file to rename, asked for in an alert.
     var renaming: URL?
+    /// The PDF drawn on, while the pen above it is on (iPhone and iPad).
+    var drawsOnPDF: URL?
     /// The file shown in Quick Look over everything.
     var quickLookURL: URL?
     /// Something that couldn't be done, for an alert.
@@ -895,6 +897,10 @@ public final class Workspace: NSObject {
             if focusTitle { editor.focusTitle() }
             return
         }
+        #if os(iOS)
+        // Another file: the PDF's drawing is saved as it goes (`PDFDrawingSession`).
+        drawsOnPDF = nil
+        #endif
         showsTodos = false
         #if os(macOS)
         pages.willOpen(target)

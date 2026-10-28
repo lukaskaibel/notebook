@@ -53,6 +53,10 @@ struct FileLoadingView<Loaded, Content: View>: View {
                 presenter?.stop()
                 presenter = nil
             }
+            // Written by Notebook itself: read at once, not when the presenter hears of it, which can take seconds.
+            .onReceive(NotificationCenter.default.publisher(for: FileLoading.written)) { notification in
+                if rereads, loaded != nil, (notification.object as? URL) == url.standardizedFileURL { changes += 1 }
+            }
             .onChange(of: scenePhase) { _, phase in
                 // Changed while Notebook was away, which a presenter isn't always told of.
                 if rereads, phase == .active, loaded != nil, modified != Self.modificationDate(url) { changes += 1 }
@@ -68,9 +72,9 @@ struct FileLoadingView<Loaded, Content: View>: View {
         let start = ContinuousClock.now
         let rereading = loaded != nil
         if rereading {
-            // Changes come in bursts as a file is written; the last one is read.
+            // Changes come in bursts as a file is written; the last one is read. One already shown isn't read again.
             try? await Task.sleep(for: .milliseconds(200))
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, Self.modificationDate(url) != modified else { return }
         } else {
             inCloud = (try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]).ubiquitousItemDownloadingStatus) == .notDownloaded
         }
@@ -171,6 +175,13 @@ struct NoteWaitingView: View {
 }
 
 enum FileLoading {
+    static let written = Notification.Name("NotebookFileWritten")
+
+    /// Notebook wrote `url` itself: a page showing it reads it again at once.
+    @MainActor static func didWrite(_ url: URL) {
+        NotificationCenter.default.post(name: written, object: url.standardizedFileURL)
+    }
+
     /// A file read within this long shows at once; one that took longer fades in.
     static let noticeableWait = Duration.milliseconds(150)
 

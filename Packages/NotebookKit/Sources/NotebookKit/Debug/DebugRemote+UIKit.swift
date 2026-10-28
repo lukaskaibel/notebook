@@ -88,6 +88,9 @@ enum DebugRemote {
             RunLoop.main.add(timer, forMode: .common)
         case "close":
             workspace.closeFile()
+        case "pdfpen":
+            // pdfpen [off]: the pen above the open PDF, on or off.
+            workspace.drawsOnPDF = argument == "off" ? nil : workspace.currentURL
         case "openoutside":
             // openoutside <path>: what a file handed over by the Files app's Open With or a share does.
             workspace.openFromOutside(URL(fileURLWithPath: argument))
