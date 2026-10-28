@@ -7,9 +7,14 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
-- Markup for PDFs and pictures on iPhone and iPad: the pen in the bar above a PDF or picture opens it ready to write
-  and draw on, as Markup in Files does, and what you add is saved into the file itself, in its folder. (Markup in the
-  share sheet asks where to save a copy.)
+- Draw and write on PDFs right on the page, on iPhone and iPad: tap the pen above a PDF, and Apple Pencil (or a
+  finger) draws on its pages with the system's tools, the eraser and the lasso included; two fingers scroll. Tap the pen
+  again and what you drew is in the PDF itself, in its folder; leaving the PDF or Notebook saves it too. It is saved as
+  lines, which every PDF app shows sharp, and Notebook can change it again later, also handwriting added with Markup in
+  Files or Preview.
+- Markup for pictures on iPhone and iPad: the pen above a picture opens it ready to draw on, as Markup in Files does,
+  and what you add is saved into the picture itself. (Markup in the share sheet asks where to save a copy.)
+- Rename a PDF, picture or any other file by tapping its name at the top, as in Files.
 - New Note as a widget and a control: the widget on the Home Screen and the Lock Screen of iPhone and iPad and on the
   Mac's desktop, the control in Control Center, on the Lock Screen and on the iPhone's Action button. A tap opens
   Notebook with a new note in your default folder and the caret in its title, as New Note in Shortcuts does. The

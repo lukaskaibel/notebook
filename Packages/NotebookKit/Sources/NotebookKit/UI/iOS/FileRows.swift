@@ -489,6 +489,14 @@ struct FileAlerts: ViewModifier {
     }
 
     private func rename(_ url: URL) {
+        workspace.rename(url, typed: name)
+    }
+}
+
+extension Workspace {
+    /// Renames a file to a name typed in the Rename alert or its title, which shows a note without its extension and
+    /// any other file with it.
+    func rename(_ url: URL, typed name: String) {
         var target = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let current = FileKind(url: url, isDirectory: false) == .note ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent
         guard !target.isEmpty, target != current else { return }
@@ -496,7 +504,7 @@ struct FileAlerts: ViewModifier {
         if !url.pathExtension.isEmpty, (target as NSString).pathExtension.lowercased() == url.pathExtension.lowercased() {
             target = (target as NSString).deletingPathExtension
         }
-        workspace.rename(url, to: target)
+        rename(url, to: target)
     }
 }
 #endif

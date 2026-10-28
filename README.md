@@ -356,7 +356,9 @@ shows the same in Notebook.
 Notebook is a browser for your folders, not only for notes. A PDF opens right in the window the way Preview shows it, its
 pages one under the other: there at once, and back where you left it when you return. Handwriting added with Markup is
 as sharp as the text, and a PDF changed in another app or on another device shows the change while it's open. On iPhone
-and iPad, the pen above a PDF or picture marks it up as in Files, and saves what you add into the file itself. A
+and iPad, the pen above a PDF lets you write and draw right on its pages, with Apple Pencil and the system's tools;
+tap it again and the strokes are in the PDF, as lines every PDF app shows sharp, and Notebook can change them later.
+The pen above a picture marks it up as in Files, and saves what you add into the picture itself. A
 picture fits the window on the same grey, never larger than it is; pinch or double-click to zoom in on a spot. A video plays with the system's
 controls, as in QuickTime Player. A spreadsheet or any other file opens in Quick Look. The inspector shows a file's
 details, and "Open in" hands it to its own app, as a double-click on it in the sidebar does.
@@ -478,7 +480,7 @@ screens.
   that other apps show, with its strokes kept next to it so it stays a drawing in Notebook.
 - **PDFs, pictures, videos and other files** open in the window: PDFs and pictures as in Preview, videos as in
   QuickTime Player, the rest in Quick Look. Double-click one in the sidebar to open it in its own app, such as Preview.
-  On iPhone and iPad, Markup writes and draws on a PDF or picture and saves into the file.
+  On iPhone and iPad you write and draw right on a PDF's pages, saved into the PDF; pictures get Markup.
 - **Search** for the names of notes, files and folders, headings, words in notes and PDFs, and the text in pictures,
   scans and handwriting, in the background as you type. ⌘K finds the same and runs commands.
 - **Spotlight** finds your notes by their names and words too, on the Mac, iPhone and iPad, and opens them in
@@ -761,6 +763,8 @@ Replace; otherwise ⌥⌘F searches. On iPhone and iPad:
 | Swipe a to-do in To-dos to the left | Delete; all the way across deletes it at once |
 | Shake the iPhone in To-dos | Undo or Redo what you last did to a to-do |
 | Tap a drawing | Draw in it |
+| Tap the pen above a PDF | Write and draw on its pages; tap it again to save it into the PDF |
+| Tap the name of a PDF or other file at the top | Rename it |
 | While drawing: one finger, two fingers | Draw, scroll (where only Apple Pencil draws, a finger scrolls) |
 | While drawing on the iPhone: Undo at the top, or touch and hold it | Take back the last stroke, or Redo |
 | Touch and hold a picture or file in a note, then drag | Move it to another place in the note, or into another app |

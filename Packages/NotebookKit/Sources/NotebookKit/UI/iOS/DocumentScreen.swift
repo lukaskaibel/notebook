@@ -22,9 +22,9 @@ struct DocumentScreen: View {
 
     var body: some View {
         content
-            .navigationTitle(showsTitle ? name : "")
+            .modifier(DocumentTitle(workspace: workspace, url: url, title: showsTitle ? name : "", isNote: isNote))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarRole(isInSplitView ? .editor : .automatic)
+            .toolbarRole(isInSplitView || !isNote ? .editor : .automatic)
             .toolbar { toolbar }
             .sheet(isPresented: $showsOutline) {
                 NavigationStack {
@@ -85,7 +85,9 @@ struct DocumentScreen: View {
                     NoteWaitingView(note: workspace.note)
                 }
             }
-        case .pdf: PDFFileView(url: url, find: workspace.find(in: url)).id(url)
+        case .pdf:
+            PDFFileView(url: url, find: workspace.find(in: url), isDrawing: workspace.drawsOnPDF == url) { workspace.report($0, $1) }
+                .id(url)
         case .image: PictureFileView(url: url).id(url)
         case .video: VideoFileView(url: url).id(url)
         default: QuickLookView(url: url).id(url).ignoresSafeArea(.container, edges: .bottom)
@@ -122,7 +124,13 @@ struct DocumentScreen: View {
             if isNote, workspace.isDrawing, sizeClass == .compact {
                 DrawingUndoButton(workspace: workspace)
             }
-            if Markup.canMarkUp(kind) {
+            if kind == .pdf {
+                // On, the pages are drawn on right there; off again, what was drawn is in the PDF.
+                let drawing = workspace.drawsOnPDF == url
+                Button { workspace.drawsOnPDF = drawing ? nil : url } label: {
+                    Label(drawing ? "Done Drawing" : "Draw", systemImage: drawing ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
+                }
+            } else if Markup.canMarkUp(kind) {
                 Button { Markup.open(url, workspace: workspace) } label: { Label("Markup", systemImage: "pencil.tip.crop.circle") }
             }
             ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
@@ -218,6 +226,25 @@ struct DocumentScreen: View {
         Task {
             guard let file = await NoteExporter.pdfFile(for: workspace.editor, title: name) else { return }
             exportedPDF = ExportedFile(url: file)
+        }
+    }
+}
+
+/// The bar's title. A note is renamed in its own title, in the page; any other file by tapping its name in the bar,
+/// as in Files and Pages.
+private struct DocumentTitle: ViewModifier {
+    let workspace: Workspace
+    let url: URL
+    let title: String
+    let isNote: Bool
+
+    func body(content: Content) -> some View {
+        if isNote {
+            content.navigationTitle(title)
+        } else {
+            content
+                .navigationTitle(Binding(get: { title }, set: { workspace.rename(url, typed: $0) }))
+                .toolbarTitleMenu { RenameButton() }
         }
     }
 }
