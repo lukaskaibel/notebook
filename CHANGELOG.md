@@ -129,6 +129,8 @@ versions follow [semantic versioning](https://semver.org).
   the strokes that Markup keeps beside it.
 - On iPad, folders in the search results open: search ends and the folder shows open in the sidebar. A tap did
   nothing before.
+- Folders in the search results, in ⌘K and in ⌘K's Move To show the symbol or emoji and colour you chose with
+  Customize Folder, as in the sidebar, not the plain blue folder.
 - On iPhone and iPad, To-dos no longer scrolls when you tap a to-do to edit it, or a line under it, unless the keyboard
   would cover it; then it scrolls just far enough. The new to-do's circle sits on the line of its words rather than
   above them, and so does a new sub-to-do's, which now opens smoothly under the others.

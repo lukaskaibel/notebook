@@ -31,6 +31,8 @@ struct PaletteRow: Identifiable {
     var matches: [Range<String.Index>] = []
     var detail: String?
     var symbol: String
+    /// A folder's emoji, shown instead of the symbol.
+    var emoji: String?
     var tint: Color
     var keys: [String] = []
     var action: Action
@@ -213,10 +215,16 @@ struct CommandPalette: View {
 
     private func rowView(_ row: PaletteRow, isSelected: Bool) -> some View {
         HStack(alignment: row.snippet == nil ? .center : .top, spacing: 10) {
-            Image(systemName: row.symbol)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(row.tint)
-                .frame(width: 18, height: 18)
+            Group {
+                if let emoji = row.emoji {
+                    Text(emoji).font(.system(size: 13))
+                } else {
+                    Image(systemName: row.symbol)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(row.tint)
+                }
+            }
+            .frame(width: 18, height: 18)
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.title)
                     .font(.system(size: 14))
@@ -340,7 +348,7 @@ struct CommandPalette: View {
                 // By section too: a scanned PDF can be found by its text and by its pictures.
                 PaletteRow(id: (section.title ?? "") + "/" + Self.id(of: item.result), section: section.title, title: item.title, snippet: item.snippet,
                            matches: item.matches, detail: item.snippet == nil ? item.place : nil, symbol: item.image,
-                           tint: tint(of: item), action: .result(item.result))
+                           emoji: item.emoji, tint: tint(of: item), action: .result(item.result))
             }
         }
     }
@@ -349,7 +357,7 @@ struct CommandPalette: View {
         guard let kind = item.kind else { return Color.theme(Theme.accent) }
         if item.symbol != nil { return Color.theme(Theme.textSecondary) }
         switch kind {
-        case .folder: return Color.theme(Theme.accent)
+        case .folder: return item.folderIcon?.color?.color ?? Color.theme(Theme.accent)
         case .note, .other, .audio: return Color.theme(Theme.textSecondary)
         default: return Color.theme(kind.tint)
         }
@@ -373,14 +381,16 @@ struct CommandPalette: View {
             let folder = folder.standardizedFileURL
             return !FileNode.samePath(folder, from) && !FileNode.samePath(folder, url) && !folder.path.hasPrefix(url.standardizedFileURL.path + "/")
         }
-        func row(_ folder: URL, name: String, place: String?, symbol: String = "folder", section: String = "Folders") -> PaletteRow {
-            PaletteRow(id: "folder:" + folder.path, section: section, title: name, detail: place, symbol: symbol,
-                       tint: Color.theme(Theme.accent), action: .moveInto(folder))
+        // Folders as the sidebar shows them, with the symbol or emoji and colour you chose.
+        func row(_ folder: URL, name: String, place: String?, symbol: String = "folder", icon: FolderIcon? = nil, section: String = "Folders") -> PaletteRow {
+            PaletteRow(id: "folder:" + folder.path, section: section, title: name, detail: place,
+                       symbol: icon.flatMap { $0.symbol == nil ? nil : $0.shownSymbol } ?? symbol, emoji: icon?.emoji,
+                       tint: icon?.color?.color ?? Color.theme(Theme.accent), action: .moveInto(folder))
         }
         guard query.trimmingCharacters(in: .whitespaces).isEmpty else {
             return search.sections.flatMap(\.items).compactMap { item in
                 guard case .file(let folder) = item.result, allowed(folder) else { return nil }
-                return row(folder, name: item.title, place: item.place)
+                return row(folder, name: item.title, place: item.place, icon: item.folderIcon)
             }
         }
         var rows = workspace.locations.filter { allowed($0.url) }.map {
@@ -390,7 +400,8 @@ struct CommandPalette: View {
         for recent in workspace.recentURLs {
             let folder = recent.deletingLastPathComponent().standardizedFileURL
             guard allowed(folder), seen.insert(folder.path).inserted, !workspace.locations.contains(where: { FileNode.samePath($0.url, folder) }) else { continue }
-            rows.append(row(folder, name: workspace.folderName(folder), place: workspace.index.entry(for: folder)?.place, section: "Recent Folders"))
+            rows.append(row(folder, name: workspace.folderName(folder), place: workspace.index.entry(for: folder)?.place,
+                            icon: workspace.folderIcon(for: folder), section: "Recent Folders"))
             if seen.count == 6 { break }
         }
         return rows

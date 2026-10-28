@@ -110,7 +110,9 @@ private final class DrawingPage: PDFPage, @unchecked Sendable {
         let bounds = self.bounds(for: box)
         context.translateBy(x: -bounds.minX, y: -bounds.minY)
         let device = context.userSpaceToDeviceSpaceTransform
-        let scale = min(max(hypot(device.a, device.b), hypot(device.c, device.d), 1), 8)
+        // As many pixels as the screen has at this zoom, however far in: only the part in view is drawn, so the picture
+        // stays the size of a tile. The limit is for a context that claims more than any screen.
+        let scale = min(max(hypot(device.a, device.b), hypot(device.c, device.d), 1), 64)
         let clip = context.boundingBoxOfClipPath
         for (drawing, area) in drawings {
             // Only the part in view, at the pixels it covers: zoomed in, a whole page of strokes would be a huge picture.

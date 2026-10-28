@@ -1134,7 +1134,7 @@ final class SidebarFileCell: NSTableCellView {
 
     /// An emoji as a picture about as large as the symbols on the other rows: just its square, so it sits in their
     /// middle rather than on the line's baseline.
-    private static func picture(of emoji: String, nested: Bool) -> NSImage {
+    static func picture(of emoji: String, nested: Bool) -> NSImage {
         let key = emoji + (nested ? " nested" : "")
         if let picture = emojiPictures[key] { return picture }
         let line = CTLineCreateWithAttributedString(NSAttributedString(string: emoji, attributes: [.font: NSFont.systemFont(ofSize: nested ? 12 : 13.5)]))

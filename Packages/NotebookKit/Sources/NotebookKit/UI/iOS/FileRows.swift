@@ -376,9 +376,14 @@ struct SearchResultsList: View {
                     }
                 }
             } icon: {
-                Image(systemName: item.image)
-                    .foregroundStyle(item.symbol != nil ? Color.secondary : kind == .folder ? Color.accentColor
-                                     : kind == .note || kind == .other ? Color.secondary : Color.theme(kind.tint))
+                // A folder as the sidebar shows it: its emoji, or its symbol in its colour.
+                if let emoji = item.emoji {
+                    Text(emoji)
+                } else {
+                    Image(systemName: item.image)
+                        .foregroundStyle(item.symbol != nil ? Color.secondary : kind == .folder ? item.folderIcon?.color?.color ?? Color.accentColor
+                                         : kind == .note || kind == .other ? Color.secondary : Color.theme(kind.tint))
+                }
             }
             .contentShape(Rectangle())
         } else {
