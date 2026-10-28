@@ -13,6 +13,7 @@ struct PDFFileView: View {
         FileLoadingView(url: url, background: FileKind.pdf.pageBackground) { url in
             FileLoading.read(url) { url -> PDFDocument? in
                 guard let document = PDFDocument(url: url), !document.isLocked, document.pageCount > 0 else { return nil }
+                MarkupDrawings.sharpen(document, fileAt: url)
                 return document
             }
         } content: { document in
@@ -90,8 +91,9 @@ private struct PDFKitView: NSViewRepresentable {
             }
         }
         guard view.document !== document else { return }
+        // Read again after it changed: it stays where it was.
+        let place = view.document != nil ? Self.place(in: view) : Self.places[url]
         view.document = document
-        let place = Self.places[url]
         if let scale = place?.scale { view.scaleFactor = scale }
         guard document != nil, let scrollView = view.documentView?.enclosingScrollView else { return }
         // PDFKit fits the pages to the width only now, and keeps the middle of the view where it was, which leaves
@@ -103,8 +105,12 @@ private struct PDFKitView: NSViewRepresentable {
     }
 
     static func dismantleNSView(_ view: PDFView, coordinator: PDFViewCoordinator) {
-        guard view.document != nil, let clip = view.documentView?.enclosingScrollView?.contentView else { return }
-        places[coordinator.url] = (clip.bounds.origin, view.autoScales ? nil : view.scaleFactor)
+        if let place = place(in: view) { places[coordinator.url] = place }
+    }
+
+    private static func place(in view: PDFView) -> (origin: CGPoint, scale: CGFloat?)? {
+        guard view.document != nil, let clip = view.documentView?.enclosingScrollView?.contentView else { return nil }
+        return (clip.bounds.origin, view.autoScales ? nil : view.scaleFactor)
     }
 }
 #else
@@ -140,9 +146,10 @@ private struct PDFKitView: UIViewRepresentable {
             }
         }
         guard view.document !== document else { return }
+        // Read again after it changed: it stays where it was.
+        let place = view.document != nil ? Self.place(in: view) : Self.places[url]
         view.document = document
         guard document != nil else { return }
-        let place = Self.places[url]
         if let scale = place?.scale {
             view.autoScales = false
             view.scaleFactor = scale
@@ -153,9 +160,13 @@ private struct PDFKitView: UIViewRepresentable {
     }
 
     static func dismantleUIView(_ view: PDFView, coordinator: PDFViewCoordinator) {
-        guard let document = view.document, let page = view.currentPage else { return }
+        if let place = place(in: view) { places[coordinator.url] = place }
+    }
+
+    private static func place(in view: PDFView) -> (page: Int, point: CGPoint, scale: CGFloat?)? {
+        guard let document = view.document, let page = view.currentPage else { return nil }
         let top = view.convert(CGPoint(x: 0, y: view.safeAreaInsets.top), to: page)
-        places[coordinator.url] = (document.index(for: page), top, view.autoScales ? nil : view.scaleFactor)
+        return (document.index(for: page), top, view.autoScales ? nil : view.scaleFactor)
     }
 }
 #endif

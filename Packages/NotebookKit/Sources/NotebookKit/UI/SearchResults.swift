@@ -36,6 +36,8 @@ struct SearchItem: Identifiable, Hashable {
     var isInCloud = false
     /// A symbol other than the kind's: a heading's, or how text was read from a picture.
     var symbol: String?
+    /// A folder's symbol or emoji and colour, if you chose any (Customize Folder), as the sidebar shows it.
+    var folderIcon: FolderIcon?
     /// For words found in a note, PDF or picture: the line they are in, and where they are in it.
     var snippet: String?
     var matches: [Range<String.Index>] = []
@@ -46,8 +48,12 @@ struct SearchItem: Identifiable, Hashable {
     var image: String {
         if let symbol { return symbol }
         if isInCloud { return "icloud.and.arrow.down" }
+        if let folderIcon, folderIcon.symbol != nil { return folderIcon.shownSymbol }
         return kind?.symbol ?? "square.and.pencil"
     }
+
+    /// A folder's emoji, shown instead of a symbol.
+    var emoji: String? { symbol == nil ? folderIcon?.emoji : nil }
 }
 
 /// The results in their sections: Recent, Files, Folders, Headings, In Notes and PDFs, In Pictures and Drawings,
@@ -95,7 +101,7 @@ struct SearchSection: Identifiable {
         }
         if !results.folders.isEmpty {
             sections.append(SearchSection(title: "Folders", items: results.folders.map { item in
-                SearchItem(result: .file(item.url), title: item.name, place: item.place, kind: .folder)
+                SearchItem(result: .file(item.url), title: item.name, place: item.place, kind: .folder, folderIcon: FolderIcons.read(item.url))
             }))
         }
         if !results.headings.isEmpty {
@@ -136,7 +142,8 @@ struct SearchSection: Identifiable {
         // Last: names with the letters typed, not much like it, for when nothing above is what you were looking for.
         if !results.others.isEmpty {
             sections.append(SearchSection(title: similarNames, items: results.others.map { item in
-                SearchItem(result: .file(item.url), title: item.name, place: item.place, kind: item.kind, isInCloud: item.isInCloud)
+                SearchItem(result: .file(item.url), title: item.name, place: item.place, kind: item.kind, isInCloud: item.isInCloud,
+                           folderIcon: item.kind == .folder ? FolderIcons.read(item.url) : nil)
             }))
         }
         if newNote {

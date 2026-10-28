@@ -101,7 +101,12 @@ final class SearchController: NSObject, NSTextSuggestionsDelegate, NSSearchField
         var item = NSSuggestionItem(representedValue: found.result, title: found.title)
         item.secondaryTitle = detail
         let kind = found.kind ?? .other
-        let tint: NSColor = found.symbol != nil ? .secondaryLabelColor : kind == .folder ? .controlAccentColor
+        // A folder as the sidebar shows it: its emoji, or its symbol in its colour.
+        if let emoji = found.emoji {
+            item.image = SidebarFileCell.picture(of: emoji, nested: false)
+            return item
+        }
+        let tint: NSColor = found.symbol != nil ? .secondaryLabelColor : kind == .folder ? found.folderIcon?.color?.platformColor ?? .controlAccentColor
             : kind == .note || kind == .other ? .secondaryLabelColor : kind.tint
         item.image = NSImage(systemSymbolName: found.image, accessibilityDescription: nil)?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(paletteColors: [tint]))

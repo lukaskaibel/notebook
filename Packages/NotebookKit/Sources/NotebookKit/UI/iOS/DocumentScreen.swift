@@ -122,6 +122,9 @@ struct DocumentScreen: View {
             if isNote, workspace.isDrawing, sizeClass == .compact {
                 DrawingUndoButton(workspace: workspace)
             }
+            if Markup.canMarkUp(kind) {
+                Button { Markup.open(url, workspace: workspace) } label: { Label("Markup", systemImage: "pencil.tip.crop.circle") }
+            }
             ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
             moreMenu
         }

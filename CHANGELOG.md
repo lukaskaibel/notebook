@@ -7,6 +7,9 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- Markup for PDFs and pictures on iPhone and iPad: the pen in the bar above a PDF or picture opens it ready to write
+  and draw on, as Markup in Files does, and what you add is saved into the file itself, in its folder. (Markup in the
+  share sheet asks where to save a copy.)
 - New Note as a widget and a control: the widget on the Home Screen and the Lock Screen of iPhone and iPad and on the
   Mac's desktop, the control in Control Center, on the Lock Screen and on the iPhone's Action button. A tap opens
   Notebook with a new note in your default folder and the caret in its title, as New Note in Shortcuts does. The
@@ -88,6 +91,8 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Changed
 
+- A PDF or picture that changes while it's open, marked up in another app or on another device, shows the change at
+  once, on the page you were on, as in Preview.
 - In To-dos on iPhone and iPad, Date, Time and Location in the bar above the keyboard no longer open a sheet that takes
   the keyboard away. The bar becomes a field to type in, with the keyboard still up, and the choices rise above it on
   glass: type "next week on Thursday", "fri 9am" or a place's name and tap what it reads, or Return; × leaves it as it
@@ -119,6 +124,13 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- Handwriting and drawings added to a PDF with Markup (in Files, Preview or the share sheet) are as sharp as the text
+  around them, at any zoom. They were blurred, as Markup saves a small picture of them in the PDF; Notebook now draws
+  the strokes that Markup keeps beside it.
+- On iPad, folders in the search results open: search ends and the folder shows open in the sidebar. A tap did
+  nothing before.
+- Folders in the search results, in ⌘K and in ⌘K's Move To show the symbol or emoji and colour you chose with
+  Customize Folder, as in the sidebar, not the plain blue folder.
 - On iPhone and iPad, To-dos no longer scrolls when you tap a to-do to edit it, or a line under it, unless the keyboard
   would cover it; then it scrolls just far enough. The new to-do's circle sits on the line of its words rather than
   above them, and so does a new sub-to-do's, which now opens smoothly under the others.
