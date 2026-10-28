@@ -100,6 +100,10 @@ extension Workspace {
     /// Asks whether Notebook may send notifications, and with a place whether it may use your location (on iPhone and
     /// iPad, which remind you there). Says whether notifications may come.
     func askForReminderPermissions(place: Bool) async -> Bool {
+        #if DEBUG
+        // A run on the sample notes sends no notifications (`scheduleTodoNotifications`), so it doesn't ask either.
+        if temporaryLocations, UserDefaults.standard.bool(forKey: "NotebookDemo") { return true }
+        #endif
         let allowed = await ReminderNotifications.shared.requestPermission()
         #if os(iOS)
         if place, ReminderNotifications.shared.isActive {
