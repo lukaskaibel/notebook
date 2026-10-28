@@ -1,7 +1,8 @@
 #!/bin/bash
 # Takes the Mac App Store screenshots on the sample notes, 2880 x 1800, into Design/screenshots/app-store/mac: ten
 # slots, each a caption line and a smaller one above the window.
-#   Tools/mac-app-store-screenshots.sh
+#   Tools/mac-app-store-screenshots.sh                  all ten
+#   Tools/mac-app-store-screenshots.sh 04-todos 07-search   only those slots, keeping the others
 # Builds a Debug copy under a bundle identifier of its own, so it shares no settings with a Notebook you have running,
 # runs it on a fresh copy of the sample notes (Files/DemoLibrary.swift) and drives it through its debug remote
 # (Debug/DebugRemote.swift), as Tools/readme-images.sh does. Each window is taken as it is on screen with
@@ -21,6 +22,10 @@ bundle_id=com.lukaskbl.Notebook.screenshots
 # The window in points; on a Retina display twice that in pixels, with room around it in 2880 x 1800.
 width=1240
 height=780
+
+# The slots to take; all of them when none are named.
+slots=" $* "
+wanted() { [ "$slots" = "  " ] || [[ "$slots" == *" $1 "* ]]; }
 
 pid=""
 previous=$(lsappinfo info -only bundlepath "$(lsappinfo front)" | sed -nE 's/.*"(.+)".*/\1/p')
@@ -92,6 +97,7 @@ EOF
 shot() {
   local name=$1 theme=$2 caption=$3 smaller=$4
   shift 4
+  wanted "$name" || return 0
   front
   say "appearance $theme"
   for command in "$@"; do say "$command"; sleep 0.6; done
@@ -140,6 +146,7 @@ echo "Taking screenshots…"
 # Framed in the work folder and moved over the old pictures only once every one is taken, so a run that stops (a
 # locked screen, say) leaves the old ones.
 mkdir -p "$work/framed"
+rm -f "$work/framed"/*.png
 # The order is the store's: the note, its folders and how it writes, then to-dos, reminders, versions, search, what a
 # note holds, and a PDF in the window. Two digits, since fastlane takes them in the order of their names.
 shot 01-note light "The ease of Notes." "Every note a Markdown file in your iCloud Drive." "open Travel/Kyoto trip.md"
@@ -156,10 +163,14 @@ typing >> "$work/cmd"
 sleep 7
 shot 03-typing light "Markdown that gets out of the way." "The marks show only where you are writing." "showcaret 1"
 say "showcaret 0"
-# To-dos, the dry cleaning edited in place, with a day typed into its date.
+# To-dos, the dry cleaning edited in place, a day just typed into its date: it shows its new date and stays where it
+# is while it's edited. Not with the date's dropdown open, since that lies over the to-dos under it and cuts one of
+# their lines, wherever the time of day has put them.
 shot 04-todos light "Every to-do in one list." "Type “thursday in 3 weeks”, and it’s a date." \
-  "showtodos" "wait 1" "edittodo end dry cleaning" "wait 1" "todopick date" "wait 0.6" "todopicktype thursday in 3 weeks" "wait 1.5"
-say "todopick none" "key escape"
+  "showtodos" "wait 1" "edittodo end dry cleaning" "wait 2" "todopick date" "wait 0.6" "todopicktype thursday in 3 weeks" \
+  "wait 1.2" "todopickkey return" "wait 1.5"
+# Due today again, at the time it had, for Errands in the next picture.
+say "todopick date" "wait 0.6" "todopicktype today" "wait 1" "todopickkey return" "wait 1" "key escape"
 # Remind Me for the to-do at a place, from its pill, once the map has loaded.
 shot 05-reminders light "Reminders, right in the note." "At a time you type, or when you get somewhere." \
   "open Inbox/Errands.md" "wait 1" "remindtodo plasters" "wait 3"
@@ -178,6 +189,6 @@ shot 09-drawing light "Draw right in the note." "With the trackpad or the mouse,
 say "drawing end"
 shot 10-pdf light "PDFs and pictures, in the window." "Everything else opens in Quick Look." "open Travel/Flight tickets.pdf" "wait 1"
 mkdir -p "$out"
-rm -f "$out"/*.png
+[ "$slots" = "  " ] && rm -f "$out"/*.png
 mv "$work/framed"/*.png "$out"/
 echo "Done: $out. Look at every picture before committing them."

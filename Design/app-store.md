@@ -9,7 +9,9 @@ fastlane (see the README's "For contributors"). fastlane uploads:
 - the screenshots in `Design/screenshots/app-store`, ten per device, each with a caption line and a smaller one above
   the screen: 6.9-inch iPhone and 13-inch iPad from `Tools/app-store-screenshots.sh`, Mac at 2880 × 1800 from
   `Tools/mac-app-store-screenshots.sh`, all on the sample notes (`bundle exec fastlane screenshots` runs both). The
-  captions are in the scripts, next to each scene; `Tools/app-store-media/caption.py` lays them out.
+  captions are in the scripts, next to each scene; `Tools/app-store-media/caption.py` lays them out. Both scripts
+  retake single slots when named (`Tools/mac-app-store-screenshots.sh 04-todos`). The sample to-dos' times follow
+  the clock, so pictures taken at another time of day show other times, sometimes in another order.
 
 deliver can't upload the header and search-result assets of iOS 27 or the app previews; `bundle exec fastlane
 store_media` does, below.
