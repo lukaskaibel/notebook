@@ -8,7 +8,7 @@ struct VideoFileView: View {
     let url: URL
 
     var body: some View {
-        FileLoadingView(url: url, background: FileKind.video.pageBackground) { url -> AVPlayer? in
+        FileLoadingView(url: url, background: FileKind.video.pageBackground, rereads: false) { url -> AVPlayer? in
             guard FileLoading.read(url, { _ in true }) == true else { return nil }
             let asset = AVURLAsset(url: url)
             guard (try? await asset.load(.isPlayable)) == true, (try? await asset.loadTracks(withMediaType: .video))?.isEmpty == false else { return nil }

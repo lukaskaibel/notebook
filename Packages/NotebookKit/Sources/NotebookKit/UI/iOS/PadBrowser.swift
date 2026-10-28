@@ -216,8 +216,11 @@ struct PadSidebar: View {
     let query: String
     @Binding var newFolderIn: URL?
     @Environment(\.isSearching) private var isSearching
+    @Environment(\.dismissSearch) private var dismissSearch
     @State private var expanded = Set((UserDefaults.standard.stringArray(forKey: "expandedFolders") ?? []).map(Workspace.rerooted))
     @State private var collapsedSections = Set(UserDefaults.standard.stringArray(forKey: "collapsedSections") ?? [])
+    /// A folder opened from search, to show in the tree when search has ended.
+    @State private var revealsAfterSearch: URL?
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -260,8 +263,23 @@ struct PadSidebar: View {
             .onReceive(NotificationCenter.default.publisher(for: Workspace.documentsMoved)) { _ in expanded = Set(expanded.map(Workspace.rerooted)) }
             .onChange(of: workspace.revealRequest?.id) { _, _ in
                 guard let request = workspace.revealRequest else { return }
+                // What was opened from search shows in the tree once the tree is back.
+                if isSearching {
+                    revealsAfterSearch = request.url
+                    return
+                }
                 reveal(request.url)
                 DispatchQueue.main.async { withAnimation { proxy.scrollTo(request.url) } }
+            }
+            // A folder opens in the tree, which search covers: search ends, as Cancel ends it.
+            .onChange(of: workspace.folderRequest?.id) { _, _ in
+                if isSearching { dismissSearch() }
+            }
+            .onChange(of: isSearching) { _, searching in
+                guard !searching, let url = revealsAfterSearch else { return }
+                revealsAfterSearch = nil
+                reveal(url)
+                DispatchQueue.main.async { withAnimation { proxy.scrollTo(url) } }
             }
         }
     }
