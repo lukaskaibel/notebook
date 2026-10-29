@@ -115,6 +115,11 @@ struct PhoneBrowser: View {
         }
         if let top = path.last, !top.isFolder, !top.isTodos {
             if top.url == url { return }
+            // A new note switched to the other kind: the one it was goes, and this one takes its screen.
+            if workspace.replacesScreen {
+                top.url = url
+                return
+            }
             // Renamed or moved (itself or a folder it is in): the same screen, under the new name.
             if let relocation = workspace.relocation, Self.relocated(top.url, relocation.from, relocation.to) == url {
                 top.url = url
@@ -234,7 +239,7 @@ struct HomeScreen: View {
             DefaultToolbarItem(kind: .search, placement: .bottomBar)
             ToolbarSpacer(.fixed, placement: .bottomBar)
             ToolbarItem(placement: .bottomBar) {
-                NewNoteButton { workspace.newNote(in: workspace.defaultFolder) }
+                NewNoteButton(workspace: workspace, folder: workspace.defaultFolder)
             }
         }
         .sheet(isPresented: $showsSettings) { TouchSettings(workspace: workspace) }
@@ -375,6 +380,7 @@ struct FolderScreen: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Section {
+                        NewHandwrittenNoteMenu { workspace.newHandwrittenNote(in: page.url, paper: $0) }
                         Button { newFolderIn = page.url } label: { Label("New Folder", systemImage: "folder.badge.plus") }
                         Button { workspace.appleNotesImportFolder = page.url } label: {
                             Label("Import from Apple Notes", systemImage: "square.and.arrow.down.on.square")
@@ -401,7 +407,7 @@ struct FolderScreen: View {
             DefaultToolbarItem(kind: .search, placement: .bottomBar)
             ToolbarSpacer(.fixed, placement: .bottomBar)
             ToolbarItem(placement: .bottomBar) {
-                NewNoteButton { workspace.newNote(in: page.url) }
+                NewNoteButton(workspace: workspace, folder: page.url)
             }
         }
     }

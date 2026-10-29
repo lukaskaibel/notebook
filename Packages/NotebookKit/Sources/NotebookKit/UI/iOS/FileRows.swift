@@ -232,6 +232,7 @@ struct FileActions: View {
         if isFolder {
             Section {
                 Button { workspace.newNote(in: url) } label: { Label("New Note", systemImage: "square.and.pencil") }
+                NewHandwrittenNoteMenu { workspace.newHandwrittenNote(in: url, paper: $0) }
                 if let newFolder {
                     Button { newFolder(url) } label: { Label("New Folder", systemImage: "folder.badge.plus") }
                 }

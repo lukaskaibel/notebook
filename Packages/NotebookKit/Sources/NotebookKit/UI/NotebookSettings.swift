@@ -153,7 +153,21 @@ public final class NotebookSettings {
         }
     }
 
-    /// A new note left without a title or text goes away again, as if it had never been made.
+    /// What New Note makes on iPhone and iPad: a typed note, a handwritten one, or either, asked each time.
+    public var newNoteKind: NewNoteKind {
+        didSet { UserDefaults.standard.set(newNoteKind.rawValue, forKey: "newNoteKind") }
+    }
+
+    /// The paper of a new handwritten note's pages, and their size.
+    public var paper: PaperStyle {
+        didSet { UserDefaults.standard.set(paper.rawValue, forKey: "paper") }
+    }
+    public var paperSize: PaperSize {
+        didSet { UserDefaults.standard.set(paperSize.rawValue, forKey: "paperSize") }
+    }
+
+    /// A new note left without a title or text, or a handwritten one left without anything written in it, goes away
+    /// again, as if it had never been made.
     public var deletesEmptyNewNotes: Bool {
         didSet { UserDefaults.standard.set(deletesEmptyNewNotes, forKey: "deletesEmptyNewNotes") }
     }
@@ -220,6 +234,9 @@ public final class NotebookSettings {
         headingMarks = HeadingMarks(rawValue: defaults.string(forKey: "headingMarks") ?? "") ?? .margin
         readsTextInPictures = defaults.object(forKey: "readsTextInPictures") as? Bool ?? true
         deletesEmptyNewNotes = defaults.object(forKey: "deletesEmptyNewNotes") as? Bool ?? true
+        newNoteKind = NewNoteKind(rawValue: defaults.string(forKey: "newNoteKind") ?? "") ?? .standard
+        paper = PaperStyle(rawValue: defaults.string(forKey: "paper") ?? "") ?? .lined
+        paperSize = PaperSize(rawValue: defaults.string(forKey: "paperSize") ?? "") ?? .regional
         showsTodos = defaults.object(forKey: "showsTodos") as? Bool ?? true
         #if os(macOS)
         checksSpelling = defaults.object(forKey: "checksSpelling") as? Bool ?? true

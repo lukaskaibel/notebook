@@ -16,6 +16,10 @@ struct PDFFileView: View {
     #endif
     /// Tells that something went wrong, such as a drawing that couldn't be saved.
     var report: (String, String) -> Void = { _, _ in }
+    #if os(iOS)
+    /// The pages for the toolbar while drawing.
+    var editing: PDFEditing?
+    #endif
 
     var body: some View {
         FileLoadingView(url: url, background: FileKind.pdf.pageBackground) { url in
@@ -29,7 +33,7 @@ struct PDFFileView: View {
             PDFKitView(url: url, document: document, find: find, isDrawing: isDrawing, workspace: workspace, report: report)
                 .ignoresSafeArea(.container, edges: .top)
             #else
-            PDFKitView(url: url, document: document, find: find, isDrawing: isDrawing, report: report)
+            PDFKitView(url: url, document: document, find: find, isDrawing: isDrawing, report: report, editing: editing)
                 .ignoresSafeArea(.container, edges: .top)
             #endif
         }
@@ -64,6 +68,87 @@ extension PDFView {
     }
 }
 
+#if os(iOS)
+extension PDFView {
+    /// Does what lays the pages out again (a document given anew), and puts them back where they were on the screen.
+    func keepingScroll(_ change: () -> Void) {
+        guard let scrollView = subviews.lazy.compactMap({ $0 as? UIScrollView }).first else { return change() }
+        let offset = scrollView.contentOffset, scale = scaleFactor, autoScales = autoScales
+        change()
+        if !autoScales {
+            self.autoScales = false
+            scaleFactor = scale
+        }
+        layoutDocumentView()
+        let inset = scrollView.adjustedContentInset
+        let bottom = max(scrollView.contentSize.height + inset.bottom - scrollView.bounds.height, -inset.top)
+        scrollView.contentOffset = CGPoint(x: offset.x, y: min(max(offset.y, -inset.top), bottom))
+    }
+
+    /// Does what has PDFKit draw the pages anew, behind a picture of them as they were. PDFKit draws them a moment
+    /// later, and until then shows what it drew before: pages without their strokes while canvases showed them.
+    func coveringRedraw(_ change: () -> Void) {
+        let cover = RedrawCover(over: self)
+        change()
+        if let cover { bringSubviewToFront(cover) }
+    }
+}
+
+/// A picture of the pages as they were, over them while PDFKit draws them anew; it fades once they are drawn, or goes
+/// at once at a touch, which scrolls them or draws on them.
+private final class RedrawCover: UIView {
+    private weak var watched: UIView?
+    private let touch = TouchWatch()
+    private var isLifting = false
+
+    init?(over view: PDFView) {
+        guard view.window != nil, view.document != nil, let picture = view.snapshotView(afterScreenUpdates: false) else { return nil }
+        super.init(frame: view.bounds)
+        isUserInteractionEnabled = false
+        autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        picture.frame = bounds
+        picture.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        addSubview(picture)
+        view.addSubview(self)
+        watched = view
+        touch.touched = { [weak self] in self?.lift(over: 0) }
+        view.addGestureRecognizer(touch)
+        // PDFKit draws the pages in view within a few frames; the rest of the wait is for a slower device.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.lift(over: 0.2) }
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    private func lift(over duration: TimeInterval) {
+        guard !isLifting else { return }
+        isLifting = true
+        watched?.removeGestureRecognizer(touch)
+        UIView.animate(withDuration: duration, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
+            self.alpha = 0
+        } completion: { _ in
+            self.removeFromSuperview()
+        }
+    }
+
+    /// Sees a touch begin anywhere on the PDF, and lets it go on to whatever takes it.
+    private final class TouchWatch: UIGestureRecognizer {
+        var touched: (() -> Void)?
+
+        override init(target: Any?, action: Selector?) {
+            super.init(target: target, action: action)
+            cancelsTouchesInView = false
+            delaysTouchesBegan = false
+            delaysTouchesEnded = false
+        }
+
+        override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+            touched?()
+            state = .failed
+        }
+    }
+}
+#endif
+
 @MainActor
 final class PDFViewCoordinator {
     let url: URL
@@ -76,6 +161,7 @@ final class PDFViewCoordinator {
 
     init(url: URL) { self.url = url }
 
+    #if os(macOS)
     /// The view was given the PDF read again. Once drawing is off, what was drawn has been saved and read again: the
     /// pages draw it now.
     func documentChanged(in view: PDFView, isDrawing: Bool) {
@@ -115,6 +201,7 @@ final class PDFViewCoordinator {
         if view.isInMarkupMode { drawing?.end() }
         drawing = nil
     }
+    #endif
 }
 
 #if os(macOS)
@@ -212,6 +299,7 @@ private struct PDFKitView: UIViewRepresentable {
     let find: PDFFind?
     let isDrawing: Bool
     let report: (String, String) -> Void
+    let editing: PDFEditing?
 
     /// Where each PDF was left: the page (by number, as each visit reads the file anew) and the point on it at the
     /// top of the view, and its zoom unless it fit.
@@ -237,19 +325,60 @@ private struct PDFKitView: UIViewRepresentable {
                 coordinator.shown = find.id
                 view.show(find)
             }
-            coordinator.updateDrawing(view, isDrawing: isDrawing) { PDFDrawingSession(url: url, report: report) }
         }
-        guard view.document !== document else { return }
-        // Read again after it changed: it stays where it was.
-        let place = view.document != nil ? Self.place(in: view) : Self.places[url]
+        if let session = coordinator.drawing {
+            if isDrawing {
+                // The pages drawn on stay: the file, read again after a save, waits until drawing ends.
+                if !session.isActive, view.document != nil { session.start(in: view) }
+                return
+            }
+            session.end()
+            // The last save is read again once written, and shows what was drawn.
+            guard !session.isSaving, !session.hasUnsavedChanges else { return }
+            if session.hasSaved, document === coordinator.drawnDocument {
+                FileLoading.didWrite(url)
+                return
+            }
+            // The canvases go first: given the document, the view would ask for them anew.
+            // Where it was, taken before the canvases go and the pages are laid out again.
+            let place = Self.place(in: view)
+            view.coveringRedraw {
+                session.finish(in: view)
+                if let document, view.document !== document { show(document, in: view, at: place) }
+            }
+            coordinator.drawing = nil
+            coordinator.drawnDocument = nil
+            if editing?.session === session { editing?.connect(nil) }
+            return
+        }
+        if view.document !== document { show(document, in: view) }
+        if isDrawing, view.document != nil {
+            let session = PDFDrawingSession(url: url, report: report)
+            coordinator.drawing = session
+            coordinator.drawnDocument = view.document
+            let editing = editing
+            session.changed = { [weak editing] in editing?.update() }
+            session.addPictures = { [weak editing] source in editing?.addPictures(from: source) }
+            editing?.connect(session)
+            session.start(in: view)
+        }
+    }
+
+    /// Shows the document, read again after it changed where it was.
+    private func show(_ document: PDFDocument?, in view: PDFView, at kept: (page: Int, point: CGPoint, scale: CGFloat?)? = nil) {
+        // The same pages, read again: exactly where they were, to the point.
+        if let old = view.document, let document, old.pageCount == document.pageCount {
+            view.keepingScroll { view.document = document }
+            return
+        }
+        let place = kept ?? (view.document != nil ? Self.place(in: view) : Self.places[url])
         view.document = document
-        coordinator.documentChanged(in: view, isDrawing: isDrawing)
-        guard document != nil else { return }
+        guard let document else { return }
         if let scale = place?.scale {
             view.autoScales = false
             view.scaleFactor = scale
         }
-        if let place, let document, let page = document.page(at: min(place.page, document.pageCount - 1)) {
+        if let place, let page = document.page(at: min(place.page, document.pageCount - 1)) {
             view.go(to: PDFDestination(page: page, at: place.point))
         }
     }
@@ -257,7 +386,8 @@ private struct PDFKitView: UIViewRepresentable {
     static func dismantleUIView(_ view: PDFView, coordinator: PDFViewCoordinator) {
         if let place = place(in: view) { places[coordinator.url] = place }
         // Leaving the PDF while drawing saves what was drawn.
-        coordinator.dismantle(view)
+        coordinator.drawing?.end()
+        coordinator.drawing = nil
     }
 
     private static func place(in view: PDFView) -> (page: Int, point: CGPoint, scale: CGFloat?)? {

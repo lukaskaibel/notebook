@@ -174,6 +174,14 @@ public final class Workspace: NSObject {
     private(set) var revealRequest: (url: URL, select: Bool, id: UUID)?
     /// A new folder to name, or a file to rename, asked for in an alert.
     var renaming: URL?
+    /// The PDF drawn on, while the pen above it is on: its pages, for the Page menu.
+    let pdfEditing = PDFEditing()
+    /// A new note made a moment ago with nothing in it yet, which can still become the other kind (`switchNewNote`).
+    var freshNote: URL?
+    /// The new note being switched for one of the other kind: it goes, whatever Settings say about empty new notes.
+    @ObservationIgnored var switchingFrom: URL?
+    /// The iPhone shows the next file opened in place of the one on its screen, as for a new note switched.
+    @ObservationIgnored var replacesScreen = false
     /// The file shown in Quick Look over everything.
     var quickLookURL: URL?
     /// Something that couldn't be done, for an alert.
@@ -1181,7 +1189,13 @@ public final class Workspace: NSObject {
 
     /// Saves the note being left; a new note left empty goes away, and pictures it no longer uses go to the Trash.
     private func leaveCurrentNote() {
+        #if os(iOS)
+        leaveNewHandwrittenNote()
+        #endif
         guard let note else { return }
+        #if os(iOS)
+        if freshNote.map({ FileNode.samePath($0, note.url) }) == true { freshNote = nil }
+        #endif
         editor.endDrawing()
         // Back or ⌘N while typing a new name: the name counts, as it would once the title is left.
         if editor.isEditingTitle { editor.commitTitle() }
@@ -1225,9 +1239,71 @@ public final class Workspace: NSObject {
 
     /// A note made with New Note and left as it came, without a name or text, unless Settings keeps those.
     private func isLeftEmpty(_ note: NoteDocument) -> Bool {
-        NotebookSettings.shared.deletesEmptyNewNotes && note.isNew && note.isEmpty
+        #if os(iOS)
+        // Switched for one of the other kind, it goes whatever Settings say.
+        let goes = NotebookSettings.shared.deletesEmptyNewNotes || switchingFrom.map { FileNode.samePath($0, note.url) } == true
+        #else
+        let goes = NotebookSettings.shared.deletesEmptyNewNotes
+        #endif
+        return goes && note.isNew && note.isEmpty
             && note.url.deletingPathExtension().lastPathComponent.hasPrefix("Untitled")
     }
+
+    #if os(iOS)
+    /// A new handwritten note left before anything was written in it goes, as a new note left empty does, and its New
+    /// Handwritten Note with it.
+    private func leaveNewHandwrittenNote() {
+        guard let url = currentURL, FileKind(url: url, isDirectory: false) == .pdf,
+              freshNote.map({ FileNode.samePath($0, url) }) == true else { return }
+        freshNote = nil
+        let switching = switchingFrom.map { FileNode.samePath($0, url) } == true
+        guard switching || NotebookSettings.shared.deletesEmptyNewNotes else { return }
+        // Written in a moment ago, and not told yet: it stays.
+        if let session = pdfEditing.session, FileNode.samePath(session.url, url), session.isTouched { return }
+        if let change = newNoteChange, change.after.map({ FileNode.samePath($0, url) }) == true { dropFromUndo(change) }
+        changeFiles { [self] follow in
+            let url = follow(url)
+            let thrownAway = await Task.detached(priority: .userInitiated) {
+                // As an empty note: where there is no Recently Deleted, it goes for good, and nothing is lost.
+                FileOperations.trash(url) || FileOperations.delete(url).done
+            }.value
+            if thrownAway {
+                forgetRecent(url)
+                showChanges(in: [url.deletingLastPathComponent()], removing: [url])
+            }
+        }
+    }
+
+    /// A new note with nothing in it yet becomes the other kind: one of that kind is made in its folder and shown in its
+    /// place, and it goes.
+    public func switchNewNote(to kind: NoteKind) {
+        guard let url = currentURL, freshNote.map({ FileNode.samePath($0, url) }) == true,
+              (FileKind(url: url, isDirectory: false) == .note) != (kind == .typed) else { return }
+        switchingFrom = url
+        replacesScreen = true
+        let folder = url.deletingLastPathComponent()
+        let made = kind == .typed ? newNote(in: folder) : newHandwrittenNote(in: folder)
+        Task { [weak self] in
+            let made = await made.value
+            guard let self else { return }
+            switchingFrom = nil
+            replacesScreen = false
+            // It took the other's place: Back goes to where you were before either.
+            if made != nil {
+                while let index = history.firstIndex(where: { FileNode.samePath($0, url) }), index != historyIndex {
+                    history.remove(at: index)
+                    if index < historyIndex { historyIndex -= 1 }
+                }
+            }
+        }
+    }
+
+    /// New Note from the keyboard or ⌘K: the kind Settings say, a typed note where they say to ask (the switch at the
+    /// top of a new note changes it).
+    public func newNoteOfSetKind(in folder: URL? = nil) {
+        if NotebookSettings.shared.newNoteKind == .handwritten { newHandwrittenNote(in: folder) } else { newNote(in: folder) }
+    }
+    #endif
 
     #if os(macOS)
     /// Quitting leaves the note too, and the next launch wouldn't know it was new: one left empty goes to the Trash
@@ -1578,6 +1654,52 @@ public final class Workspace: NSObject {
             open(made.url, focusTitle: title == nil)
             // After opening it: a new note left empty for this one goes, with its own New Note.
             if title == nil { newNoteChange = change }
+            #if os(iOS)
+            freshNote = title == nil && text.isEmpty ? made.url : nil
+            #endif
+            return made.url
+        }
+    }
+
+    /// A new handwritten note: a PDF of a page of paper, in the folder new notes go to, opened with the pen on.
+    @discardableResult
+    public func newHandwrittenNote(in folder: URL? = nil, paper: PaperStyle? = nil) -> Task<URL?, Never> {
+        let folder = folder ?? folderForNewNote
+        let inbox = folder.flatMap { folder in chosenDefaultFolder.map { FileNode.samePath(URL(fileURLWithPath: $0), folder) } == true ? inboxFolder : nil }
+        let paper = paper ?? NotebookSettings.shared.paper
+        let size = NotebookSettings.shared.paperSize.size
+        let change = keepForUndo(FileChange(.make, "New Handwritten Note"))
+        return changeFiles { [self] follow in
+            guard let chosen = folder.map(follow) else {
+                dropFromUndo(change)
+                return nil
+            }
+            let inbox = inbox.map(follow)
+            let made = await Task.detached(priority: .userInitiated) { () -> (url: URL, folder: URL, listing: FileNode.Listing?, folderListing: FileNode.Listing?)? in
+                let folder = inbox.flatMap { FileManager.default.fileExists(atPath: chosen.path) ? nil : $0 } ?? chosen
+                guard let made = FileOperations.createHandwrittenNote(in: folder, paper: paper, size: size) else { return nil }
+                return (made.url, folder, FileNode.listing(of: made.url), made.madeFolder ? FileNode.listing(of: folder) ?? FileNode.Listing(url: folder, kind: .folder) : nil)
+            }.value
+            changeDone(change, to: made?.url)
+            guard let made else {
+                report("The handwritten note couldn’t be made.", "Notebook can’t write in “\(folderName(chosen))”.")
+                return nil
+            }
+            let folder = made.folder
+            let parent = folder.deletingLastPathComponent()
+            showChanges(in: made.folderListing != nil ? [parent, folder] : [folder],
+                        adding: (made.listing.map { [$0] } ?? []) + (made.folderListing.map { [$0] } ?? []))
+            open(made.url)
+            // A new handwritten note left without anything written in it goes, as a new note left empty does.
+            newNoteChange = change
+            #if os(iOS)
+            // Ready to write in.
+            drawsOnPDF = made.url
+            freshNote = made.url
+            pdfEditing.touched = { [weak self] url in
+                if let self, self.freshNote.map({ FileNode.samePath($0, url) }) == true { self.freshNote = nil }
+            }
+            #endif
             return made.url
         }
     }
@@ -2369,6 +2491,9 @@ public struct Problem: Identifiable, Equatable {
 extension Workspace: EditorControllerDelegate {
     public func editorTextDidChange(_ editor: EditorController) {
         note?.update(text: editor.text)
+        #if os(iOS)
+        if freshNote != nil, note?.isEmpty == false { freshNote = nil }
+        #endif
     }
 
     public func editorOutlineDidChange(_ editor: EditorController) {

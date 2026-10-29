@@ -125,10 +125,11 @@ for theme in [] if only == "devices" else ["dark", "light"]:
     webp(place(window(f"palette-{theme}"), theme, (130, 110), 1800), f"palette-{theme}")
     webp(search(theme), f"search-{theme}")
 
-def devices(theme):
-    """The iPad with the note and its outline, and the iPhone with the note, in front of it at the lower right."""
-    ipad = Image.open(f"{raw}/ipad-{theme}.png").convert("RGBA")
-    iphone = Image.open(f"{raw}/iphone-{theme}.png").convert("RGBA")
+def devices(theme, scene=""):
+    """The iPad with the note and its outline, and the iPhone with the note, in front of it at the lower right; or, for
+    "-handwriting", both with the handwritten note and the pen on."""
+    ipad = Image.open(f"{raw}/ipad{scene}-{theme}.png").convert("RGBA")
+    iphone = Image.open(f"{raw}/iphone{scene}-{theme}.png").convert("RGBA")
     # The screens' own corners: 18 points on the iPad at 2x, 55 on the iPhone at 3x.
     ipad = rounded(scaled(ipad, 1500 / ipad.height), round(36 * 1500 / ipad.height), THEMES[theme]["border"])
     iphone = rounded(scaled(iphone, 1260 / iphone.height), round(165 * 1260 / iphone.height), THEMES[theme]["border"])
@@ -147,9 +148,10 @@ def phone_screen(theme):
     return scaled(screen, 600 / screen.width)
 
 
-print("iPhone and iPad")
+print("iPhone and iPad, handwritten note")
 for theme in ["dark", "light"]:
     webp(devices(theme), f"devices-{theme}")
+    webp(devices(theme, "-handwriting"), f"handwriting-{theme}")
     webp(phone_screen(theme), f"iphone-{theme}")
 
 if only == "devices":

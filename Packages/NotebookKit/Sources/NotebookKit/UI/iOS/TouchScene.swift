@@ -86,8 +86,11 @@ struct TouchCommands: Commands {
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button { workspace.newNote() } label: { Label("New Note", systemImage: "square.and.pencil") }
+            Button { workspace.newNoteOfSetKind() } label: { Label("New Note", systemImage: "square.and.pencil") }
                 .keyboardShortcut("n", modifiers: .command)
+                .disabled(workspace.locations.isEmpty)
+            Button { workspace.newHandwrittenNote() } label: { Label("New Handwritten Note", systemImage: "pencil.and.scribble") }
+                .keyboardShortcut("n", modifiers: [.command, .option])
                 .disabled(workspace.locations.isEmpty)
             Button { workspace.newFolderRequest += 1 } label: { Label("New Folder", systemImage: "folder.badge.plus") }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
@@ -306,9 +309,36 @@ struct TouchSettings: View {
                 } header: {
                     Text("Notes")
                 } footer: {
-                    Text("New notes go into the folder you’re in; made anywhere else, they go to the default folder. A new note you leave without giving it a title or text is deleted.")
+                    Text("New notes go into the folder you’re in; made anywhere else, they go to the default folder. A new note you leave without giving it a title or text, or without writing in it, is deleted.")
                 }
                 TodosSetting()
+                Section {
+                    Picker(selection: Bindable(NotebookSettings.shared).newNoteKind) {
+                        ForEach(NewNoteKind.allCases) { kind in
+                            Text(kind.name).tag(kind)
+                        }
+                    } label: {
+                        Label("New Note", systemImage: "square.and.pencil")
+                    }
+                    Picker(selection: Bindable(NotebookSettings.shared).paper) {
+                        ForEach(PaperStyle.allCases) { paper in
+                            Label(paper.name, systemImage: paper.symbol).tag(paper)
+                        }
+                    } label: {
+                        Label("Paper", systemImage: "doc.richtext")
+                    }
+                    Picker(selection: Bindable(NotebookSettings.shared).paperSize) {
+                        ForEach(PaperSize.allCases) { size in
+                            Text(size.name).tag(size)
+                        }
+                    } label: {
+                        Label("Page Size", systemImage: "ruler")
+                    }
+                } header: {
+                    Text("New Notes")
+                } footer: {
+                    Text("New Note makes a typed note, a handwritten one, or asks which. Until you write in a new note, Typed and Handwritten at the top turn it into the other kind. A handwritten note is a PDF you write in with Apple Pencil or your finger, on blank, lined, squared, dotted or Cornell paper; pages you add take the paper of the page before them.")
+                }
                 Section {
                     LabeledContent("Indexed") {
                         Text(workspace.index.isBuilding ? "Reading your files…" : "\(workspace.index.count) files")

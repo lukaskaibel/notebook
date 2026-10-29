@@ -11,7 +11,7 @@ import PencilKit
 /// page draws the strokes with its text, at the size they are shown. (An annotation of its own wouldn't do: PDFKit
 /// draws annotations once at the page's size, and stretches them too.) Reading changes nothing in the file.
 enum MarkupDrawings {
-    private static let extrasKey = PDFAnnotationKey(rawValue: "/AAPL:AKExtras")
+    static let extrasKey = PDFAnnotationKey(rawValue: "/AAPL:AKExtras")
     private static let annotationKey = "/AAPL:AKAnnotationV2"
     /// Notebook's strokes: a PencilKit drawing, as Base64, measured from the top left of the page's crop box.
     static let notebookKey = PDFAnnotationKey(rawValue: "/NotebookDrawing")
@@ -19,11 +19,14 @@ enum MarkupDrawings {
     /// Draws the strokes in `document` sharp. Called in the background, right after it was read, before anything has
     /// looked at its pages.
     static func sharpen(_ document: PDFDocument, fileAt url: URL) {
-        // Most PDFs have none: their bytes say so without reading a page. Both entries are written uncompressed.
-        guard let data = try? Data(contentsOf: url, options: .alwaysMapped),
-              data.range(of: Data("AAPL:AKAnnotationV2".utf8)) != nil || data.range(of: Data("NotebookDrawing".utf8)) != nil else { return }
+        // Most PDFs have none: their bytes say so without reading a page. The entries are written uncompressed.
+        guard let data = try? Data(contentsOf: url, options: .alwaysMapped) else { return }
+        let hasStrokes = data.range(of: Data("AAPL:AKAnnotationV2".utf8)) != nil || data.range(of: Data("NotebookDrawing".utf8)) != nil
+        let hasPictures = data.range(of: Data("NotebookPicture".utf8)) != nil
+        guard hasStrokes || hasPictures else { return }
         // Pages that can draw strokes, from the first one read.
         document.delegate = PageMaker.shared
+        let images = hasPictures ? CGPDFDocument(url as CFURL).map { PDFPictures.images(in: $0) } ?? [:] : [:]
         for index in 0..<document.pageCount {
             guard let page = document.page(at: index) as? DrawingPage else { continue }
             for annotation in page.annotations where annotation.shouldDisplay {
@@ -31,6 +34,24 @@ enum MarkupDrawings {
                 annotation.shouldDisplay = false
                 page.drawings.append(found)
             }
+            for (annotation, picture) in PDFPictures.pictures(on: page) {
+                guard let image = images[picture.id] else { continue }
+                page.pictureImages[picture.id] = image
+                // PDFKit would draw the stamp at the page's size, blurred as soon as the page is shown larger.
+                guard let look = image.cgImage else { continue }
+                annotation.shouldDisplay = false
+                page.pictures.append((picture, look))
+            }
+        }
+    }
+
+    /// The pictures Notebook put on the page, with what they show, as read from the file.
+    static func pictures(on page: PDFPage) -> [PDFPicture] {
+        let images = (page as? DrawingPage)?.pictureImages ?? [:]
+        return PDFPictures.pictures(on: page).map { found in
+            var picture = found.picture
+            picture.image = images[picture.id]
+            return picture
         }
     }
 
@@ -57,9 +78,16 @@ enum MarkupDrawings {
         }
     }
 
-    /// While a canvas over the page shows its strokes to change them, the page doesn't draw them too.
-    static func setEditing(_ editing: Bool, on page: PDFPage) {
-        (page as? DrawingPage)?.isEditing = editing
+    /// While a canvas over the page shows its strokes to change them, and its pictures too with `pictures` (iPhone and
+    /// iPad), the page doesn't draw them too.
+    static func setEditing(_ editing: Bool, pictures: Bool = false, on page: PDFPage) {
+        let drawingPage = page as? DrawingPage
+        drawingPage?.isEditing = editing
+        drawingPage?.hidesPictures = editing && pictures
+        let drawn = Set(drawingPage?.pictures.map(\.picture.id) ?? [])
+        for (annotation, picture) in PDFPictures.pictures(on: page) {
+            annotation.shouldDisplay = !(editing && pictures) && !drawn.contains(picture.id)
+        }
     }
 
     /// The strokes Markup keeps in an annotation, and the size of the page they were drawn on.
@@ -113,12 +141,16 @@ private final class MarkupInk: NSObject, NSSecureCoding {
     func encode(with coder: NSCoder) {}
 }
 
-/// A page that draws the strokes on it over itself, at the scale it is drawn at.
+/// A page that draws the strokes and pictures on it over itself, at the scale it is drawn at.
 private final class DrawingPage: PDFPage, @unchecked Sendable {
     typealias Drawing = (drawing: PKDrawing, area: CGRect)
+    typealias Picture = (picture: PDFPicture, look: CGImage)
     private final class State {
         var drawings: [Drawing] = []
+        var pictureImages: [String: PictureImage] = [:]
+        var pictures: [Picture] = []
         var isEditing = false
+        var hidesPictures = false
     }
     nonisolated(unsafe) private static var key: UInt8 = 0
 
@@ -136,6 +168,18 @@ private final class DrawingPage: PDFPage, @unchecked Sendable {
         set { state.drawings = newValue }
     }
 
+    /// The pictures of Notebook's picture stamps, by id, read from the file's own objects.
+    var pictureImages: [String: PictureImage] {
+        get { state.pictureImages }
+        set { state.pictureImages = newValue }
+    }
+
+    /// The pictures the page draws in place of their stamps, under the strokes. Set before the page is shown.
+    var pictures: [Picture] {
+        get { state.pictures }
+        set { state.pictures = newValue }
+    }
+
     /// A canvas over the page shows the strokes meanwhile. The view showing the page draws it again only when given
     /// its document again.
     var isEditing: Bool {
@@ -143,19 +187,28 @@ private final class DrawingPage: PDFPage, @unchecked Sendable {
         set { state.isEditing = newValue }
     }
 
+    /// A canvas over the page shows the pictures too.
+    var hidesPictures: Bool {
+        get { state.hidesPictures }
+        set { state.hidesPictures = newValue }
+    }
+
     override func draw(with box: PDFDisplayBox, to context: CGContext) {
         super.draw(with: box, to: context)
-        guard !drawings.isEmpty, !isEditing else { return }
+        let drawsStrokes = !drawings.isEmpty && !isEditing, drawsPictures = !pictures.isEmpty && !hidesPictures
+        guard drawsStrokes || drawsPictures else { return }
         context.saveGState()
         defer { context.restoreGState() }
         // PDFKit draws the page in its own space; it goes into the box's, as annotations do.
         let bounds = self.bounds(for: box)
         context.translateBy(x: -bounds.minX, y: -bounds.minY)
+        let clip = context.boundingBoxOfClipPath
+        if drawsPictures { drawPictures(in: context, clip: clip) }
+        guard drawsStrokes else { return }
         let device = context.userSpaceToDeviceSpaceTransform
         // As many pixels as the screen has at this zoom, however far in: only the part in view is drawn, so the picture
         // stays the size of a tile. The limit is for a context that claims more than any screen.
         let scale = min(max(hypot(device.a, device.b), hypot(device.c, device.d), 1), 64)
-        let clip = context.boundingBoxOfClipPath
         for (drawing, area) in drawings {
             // Only the part in view, at the pixels it covers: zoomed in, a whole page of strokes would be a huge picture.
             let strokes = drawing.bounds
@@ -165,6 +218,26 @@ private final class DrawingPage: PDFPage, @unchecked Sendable {
             let part = CGRect(x: shown.minX - area.minX, y: area.maxY - shown.maxY, width: shown.width, height: shown.height)
             guard let image = Self.image(of: drawing, part: part, scale: scale) else { continue }
             context.draw(image, in: shown)
+        }
+    }
+
+    /// The pictures as their stamps show them: turned about their middles, the corners a little round.
+    private func drawPictures(in context: CGContext, clip: CGRect) {
+        let crop = bounds(for: .cropBox)
+        context.interpolationQuality = .high
+        for (picture, look) in pictures {
+            let box = PDFPictures.bounds(of: picture)
+            guard CGRect(x: crop.minX + box.minX, y: crop.maxY - box.maxY, width: box.width, height: box.height).intersects(clip) else { continue }
+            let (w, h) = (picture.frame.width / 2, picture.frame.height / 2)
+            context.saveGState()
+            context.translateBy(x: crop.minX + picture.frame.midX, y: crop.maxY - picture.frame.midY)
+            context.rotate(by: -picture.rotation)
+            let rect = CGRect(x: -w, y: -h, width: 2 * w, height: 2 * h)
+            let radius = min(4, w, h)
+            context.addPath(CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil))
+            context.clip()
+            context.draw(look, in: rect)
+            context.restoreGState()
         }
     }
 
