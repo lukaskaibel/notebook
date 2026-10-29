@@ -101,7 +101,8 @@ public final class NotebookSettings {
         didSet { changedSidebar("showsOnlyNotes", showsOnlyNotes) }
     }
 
-    /// PDFs, pictures and other files are greyed in the sidebar, so notes stand out.
+    /// PDFs, pictures and other files are greyed in the sidebar, so notes stand out. Off unless you turn it on: they open
+    /// in Notebook, and greyed they look as if they didn't.
     public var dimsOtherFiles: Bool {
         didSet { changedSidebar("dimsOtherFiles", dimsOtherFiles) }
     }
@@ -113,6 +114,16 @@ public final class NotebookSettings {
 
     /// How the files in each folder are sorted: by name, or newest first by when they were edited or made.
     public let fileOrders = FileOrders()
+
+    /// The colour of each kind of file's icon where you chose one, of the Finder's tag colours. The others are in the
+    /// accent colour, as folders are.
+    public var fileColors: [FileKind: FolderColor] {
+        didSet {
+            guard fileColors != oldValue else { return }
+            UserDefaults.standard.set(Dictionary(uniqueKeysWithValues: fileColors.map { ($0.key.rawValue, $0.value.rawValue) }), forKey: "fileColors")
+            NotificationCenter.default.post(name: .notebookSidebarOptionsChanged, object: nil)
+        }
+    }
 
     /// How a heading shows that it is one while you edit it: a level tag in the margin, its `#`s showing with a keyboard
     /// and while they are typed, or only its `#`s, in the text, on every keyboard.
@@ -201,8 +212,11 @@ public final class NotebookSettings {
         let defaults = UserDefaults.standard
         typography = (defaults.data(forKey: "typography")).flatMap { try? JSONDecoder().decode(Typography.self, from: $0) } ?? Typography()
         showsOnlyNotes = defaults.bool(forKey: "showsOnlyNotes")
-        dimsOtherFiles = defaults.object(forKey: "dimsOtherFiles") as? Bool ?? true
+        dimsOtherFiles = defaults.bool(forKey: "dimsOtherFiles")
         foldersFirst = defaults.object(forKey: "foldersFirst") as? Bool ?? true
+        fileColors = (defaults.dictionary(forKey: "fileColors") as? [String: Int] ?? [:]).reduce(into: [:]) { colors, saved in
+            if let kind = FileKind(rawValue: saved.key), kind != .folder, let color = FolderColor(rawValue: saved.value) { colors[kind] = color }
+        }
         headingMarks = HeadingMarks(rawValue: defaults.string(forKey: "headingMarks") ?? "") ?? .margin
         readsTextInPictures = defaults.object(forKey: "readsTextInPictures") as? Bool ?? true
         deletesEmptyNewNotes = defaults.object(forKey: "deletesEmptyNewNotes") as? Bool ?? true

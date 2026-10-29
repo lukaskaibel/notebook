@@ -8,8 +8,11 @@ import Synchronization
 import UniformTypeIdentifiers
 
 /// What a file is, for its icon and for what opening it does.
-public enum FileKind: Equatable, Sendable {
+public enum FileKind: String, Sendable {
     case folder, note, pdf, image, video, audio, other
+
+    /// The kinds of files, in the order Settings lists them for their colours.
+    static let files: [FileKind] = [.note, .pdf, .image, .video, .audio, .other]
 
     init(url: URL, isDirectory: Bool) {
         self.init(pathExtension: isDirectory ? nil : url.pathExtension)
@@ -52,13 +55,23 @@ public enum FileKind: Equatable, Sendable {
         }
     }
 
-    var tint: NSColor {
+    /// What Settings calls files of this kind.
+    var pluralName: String {
         switch self {
-        case .pdf: Theme.pdf
-        case .image: Theme.image
-        case .video: Theme.video
-        default: Theme.textTertiary
+        case .folder: "Folders"
+        case .note: "Notes"
+        case .pdf: "PDFs"
+        case .image: "Pictures"
+        case .video: "Videos"
+        case .audio: "Audio"
+        case .other: "Other files"
         }
+    }
+
+    /// The colour of its icon: the one you chose for its kind in Settings, else the accent colour, every kind alike, as
+    /// the Finder's sidebar has them. A folder's own colour (Customize Folder) goes before this.
+    @MainActor var tint: NSColor {
+        NotebookSettings.shared.fileColors[self]?.platformColor ?? Theme.accent
     }
 }
 

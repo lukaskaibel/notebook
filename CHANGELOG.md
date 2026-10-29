@@ -96,6 +96,12 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Changed
 
+- PDFs, pictures and other files are no longer greyed out in the sidebar and the lists. They open in Notebook, and you
+  can draw on PDFs on iPhone and iPad, so greyed out they looked as if they didn't. Dim Files That Aren't Notes, in
+  Settings and in the Mac's View menu, still greys them for those who want notes to stand out.
+- Every file's icon is in the accent colour now, as folders are and as in the Finder's sidebar, with a symbol of its
+  own for each kind: notes, PDFs, pictures, videos, audio and other files. Icon Colours in Settings › Sidebar (Settings
+  › Files on iPhone and iPad) gives a kind a colour of its own, from the colours of the Finder's tags.
 - A PDF or picture that changes while it's open, marked up in another app or on another device, shows the change at
   once, on the page you were on, as in Preview.
 - In To-dos on iPhone and iPad, Date, Time and Location in the bar above the keyboard no longer open a sheet that takes

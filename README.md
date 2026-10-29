@@ -361,7 +361,9 @@ tap it again and the strokes are in the PDF, as lines every PDF app shows sharp,
 The pen above a picture marks it up as in Files, and saves what you add into the picture itself. A
 picture fits the window on the same grey, never larger than it is; pinch or double-click to zoom in on a spot. A video plays with the system's
 controls, as in QuickTime Player. A spreadsheet or any other file opens in Quick Look. The inspector shows a file's
-details, and "Open in" hands it to its own app, as a double-click on it in the sidebar does.
+details, and "Open in" hands it to its own app, as a double-click on it in the sidebar does. In the sidebar and the
+lists each kind of file has a symbol of its own, in the accent colour as folders are; Icon Colours in Settings › Sidebar
+(Settings › Files on iPhone and iPad) gives notes, PDFs, pictures, videos, audio and other files colours of their own.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/quicklook-dark.webp">
@@ -377,7 +379,8 @@ a heading scrolls there. In Settings › Text you pick the typeface (San Francis
 each shown in itself), the size, the line spacing and the line width; on iPhone and iPad the system's text size makes
 notes larger or smaller on top of that, as it does the text of other apps (not in a PDF or printout). The icon is a leather notebook, and Settings › App Icon makes it yours:
 pick the leather, the elastic band, the ribbon and the background, and the Dock shows your notebook while the app is
-open. Links, the caret and folders are in ink blue to go with it, or in the accent colour you chose in System Settings.
+open. Links, the caret, folders and the icons of files are in ink blue to go with it, or in the accent colour you chose
+in System Settings.
 
 ### On iPhone and iPad
 

@@ -1114,7 +1114,7 @@ final class SidebarFileCell: NSTableCellView {
         } else {
             icon.image = NSImage(systemSymbolName: look.flatMap { $0.symbol == nil ? nil : $0.shownSymbol } ?? symbol ?? kind.symbol, accessibilityDescription: nil)
         }
-        tint = kind == .folder ? look?.color?.platformColor ?? .controlAccentColor : kind == .note || kind == .other ? .secondaryLabelColor : kind.tint
+        tint = look?.color?.platformColor ?? kind.tint
         updateTint()
         // A reminder's bell, red once its time has passed, goes before the cloud of a note still in iCloud.
         if let reminder {

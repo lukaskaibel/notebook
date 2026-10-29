@@ -562,7 +562,9 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
             size = CGSize(width: size.width * scale, height: size.height * scale)
             thumb.drawUpright(in: NSRect(x: thumbRect.midX - size.width / 2, y: thumbRect.midY - size.height / 2, width: size.width, height: size.height))
         } else {
-            drawSymbol("doc", size: 22, color: url?.pathExtension.lowercased() == "pdf" ? Theme.pdf : Theme.textTertiary, center: CGPoint(x: thumbRect.midX, y: thumbRect.midY))
+            // Until its thumbnail is ready, or for a file that's gone: its kind's icon, as the sidebar shows it.
+            let kind = url.map { FileKind(url: $0, isDirectory: false) }
+            drawSymbol(kind?.symbol ?? "doc", size: 22, color: kind?.tint ?? Theme.textTertiary, center: CGPoint(x: thumbRect.midX, y: thumbRect.midY))
         }
         let title = NSAttributedString(string: url.map { $0.deletingPathExtension().lastPathComponent } ?? name,
                                        attributes: [.font: NSFont.systemFont(ofSize: 14, weight: .semibold), .foregroundColor: url == nil ? Theme.textTertiary : Theme.text])
