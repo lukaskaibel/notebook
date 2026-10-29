@@ -160,3 +160,8 @@ While a version of either platform is waiting for review, in review or waiting t
 the app's name locked, as both platforms share it, and takes no new version of that platform. fastlane checks this
 first and stops with the reason; release the waiting version (or remove it from review) and run it again. TestFlight
 builds (`bundle exec fastlane beta`) can go up at any time.
+
+`bundle exec fastlane submit` takes the newest build of each platform. Every change to main makes one, so once work
+for the next version has landed, name the build that was tested: `bundle exec fastlane submit build:2026.1029.1432`
+(for 1.1.0 that is 2026.1029.1432, made of the release commit, since the Mac's PDF drawing for 1.2 was already on
+main).

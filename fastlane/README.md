@@ -57,6 +57,8 @@ Submits the newest uploaded builds of the Mac, iPhone and iPad apps for review, 
 
 Builds nothing: run it after `beta` once the TestFlight builds are tested. automatic_release:true as for release
 
+build:2026.1029.1432 submits that build of each platform instead of the newest
+
 ### release
 
 ```sh
@@ -122,7 +124,7 @@ Builds the iPhone and iPad app and uploads it to TestFlight
 [bundle exec] fastlane ios submit
 ```
 
-Submits the newest uploaded build of the iPhone and iPad app for review, with texts and screenshots
+Submits the newest uploaded build of the iPhone and iPad app (or build:…) for review, with texts and screenshots
 
 ### ios release
 
@@ -175,7 +177,7 @@ Builds the Mac app and uploads it to TestFlight
 [bundle exec] fastlane mac submit
 ```
 
-Submits the newest uploaded build of the Mac app for review, with texts and screenshots
+Submits the newest uploaded build of the Mac app (or build:…) for review, with texts and screenshots
 
 ### mac release
 

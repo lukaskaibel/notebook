@@ -919,8 +919,9 @@ bundle exec fastlane ios beta
 
 The App Store listing is kept here too: its texts in `fastlane/metadata`, the age rating in `fastlane/rating.json` and
 the screenshots in `Design/screenshots/app-store`, taken on the sample notes by `bundle exec fastlane screenshots`.
-`bundle exec fastlane metadata` uploads them, `submit` sends the builds TestFlight has for review, and `release`
-builds, uploads and submits in one go. The header and search-result videos of iOS 27 and the app previews are made by
+`bundle exec fastlane metadata` uploads them, `submit` sends the newest builds TestFlight has for review (or the one
+`build:2026.1029.1432` names, when newer ones already hold work for the next version), and `release` builds, uploads
+and submits in one go. The header and search-result videos of iOS 27 and the app previews are made by
 `Tools/app-store-media.sh`, `Tools/app-store-previews.sh` and `Tools/mac-app-store-preview.sh`, and
 `bundle exec fastlane store_media` checks them against App Store Connect's specs and uploads them.
 [Design/app-store.md](Design/app-store.md) lists what is set once in App Store Connect, and why the answers are what
