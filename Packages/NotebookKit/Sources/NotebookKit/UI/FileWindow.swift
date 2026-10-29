@@ -365,11 +365,13 @@ public final class NotebookAppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             let workspace = Workspace.shared
             workspace.saveAll(quitting: true)
-            guard NoteDocument.isWriting || workspace.isWritingTodos else { return .terminateNow }
-            // The to-dos are waited for ten seconds at most: quitting never gets stuck.
+            PDFDrawingSession.saveAll()
+            guard NoteDocument.isWriting || workspace.isWritingTodos || PDFInk.isWriting else { return .terminateNow }
+            // The to-dos and PDFs are waited for ten seconds at most: quitting never gets stuck.
             let reply = QuitReply()
             Task { @MainActor in
                 await workspace.todosWritten()
+                await withCheckedContinuation { done in PDFInk.whenWritten { done.resume() } }
                 reply.send()
             }
             Task { @MainActor in

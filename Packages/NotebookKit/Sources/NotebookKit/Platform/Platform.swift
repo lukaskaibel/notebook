@@ -108,6 +108,13 @@ extension NSColor {
         return (red, green, blue, alpha)
         #endif
     }
+
+    /// 0xRRGGBB, in sRGB.
+    var hexValue: UInt32 {
+        let rgba = self.rgba
+        func byte(_ value: CGFloat) -> UInt32 { UInt32(max(0, min(255, (value * 255).rounded()))) }
+        return byte(rgba.red) << 16 | byte(rgba.green) << 8 | byte(rgba.blue)
+    }
 }
 
 /// The system's alert sound where there is one: something that can't be done.

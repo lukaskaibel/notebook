@@ -78,7 +78,8 @@ struct FileLoadingView<Loaded, Content: View>: View {
         } else {
             inCloud = (try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]).ubiquitousItemDownloadingStatus) == .notDownloaded
         }
-        modified = Self.modificationDate(url)
+        // Taken as read only once it is: a read cut short by the next change leaves the next one to read it.
+        let date = Self.modificationDate(url)
         let url = url, read = read
         let result = await Task.detached(priority: .userInitiated) { () -> Loaded? in
             #if DEBUG
@@ -87,6 +88,7 @@ struct FileLoadingView<Loaded, Content: View>: View {
             return await read(url)
         }.value
         guard !Task.isCancelled else { return }
+        modified = date
         if let result {
             // Read before the wait could be seen, it is simply there, as in Preview; only after one it fades in. Read
             // again, it takes the place of what was there.

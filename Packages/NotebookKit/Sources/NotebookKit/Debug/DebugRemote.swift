@@ -1008,6 +1008,107 @@ enum DebugRemote {
             if let pdf = window?.contentView.flatMap(pdfView), let scrollView = pdf.documentView?.enclosingScrollView {
                 log("pdf clip=\(scrollView.contentView.bounds) scale=\(pdf.scaleFactor) auto=\(pdf.autoScales) insets=\(scrollView.contentInsets) document=\(scrollView.documentView?.frame ?? .zero) selection=\(pdf.currentSelection?.string ?? "none")")
             }
+        case "pdfpen":
+            // pdfpen [off]: the pencil above the open PDF, on or off.
+            workspace?.drawsOnPDF = argument == "off" ? nil : workspace?.currentPDF
+        case "pdfdraw":
+            // pdfdraw [shift] <page> x y x y …: a drag through points on a page (from its crop box's top left, page
+            // points, the page counted from 1), as real events, with Shift held if asked.
+            var bits = argument.split(separator: " ").map(String.init)
+            let shift = bits.first == "shift"
+            if shift { bits.removeFirst() }
+            let values = bits.compactMap { Double($0) }
+            guard let pdf = window?.contentView.flatMap(pdfView), values.count >= 5, let page = pdf.document?.page(at: Int(values[0]) - 1) else {
+                return log("pdfdraw: no page")
+            }
+            let points = stride(from: 1, to: values.count - 1, by: 2).compactMap { windowPoint(on: page, x: values[$0], y: values[$0 + 1], in: pdf) }
+            drag(through: points, modifiers: shift ? .shift : [])
+        case "pdfsave":
+            // pdfsave: what going to another app or quitting does while drawing on a PDF.
+            PDFDrawingSession.saveAll()
+        case "pdfcanvases":
+            // pdfcanvases: the canvases over the open PDF's pages, while drawing.
+            guard let pdf = window?.contentView.flatMap(pdfView) else { return log("pdfcanvases: no PDF") }
+            let canvases = pdf.canvases.map { canvas in
+                let strokes = canvas.strokes.strokes.map { "\($0.ink.inkType.rawValue) \(String(format: "%06X", $0.ink.color.hexValue)) \($0.renderBounds.integral)" }
+                return "page \(canvas.pageIndex + 1): \(strokes.count) strokes [\(strokes.joined(separator: ", "))], frame \(canvas.frame.integral), scale \(String(format: "%.3f", canvas.scale)), takes \(canvas.takesEvents)"
+            }
+            log("pdfcanvases markup=\(pdf.isInMarkupMode) first=\(window?.firstResponder.map { String(describing: type(of: $0)) } ?? "none") \(canvases.joined(separator: "; "))")
+        case "pdfselect":
+            // pdfselect <page> <words>: selects the words on that page, as a drag over them does.
+            let bits = argument.split(separator: " ", maxSplits: 1).map(String.init)
+            guard let pdf = window?.contentView.flatMap(pdfView), bits.count == 2, let number = Int(bits[0]), let page = pdf.document?.page(at: number - 1),
+                  let text = page.string else { return log("pdfselect: no page") }
+            let range = (text as NSString).range(of: bits[1])
+            guard range.location != NSNotFound, let selection = page.selection(for: range) else { return log("pdfselect: no “\(bits[1])”") }
+            pdf.setCurrentSelection(selection, animate: false)
+            log("pdfselect “\(selection.string ?? "")” canHighlight=\(workspace?.canHighlight ?? false)")
+        case "pdfhighlight":
+            // pdfhighlight [colour]: Format › Highlight, or the colour picked in the menu on the text selected.
+            if let color = HighlightColor(rawValue: argument), let pdf = window?.contentView.flatMap(pdfView) as? NotebookPDFView {
+                pdf.highlight(in: color)
+            } else {
+                workspace?.highlight()
+            }
+        case "pdfannotations":
+            // pdfannotations: every page's annotations, as the PDF on screen has them.
+            guard let document = window?.contentView.flatMap(pdfView)?.document else { return log("pdfannotations: no PDF") }
+            var lines: [String] = []
+            for index in 0..<document.pageCount {
+                guard let page = document.page(at: index) else { continue }
+                for annotation in page.annotations where annotation.type != "Link" {
+                    let quads = annotation.quadrilateralPoints?.count ?? 0
+                    let color = String(format: "%06X", annotation.color.hexValue)
+                    let notebook = annotation.value(forAnnotationKey: MarkupDrawings.notebookKey) != nil
+                    lines.append("page \(index + 1) \(annotation.type ?? "?") \(annotation.bounds.integral) quads=\(quads) color=\(color) shown=\(annotation.shouldDisplay)\(notebook ? " notebook-strokes" : "")")
+                }
+            }
+            log("pdfannotations \(lines.isEmpty ? "none" : lines.joined(separator: " | "))")
+        case "pdfmenu", "pdfmenupick":
+            // pdfmenu <page> x y: the menu a right click there shows. pdfmenupick <page> x y <item>: picks an item in it,
+            // by its title or a colour's name.
+            let bits = argument.split(separator: " ", maxSplits: 3).map(String.init)
+            guard let pdf = window?.contentView.flatMap(pdfView), let window, bits.count >= 3, let number = Int(bits[0]),
+                  let page = pdf.document?.page(at: number - 1), let x = Double(bits[1]), let y = Double(bits[2]),
+                  let point = windowPoint(on: page, x: x, y: y, in: pdf),
+                  let event = NSEvent.mouseEvent(with: .rightMouseDown, location: NSPoint(x: point.x, y: (window.contentView?.bounds.height ?? 0) - point.y),
+                                                 modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                                 context: nil, eventNumber: 0, clickCount: 1, pressure: 1),
+                  let menu = pdf.menu(for: event) else { return log("\(command): no menu") }
+            func describe(_ item: NSMenuItem) -> String {
+                if item.isSeparatorItem { return "—" }
+                if let palette = item.submenu, palette.presentationStyle == .palette {
+                    return "[" + palette.items.map { $0.title + ($0.state == .on ? "✓" : "") }.joined(separator: " ") + "]"
+                }
+                let key = item.keyEquivalent.isEmpty ? "" : " (\(item.keyEquivalentModifierMask.contains(.control) ? "⌃" : "")⌘\(item.keyEquivalent.uppercased()))"
+                let action = item.action.map { " <\(NSStringFromSelector($0))>" } ?? (item.view.map { " <view \(type(of: $0))>" } ?? "")
+                let submenu = item.submenu.map { " {" + $0.items.map(\.title).joined(separator: ", ") + "}" } ?? ""
+                return item.title + key + action + submenu
+            }
+            if command == "pdfmenu", bits.count == 4, let seconds = Double(bits[3]) {
+                // pdfmenu <page> x y <seconds>: opens it for real, for a picture, and closes it after the seconds.
+                trackedMenu = menu
+                let timer = Timer(timeInterval: seconds, repeats: false) { _ in MainActor.assumeIsolated { trackedMenu?.cancelTracking() } }
+                RunLoop.main.add(timer, forMode: .common)
+                log("pdfmenu open")
+                NSMenu.popUpContextMenu(menu, with: event, for: pdf)
+                return
+            }
+            guard command == "pdfmenupick", bits.count == 4 else {
+                return log("pdfmenu " + menu.items.map(describe).joined(separator: " · "))
+            }
+            for (index, item) in menu.items.enumerated() {
+                if item.title == bits[3] {
+                    menu.performActionForItem(at: index)
+                    return log("pdfmenupick \(bits[3])")
+                }
+                if let palette = item.submenu, palette.presentationStyle == .palette,
+                   let choice = palette.items.firstIndex(where: { $0.title == bits[3] }) {
+                    palette.performActionForItem(at: choice)
+                    return log("pdfmenupick colour \(bits[3]), selected \(palette.selectedItems.map(\.title))")
+                }
+            }
+            log("pdfmenupick: no \(bits[3])")
         case "pdfscroll":
             // pdfscroll <y>: scrolls the open PDF, in its pages' points from the top.
             if let pdf = window?.contentView.flatMap(pdfView), let scrollView = pdf.documentView?.enclosingScrollView, let y = numbers.first {
@@ -1035,6 +1136,14 @@ enum DebugRemote {
     private static func pdfView(in view: NSView) -> PDFView? {
         if let pdf = view as? PDFView { return pdf }
         return view.subviews.lazy.compactMap(pdfView).first
+    }
+
+    /// A point on a page, from its crop box's top left in page points, in window points from the top left.
+    private static func windowPoint(on page: PDFPage, x: Double, y: Double, in pdf: PDFView) -> CGPoint? {
+        guard let content = pdf.window?.contentView else { return nil }
+        let crop = page.bounds(for: .cropBox)
+        let inWindow = pdf.convert(pdf.convert(CGPoint(x: crop.minX + x, y: crop.maxY - y), from: page), to: nil)
+        return CGPoint(x: inWindow.x, y: content.bounds.height - inWindow.y)
     }
 
     /// The caret as proposed by AppKit (the line's used rect, as when it blinks, and `firstRect`, as `showcaret` draws
@@ -1258,13 +1367,13 @@ enum DebugRemote {
     }
 
     /// A mouse drag through points, delivered to the view under the first one: down, dragged, up.
-    private static func drag(through points: [CGPoint]) {
+    private static func drag(through points: [CGPoint], modifiers: NSEvent.ModifierFlags = []) {
         guard let window, let content = window.contentView, let first = points.first else { return }
         let root = content.superview ?? content
         let flip = { (point: CGPoint) in CGPoint(x: point.x, y: content.bounds.height - point.y) }
         guard let target = root.hitTest(flip(first)) else { return log("drawpath: nothing at \(first)") }
         func event(_ type: NSEvent.EventType, _ point: CGPoint) -> NSEvent? {
-            NSEvent.mouseEvent(with: type, location: flip(point), modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            NSEvent.mouseEvent(with: type, location: flip(point), modifierFlags: modifiers, timestamp: ProcessInfo.processInfo.systemUptime,
                                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1)
         }
         for (a, b) in zip(points, points.dropFirst()) {
