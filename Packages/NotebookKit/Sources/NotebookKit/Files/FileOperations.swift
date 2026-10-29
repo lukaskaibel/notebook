@@ -125,6 +125,20 @@ enum FileOperations {
         return (url, madeFolder)
     }
 
+    /// A new handwritten note: a PDF of one page of paper, and whether its folder had to be made for it.
+    static func createHandwrittenNote(in folder: URL, title: String = "Untitled", paper: PaperStyle, size: CGSize) -> (url: URL, madeFolder: Bool)? {
+        debugWait("made a handwritten note in", folder)
+        guard let data = NotebookPaper.document(paper, size: size) else { return nil }
+        let madeFolder = !FileManager.default.fileExists(atPath: folder.path)
+        if madeFolder { try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) }
+        let url = uniqueURL(in: folder, name: fileName(from: title).isEmpty ? "Untitled" : fileName(from: title), extension: "pdf")
+        var written = false
+        NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: nil) { url in
+            written = (try? data.write(to: url, options: .withoutOverwriting)) != nil
+        }
+        return written ? (url, madeFolder) : nil
+    }
+
     /// A new note under a name no other file has, even with another made in the folder at the same moment: the name is
     /// taken by creating the file, and when that finds one there, the next ("Groceries (Anna’s iPhone) 2"). Nil when it
     /// couldn't be written, as when the folder is gone.

@@ -27,16 +27,26 @@ struct MoveToMenu: View {
     }
 }
 
-/// New Note in a toolbar on iPhone and iPad, in glass of the accent colour as Done is, so that it stands out from the
-/// other buttons. The Mac's is plain, next to Back and Forward.
-struct NewNoteButton: View {
-    let action: () -> Void
+#if os(iOS)
+/// New Handwritten Note in the menus of folders: a tap makes one of the paper Settings has, the menu one of any paper.
+/// (New Note in a toolbar asks which kind, `NewNoteButton`.)
+struct NewHandwrittenNoteMenu: View {
+    let action: (PaperStyle?) -> Void
 
     var body: some View {
-        Button(action: action) { Label("New Note", systemImage: "square.and.pencil") }
-            .buttonStyle(.glassProminent)
+        Menu {
+            ForEach(PaperStyle.allCases) { paper in
+                Button { action(paper) } label: { Label(paper.name, systemImage: paper.symbol) }
+            }
+        } label: {
+            Label("New Handwritten Note", systemImage: "pencil.and.scribble")
+        } primaryAction: {
+            action(nil)
+        }
     }
 }
+
+#endif
 
 struct EmptyState: View {
     var body: some View {

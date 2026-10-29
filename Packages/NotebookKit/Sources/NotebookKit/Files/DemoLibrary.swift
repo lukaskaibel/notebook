@@ -332,6 +332,7 @@ enum DemoLibrary {
 
         drawTorii(to: root.appendingPathComponent("Travel/.assets/torii.png"))
         drawRoute(to: root.appendingPathComponent("Travel/.assets/Getting to the ryokan drawing.png"))
+        DemoHandwriting.writeLecture(to: root.appendingPathComponent("University/Linear algebra/Lecture 4.pdf"))
         drawTorii(to: root.appendingPathComponent("Travel/ryokan.jpg"), jpeg: true)
         drawReceipt(to: root.appendingPathComponent("Travel/.assets/rail pass receipt.jpg"))
         makeScan(at: root.appendingPathComponent("Travel/Ryokan confirmation.pdf"), lines: [
@@ -458,7 +459,7 @@ enum DemoLibrary {
         ("Inbox/Shared link.md", 0.1, 0.1), ("Inbox/Errands.md", 0.15, 5), ("Inbox/Gift ideas.md", 4, 40),
         ("Personal/Weekend.md", 0.2, 2), ("Personal/Questions for Dr. Weber.md", 1, 8), ("Personal/Cooking/Recipes.md", 15, 60),
         ("Projects/Notebook roadmap.md", 0.02, 50), ("Projects/Offer.pdf", 10, 10), ("Projects/Design/Meeting notes.md", 7, 49),
-        ("University/Linear algebra/Week 3.md", 3, 10), ("Archive/2025/Old apartment.md", 200, 300),
+        ("University/Linear algebra/Week 3.md", 3, 10), ("University/Linear algebra/Lecture 4.pdf", 1, 3), ("Archive/2025/Old apartment.md", 200, 300),
         ("Travel/Photos", 6, 25), ("Personal/Cooking", 15, 60), ("Projects/Design", 7, 50), ("University/Linear algebra", 3, 40),
         ("Archive/2025", 200, 300), ("Travel", 0.5, 30), ("Inbox", 0.1, 60), ("Personal", 2, 60), ("Projects", 10, 50),
         ("University", 3, 40), ("Archive", 200, 300),

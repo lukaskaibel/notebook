@@ -133,8 +133,18 @@ extension Workspace {
         let new = "New"
         if !locations.isEmpty {
             list.append(PaletteCommand(id: "new-note", title: "New Note", symbol: "square.and.pencil", section: new, keys: ["⌘", "N"]) { [self] in
+                #if os(iOS)
+                newNoteOfSetKind()
+                #else
                 newNote()
+                #endif
             })
+            #if os(iOS)
+            list.append(PaletteCommand(id: "new-handwritten-note", title: "New Handwritten Note", symbol: "pencil.and.scribble", section: new, keys: ["⌥", "⌘", "N"],
+                                       keywords: ["pdf", "paper", "draw", "pencil", "notebook", "goodnotes"]) { [self] in
+                newHandwrittenNote()
+            })
+            #endif
             list.append(PaletteCommand(id: "new-folder", title: "New Folder", symbol: "folder.badge.plus", section: new, keys: ["⇧", "⌘", "N"]) {
                 actions.newFolder()
             })

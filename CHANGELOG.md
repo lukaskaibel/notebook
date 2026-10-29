@@ -17,6 +17,34 @@ versions follow [semantic versioning](https://semver.org).
   the PDF as Preview's do, so every PDF app shows them, and ⌘Z takes each one back.
 - Hold Shift while drawing on the Mac, in a note or on a PDF, for a straight line; nearly level or upright, it is level
   or upright.
+- Handwritten notes, on iPhone and iPad, as in GoodNotes: a PDF of blank, lined, squared, dotted or Cornell paper in
+  the folder, opened with the pen on, ready to write in with Apple Pencil or a finger. On the iPad, New Note asks
+  whether to type or write by hand, and on which paper, showing each as its first page looks; on the iPhone it makes a
+  typed note. Settings › New Notes says what New Note makes (typed, handwritten or asked), and the paper and page size,
+  A4 or US Letter, of handwritten ones. A folder's menu, ⌥⌘N and ⌘K make one too. On the Mac you write on them as on
+  any PDF.
+- Typed or handwritten, changed after all: until you write in a new note, Typed and Handwritten at the top turn it into
+  the other kind with one tap. A new handwritten note left without anything written in it goes away again, as an empty
+  new note does.
+- Pages for any PDF you write on, on iPhone and iPad: pull past the last page and let go for a new one, of the paper
+  and size of the page before it, so you can write on after the last slide of a lecture. Page in the toolbar adds a
+  page after the one in view, gives a page other paper with what is on it, or deletes it; Undo puts it back.
+- Pictures on PDF pages, on iPhone and iPad: Add, in the toolbar and in the tool picker, puts photos, pictures from
+  the camera, scans or pictures from Files on the page in view, picked, to drag where you want them. The lasso picks
+  them up again later to move, resize, turn, duplicate or delete them, with the strokes around them. Notebook draws
+  them as sharp as the handwriting however far you zoom in, and every PDF app shows them where you put them.
+
+### Changed
+
+- On iPhone and iPad, what you write on a PDF is saved a moment after you stop, not only when you put the pen away,
+  leave the PDF or leave Notebook. Drawing on a PDF there uses the canvas Markup has, so pictures on a page can be picked
+  and moved.
+
+### Fixed
+
+- Putting the pen away on a PDF, or taking it up, no longer makes the pages flash empty for a moment.
+- A PDF you draw in on iPhone or iPad no longer grows a little with every save: it is written anew with only what its
+  pages use (#244).
 
 ## [1.1.0] – not released yet
 

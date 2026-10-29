@@ -56,6 +56,12 @@ enum DebugRemote {
         }
     }
 
+    /// The PDF view on screen.
+    private static func editorWindowPDFView() -> PDFView? {
+        func find(_ view: UIView) -> PDFView? { (view as? PDFView) ?? view.subviews.lazy.compactMap(find).first }
+        return UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.lazy.compactMap(find).first
+    }
+
     private static func url(_ argument: String) -> URL? {
         if argument.hasPrefix("/") { return URL(fileURLWithPath: argument) }
         return workspace?.locations.first?.url.appendingPathComponent(argument)
@@ -91,6 +97,112 @@ enum DebugRemote {
         case "pdfpen":
             // pdfpen [off]: the pen above the open PDF, on or off.
             workspace.drawsOnPDF = argument == "off" ? nil : workspace.currentURL
+        case "newhandwritten":
+            // newhandwritten [paper]: New Handwritten Note, of the paper given or Settings' paper.
+            workspace.newHandwrittenNote(paper: PaperStyle(rawValue: argument))
+        case "pdfaddpage":
+            // pdfaddpage [paper] [end]: Add Page after the page in view (or at the end), of the paper given.
+            let words = argument.split(separator: " ").map(String.init)
+            let paper = words.compactMap(PaperStyle.init(rawValue:)).first
+            if words.contains("end") { workspace.pdfEditing.session?.addPage(paper) } else if let paper { workspace.pdfEditing.addPage(paper) } else { workspace.pdfEditing.session?.addPage(nil, after: workspace.pdfEditing.pageIndex) }
+        case "pdfpaper":
+            // pdfpaper <paper>: other paper for the page in view.
+            if let paper = PaperStyle(rawValue: argument) { workspace.pdfEditing.changePaper(to: paper) }
+        case "pdfdeletepage":
+            workspace.pdfEditing.deletePage()
+        case "pdfpicture":
+            // pdfpicture [transparent]: a picture on the page in view, as from the photo library: a JPEG photo, or a
+            // PNG with see-through parts.
+            let size = CGSize(width: 1200, height: 800)
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            format.opaque = argument != "transparent"
+            let picture = UIGraphicsImageRenderer(size: size, format: format).image { context in
+                if argument == "transparent" {
+                    UIColor.systemOrange.setFill()
+                    UIBezierPath(ovalIn: CGRect(x: 200, y: 100, width: 800, height: 600)).fill()
+                } else {
+                    for row in 0..<8 {
+                        for column in 0..<12 {
+                            UIColor(hue: CGFloat(row * 12 + column) / 96, saturation: 0.55, brightness: 0.9, alpha: 1).setFill()
+                            context.fill(CGRect(x: column * 100, y: row * 100, width: 100, height: 100))
+                        }
+                    }
+                }
+            }
+            let data = argument == "transparent" ? picture.pngData() : picture.jpegData(compressionQuality: 0.85)
+            if let data, let image = PictureImage.make(from: data) { workspace.pdfEditing.session?.insert([image]) }
+        case "pdfrotate":
+            // pdfrotate <radians>: turns the first picture on the page in view.
+            workspace.pdfEditing.session?.debugRotateFirstPicture(by: CGFloat(numbers.first ?? 0.3))
+        case "pdfsave":
+            workspace.pdfEditing.session?.save()
+        case "pdfundo":
+            workspace.pdfEditing.session?.undo.undo()
+        case "pdfredo":
+            workspace.pdfEditing.session?.undo.redo()
+        case "freshnote":
+            // freshnote: the new note that can still become the other kind.
+            log("freshnote \(workspace.freshNote?.lastPathComponent ?? "none") current \(workspace.currentURL?.lastPathComponent ?? "none")")
+        case "switchkind":
+            // switchkind typed|handwritten: the switch at the top of a new note.
+            if let kind = NoteKind(rawValue: argument) { workspace.switchNewNote(to: kind) }
+        case "newnotekind":
+            // newnotekind ask|typed|handwritten: what New Note makes.
+            if let kind = NewNoteKind(rawValue: argument) { NotebookSettings.shared.newNoteKind = kind }
+        case "pdffinger":
+            // pdffinger: a finger draws on the PDF's pages, as before any Apple Pencil was used.
+            workspace.pdfEditing.session?.debugFingerDraws()
+        case "pdfpages":
+            // pdfpages: the pages of the PDF drawn on, the one in view and its paper, and what is in the file.
+            let editing = workspace.pdfEditing
+            editing.update()
+            var line = "pdfpages: \(editing.pageCount) pages, in view \(editing.pageIndex + 1), paper \(editing.paper?.rawValue ?? "none"), unsaved \(editing.session?.hasUnsavedChanges ?? false), undo \(editing.session?.undo.undoActionName ?? "")"
+            if let url = workspace.currentURL, let document = PDFDocument(url: url) {
+                line += " | file: \(document.pageCount) pages, " + (0..<document.pageCount).map { index in
+                    guard let page = document.page(at: index) else { return "?" }
+                    let strokes = page.annotations.compactMap { MarkupDrawings.strokes(in: $0, on: page)?.drawing.strokes.count }.reduce(0, +)
+                    let pictures = PDFPictures.pictures(on: page).map { "\(Int($0.picture.frame.minX)),\(Int($0.picture.frame.minY)) \(Int($0.picture.frame.width))x\(Int($0.picture.frame.height)) r\(String(format: "%.2f", $0.picture.rotation))" }
+                    return "[\(NotebookPaper.style(of: page)?.rawValue ?? "-") \(Int(page.bounds(for: .cropBox).width))x\(Int(page.bounds(for: .cropBox).height)) strokes \(strokes) pictures \(pictures)]"
+                }.joined(separator: " ")
+                line += " size \((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? -1)"
+            }
+            log(line)
+            if let session = editing.session { log("pdfpages session: " + session.debugCanvases) }
+        case "inkwidth":
+            // inkwidth: how wide PencilKit draws a pen stroke of each point size, measured in its picture.
+            func measure(_ width: CGFloat, force: CGFloat, ink: PKInk.InkType = .pen) -> String {
+                let points = (0..<120).map { i in PKStrokePoint(location: CGPoint(x: 20 + CGFloat(i) * 160 / 120, y: 50), timeOffset: Double(i) / 120, size: CGSize(width: width, height: width), opacity: 1, force: force, azimuth: 0, altitude: .pi / 2) }
+                let drawing = PKDrawing(strokes: [PKStroke(ink: PKInk(ink, color: .black), path: PKStrokePath(controlPoints: points, creationDate: Date()))])
+                var image: UIImage?
+                UITraitCollection(userInterfaceStyle: .light).performAsCurrent { image = drawing.image(from: CGRect(x: 0, y: 0, width: 200, height: 100), scale: 4) }
+                guard let cg = image?.cgImage, let context = CGContext(data: nil, width: cg.width, height: cg.height, bitsPerComponent: 8, bytesPerRow: cg.width * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return "?" }
+                context.draw(cg, in: CGRect(x: 0, y: 0, width: cg.width, height: cg.height))
+                guard let pixels = context.data?.assumingMemoryBound(to: UInt8.self) else { return "?" }
+                var inked: CGFloat = 0
+                for row in 0..<cg.height { inked += CGFloat(pixels[(row * cg.width + 400) * 4 + 3]) / 255 }
+                return String(format: "%.2f", inked / 4)
+            }
+            for width in [1.0, 1.7, 2.4, 3.0, 5.0, 10.0] as [CGFloat] {
+                log("inkwidth pen \(width): force 1 \(measure(width, force: 1)), 0.5 \(measure(width, force: 0.5)), 0 \(measure(width, force: 0)); monoline \(measure(width, force: 1, ink: .monoline)), pencil \(measure(width, force: 1, ink: .pencil))")
+            }
+        case "hit":
+            // hit <x> <y>: the views under a point of the window, from the one a touch goes to outwards.
+            guard numbers.count >= 2, let window = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first else { break }
+            var view = window.hitTest(CGPoint(x: numbers[0], y: numbers[1]), with: nil)
+            var chain: [String] = []
+            while let current = view {
+                chain.append("\(type(of: current))\(current.isUserInteractionEnabled ? "" : " (off)")\(current.gestureRecognizers?.isEmpty == false ? " g\(current.gestureRecognizers!.filter(\.isEnabled).count)/\(current.gestureRecognizers!.count)" : "")")
+                view = current.superview
+            }
+            log("hit: " + chain.joined(separator: " < "))
+        case "pdfscrollto":
+            // pdfscrollto <y>|end: the PDF scrolled to y points from the top, or as far down as it goes.
+            if let scrollView = (editorWindowPDFView())?.subviews.compactMap({ $0 as? UIScrollView }).first {
+                let end = scrollView.contentSize.height - scrollView.bounds.height + scrollView.adjustedContentInset.bottom
+                scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: argument == "end" ? end : CGFloat(numbers.first ?? 0)), animated: false)
+                log("pdfscrollto \(scrollView.contentOffset.y) of \(scrollView.contentSize.height) inset \(scrollView.adjustedContentInset)")
+            }
         case "openoutside":
             // openoutside <path>: what a file handed over by the Files app's Open With or a share does.
             workspace.openFromOutside(URL(fileURLWithPath: argument))

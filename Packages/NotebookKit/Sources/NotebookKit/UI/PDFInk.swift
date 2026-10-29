@@ -80,7 +80,7 @@ enum PDFInk {
 }
 
 /// A page's strokes as a stamp. PDFKit makes its look by drawing it, as lines, when it writes the PDF.
-private final class InkAnnotation: PDFAnnotation {
+final class InkAnnotation: PDFAnnotation {
     private let drawing: PKDrawing
     /// The page's crop box, whose top left the strokes are measured from.
     private let crop: CGRect

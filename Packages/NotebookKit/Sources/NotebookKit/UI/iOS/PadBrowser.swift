@@ -177,8 +177,9 @@ struct PadBrowser: View {
                             Label("More for Notebook", systemImage: "ellipsis")
                         }
                     }
+                    ToolbarSpacer(.fixed, placement: .topBarTrailing)
                     ToolbarItem(placement: .topBarTrailing) {
-                        NewNoteButton { workspace.newNote() }
+                        NewNoteButton(workspace: workspace)
                     }
                 }
                 .navigationSplitViewColumnWidth(min: 260, ideal: 320, max: 420)
@@ -193,7 +194,7 @@ struct PadBrowser: View {
                         EmptyState()
                             .toolbar {
                                 ToolbarItem(placement: .primaryAction) {
-                                    NewNoteButton { workspace.newNote() }
+                                    NewNoteButton(workspace: workspace)
                                 }
                             }
                     }

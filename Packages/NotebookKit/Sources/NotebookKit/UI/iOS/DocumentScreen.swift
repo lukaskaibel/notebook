@@ -22,7 +22,8 @@ struct DocumentScreen: View {
 
     var body: some View {
         content
-            .modifier(DocumentTitle(workspace: workspace, url: url, title: showsTitle ? name : "", isNote: isNote))
+            // On a view of its own: a title of another kind makes that view anew, not the file's (a PDF being drawn on).
+            .background { Color.clear.modifier(DocumentTitle(workspace: workspace, url: url, title: showsTitle ? name : "", isNote: isNote, hasMenu: !isFresh)) }
             .navigationBarTitleDisplayMode(.inline)
             .toolbarRole(isInSplitView || !isNote ? .editor : .automatic)
             .toolbar { toolbar }
@@ -58,9 +59,15 @@ struct DocumentScreen: View {
             }
     }
 
-    /// The note's name shows in the bar once its title has scrolled up under it; other files always show theirs.
+    /// The note's name shows in the bar once its title has scrolled up under it; other files always show theirs. A new
+    /// note with nothing in it yet shows Typed and Handwritten there instead.
     private var showsTitle: Bool {
-        !isNote || (isOpen && workspace.isTitleScrolledAway)
+        !isFresh && (!isNote || (isOpen && workspace.isTitleScrolledAway))
+    }
+
+    /// A new note made a moment ago with nothing in it yet, which can still become the other kind.
+    private var isFresh: Bool {
+        isOpen && workspace.freshNote.map { FileNode.samePath($0, url) } == true
     }
 
     @ViewBuilder
@@ -86,7 +93,8 @@ struct DocumentScreen: View {
                 }
             }
         case .pdf:
-            PDFFileView(url: url, find: workspace.find(in: url), isDrawing: workspace.drawsOnPDF == url) { workspace.report($0, $1) }
+            PDFFileView(url: url, find: workspace.find(in: url), isDrawing: workspace.drawsOnPDF == url, report: { workspace.report($0, $1) },
+                        editing: workspace.pdfEditing)
                 .id(url)
         case .image: PictureFileView(url: url).id(url)
         case .video: VideoFileView(url: url).id(url)
@@ -98,6 +106,11 @@ struct DocumentScreen: View {
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
+        if isFresh {
+            ToolbarItem(placement: .principal) {
+                NoteKindSwitch(workspace: workspace, kind: isNote ? .typed : .handwritten, isCompact: sizeClass == .compact)
+            }
+        }
         if isInSplitView {
             ToolbarItemGroup(placement: .topBarLeading) {
                 // ⌘[ and ⌘] are the Go menu's.
@@ -127,13 +140,20 @@ struct DocumentScreen: View {
             if kind == .pdf {
                 // On, the pages are drawn on right there; off again, what was drawn is in the PDF.
                 let drawing = workspace.drawsOnPDF == url
+                if drawing, workspace.pdfEditing.pageCount > 0 {
+                    // Where it is narrow, one menu, which leaves room for Done Drawing.
+                    PDFAddMenu(editing: workspace.pdfEditing, hasPage: sizeClass == .compact)
+                    if sizeClass != .compact { PDFPageMenu(editing: workspace.pdfEditing) }
+                }
                 Button { workspace.drawsOnPDF = drawing ? nil : url } label: {
                     Label(drawing ? "Done Drawing" : "Draw", systemImage: drawing ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle")
                 }
             } else if Markup.canMarkUp(kind) {
                 Button { Markup.open(url, workspace: workspace) } label: { Label("Markup", systemImage: "pencil.tip.crop.circle") }
             }
-            ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
+            if !(kind == .pdf && workspace.drawsOnPDF == url && sizeClass == .compact) {
+                ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
+            }
             moreMenu
         }
         if isNote, workspace.isEditing || workspace.isDrawing, !isInSplitView {
@@ -173,7 +193,7 @@ struct DocumentScreen: View {
             }
             ToolbarSpacer(.flexible, placement: .bottomBar)
             ToolbarItem(placement: .bottomBar) {
-                NewNoteButton { workspace.newNote(in: url.deletingLastPathComponent()) }
+                NewNoteButton(workspace: workspace, folder: url.deletingLastPathComponent())
             }
         }
     }
@@ -237,9 +257,11 @@ private struct DocumentTitle: ViewModifier {
     let url: URL
     let title: String
     let isNote: Bool
+    /// Rename, for a file's name; not while a new note shows Typed and Handwritten in its place.
+    let hasMenu: Bool
 
     func body(content: Content) -> some View {
-        if isNote {
+        if isNote || !hasMenu {
             content.navigationTitle(title)
         } else {
             content
@@ -286,6 +308,87 @@ struct FormatMenu: View {
                 // at 390 Body was cut off.
                 .frame(width: 460)
                 .presentationCompactAdaptation(.popover)
+        }
+    }
+}
+
+/// Pictures for the page in view, and new pages, while drawing on a PDF; where it is narrow, the page's paper too.
+struct PDFAddMenu: View {
+    let editing: PDFEditing
+    var hasPage = false
+
+    var body: some View {
+        Menu {
+            Section {
+                ForEach(AttachmentSource.available) { source in
+                    Button { editing.addPictures(from: source) } label: {
+                        Label(source == .files ? "Choose File" : source.name, systemImage: source == .files ? "folder" : source.symbol)
+                    }
+                }
+            }
+            if hasPage {
+                PDFPageItems(editing: editing)
+            } else {
+                PaperMenu(title: "Add Page", symbol: "doc.badge.plus") { editing.addPage($0) }
+            }
+        } label: {
+            Label("Add", systemImage: "plus")
+        }
+    }
+}
+
+/// The page in view: a page after it, its paper, and taking it out.
+struct PDFPageMenu: View {
+    let editing: PDFEditing
+
+    var body: some View {
+        Menu {
+            PDFPageItems(editing: editing)
+        } label: {
+            Label("Page", systemImage: "doc.on.doc")
+        }
+    }
+}
+
+private struct PDFPageItems: View {
+    let editing: PDFEditing
+
+    var body: some View {
+        Section("Page \(editing.pageIndex + 1) of \(editing.pageCount)") {
+            PaperMenu(title: "Add Page After", symbol: "doc.badge.plus") { editing.addPage($0) }
+            // Only paper Notebook made: under a page of another PDF is what it shows.
+            if let paper = editing.paper {
+                Menu {
+                    Picker("Paper", selection: Binding(get: { paper }, set: { editing.changePaper(to: $0) })) {
+                        ForEach(PaperStyle.allCases) { style in
+                            Label(style.name, systemImage: style.symbol).tag(style)
+                        }
+                    }
+                } label: {
+                    Label("Paper", systemImage: "doc.richtext")
+                }
+            }
+        }
+        Section {
+            Button(role: .destructive) { editing.deletePage() } label: { Label("Delete Page", systemImage: "trash") }
+                .disabled(editing.pageCount < 2)
+        }
+    }
+}
+
+/// A menu of the papers, for a new page or a handwritten note.
+struct PaperMenu: View {
+    let title: String
+    let symbol: String
+    let action: (PaperStyle) -> Void
+
+    var body: some View {
+        Menu {
+            ForEach(PaperStyle.allCases) { paper in
+                Button { action(paper) } label: { Label(paper.name, systemImage: paper.symbol) }
+            }
+        } label: {
+            Label(title, systemImage: symbol)
         }
     }
 }
