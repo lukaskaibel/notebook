@@ -130,6 +130,8 @@ fastlane can't do these; they are set by hand.
   and drawing are made by the app.
 - **Age rating:** none of the content questions apply. "User-generated content" is no: notes are the user's own files
   and aren't shared with other people through the app. "Unrestricted web access" is no: links open in the browser.
+  "Social media" (`socialMedia`, which App Store Connect has required since 1.1) is no: there are no accounts, feeds
+  or other people in the app.
 - **Privacy manifest:** `Notebook/PrivacyInfo.xcprivacy` says the app tracks no one, collects nothing, and why it reads
   UserDefaults and file dates.
 - **Trying it for App Review:** "Try Sample Notes" on the first screen makes a folder of sample notes, on the Mac where
