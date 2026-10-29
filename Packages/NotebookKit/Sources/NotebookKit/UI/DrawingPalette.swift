@@ -2,20 +2,20 @@
 import AppKit
 import SwiftUI
 
-/// The pencil in the toolbar, as in Notes: on while the note is in drawing mode.
+/// The pencil in the toolbar, as in Notes: on while the note or the PDF is drawn on.
 struct DrawingToggle: View {
     let workspace: Workspace
 
     var body: some View {
-        Toggle(isOn: Binding(get: { workspace.isDrawing }, set: { _ in workspace.editor.toggleDrawing() })) {
+        Toggle(isOn: Binding(get: { workspace.isDrawingInFront }, set: { _ in workspace.toggleDrawing() })) {
             Label("Drawing", systemImage: "pencil.tip.crop.circle")
         }
-        .help(workspace.isDrawing ? "Stop drawing (Esc)" : "Draw in the note")
+        .help(workspace.isDrawingInFront ? "Stop drawing (Esc)" : workspace.note == nil ? "Draw on the PDF" : "Draw in the note")
     }
 }
 
-/// The drawing tools on the Mac, floating at the bottom of the note while you draw, as Notes has them: what draws,
-/// its width and colour, and Done. The iPad's tool picker is PencilKit's own; the Mac has none.
+/// The drawing tools on the Mac, floating at the bottom of the note or the PDF while you draw, as Notes has them: what
+/// draws, its width and colour, and Done. The iPad's tool picker is PencilKit's own; the Mac has none.
 struct DrawingPalette: View {
     let workspace: Workspace
     @Bindable private var tools = DrawingTools.shared
@@ -55,9 +55,11 @@ struct DrawingPalette: View {
 
             Divider().frame(height: 20)
 
-            Button("Done") { workspace.editor.endDrawing() }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.cancelAction)
+            Button("Done") {
+                if workspace.isDrawing { workspace.editor.endDrawing() } else { workspace.drawsOnPDF = nil }
+            }
+            .buttonStyle(.borderedProminent)
+            .keyboardShortcut(.cancelAction)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
@@ -82,9 +84,9 @@ struct DrawingPalette: View {
 
     private func swatch(_ color: NSColor) -> some View {
         let selected = tools.color.hexValue == color.hexValue
-        // Black ink is drawn white in dark mode, as PencilKit draws it.
+        // Black ink is drawn white in dark mode, as PencilKit draws it; on a PDF's page, which is paper, it stays black.
         let rgba = color.rgba
-        let shown = colorScheme == .dark && rgba.red + rgba.green + rgba.blue < 0.4 ? NSColor.white : color
+        let shown = colorScheme == .dark && workspace.isDrawing && rgba.red + rgba.green + rgba.blue < 0.4 ? NSColor.white : color
         return Button { tools.color = color } label: {
             Circle()
                 .fill(Color(nsColor: shown))

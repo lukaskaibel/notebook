@@ -166,7 +166,10 @@ public struct NotebookScene: Scene {
                 formatButton(.bold, #selector(MarkdownTextView.toggleBoldface(_:)), "b", .command)
                 formatButton(.italic, #selector(MarkdownTextView.toggleItalics(_:)), "i", .command)
                 formatButton(.strikethrough, #selector(MarkdownTextView.toggleStrikethrough(_:)), "x", [.command, .shift])
-                formatButton(.highlight, #selector(MarkdownTextView.toggleHighlight(_:)), "h", [.command, .control])
+                // In a PDF too: the text selected on its pages.
+                Button { workspace.highlight() } label: { Label(FormatCommand.highlight.name, systemImage: FormatCommand.highlight.symbol) }
+                    .keyboardShortcut("h", modifiers: [.command, .control])
+                    .disabled(!workspace.canHighlight)
                 formatButton(.code, #selector(MarkdownTextView.toggleInlineCode(_:)), "e", .command)
                 formatButton(.link, #selector(MarkdownTextView.addLink(_:)), "l", .command)
                 Divider()
@@ -185,11 +188,11 @@ public struct NotebookScene: Scene {
                 formatButton(.numberedList, #selector(MarkdownTextView.makeNumberedList(_:)), "9", [.command, .shift])
                 formatButton(.quote, #selector(MarkdownTextView.makeQuote(_:)), "'", .command)
                 Divider()
-                Button { workspace.editor.toggleDrawing() } label: {
-                    Label(workspace.isDrawing ? "Stop Drawing" : "Drawing", systemImage: "pencil.tip.crop.circle")
+                Button { workspace.toggleDrawing() } label: {
+                    Label(workspace.isDrawingInFront ? "Stop Drawing" : "Drawing", systemImage: "pencil.tip.crop.circle")
                 }
-                // The main window's: a note's own window has no pens to draw with.
-                .disabled(!workspace.isMainWindowInFront || workspace.note == nil)
+                // The main window's: a note's own window has no pens to draw with. A PDF is drawn on too.
+                .disabled(!workspace.isMainWindowInFront || (workspace.note == nil && workspace.currentPDF == nil))
                 Divider()
                 formatButton(.indent, #selector(MarkdownTextView.indentLines(_:)), "]", [.command, .option], name: "Increase Indent")
                 formatButton(.outdent, #selector(MarkdownTextView.outdentLines(_:)), "[", [.command, .option], name: "Decrease Indent")

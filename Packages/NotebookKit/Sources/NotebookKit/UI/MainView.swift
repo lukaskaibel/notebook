@@ -138,6 +138,10 @@ struct DocumentToolbar: ToolbarContent {
                 ToolbarSpacer(.fixed)
             }
             ToolbarItemGroup {
+                // As on the iPad: on, the pages are drawn on right there; off again, what was drawn is in the PDF.
+                if workspace.currentPDF != nil {
+                    DrawingToggle(workspace: workspace)
+                }
                 ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
                     .help("Share")
                 MoreMenu(workspace: workspace, url: url)
@@ -271,7 +275,9 @@ struct DetailColumn: View {
                 } else {
                     // What Preview and QuickTime Player open, Notebook draws itself; everything else is Quick Look's.
                     switch FileKind(url: url, isDirectory: false) {
-                    case .pdf: PDFFileView(url: url, find: workspace.find(in: url)).id(url)
+                    case .pdf:
+                        PDFFileView(url: url, find: workspace.find(in: url), isDrawing: workspace.drawsOnPDF == url, workspace: workspace) { workspace.report($0, $1) }
+                            .id(url)
                     case .image: PictureFileView(url: url).id(url)
                     case .video: VideoFileView(url: url).id(url)
                     default: QuickLookView(url: url).id(url)
@@ -284,14 +290,14 @@ struct DetailColumn: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.theme(Theme.panel).ignoresSafeArea())
         .overlay(alignment: .bottom) {
-            if workspace.isDrawing {
+            if workspace.isDrawingInFront {
                 DrawingPalette(workspace: workspace)
                     .padding(.bottom, 18)
                     .padding(.horizontal, 12)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .animation(Theme.spring, value: workspace.isDrawing)
+        .animation(Theme.spring, value: workspace.isDrawingInFront)
         .overlay {
             SwipeAnchor(swiper: workspace.pages)
                 .ignoresSafeArea(.container, edges: .top)

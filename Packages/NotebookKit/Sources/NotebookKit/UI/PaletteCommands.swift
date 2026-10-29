@@ -70,10 +70,10 @@ extension Workspace {
                     askForReminder(url)
                 })
             }
-            if isLoaded {
-                list.append(PaletteCommand(id: "draw", title: isDrawing ? "Stop Drawing" : "Drawing", symbol: "pencil.tip.crop.circle", section: section,
-                                           keywords: ["sketch", "pencil", "handwriting"]) { [self] in
-                    editor.toggleDrawing()
+            if isLoaded || currentPDF != nil {
+                list.append(PaletteCommand(id: "draw", title: isDrawingInFront ? "Stop Drawing" : "Drawing", symbol: "pencil.tip.crop.circle", section: section,
+                                           keywords: ["sketch", "pencil", "handwriting", "markup", "annotate"]) { [self] in
+                    toggleDrawing()
                 })
             }
             list.append(PaletteCommand(id: "link", title: "Copy Link", symbol: "link", section: section) { [self] in copyLink(url) })

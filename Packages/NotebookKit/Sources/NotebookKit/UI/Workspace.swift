@@ -142,8 +142,14 @@ public final class Workspace: NSObject {
     @ObservationIgnored private(set) var isStarted = false
     /// Brings the main window up (set by the window, which SwiftUI opens).
     @ObservationIgnored var showWindow: (() -> Void)?
+    /// The PDF drawn on, while the pencil above it is on.
+    var drawsOnPDF: URL?
 
     #if os(macOS)
+    /// The PDF in the main window, which Format › Highlight highlights in.
+    @ObservationIgnored weak var shownPDF: NotebookPDFView?
+    /// Text is selected in it, to highlight.
+    var canHighlightPDF = false
     /// The main window is open: it can be closed while Notebook keeps running. Open until it says it closed: at launch
     /// it is on its way, and tests have a window of their own.
     var isMainWindowOpen = true
@@ -168,8 +174,6 @@ public final class Workspace: NSObject {
     private(set) var revealRequest: (url: URL, select: Bool, id: UUID)?
     /// A new folder to name, or a file to rename, asked for in an alert.
     var renaming: URL?
-    /// The PDF drawn on, while the pen above it is on (iPhone and iPad).
-    var drawsOnPDF: URL?
     /// The file shown in Quick Look over everything.
     var quickLookURL: URL?
     /// Something that couldn't be done, for an alert.
@@ -897,10 +901,8 @@ public final class Workspace: NSObject {
             if focusTitle { editor.focusTitle() }
             return
         }
-        #if os(iOS)
         // Another file: the PDF's drawing is saved as it goes (`PDFDrawingSession`).
         drawsOnPDF = nil
-        #endif
         showsTodos = false
         #if os(macOS)
         pages.willOpen(target)

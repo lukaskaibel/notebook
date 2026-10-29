@@ -122,9 +122,9 @@ drawings, never over the words. On iPhone and iPad it is PencilKit with Apple's 
 its pressure and tilt, the ruler and the lasso work as they do in Notes; one finger draws and two scroll, or, where only
 Apple Pencil draws, a finger scrolls. On the iPhone, Undo is in the bar at the top while you draw, as in Notes; touch
 and hold it for Redo. On the Mac you draw with the mouse, the trackpad or a tablet's pen, with a pen, pencil, marker or
-eraser from a palette at the bottom of the note. Done, Escape or a click in the text puts the drawing back in the text,
-as tall as what you drew; start typing and the text goes on below it. Tap a drawing (double-click it on the Mac) to draw
-in it again.
+eraser from a palette at the bottom of the note; hold Shift for a straight line. Done, Escape or a click in the text
+puts the drawing back in the text, as tall as what you drew; start typing and the text goes on below it. Tap a drawing
+(double-click it on the Mac) to draw in it again.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/drawing-dark.webp">
@@ -355,17 +355,21 @@ shows the same in Notebook.
 
 Notebook is a browser for your folders, not only for notes. A PDF opens right in the window the way Preview shows it, its
 pages one under the other: there at once, and back where you left it when you return. Handwriting added with Markup is
-as sharp as the text, and a PDF changed in another app or on another device shows the change while it's open. On iPhone
-and iPad, the pen above a PDF lets you write and draw right on its pages, with Apple Pencil and the system's tools;
-tap it again and the strokes are in the PDF, as lines every PDF app shows sharp, and Notebook can change them later.
-The pen above a picture marks it up as in Files, and saves what you add into the picture itself. A
+as sharp as the text, and a PDF changed in another app or on another device shows the change while it's open. The
+pencil above a PDF lets you write and draw right on its pages, where you are: on iPhone and iPad with Apple Pencil and
+the system's tools, on the Mac with the mouse, the trackpad or a tablet and the palette from drawing in notes, while two
+fingers still scroll. Click or tap it again (on the Mac also Escape) and the strokes are in the PDF, as lines every PDF
+app shows sharp, and Notebook can change them later on any of your devices. On the Mac, select text and press ⌃⌘H, or
+right-click it, to highlight it in one of five colours; right-click a highlight to change its colour or remove it.
+Highlights are the PDF's own, as Preview's are, and ⌘Z takes them back. The pen above a picture marks it up as in
+Files on iPhone and iPad, and saves what you add into the picture itself. A
 picture fits the window on the same grey, never larger than it is; pinch or double-click to zoom in on a spot. A video plays with the system's
 controls, as in QuickTime Player. A spreadsheet or any other file opens in Quick Look. The inspector shows a file's
 details, and "Open in" hands it to its own app, as a double-click on it in the sidebar does.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/quicklook-dark.webp">
-  <img alt="Flight tickets.pdf open in the window, its page on grey as in Preview, with its kind, size, page count, dates and folder in the inspector" src="Design/screenshots/quicklook-light.webp">
+  <img alt="Flight tickets.pdf open in the window, its page on grey as in Preview, the booking reference highlighted in yellow, the flight out ringed in red and the way back ticked in green, with its kind, size, page count, dates and folder in the inspector" src="Design/screenshots/quicklook-light.webp">
 </picture>
 
 ### A Mac app, made of the Mac's parts
@@ -480,7 +484,8 @@ screens.
   that other apps show, with its strokes kept next to it so it stays a drawing in Notebook.
 - **PDFs, pictures, videos and other files** open in the window: PDFs and pictures as in Preview, videos as in
   QuickTime Player, the rest in Quick Look. Double-click one in the sidebar to open it in its own app, such as Preview.
-  On iPhone and iPad you write and draw right on a PDF's pages, saved into the PDF; pictures get Markup.
+  You write and draw right on a PDF's pages, and on the Mac highlight its text, saved into the PDF; on iPhone and iPad
+  pictures get Markup.
 - **Search** for the names of notes, files and folders, headings, words in notes and PDFs, and the text in pictures,
   scans and handwriting, in the background as you type. ⌘K finds the same and runs commands.
 - **Spotlight** finds your notes by their names and words too, on the Mac, iPhone and iPad, and opens them in
@@ -684,7 +689,7 @@ While writing:
 | --- | --- |
 | ⌘B, ⌘I | Bold, italic; inside bold text it comes off (again: back on), at its end you step out of it |
 | ⇧⌘X | Strikethrough |
-| ⌃⌘H | Highlight |
+| ⌃⌘H | Highlight; in a PDF, the text selected |
 | ⌘E | Inline code |
 | ⌘L | Link: wraps the selection, or starts a `[[link]]` |
 | ⇧⌘T, ⇧⌘H, ⇧⌘J, ⇧⌘B | Title, heading, subheading, body |
@@ -708,6 +713,7 @@ While writing:
 | Drag a picture or file in a note | Move it to another line; ⌥ drops a copy. Into another note, the sidebar, the Finder or another app: a copy |
 | Double-click a drawing | Draw in it |
 | Esc, or start typing | Stop drawing; typing goes on below the drawing |
+| Shift while drawing | A straight line, level or upright when it nearly is (in a PDF too) |
 | ↑ on the first line, ← or Delete at the very start | Into the title, at its end |
 | Return, Tab, ↓, or → at the end of the title | Into the text |
 

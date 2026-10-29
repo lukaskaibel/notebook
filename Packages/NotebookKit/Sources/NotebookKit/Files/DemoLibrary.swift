@@ -6,6 +6,7 @@ import UIKit
 import CoreText
 import Foundation
 import ImageIO
+import PDFKit
 import PencilKit
 import UniformTypeIdentifiers
 
@@ -341,6 +342,7 @@ enum DemoLibrary {
             "Booking reference K7Q2LM", "Outbound Mon 12 Oct: FRA 13:40 to KIX 08:45, flight XY 2041",
             "Return Sat 17 Oct: KIX 10:55 to FRA 16:15, flight XY 2042", "Haruka express from Kansai Airport to Kyoto Station",
         ])
+        markUp(root.appendingPathComponent("Travel/Flight tickets.pdf"))
         makePDF(at: root.appendingPathComponent("Projects/Offer.pdf"), title: "Offer", lines: [
             "Design and build of the Notebook website", "Three pages, light and dark", "Delivery in four weeks",
         ])
@@ -645,6 +647,42 @@ enum DemoLibrary {
         context.draw(image, in: box)
         context.endPDFPage()
         context.closePDF()
+    }
+
+    /// The tickets marked up as on a Mac or an iPad: the booking reference highlighted, the flight out ringed and the
+    /// way back ticked, in strokes Notebook can change again.
+    private static func markUp(_ url: URL) {
+        guard let document = PDFDocument(url: url), let page = document.page(at: 0), let text = page.string.map({ $0 as NSString }) else { return }
+        if let selection = page.selection(for: text.range(of: "Booking reference K7Q2LM")),
+           let highlight = PDFHighlight(selection, on: page, number: 0, color: .yellow) {
+            PDFHighlight.apply(removing: [], adding: [highlight], to: document)
+        }
+        let crop = page.bounds(for: .cropBox)
+        /// Where words are, in the strokes' points: from the crop box's top left.
+        func box(of words: String) -> CGRect? {
+            guard let bounds = page.selection(for: text.range(of: words))?.bounds(for: page) else { return nil }
+            return CGRect(x: bounds.minX - crop.minX, y: crop.maxY - bounds.maxY, width: bounds.width, height: bounds.height)
+        }
+        var strokes: [PKStroke] = []
+        func stroke(_ points: [CGPoint], _ color: UInt32) {
+            let path = points.enumerated().map { index, point in
+                PKStrokePoint(location: point, timeOffset: Double(index) / 120, size: CGSize(width: 2.2, height: 2.2), opacity: 1, force: 1, azimuth: 0, altitude: .pi / 2)
+            }
+            strokes.append(PKStroke(ink: PKInk(.pen, color: NSColor(hex: color)), path: PKStrokePath(controlPoints: path, creationDate: Date())))
+        }
+        if let flight = box(of: "flight XY 2041")?.insetBy(dx: -9, dy: -7) {
+            // Round once and a little past where it started, as a hand rings something.
+            stroke(stride(from: -0.3, through: 2 * Double.pi + 0.35, by: 0.12).map { t in
+                CGPoint(x: flight.midX + flight.width / 2 * cos(t) * (1 + 0.02 * sin(3 * t)), y: flight.midY + flight.height / 2 * sin(t) + CGFloat(t) * 0.5)
+            }, 0xE5483E)
+        }
+        if let back = box(of: "Return") {
+            let x = back.minX - 22, y = back.midY
+            stroke([CGPoint(x: x, y: y), CGPoint(x: x + 3, y: y + 3), CGPoint(x: x + 6, y: y + 6), CGPoint(x: x + 10, y: y + 1),
+                    CGPoint(x: x + 14, y: y - 5), CGPoint(x: x + 17, y: y - 10)], 0x2FA84F)
+        }
+        PDFInk.put([0: PKDrawing(strokes: strokes)], in: document)
+        document.write(to: url)
     }
 
     private static func makePDF(at url: URL, title: String, lines: [String]) {
