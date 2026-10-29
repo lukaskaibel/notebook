@@ -3,7 +3,10 @@
 Everything users would notice, newest first. The format follows [Keep a Changelog](https://keepachangelog.com), and
 versions follow [semantic versioning](https://semver.org).
 
-## [Unreleased]
+## [1.1.0] – not released yet
+
+Widgets, Share to Notebook, version history, repeating to-dos, to-dos in no note and import from Apple Notes; on iPhone
+and iPad, drawing on PDFs right on the page.
 
 ### Added
 
@@ -106,6 +109,12 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Changed
 
+- PDFs, pictures and other files are no longer greyed out in the sidebar and the lists. They open in Notebook, and you
+  can draw on PDFs on iPhone and iPad, so greyed out they looked as if they didn't. Dim Files That Aren't Notes, in
+  Settings and in the Mac's View menu, still greys them for those who want notes to stand out.
+- Every file's icon is in the accent colour now, as folders are and as in the Finder's sidebar, with a symbol of its
+  own for each kind: notes, PDFs, pictures, videos, audio and other files. Icon Colours in Settings › Sidebar (Settings
+  › Files on iPhone and iPad) gives a kind a colour of its own, from the colours of the Finder's tags.
 - A PDF or picture that changes while it's open, marked up in another app or on another device, shows the change at
   once, on the page you were on, as in Preview.
 - In To-dos on iPhone and iPad, Date, Time and Location in the bar above the keyboard no longer open a sheet that takes
@@ -242,10 +251,10 @@ versions follow [semantic versioning](https://semver.org).
   the one before it at the end, as Notes shows the next note; before, the note opened before it came back, wherever it
   was, and the sidebar jumped there. VoiceOver calls the outline next to the note "Outline", not "Sidebar".
 
-## [1.0.0] – not released yet
+## [1.0.0] – 2026-10-27
 
-The first version: notes as Markdown files in your own folders, on the Mac, iPhone and iPad. While it was being built,
-it was called Folio. What is under Changed and Fixed is against the earlier builds on TestFlight.
+The first version: notes as Markdown files in your own folders, on the Mac, iPhone and iPad. It came to the App Store
+for iPhone and iPad on 27 October 2026 and for the Mac on 29 October. While it was being built, it was called Folio. What is under Changed and Fixed is against the earlier builds on TestFlight.
 
 ### Added
 

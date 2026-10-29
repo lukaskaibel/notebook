@@ -6,7 +6,9 @@ The Mac app runs in the App Sandbox and reaches only the folders the user chose,
 
 Network: Notebook connects to nothing of its own. Searching for a place for a reminder or a to-do uses Apple Maps (MapKit), with the words typed, and Current Location asks MapKit for the address.
 
-iCloud: the folders the user hides and the reminders they set are kept in iCloud's key-value store of the user's own Apple account, so their devices agree. Notes in iCloud Drive are synced by iCloud Drive itself. Nothing goes to the developer.
+iCloud: the folders the user hides and the reminders they set are kept in iCloud's key-value store of the user's own Apple account, so their devices agree. Notes in iCloud Drive are synced by iCloud Drive itself. Notebook's own iCloud container (iCloud.com.lukaskbl.Notebook, not shown in iCloud Drive) holds the earlier versions of notes in iCloud, for version history (File › Revert To › Browse All Versions… on the Mac, Version History in a note's ⋯ menu on iPhone and iPad), and To-dos.md, the to-dos added in To-dos without a note. Nothing goes to the developer.
+
+Import from Apple Notes (File › Import from Apple Notes… on the Mac, the ⋯ menu on iPhone and iPad) reads the Markdown that Notes itself exports (File › Export as › Markdown in Notes); it doesn't read Notes' data.
 
 Permissions, each asked for only when first needed:
 • Notifications: when the user sets the first reminder of a note or a to-do with Remind Me…, for instance on a to-do in Inbox › Errands of the sample notes. Reminders are local notifications scheduled on the device; to-dos with a time remind only once notifications are allowed.

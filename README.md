@@ -25,7 +25,7 @@
   <img alt="Apple silicon" src="https://img.shields.io/badge/Apple%20silicon-native-34508F">
   <img alt="Built with Swift, SwiftUI, AppKit and UIKit" src="https://img.shields.io/badge/Swift-SwiftUI%20%2B%20AppKit%20%2B%20UIKit-F05138">
   <a href="#license"><img alt="License: GPLv3" src="https://img.shields.io/badge/license-GPLv3-34508F"></a>
-  <a href="CHANGELOG.md"><img alt="Version 1.0.0" src="https://img.shields.io/badge/version-1.0.0-34508F"></a>
+  <a href="CHANGELOG.md"><img alt="Version 1.1.0" src="https://img.shields.io/badge/version-1.1.0-34508F"></a>
 </p>
 
 <p align="center">
@@ -44,9 +44,10 @@
   <img alt="Notebook showing the note Kyoto trip: links to Budget and Flight tickets.pdf, a picture of a torii gate and a packing checklist; the folders of iCloud Drive in the sidebar and the note's outline on the right" src="Design/screenshots/hero-light.webp">
 </picture>
 
-> **Version 1.0.0** covers writing, organising and finding notes day to day, on the Mac, iPhone and iPad. It is
-> [in the App Store](https://apps.apple.com/app/id6823609514) for iPhone and iPad, free; the Mac version is still in App
-> Review and comes to the same page. You can also build it from source (five minutes, see below).
+> **Version 1.1.0** covers writing, organising and finding notes day to day, on the Mac, iPhone and iPad, and adds
+> widgets, Share to Notebook, version history, repeating to-dos and import from Apple Notes. Notebook is
+> [in the App Store](https://apps.apple.com/app/id6823609514) for the Mac, iPhone and iPad, free; the App Store has
+> 1.0.0 until Apple has reviewed 1.1.0. You can also build it from source (five minutes, see below).
 
 ## Why
 
@@ -365,7 +366,9 @@ Highlights are the PDF's own, as Preview's are, and ⌘Z takes them back. The pe
 Files on iPhone and iPad, and saves what you add into the picture itself. A
 picture fits the window on the same grey, never larger than it is; pinch or double-click to zoom in on a spot. A video plays with the system's
 controls, as in QuickTime Player. A spreadsheet or any other file opens in Quick Look. The inspector shows a file's
-details, and "Open in" hands it to its own app, as a double-click on it in the sidebar does.
+details, and "Open in" hands it to its own app, as a double-click on it in the sidebar does. In the sidebar and the
+lists each kind of file has a symbol of its own, in the accent colour as folders are; Icon Colours in Settings › Sidebar
+(Settings › Files on iPhone and iPad) gives notes, PDFs, pictures, videos, audio and other files colours of their own.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/quicklook-dark.webp">
@@ -381,7 +384,8 @@ a heading scrolls there. In Settings › Text you pick the typeface (San Francis
 each shown in itself), the size, the line spacing and the line width; on iPhone and iPad the system's text size makes
 notes larger or smaller on top of that, as it does the text of other apps (not in a PDF or printout). The icon is a leather notebook, and Settings › App Icon makes it yours:
 pick the leather, the elastic band, the ribbon and the background, and the Dock shows your notebook while the app is
-open. Links, the caret and folders are in ink blue to go with it, or in the accent colour you chose in System Settings.
+open. Links, the caret, folders and the icons of files are in ink blue to go with it, or in the accent colour you chose
+in System Settings.
 
 ### On iPhone and iPad
 

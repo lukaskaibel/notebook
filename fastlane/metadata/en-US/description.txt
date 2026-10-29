@@ -14,7 +14,7 @@ NEW IN 1.1
 WRITE
 • Tables, code, maths and Mermaid diagrams, drawn right in the note
 • Pictures, PDFs and files in the note, kept in a hidden .assets folder beside it
-• Drawings with Apple Pencil, a finger, the mouse or the trackpad
+• Drawings with Apple Pencil, a finger, the mouse or the trackpad, and on iPhone and iPad right on PDFs
 • [[Links]] between notes that keep working when you rename or move them
 
 FIND

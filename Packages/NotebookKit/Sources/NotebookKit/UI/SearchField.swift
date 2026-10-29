@@ -106,8 +106,7 @@ final class SearchController: NSObject, NSTextSuggestionsDelegate, NSSearchField
             item.image = SidebarFileCell.picture(of: emoji, nested: false)
             return item
         }
-        let tint: NSColor = found.symbol != nil ? .secondaryLabelColor : kind == .folder ? found.folderIcon?.color?.platformColor ?? .controlAccentColor
-            : kind == .note || kind == .other ? .secondaryLabelColor : kind.tint
+        let tint: NSColor = found.symbol != nil ? .secondaryLabelColor : found.folderIcon?.color?.platformColor ?? kind.tint
         item.image = NSImage(systemSymbolName: found.image, accessibilityDescription: nil)?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(paletteColors: [tint]))
         return item

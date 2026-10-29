@@ -117,7 +117,101 @@ struct SidebarSettings: View {
                 Text("PDFs, pictures and other files still open from search and from links in your notes.")
                     .foregroundStyle(.secondary)
             }
+            Section {
+                ForEach(FileKind.files, id: \.self) { FileColorPicker(kind: $0) }
+            } header: {
+                Text("Icon Colours")
+            } footer: {
+                Text("Every kind of file has an icon of its own, in the accent colour unless you choose another. A folder takes the colour you give it with Customize Folder.")
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
     }
 }
+
+/// The colour of one kind of file's icon: the accent colour, or one of the Finder's tag colours. Swatches on the Mac, as
+/// System Settings has accent colours; a list of the icon in each colour on iPhone and iPad.
+private struct FileColorPicker: View {
+    let kind: FileKind
+    @Bindable private var settings = NotebookSettings.shared
+
+    var body: some View {
+        let chosen = settings.fileColors[kind]
+        #if os(macOS)
+        LabeledContent {
+            HStack(spacing: 2) {
+                ColorSwatch(color: Color.theme(Theme.accent), name: "Accent Colour", isChosen: chosen == nil, size: 14) { settings.fileColors[kind] = nil }
+                ForEach(FolderColor.allCases, id: \.self) { color in
+                    ColorSwatch(color: color.color, name: color.name, isChosen: chosen == color, size: 14) { settings.fileColors[kind] = color }
+                }
+            }
+        } label: {
+            Self.icon(of: kind, kind.pluralName, color: chosen)
+        }
+        #else
+        NavigationLink {
+            FileColorList(kind: kind)
+        } label: {
+            LabeledContent {
+                Text(chosen?.name ?? "Accent Colour")
+            } label: {
+                Self.icon(of: kind, kind.pluralName, color: chosen)
+            }
+        }
+        #endif
+    }
+
+    /// The kind's name, or a colour's, next to the kind's icon in that colour.
+    static func icon(of kind: FileKind, _ title: String, color: FolderColor?) -> some View {
+        Label {
+            Text(title)
+        } icon: {
+            Image(systemName: kind.symbol)
+                .foregroundStyle(color?.color ?? Color.theme(Theme.accent))
+                #if os(macOS)
+                // The symbols differ in width, and a form on the Mac doesn't line up its labels' icons as one on iOS does.
+                .frame(width: 18)
+                #endif
+        }
+    }
+}
+
+#if os(iOS)
+/// The colours for one kind of file on iPhone and iPad, as Settings lists a choice: the kind's icon in each, the one
+/// chosen ticked. Choosing one goes back.
+private struct FileColorList: View {
+    let kind: FileKind
+    @Bindable private var settings = NotebookSettings.shared
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        List {
+            row("Accent Colour", color: nil)
+            ForEach(FolderColor.allCases, id: \.self) { row($0.name, color: $0) }
+        }
+        .navigationTitle(kind.pluralName)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func row(_ name: String, color: FolderColor?) -> some View {
+        let isChosen = settings.fileColors[kind] == color
+        return Button {
+            settings.fileColors[kind] = color
+            dismiss()
+        } label: {
+            HStack {
+                FileColorPicker.icon(of: kind, name, color: color)
+                Spacer()
+                if isChosen {
+                    Image(systemName: "checkmark")
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+        }
+        .tint(.primary)
+        .accessibilityAddTraits(isChosen ? .isSelected : [])
+    }
+}
+#endif
