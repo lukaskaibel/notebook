@@ -3,7 +3,10 @@
 Everything users would notice, newest first. The format follows [Keep a Changelog](https://keepachangelog.com), and
 versions follow [semantic versioning](https://semver.org).
 
-## [Unreleased]
+## [1.1.0] – not released yet
+
+Widgets, Share to Notebook, version history, repeating to-dos, to-dos in no note and import from Apple Notes; on iPhone
+and iPad, drawing on PDFs right on the page.
 
 ### Added
 
@@ -238,10 +241,10 @@ versions follow [semantic versioning](https://semver.org).
   the one before it at the end, as Notes shows the next note; before, the note opened before it came back, wherever it
   was, and the sidebar jumped there. VoiceOver calls the outline next to the note "Outline", not "Sidebar".
 
-## [1.0.0] – not released yet
+## [1.0.0] – 2026-10-27
 
-The first version: notes as Markdown files in your own folders, on the Mac, iPhone and iPad. While it was being built,
-it was called Folio. What is under Changed and Fixed is against the earlier builds on TestFlight.
+The first version: notes as Markdown files in your own folders, on the Mac, iPhone and iPad. It came to the App Store
+for iPhone and iPad on 27 October 2026 and for the Mac on 29 October. While it was being built, it was called Folio. What is under Changed and Fixed is against the earlier builds on TestFlight.
 
 ### Added
 

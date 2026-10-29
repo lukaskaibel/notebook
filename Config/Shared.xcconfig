@@ -1,7 +1,7 @@
 // Settings shared by every build. Personal settings (your signing team) go in Local.xcconfig,
 // which is not checked in.
 
-MARKETING_VERSION = 1.0.0
+MARKETING_VERSION = 1.1.0
 CURRENT_PROJECT_VERSION = 1
 
 // The app's bundle identifier; its extensions' start with it (Widgets.xcconfig). A build of your own takes another

@@ -25,7 +25,7 @@
   <img alt="Apple silicon" src="https://img.shields.io/badge/Apple%20silicon-native-34508F">
   <img alt="Built with Swift, SwiftUI, AppKit and UIKit" src="https://img.shields.io/badge/Swift-SwiftUI%20%2B%20AppKit%20%2B%20UIKit-F05138">
   <a href="#license"><img alt="License: GPLv3" src="https://img.shields.io/badge/license-GPLv3-34508F"></a>
-  <a href="CHANGELOG.md"><img alt="Version 1.0.0" src="https://img.shields.io/badge/version-1.0.0-34508F"></a>
+  <a href="CHANGELOG.md"><img alt="Version 1.1.0" src="https://img.shields.io/badge/version-1.1.0-34508F"></a>
 </p>
 
 <p align="center">
@@ -44,9 +44,10 @@
   <img alt="Notebook showing the note Kyoto trip: links to Budget and Flight tickets.pdf, a picture of a torii gate and a packing checklist; the folders of iCloud Drive in the sidebar and the note's outline on the right" src="Design/screenshots/hero-light.webp">
 </picture>
 
-> **Version 1.0.0** covers writing, organising and finding notes day to day, on the Mac, iPhone and iPad. It is
-> [in the App Store](https://apps.apple.com/app/id6823609514) for iPhone and iPad, free; the Mac version is still in App
-> Review and comes to the same page. You can also build it from source (five minutes, see below).
+> **Version 1.1.0** covers writing, organising and finding notes day to day, on the Mac, iPhone and iPad, and adds
+> widgets, Share to Notebook, version history, repeating to-dos and import from Apple Notes. Notebook is
+> [in the App Store](https://apps.apple.com/app/id6823609514) for the Mac, iPhone and iPad, free; the App Store has
+> 1.0.0 until Apple has reviewed 1.1.0. You can also build it from source (five minutes, see below).
 
 ## Why
 
