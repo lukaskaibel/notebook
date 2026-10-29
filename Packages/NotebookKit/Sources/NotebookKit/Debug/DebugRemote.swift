@@ -667,7 +667,7 @@ enum DebugRemote {
             }
         case "set":
             // set <setting> <value>: face, size, spacing, width, headings, onlynotes, dim, foldersfirst, order (name, dateEdited,
-            // dateCreated), deleteempty.
+            // dateCreated), deleteempty, color.<kind> (note, pdf, image, video, audio, other) with a tag colour or accent.
             let bits = argument.split(separator: " ").map(String.init)
             guard bits.count == 2 else { break }
             let settings = NotebookSettings.shared
@@ -682,6 +682,9 @@ enum DebugRemote {
             case "foldersfirst": settings.foldersFirst = bits[1] == "1"
             case "order": if let order = FileOrder(rawValue: bits[1]) { settings.fileOrders.set(order, for: workspace?.folderInView) }
             case "deleteempty": settings.deletesEmptyNewNotes = bits[1] == "1"
+            case let key where key.hasPrefix("color."):
+                guard let kind = FileKind(rawValue: String(key.dropFirst(6))), kind != .folder else { break }
+                settings.fileColors[kind] = FolderColor.allCases.first { $0.name.lowercased() == bits[1].lowercased() }
             default: break
             }
             log("set \(argument)")

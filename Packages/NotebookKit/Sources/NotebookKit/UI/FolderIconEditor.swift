@@ -135,35 +135,12 @@ struct FolderIconEditor: View {
     }
 
     private func swatch(_ color: FolderColor?) -> some View {
-        let isChosen = icon.color == color
         #if os(macOS)
         let size: CGFloat = 22
         #else
         let size: CGFloat = 30
         #endif
-        return Button {
-            icon.color = color
-        } label: {
-            ZStack {
-                if let color {
-                    Circle().fill(color.color)
-                } else {
-                    // No colour: a slash through an empty circle, as a colour well shows none.
-                    Circle().strokeBorder(.secondary, lineWidth: 1.5)
-                    Capsule().fill(.secondary).frame(width: 1.5, height: size * 0.8).rotationEffect(.degrees(45))
-                }
-            }
-            .frame(width: size, height: size)
-            .padding(4)
-            .overlay {
-                if isChosen { Circle().strokeBorder(.secondary.opacity(0.6), lineWidth: 2) }
-            }
-            .contentShape(.circle)
-        }
-        .buttonStyle(.plain)
-        .help(color?.name ?? "No Colour")
-        .accessibilityLabel(color?.name ?? "No Colour")
-        .accessibilityAddTraits(isChosen ? .isSelected : [])
+        return ColorSwatch(color: color?.color, name: color?.name ?? "No Colour", isChosen: icon.color == color, size: size) { icon.color = color }
     }
 
     // MARK: - Symbols and emoji
@@ -281,6 +258,39 @@ struct FolderIconEditor: View {
         }
     }
     #endif
+}
+
+/// A round colour to choose, as System Settings shows accent colours and the Finder its tags, ringed while chosen.
+/// Without a colour: a slash through an empty circle, as a colour well shows none.
+struct ColorSwatch: View {
+    let color: Color?
+    let name: String
+    let isChosen: Bool
+    let size: CGFloat
+    let choose: () -> Void
+
+    var body: some View {
+        Button(action: choose) {
+            ZStack {
+                if let color {
+                    Circle().fill(color)
+                } else {
+                    Circle().strokeBorder(.secondary, lineWidth: 1.5)
+                    Capsule().fill(.secondary).frame(width: 1.5, height: size * 0.8).rotationEffect(.degrees(45))
+                }
+            }
+            .frame(width: size, height: size)
+            .padding(size < 20 ? 3 : 4)
+            .overlay {
+                if isChosen { Circle().strokeBorder(.secondary.opacity(0.6), lineWidth: size < 20 ? 1.5 : 2) }
+            }
+            .contentShape(.circle)
+        }
+        .buttonStyle(.plain)
+        .help(name)
+        .accessibilityLabel(name)
+        .accessibilityAddTraits(isChosen ? .isSelected : [])
+    }
 }
 
 #if os(macOS)

@@ -47,9 +47,6 @@ public enum Theme {
     static let red = NSColor(light: 0xD64545, dark: 0xEB6A6A)
     static let blue = NSColor(light: 0x2F86B5, dark: 0x5AB0D8)
     static let purple = NSColor(light: 0x6E56CF, dark: 0xA08CF2)
-    static let pdf = NSColor(light: 0xD64545, dark: 0xEB6A6A)
-    static let image = NSColor(light: 0x2F86B5, dark: 0x5AB0D8)
-    static let video = NSColor(light: 0x7C5CC4, dark: 0xA08CF2)
 
     static let code = NSColor(light: 0xF5F5F7, dark: 0x262628)
     static let codeBorder = NSColor(light: 0xE8E8EB, dark: 0x313134)

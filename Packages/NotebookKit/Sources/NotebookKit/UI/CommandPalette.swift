@@ -356,11 +356,7 @@ struct CommandPalette: View {
     private static func tint(of item: SearchItem) -> Color {
         guard let kind = item.kind else { return Color.theme(Theme.accent) }
         if item.symbol != nil { return Color.theme(Theme.textSecondary) }
-        switch kind {
-        case .folder: return item.folderIcon?.color?.color ?? Color.theme(Theme.accent)
-        case .note, .other, .audio: return Color.theme(Theme.textSecondary)
-        default: return Color.theme(kind.tint)
-        }
+        return item.folderIcon?.color?.color ?? Color.theme(kind.tint)
     }
 
     private static func id(of result: SearchResult) -> String {
@@ -415,7 +411,7 @@ struct CommandPalette: View {
         }
         func row(_ note: URL, section: String) -> PaletteRow {
             PaletteRow(id: "note:" + section + note.path, section: section, title: SearchSection.displayName(note),
-                       detail: workspace.index.entry(for: note)?.place, symbol: "doc.text", tint: Color.theme(Theme.textSecondary),
+                       detail: workspace.index.entry(for: note)?.place, symbol: FileKind.note.symbol, tint: Color.theme(FileKind.note.tint),
                        action: .moveTodoInto(note))
         }
         guard query.trimmingCharacters(in: .whitespaces).isEmpty else {

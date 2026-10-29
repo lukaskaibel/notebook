@@ -74,11 +74,7 @@ struct FileRow: View {
     }
 
     private var tint: Color {
-        switch kind {
-        case .folder: icon?.color?.color ?? .accentColor
-        case .note, .other, .audio: .secondary
-        default: Color.theme(kind.tint)
-        }
+        icon?.color?.color ?? Color.theme(kind.tint)
     }
 
     /// "Yesterday  Get an ICOCA card at the airport…" for a note; "12 Oct 2026 · 84 KB" for any other file.
@@ -381,8 +377,7 @@ struct SearchResultsList: View {
                     Text(emoji)
                 } else {
                     Image(systemName: item.image)
-                        .foregroundStyle(item.symbol != nil ? Color.secondary : kind == .folder ? item.folderIcon?.color?.color ?? Color.accentColor
-                                         : kind == .note || kind == .other ? Color.secondary : Color.theme(kind.tint))
+                        .foregroundStyle(item.symbol != nil ? Color.secondary : item.folderIcon?.color?.color ?? Color.theme(kind.tint))
                 }
             }
             .contentShape(Rectangle())
