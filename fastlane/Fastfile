@@ -613,6 +613,13 @@ lane :store_media do |options|
                    "platform:ios or platform:mac uploads one platform's alone, when only the other's version is shut.")
   end
   problems.each { |problem| UI.important(problem) }
+  # App Store Connect takes the better part of an hour to process each video, so all of them go up first and are
+  # processed at once; then each is placed as soon as it's ready.
+  unless library.dry_run?
+    ready.each do |media|
+      library.video(media[:path], category: media[:category], name: media[:name], frame: media[:frame], wait: false)
+    end
+  end
   ready.each do |media|
     UI.message("#{media[:name]}:") if library.dry_run?
     video = library.video(media[:path], category: media[:category], name: media[:name], frame: media[:frame])

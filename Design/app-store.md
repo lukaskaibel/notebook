@@ -75,8 +75,10 @@ changes) and nothing goes up unless all of them pass. Then each video goes to th
 - A video is uploaded once. Its reference name in the library ends in a digest of the file ("iPhone preview
   (a1b2c3d4)"), so a second run uses the one already there, changing only its poster if that moved; a new cut is a new
   video next to the old one, which can be deleted in the library once nothing shows it.
-- The lane waits until App Store Connect has processed the video (up to 20 minutes) and stops if processing failed,
-  before it touches the page. A run stopped there places nothing; run it again later.
+- Processing takes App Store Connect the better part of an hour per video (about 50 minutes for 1.1's), so the lane
+  uploads every video first and they are processed at once. It then places each as soon as it's ready, waiting up to
+  75 minutes, and stops if processing failed, before it touches the page. A run stopped there places that video and
+  the ones after it on the next run, which uploads nothing again.
 - A preview's group holds three, so the new placement is made before the old one is taken away. A header or search
   result holds one, so there the old one goes first, a moment before the new one is placed.
 - Once iOS 1.1 is submitted its page is shut, so a Mac version that is still open takes its preview with

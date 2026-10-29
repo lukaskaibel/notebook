@@ -16,7 +16,8 @@ class AssetLibrary
   # Where a version can still be changed.
   EDITABLE = %w[PREPARE_FOR_SUBMISSION DEVELOPER_REJECTED REJECTED METADATA_REJECTED INVALID_BINARY].freeze
   # How long App Store Connect may take to process a video before the lane stops; a later run takes up the same video.
-  PROCESSING = 20 * 60
+  # It took about 50 minutes for each of 1.1's.
+  PROCESSING = 75 * 60
 
   def initialize(token, bundle_id, dry_run:)
     @token = token
@@ -71,21 +72,21 @@ class AssetLibrary
 
   # The video in the app's library, processed and ready to place: the one an earlier run uploaded, found by its
   # reference name, which ends in a digest of the file, or else uploaded now. Its id, or nil on a dry run that would
-  # upload it.
-  def video(file, category:, name:, frame: nil)
+  # upload it. Without `wait` it doesn't wait for the processing, so several can be processed at once.
+  def video(file, category:, name:, frame: nil, wait: true)
     reference = "#{name} (#{Digest::SHA256.file(file).hexdigest[0, 8]})"
     code = frame && time_code(frame, file)
     found = get("/v1/appAssetLibraries/#{library_id}/videos", "filter[referenceName]" => reference).fetch("data").find do |video|
       video.dig("attributes", "referenceName") == reference && !%w[AWAITING_UPLOAD FAILED].include?(video.dig("attributes", "state"))
     end
-    return upload_video(file, category: category, reference: reference, code: code) unless found
+    return upload_video(file, category: category, reference: reference, code: code, wait: wait) unless found
 
     puts "  #{reference} is in the library already (#{found.dig('attributes', 'state')})"
     if code && found.dig("attributes", "previewFrameTimeCode") != code
       change(:patch, "/v1/appAssetLibraryVideos/#{found['id']}",
              data: { type: "appAssetLibraryVideos", id: found["id"], attributes: { previewFrameTimeCode: code } })
     end
-    processed(found["id"], file)
+    wait ? processed(found["id"], file) : found["id"]
   end
 
   # Puts the video on the localization in place of what that placement type and group show there now. Where the
@@ -117,9 +118,9 @@ class AssetLibrary
 
   private
 
-  # Reserves the video in the library, uploads it in the parts App Store Connect asks for, commits it and waits for
-  # it to be processed. Its id, or nil on a dry run.
-  def upload_video(file, category:, reference:, code:)
+  # Reserves the video in the library, uploads it in the parts App Store Connect asks for, commits it and, with
+  # `wait`, waits for it to be processed. Its id, or nil on a dry run.
+  def upload_video(file, category:, reference:, code:, wait:)
     attributes = { fileName: File.basename(file), fileSize: File.size(file), category: category, referenceName: reference }
     attributes[:previewFrameTimeCode] = code if code
     reserved = change(:post, "/v1/appAssetLibraryVideos",
@@ -131,7 +132,7 @@ class AssetLibrary
     send_parts(file, reserved.dig("data", "attributes", "uploadOperations"))
     change(:patch, "/v1/appAssetLibraryVideos/#{id}",
            data: { type: "appAssetLibraryVideos", id: id, attributes: { uploaded: true } })
-    processed(id, file)
+    wait ? processed(id, file) : id
   end
 
   # Waits until App Store Connect has processed the video: UPLOAD_COMPLETE while it works on it, then
