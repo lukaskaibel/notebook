@@ -649,8 +649,8 @@ enum DemoLibrary {
         context.closePDF()
     }
 
-    /// The tickets marked up as on a Mac or an iPad: the booking reference highlighted, the flight out ringed and the
-    /// way back ticked, in strokes Notebook can change again.
+    /// The tickets marked up as on a Mac or an iPad: the booking reference highlighted, the flight out underlined and
+    /// the way back ticked, in strokes Notebook can change again.
     private static func markUp(_ url: URL) {
         guard let document = PDFDocument(url: url), let page = document.page(at: 0), let text = page.string.map({ $0 as NSString }) else { return }
         if let selection = page.selection(for: text.range(of: "Booking reference K7Q2LM")),
@@ -666,14 +666,14 @@ enum DemoLibrary {
         var strokes: [PKStroke] = []
         func stroke(_ points: [CGPoint], _ color: UInt32) {
             let path = points.enumerated().map { index, point in
-                PKStrokePoint(location: point, timeOffset: Double(index) / 120, size: CGSize(width: 2.2, height: 2.2), opacity: 1, force: 1, azimuth: 0, altitude: .pi / 2)
+                PKStrokePoint(location: point, timeOffset: Double(index) / 120, size: CGSize(width: 3.5, height: 3.5), opacity: 1, force: 1, azimuth: 0, altitude: .pi / 2)
             }
             strokes.append(PKStroke(ink: PKInk(.pen, color: NSColor(hex: color)), path: PKStrokePath(controlPoints: path, creationDate: Date())))
         }
-        if let flight = box(of: "flight XY 2041")?.insetBy(dx: -9, dy: -7) {
-            // Round once and a little past where it started, as a hand rings something.
-            stroke(stride(from: -0.3, through: 2 * Double.pi + 0.35, by: 0.12).map { t in
-                CGPoint(x: flight.midX + flight.width / 2 * cos(t) * (1 + 0.02 * sin(3 * t)), y: flight.midY + flight.height / 2 * sin(t) + CGFloat(t) * 0.5)
+        if let flight = box(of: "flight XY 2041") {
+            // Underlined by hand: a little uneven, rising slightly.
+            stroke(stride(from: 0.0, through: 1.0, by: 0.05).map { t in
+                CGPoint(x: flight.minX - 2 + (flight.width + 4) * t, y: flight.maxY + 3 - 1.5 * t + 0.6 * sin(t * 9))
             }, 0xE5483E)
         }
         if let back = box(of: "Return") {

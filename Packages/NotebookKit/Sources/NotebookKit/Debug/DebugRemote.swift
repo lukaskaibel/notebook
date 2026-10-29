@@ -1087,7 +1087,8 @@ enum DebugRemote {
             }
             if command == "pdfmenu", bits.count == 4, let seconds = Double(bits[3]) {
                 // pdfmenu <page> x y <seconds>: opens it for real, for a picture, and closes it after the seconds.
-                let timer = Timer(timeInterval: seconds, repeats: false) { _ in MainActor.assumeIsolated { menu.cancelTracking() } }
+                trackedMenu = menu
+                let timer = Timer(timeInterval: seconds, repeats: false) { _ in MainActor.assumeIsolated { trackedMenu?.cancelTracking() } }
                 RunLoop.main.add(timer, forMode: .common)
                 log("pdfmenu open")
                 NSMenu.popUpContextMenu(menu, with: event, for: pdf)

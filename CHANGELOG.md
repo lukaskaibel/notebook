@@ -3,6 +3,21 @@
 Everything users would notice, newest first. The format follows [Keep a Changelog](https://keepachangelog.com), and
 versions follow [semantic versioning](https://semver.org).
 
+## [Unreleased]
+
+### Added
+
+- Draw on PDFs on the Mac too, right where you are on the page: click the pencil in the toolbar (or Format › Drawing),
+  and the palette from drawing in notes comes up at the bottom. The mouse, the trackpad or a tablet's pen draws on the
+  pages with a pen, pencil or marker, the eraser takes strokes away, ⌘Z takes them back, and two fingers still scroll
+  and zoom. Done or Escape puts what you drew into the PDF itself, saved the way the iPad saves it, so either can change
+  it later; leaving the PDF, switching to another app or quitting saves it too.
+- Highlight text in a PDF on the Mac: select it and press ⌃⌘H (Format › Highlight), or right-click it and pick
+  Highlight or one of five colours. Right-click a highlight to give it another colour or remove it. Highlights go into
+  the PDF as Preview's do, so every PDF app shows them, and ⌘Z takes each one back.
+- Hold Shift while drawing on the Mac, in a note or on a PDF, for a straight line; nearly level or upright, it is level
+  or upright.
+
 ## [1.1.0] – not released yet
 
 Widgets, Share to Notebook, version history, repeating to-dos, to-dos in no note and import from Apple Notes; on iPhone
@@ -15,16 +30,6 @@ and iPad, drawing on PDFs right on the page.
   again and what you drew is in the PDF itself, in its folder; leaving the PDF or Notebook saves it too. It is saved as
   lines, which every PDF app shows sharp, and Notebook can change it again later, also handwriting added with Markup in
   Files or Preview.
-- Draw on PDFs on the Mac too, right where you are on the page: click the pencil in the toolbar (or Format › Drawing),
-  and the palette from drawing in notes comes up at the bottom. The mouse, the trackpad or a tablet's pen draws on the
-  pages with a pen, pencil or marker, the eraser takes strokes away, ⌘Z takes them back, and two fingers still scroll
-  and zoom. Done or Escape puts what you drew into the PDF itself, saved the way the iPad saves it, so either can change
-  it later; leaving the PDF, switching to another app or quitting saves it too.
-- Highlight text in a PDF on the Mac: select it and press ⌃⌘H (Format › Highlight), or right-click it and pick
-  Highlight or one of five colours. Right-click a highlight to give it another colour or remove it. Highlights go into
-  the PDF as Preview's do, so every PDF app shows them, and ⌘Z takes each one back.
-- Hold Shift while drawing on the Mac, in a note or on a PDF, for a straight line; nearly level or upright, it is level
-  or upright.
 - Markup for pictures on iPhone and iPad: the pen above a picture opens it ready to draw on, as Markup in Files does,
   and what you add is saved into the picture itself. (Markup in the share sheet asks where to save a copy.)
 - Rename a PDF, picture or any other file by tapping its name at the top, as in Files.
