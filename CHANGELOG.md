@@ -49,8 +49,7 @@ versions follow [semantic versioning](https://semver.org).
   `![[Kyoto.jpg]]`, and shows as before: the picture, or the file's card. It isn't stored a second time next to the
   note, and the link follows the file when you rename or move it. Files from anywhere else, such as Downloads, are still
   copied next to the note, so the note keeps them when Downloads is emptied; drop with Option held for a copy of one
-  from your folders too.
-
+  from your folders too. A folder goes in as a link to it, never as a copy, and only from your folders.
 - On iPhone and iPad, what you write on a PDF is saved a moment after you stop, not only when you put the pen away,
   leave the PDF or leave Notebook. Drawing on a PDF there uses the canvas Markup has, so pictures on a page can be picked
   and moved.
@@ -63,8 +62,11 @@ versions follow [semantic versioning](https://semver.org).
   ("dash, left bracket, space, right bracket, Buy milk"). Headings are headings, a to-do says whether it is completed
   and a double-tap ticks it, as a tap on its circle does, links are links, pictures and drawings are read by their
   names, a table row by row, and a to-do's date or place is a button that changes it. A double-tap on a line starts
-  writing at its end; while you write, the note is one text field as before, and the to-do the caret is in can be
-  ticked from VoiceOver's actions (#214).
+  writing at its end, and "Write at the end", last in the note ("Write in the note" in an empty one), on a line of its
+  own after it all; while you write, the note is one text field as before, and the to-do the caret is in can be ticked
+  from VoiceOver's actions. VoiceOver stays on a to-do when lines come in above it from another device or it is ticked
+  there, and a double-tap on one that was written over there reads it as it is now rather than ticking it. Switch
+  Control, Voice Control and Full Keyboard Access go through the note the same way (#214, #279).
 - Putting the pen away on a PDF, or taking it up, no longer makes the pages flash empty for a moment.
 - A PDF you draw in on iPhone or iPad no longer grows a little with every save: it is written anew with only what its
   pages use (#244).

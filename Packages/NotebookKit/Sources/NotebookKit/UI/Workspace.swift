@@ -683,9 +683,8 @@ public final class Workspace: NSObject {
 
     /// A folder's name as the sidebar shows it: a location's, a linked folder's, or the folder's own.
     func folderName(_ url: URL) -> String {
-        let path = url.standardizedFileURL.path
-        if let location = locations.first(where: { $0.url.path == path }) { return location.name }
-        if let linked = locations.lazy.flatMap(\.linked).first(where: { $0.url.path == path }) { return linked.name }
+        if let location = locations.first(where: { FileNode.samePath($0.url, url.standardizedFileURL) }) { return location.name }
+        if let linked = locations.lazy.flatMap(\.linked).first(where: { FileNode.samePath($0.url, url.standardizedFileURL) }) { return linked.name }
         return url.lastPathComponent
     }
 

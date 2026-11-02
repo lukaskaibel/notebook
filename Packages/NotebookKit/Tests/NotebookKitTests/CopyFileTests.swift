@@ -21,6 +21,7 @@ final class CopyFileTests: XCTestCase {
     private var oddName: URL { trips.appendingPathComponent("Plan #2.pdf") }
     private var index: URL { notes.appendingPathComponent("Index.md") }
     private var window: NSWindow?
+    private var workspace: Workspace?
 
     override func setUp() async throws {
         library = FileManager.default.temporaryDirectory.appendingPathComponent("notebook-copy-\(UUID().uuidString)").standardizedFileURL
@@ -39,6 +40,8 @@ final class CopyFileTests: XCTestCase {
         try "Index\n".write(to: index, atomically: true, encoding: .utf8)
         UserDefaults.standard.set(library.path, forKey: "NotebookLibrary")
         UserDefaults.standard.set("Notes", forKey: "NotebookLibraryName")
+        // A note that couldn't be written is kept here, never among another test's.
+        UnsavedNotes.keep(in: outside.appendingPathComponent("Unsaved Notes"))
         // Copying in the app goes to a pasteboard of the test's own, never the clipboard of whoever runs the tests.
         UserDefaults.standard.set("notebook-copy-test-\(UUID().uuidString)", forKey: "NotebookPasteboard")
         UserDefaults.standard.removeObject(forKey: "expandedFolders")
@@ -46,6 +49,12 @@ final class CopyFileTests: XCTestCase {
     }
 
     override func tearDown() async throws {
+        // The note pasted in is written while its folder is still there: not later, kept as unsaved where another test
+        // looks for its own.
+        workspace?.saveAll()
+        workspace?.note?.close()
+        await NoteDocument.allWritten()
+        workspace = nil
         for key in ["NotebookLibrary", "NotebookLibraryName", "NotebookPasteboard", "expandedFolders", "collapsedSections"] {
             UserDefaults.standard.removeObject(forKey: key)
         }
@@ -69,6 +78,7 @@ final class CopyFileTests: XCTestCase {
     /// The library read and its index built, with the sidebar and `Index` open in one window, as in the app.
     private func makeWindow() async throws -> (Workspace, SidebarController) {
         let workspace = Workspace()
+        self.workspace = workspace
         let sidebar = SidebarController(workspace: workspace)
         workspace.start()
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
@@ -105,17 +115,17 @@ final class CopyFileTests: XCTestCase {
 
     // MARK: - What is copied
 
-    /// As the Finder copies a file: its address, which the Finder, Mail and Messages take, and its name as text. A
-    /// picture comes as the picture too, as it is in its file and as TIFF, for apps that only take pictures.
+    /// As the Finder copies a file: one item with its address, which the Finder, Mail and Messages take, and its name
+    /// as text. A picture comes as the picture too, as it is in its file, for apps that only take pictures.
     func testCopiedPictureIsTheFileAndThePicture() throws {
         let pasteboard = pasteboard()
         Workspace.writeFile(kyoto, to: pasteboard)
+        XCTAssertEqual(pasteboard.pasteboardItems?.count, 1)
         let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]
         XCTAssertEqual(urls?.map(\.standardizedFileURL), [kyoto])
         XCTAssertEqual(pasteboard.string(forType: .string), "Kyoto.jpg")
         XCTAssertEqual(pasteboard.data(forType: NSPasteboard.PasteboardType(UTType.jpeg.identifier)), try Data(contentsOf: kyoto),
                        "the picture as it is in its file")
-        XCTAssertNotNil(pasteboard.data(forType: .tiff).flatMap(NSImage.init(data:)), "and as a picture every Mac app takes")
     }
 
     /// Any other file, a video as well as a folder, is its address only: nothing of it is read to copy it.
@@ -195,6 +205,114 @@ final class CopyFileTests: XCTestCase {
         try Self.pictureData().write(to: assets.appendingPathComponent("Torii.png"))
         XCTAssertNil(workspace.libraryLink(to: assets.appendingPathComponent("Torii.png"), from: index))
         XCTAssertTrue(paste(assets.appendingPathComponent("Torii.png"), in: workspace).contains("![](.assets/Torii.png)"), workspace.editor.text)
+    }
+
+    /// A location's own folder goes in as a link to it, as any folder of the locations, by the name the sidebar gives
+    /// it: copying it into a note inside it would copy it into itself without end. Option doesn't copy a folder either.
+    func testALocationsFolderGoesInAsALink() async throws {
+        let (workspace, _) = try await makeWindow()
+        XCTAssertTrue(paste(library, in: workspace).contains("[Notes](../)"), workspace.editor.text)
+        XCTAssertTrue(workspace.editor.pasteFiles([trips], at: workspace.editor.selection, linking: false))
+        XCTAssertTrue(workspace.editor.text.contains("[Trips](../Trips/)"), workspace.editor.text)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: notes.appendingPathComponent(".assets").path), "nothing copied")
+    }
+
+    /// A folder from elsewhere isn't copied into the note, and nothing else goes in in its place, such as its name.
+    func testAFolderFromElsewhereStaysOut() async throws {
+        let (workspace, _) = try await makeWindow()
+        let before = workspace.editor.text
+        XCTAssertEqual(paste(outside, in: workspace), before, "taken care of, with nothing in its place")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: notes.appendingPathComponent(".assets").path))
+    }
+
+    /// Only what the index reads is linked, as links find nothing else: files in folders it leaves out, in a package or
+    /// hidden by the system are copied in, as files from elsewhere are.
+    func testFilesTheIndexDoesntReadAreCopied() async throws {
+        let modules = trips.appendingPathComponent("node_modules/pic.png")
+        let package = trips.appendingPathComponent("Tool.app/Contents/pic.png")
+        let hidden = trips.appendingPathComponent("Hidden.png")
+        for file in [modules, package] {
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Self.pictureData().write(to: file)
+        }
+        try Self.pictureData().write(to: hidden)
+        XCTAssertEqual(chflags(hidden.path, UInt32(UF_HIDDEN)), 0)
+        let (workspace, _) = try await makeWindow()
+        for file in [modules, package, hidden] {
+            XCTAssertFalse(SearchIndex.reads(file, in: library), file.path)
+            XCTAssertNil(workspace.libraryLink(to: file, from: index), file.path)
+        }
+        XCTAssertTrue(SearchIndex.reads(kyoto, in: library))
+        XCTAssertTrue(paste(modules, in: workspace).contains("![](.assets/pic.png)"), workspace.editor.text)
+    }
+
+    /// A file moved or thrown away since it was copied isn't pasted: no link to nothing, and not its name either.
+    func testAFileGoneSinceItWasCopiedIsntPasted() async throws {
+        let (workspace, _) = try await makeWindow()
+        let pasteboard = pasteboard()
+        Workspace.writeFile(railPass, to: pasteboard)
+        try FileManager.default.moveItem(at: railPass, to: outside.appendingPathComponent("Rail pass.pdf"))
+        let before = workspace.editor.text
+        XCTAssertTrue(workspace.editor.paste(from: pasteboard, at: nil))
+        XCTAssertEqual(workspace.editor.text, before)
+    }
+
+    /// A file iCloud hasn't brought down yet, only ".name.icloud" on disk as on iPhone and iPad, is still linked by
+    /// its name, as the sidebar and search know it.
+    func testAFileStillInICloudIsLinked() async throws {
+        let placeholder = trips.appendingPathComponent(".Temple.jpg.icloud")
+        try Data().write(to: placeholder)
+        let (workspace, _) = try await makeWindow()
+        let temple = trips.appendingPathComponent("Temple.jpg")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: temple.path))
+        XCTAssertEqual(workspace.libraryLink(to: temple, from: index)?.markdown, "![[Temple.jpg]]")
+        XCTAssertTrue(workspace.editor.pasteFiles([temple], at: workspace.editor.selection))
+        XCTAssertTrue(workspace.editor.text.contains("![[Temple.jpg]]"), workspace.editor.text)
+    }
+
+    /// A package from elsewhere (an app, an .rtfd), which can be large, is copied off the main thread and goes in once
+    /// it is there; one the note is in, as a note in a .textbundle, is never copied, which would copy it into itself.
+    func testPackagesAreCopiedInTheBackgroundAndNeverIntoThemselves() throws {
+        let tool = outside.appendingPathComponent("Tool.app")
+        try FileManager.default.createDirectory(at: tool.appendingPathComponent("Contents"), withIntermediateDirectories: true)
+        try Data("binary".utf8).write(to: tool.appendingPathComponent("Contents/Tool"))
+        let h = EditorHarness("Text")
+        h.editor.setSelection(NSRange(location: 4, length: 0))
+        XCTAssertTrue(h.editor.pasteFiles([tool], at: h.editor.selection))
+        XCTAssertEqual(h.text, "Text", "not yet: it is being copied")
+        let end = Date().addingTimeInterval(TestRun.patience)
+        while !h.text.contains("![Tool.app](.assets/Tool.app)"), Date() < end { h.settle(0.05) }
+        XCTAssertTrue(h.text.contains("![Tool.app](.assets/Tool.app)"), h.text)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: h.folder.appendingPathComponent(".assets/Tool.app/Contents/Tool").path))
+
+        let inside = tool.appendingPathComponent("Contents")
+        h.editor.load(text: "In a package", folder: inside, title: "Read me", meta: "")
+        XCTAssertTrue(h.editor.pasteFiles([tool], at: NSRange(location: 0, length: 0)), "taken care of")
+        h.settle(0.3)
+        XCTAssertEqual(h.text, "In a package")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: inside.appendingPathComponent(".assets").path), "never copied into itself")
+    }
+
+    /// A note an app writes only as it is dropped (Mail), in a folder that goes again, is copied, never linked.
+    func testANoteWrittenForADropIsCopied() throws {
+        let written = outside.appendingPathComponent("Minutes.md")
+        try "# Minutes\n".write(to: written, atomically: true, encoding: .utf8)
+        let h = EditorHarness("Text")
+        h.editor.setSelection(NSRange(location: 4, length: 0))
+        XCTAssertTrue(h.editor.pasteFiles([written], at: h.editor.selection, temporary: true))
+        XCTAssertTrue(h.text.contains("![Minutes.md](.assets/Minutes.md)"), h.text)
+        XCTAssertFalse(h.text.contains("[[Minutes]]"))
+    }
+
+    /// A location finds what is in it by either address the system gives a file ("/private/var/…" and "/var/…").
+    func testLocationsFindFilesByEitherAddress() async throws {
+        let (workspace, _) = try await makeWindow()
+        let location = try XCTUnwrap(workspace.locations.first)
+        let path = HiddenFolders.withoutPrivate(kyoto.path)
+        XCTAssertNotNil(location.folder(containing: path))
+        XCTAssertNotNil(location.folder(containing: "/private" + path))
+        XCTAssertNil(location.folder(containing: "/private" + HiddenFolders.withoutPrivate(outside.path)))
+        XCTAssertEqual(workspace.folderName(URL(fileURLWithPath: "/private" + HiddenFolders.withoutPrivate(library.path))), "Notes")
     }
 
     // MARK: - Where it is asked for

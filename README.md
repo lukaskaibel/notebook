@@ -110,7 +110,7 @@ Paste or drop a picture, from the Finder, Photos or Safari, or choose it with At
 Mac), and it's saved next to the note, in a hidden `.assets` folder, as PNG or JPEG so that other apps can show it. A
 file that's already in one of your folders isn't stored twice: it goes in as a link to it where it is, `![[Kyoto.jpg]]`,
 which shows the picture or the file's card all the same and follows the file when it moves (drop it with Option held for
-a copy). Copy a file in the sidebar with Copy in its menu, or the open one with ⇧⌘C, and paste it in a note, the Finder,
+a copy). A folder from your folders goes in as a link to it; folders are never copied into a note. Copy a file in the sidebar with Copy in its menu, or the open one with ⇧⌘C, and paste it in a note, the Finder,
 Mail or Messages; a small capsule says what was copied. Drag
 a picture or file card to another place in the note to move it, or into another note, a folder in the sidebar, the
 Finder or another app for a copy. Delete it from the note and the file goes to the Trash once you leave the note, unless
@@ -761,7 +761,7 @@ While writing:
 | ⇧⌘L | Checklist |
 | ⇧⌘U | Mark as checked |
 | ⇧⌘7, ⇧⌘9 | Bulleted list, numbered list |
-| ⇧⌘A | Attach a file: pictures, PDFs and other files go in at the caret |
+| ⇧⌘A | Attach a file: pictures, PDFs and other files go in at the caret; notes and files from your folders as links |
 | ⌘' | Block quote |
 | Tab, ⇧Tab | Nest or un-nest a list item (in code: indent) |
 | ⌥⌘] and ⌥⌘[ | Increase and decrease indent |
