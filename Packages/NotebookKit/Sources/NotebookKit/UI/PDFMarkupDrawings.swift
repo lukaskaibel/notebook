@@ -92,7 +92,7 @@ enum MarkupDrawings {
 
     /// The strokes Markup keeps in an annotation, and the size of the page they were drawn on.
     private nonisolated static func markupDrawing(in annotation: PDFAnnotation) -> (PKDrawing, CGSize)? {
-        guard let extras = annotation.value(forAnnotationKey: extrasKey) as? [AnyHashable: Any],
+        guard isMarkup(annotation), let extras = annotation.value(forAnnotationKey: extrasKey) as? [AnyHashable: Any],
               let encoded = extras[annotationKey] as? String,
               let archive = Data(base64Encoded: encoded, options: .ignoreUnknownCharacters),
               let unarchiver = try? NSKeyedUnarchiver(forReadingFrom: archive) else { return nil }
@@ -103,6 +103,13 @@ enum MarkupDrawings {
               let data = ink.drawing, let size = ink.canvas, size.width > 0, size.height > 0,
               let drawing = try? PKDrawing(data: data), !drawing.strokes.isEmpty else { return nil }
         return (drawing, size)
+    }
+
+    /// Whether Markup's entry is read on the annotation: on stamps, which Markup saves its drawings as. An ink
+    /// annotation written on the Mac (Preview's Markup, PDFKit) has the entry too, with its points in it, and once that
+    /// has been read, PDFKit on iPhone and iPad can't write the PDF with a page added or moved (#284).
+    nonisolated static func isMarkup(_ annotation: PDFAnnotation) -> Bool {
+        annotation.type == "Stamp"
     }
 
     /// The page's box the drawing was made on: its strokes are measured from the box's top left. None for a turned
