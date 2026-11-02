@@ -3,7 +3,10 @@
 Everything users would notice, newest first. The format follows [Keep a Changelog](https://keepachangelog.com), and
 versions follow [semantic versioning](https://semver.org).
 
-## [Unreleased]
+## [1.2.0] – not released yet
+
+Handwritten notes on iPhone and iPad, with All Pages and pictures on the page; drawing and highlighting PDFs on the Mac;
+Copy File; VoiceOver reading a note as it shows; and nothing you write lost when a save fails.
 
 ### Added
 
