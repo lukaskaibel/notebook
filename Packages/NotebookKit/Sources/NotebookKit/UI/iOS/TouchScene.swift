@@ -64,12 +64,19 @@ struct TouchRootView: View {
             Text("It changed on \(conflict.source) while you were editing it here. Keep both to have the other version as a copy next to it.")
         }
         .onChange(of: scenePhase) { _, phase in
+            // Out of sight, iOS may end Notebook once it is suspended, or you may swipe it away: a note that can't be
+            // written keeps what was typed in Notebook's folder at once.
+            NoteDocument.mayBeEnded = phase != .active
             switch phase {
             case .background:
                 workspace.saveAll()
                 workspace.scheduleReminderRefresh()
             case .inactive: workspace.saveAll()
-            case .active: workspace.refresh()
+            case .active:
+                workspace.refresh()
+                // Back in front: a note that couldn't be written is tried again, and a copy kept meanwhile goes once
+                // it is.
+                workspace.note?.saveNow()
             @unknown default: break
             }
         }

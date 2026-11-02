@@ -85,6 +85,9 @@ versions follow [semantic versioning](https://semver.org).
   paper or on another page (#277).
 - All Pages, on iPhone and iPad, draws the small pages in the background, so opening and scrolling it no longer
   stutters while the pages of a long scanned PDF are drawn (#278).
+  for your answer. On iPhone and iPad, switching to another app with such a note open keeps what you typed there at
+  once, so it is safe if iOS closes Notebook or you swipe it away, and Notebook tells you the next time you open it;
+  once the note can be saved after all, the copy goes again (#165, #273).
 
 ## [1.1.0] – 2026-10-29
 

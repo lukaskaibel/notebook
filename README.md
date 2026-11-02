@@ -637,7 +637,9 @@ typed as a note of its own in Notebook's folder Unsaved Notes, named after it, a
 folder is in the app's Application Support folder (Show in Finder in the alert), on iPhone and iPad it is
 On My iPhone › Notebook › Unsaved Notes in the Files app. The note itself stays as it was last saved. If the copy
 can't be written either, Notebook asks you to copy what you typed or try again, and doesn't quit before you answer. If
-it quits first, it tells you about a copy it kept the next time it opens.
+it quits first, it tells you about a copy it kept the next time it opens. On iPhone and iPad, where iOS may close
+Notebook once you have switched to another app, a note open as you switch keeps its copy there at once, and Notebook
+tells you about it the next time you open it; if the note can be saved after all, the copy goes again.
 
 Notes in iCloud Drive that aren't downloaded yet are fetched so that search finds them; other files that live only in
 iCloud show a cloud in the sidebar and download when you open them. A note that isn't on your Mac, iPhone or iPad yet
