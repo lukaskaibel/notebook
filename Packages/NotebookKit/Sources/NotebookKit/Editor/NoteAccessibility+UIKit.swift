@@ -19,6 +19,17 @@ final class NoteReader {
 
     init(view: MarkdownTextView) {
         self.view = view
+        // VoiceOver or Switch Control turned off: the elements go, and are made again if Voice Control or Full Keyboard
+        // Access, which say nothing of themselves, ask for them.
+        for name in [UIAccessibility.voiceOverStatusDidChangeNotification, UIAccessibility.switchControlStatusDidChangeNotification] {
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, !UIAccessibility.isVoiceOverRunning, !UIAccessibility.isSwitchControlRunning, self.isReading else { return }
+                    self.reset()
+                    UIAccessibility.post(notification: .layoutChanged, argument: nil)
+                }
+            }
+        }
     }
 
     /// Whether something has asked what the note reads: VoiceOver, Switch Control, Voice Control, Full Keyboard Access.
@@ -83,6 +94,16 @@ final class NoteReader {
         return element.key != nil
     }
 
+    /// A double-tap on what has changed since VoiceOver read it, written over or gone: nothing is done, and VoiceOver
+    /// reads what is on its line now, or says it is gone.
+    func changed(_ element: ReadingElement) {
+        if let next = element.replacement, isCurrent(next) {
+            UIAccessibility.post(notification: .layoutChanged, argument: next)
+        } else {
+            UIAccessibility.post(notification: .announcement, argument: "No longer in the note")
+        }
+    }
+
     /// Moves VoiceOver to the to-do on a line, which reads its new state: after a tick, which may have put the next one
     /// of a repeating to-do above it.
     func focusTodo(line: Int) {
@@ -126,12 +147,16 @@ final class NoteReader {
         }
         let items = controller.readingItems()
         let fresh = zip(items, keyed(items)).map { item, key in
-            if let element = old[key], key == .end || item.isStill(element.item) {
+            guard let element = old[key] else { return ReadingElement(item, key: key, editor: controller, in: view) }
+            if key == .end || item.isStill(element.item) {
                 old[key] = nil
                 element.show(item)
                 return element
             }
-            return ReadingElement(item, key: key, editor: controller, in: view)
+            // Written over: VoiceOver reads the new one when the old one is double-tapped.
+            let made = ReadingElement(item, key: key, editor: controller, in: view)
+            element.replacement = made
+            return made
         }
         for element in old.values { element.key = nil }
         made = fresh
@@ -160,6 +185,8 @@ final class ReadingElement: UIAccessibilityElement {
     private(set) var item: ReadingItem
     /// Its line, moved along by the edits since it was made; nil once it stands for nothing in the note.
     fileprivate var key: NoteReader.Key?
+    /// What took its place when its line was written over.
+    fileprivate weak var replacement: ReadingElement?
     private weak var editor: EditorController?
 
     fileprivate init(_ item: ReadingItem, key: NoteReader.Key, editor: EditorController, in view: MarkdownTextView) {
@@ -223,14 +250,17 @@ final class ReadingElement: UIAccessibilityElement {
         // A double-tap ticks a to-do: its words are written in from its actions.
         if item.kind.isTodo {
             actions.append(UIAccessibilityCustomAction(name: "Edit") { [weak self] _ in
-                guard let self, let editor = self.currentEditor else { return false }
+                guard let self, let editor = self.editor else { return false }
+                guard editor.textView.reader.isCurrent(self) else { return self.wasChanged(in: editor) }
                 return editor.write(at: self.item.caret)
             })
         }
         actions += item.actions.map { action in
             UIAccessibilityCustomAction(name: action.name) { [weak self] _ in
+                guard let self, let editor = self.editor else { return false }
+                guard editor.textView.reader.isCurrent(self) else { return self.wasChanged(in: editor) }
                 // What the action does now: the line may have moved since.
-                guard let self, let editor = self.currentEditor, let action = self.item.actions.first(where: { $0.name == action.name }) else { return false }
+                guard let action = self.item.actions.first(where: { $0.name == action.name }) else { return false }
                 return editor.activate(self.item, hit: action.hit)
             }
         }
@@ -240,17 +270,19 @@ final class ReadingElement: UIAccessibilityElement {
     /// Where it is now: the note scrolls, and its lines move as it is written in.
     override var accessibilityFrame: CGRect {
         get {
-            guard key != nil, let editor, let view = accessibilityContainer as? UIView, let rect = editor.readingFrame(of: item) else { return .zero }
+            guard let editor = currentEditor, let view = accessibilityContainer as? UIView, let rect = editor.readingFrame(of: item) else { return .zero }
             return UIAccessibility.convertToScreenCoordinates(rect, in: view)
         }
         set {}
     }
 
-    /// A to-do's circle, where a tap ticks it.
+    /// A to-do's circle, where a tap ticks it. Off the screen once it stands for nothing in the note: a tap where it
+    /// was would land on whatever is there now, another to-do's circle, or at the top of the screen, which scrolls the
+    /// note up.
     override var accessibilityActivationPoint: CGPoint {
         get {
-            if item.kind.isTodo, let editor, let view = accessibilityContainer as? UIView,
-               let circle = editor.layoutManager.rect(forObjectAt: item.range.location, origin: editor.textOrigin) {
+            guard let editor = currentEditor, let view = accessibilityContainer as? UIView else { return Self.nowhere }
+            if item.kind.isTodo, let circle = editor.layoutManager.rect(forObjectAt: item.range.location, origin: editor.textOrigin) {
                 let screen = UIAccessibility.convertToScreenCoordinates(circle, in: view)
                 return CGPoint(x: screen.midX, y: screen.midY)
             }
@@ -260,10 +292,21 @@ final class ReadingElement: UIAccessibilityElement {
         set {}
     }
 
+    static let nowhere = CGPoint(x: -10_000, y: -10_000)
+
     override func accessibilityActivate() -> Bool {
-        guard let editor = currentEditor else { return false }
+        guard let editor else { return false }
+        guard editor.textView.reader.isCurrent(self) else { return wasChanged(in: editor) }
+        if item.kind == .end { return editor.writeAtEnd() }
         guard let hit = item.hit else { return editor.write(at: item.caret) }
         return editor.activate(item, hit: hit)
+    }
+
+    /// Done with: VoiceOver taps where an element was when its double-tap does nothing, which would be acting on
+    /// whatever is there now.
+    private func wasChanged(in editor: EditorController) -> Bool {
+        editor.textView.reader.changed(self)
+        return true
     }
 }
 
@@ -290,6 +333,12 @@ extension EditorController {
             textView.reader.focusTodo(line: line + document.lines.count - lines)
         }
         return true
+    }
+
+    /// Starts writing after everything in the note, on a line of its own.
+    func writeAtEnd() -> Bool {
+        guard textView.isEditable, !isWaitingForText else { return false }
+        return write(at: makeRoomAtEnd())
     }
 
     /// Starts writing at a place in the text, as a tap there does.

@@ -475,7 +475,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         isApplyingStyle = false
         if !isLoading { invalidateGlyphs(of: lines) }
         #if os(iOS)
-        textView.reader.textChanged(LineMoves(from: oldDocument, to: document, edited: editedRange, changeInLength: delta))
+        textView.reader.textChanged(LineMoves(from: oldDocument, to: document, in: storage.mutableString, edited: editedRange, removed: removed))
         textView.reader.invalidate()
         #endif
     }

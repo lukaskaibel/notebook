@@ -578,13 +578,18 @@ enum DebugRemote {
                 return "\(element.accessibilityLabel ?? "") | \(element.accessibilityValue ?? "") | \(element.accessibilityTraits.rawValue) | \(element.accessibilityFrame) | \(actions)"
             }.joined(separator: "\n"))
         case "hold":
-            // hold <label>: keeps what VoiceOver reads in the note as <label>, as VoiceOver keeps the element it is on
-            // while the note changes under it; `activateheld` double-taps it then.
+            // hold <label>: keeps what VoiceOver reads in the note as <label> (or starting so), as VoiceOver keeps the
+            // element it is on while the note changes under it; `activateheld` double-taps it then.
             let elements = (editor.textView.accessibilityElements ?? []).compactMap { $0 as? NSObject }
-            held = elements.first { $0.accessibilityLabel == argument }
+            held = elements.first { $0.accessibilityLabel == argument } ?? elements.first { $0.accessibilityLabel?.hasPrefix(argument) == true }
             log("hold \(argument): \(held.map { "\(type(of: $0))" } ?? "nothing")")
         case "activateheld":
             log("activateheld: \(held?.accessibilityLabel ?? "nothing") \(held?.accessibilityActivate() ?? false)")
+        case "heldpoint":
+            // Where VoiceOver taps for what `hold` keeps when its double-tap does nothing, in the screen's points, and
+            // what it reads now.
+            let point = held?.accessibilityActivationPoint ?? .zero
+            log("heldpoint \(Int(point.x.rounded())) \(Int(point.y.rounded())) \(held?.accessibilityLabel ?? "") | \(held?.accessibilityValue ?? "")")
         case "reloadtext":
             // reloadtext <old>|<new>: the note changed on another device, the first <old> in it now <new> (\n for a line
             // break), taken in as Change from Another Device.
