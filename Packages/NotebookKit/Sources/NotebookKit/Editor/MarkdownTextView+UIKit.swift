@@ -245,14 +245,45 @@ final class MarkdownTextView: UITextView {
     override func becomeFirstResponder() -> Bool {
         guard !refusesFocus else { return false }
         let result = super.becomeFirstResponder()
-        if result { controller?.focusChanged() }
+        if result {
+            controller?.focusChanged()
+            // VoiceOver goes from the line you double-tapped to the text field you write in.
+            if UIAccessibility.isVoiceOverRunning { UIAccessibility.post(notification: .layoutChanged, argument: self) }
+        }
         return result
     }
 
     override func resignFirstResponder() -> Bool {
         let result = super.resignFirstResponder()
-        if result { controller?.focusChanged() }
+        if result {
+            controller?.focusChanged()
+            reader.focusCaretLine()
+        }
         return result
+    }
+
+    // MARK: - VoiceOver
+
+    /// What VoiceOver reads while the note isn't being written in (`NoteReader`).
+    private(set) lazy var reader = NoteReader(view: self)
+
+    /// Read line by line as it shows, unless you are writing in it: then one text field, as UIKit makes it.
+    override var isAccessibilityElement: Bool {
+        get { isFirstResponder ? super.isAccessibilityElement : false }
+        set { super.isAccessibilityElement = newValue }
+    }
+
+    override var accessibilityElements: [Any]? {
+        get { isFirstResponder ? super.accessibilityElements : reader.accessibilityElements() }
+        set { super.accessibilityElements = newValue }
+    }
+
+    override var accessibilityCustomActions: [UIAccessibilityCustomAction]? {
+        get {
+            let own = controller?.writingAccessibilityActions ?? []
+            return own.isEmpty ? super.accessibilityCustomActions : own + (super.accessibilityCustomActions ?? [])
+        }
+        set { super.accessibilityCustomActions = newValue }
     }
 
     // MARK: - Pasteboard

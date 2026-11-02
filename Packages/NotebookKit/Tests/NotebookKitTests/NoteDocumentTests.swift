@@ -7,11 +7,27 @@ import XCTest
 @MainActor
 final class NoteDocumentTests: XCTestCase {
     private var folders: [URL] = []
+    /// Notes left that couldn't be written, as the app is told about them.
+    private var told: [UnsavedNote] = []
+    private var unsavedFolder: URL!
+
+    override func setUp() async throws {
+        unsavedFolder = FileManager.default.temporaryDirectory.appendingPathComponent("notebook-unsaved-\(UUID().uuidString)")
+        folders.append(unsavedFolder)
+        UnsavedNotes.keep(in: unsavedFolder)
+        NoteDocument.retryDelays = [0.2, 0.3]
+        NoteDocument.onUnsaved = { [weak self] in self?.told.append($0) }
+    }
 
     override func tearDown() async throws {
         UserDefaults.standard.removeObject(forKey: "NotebookSlowWrites")
         await NoteDocument.allWritten()
-        for folder in folders { try? FileManager.default.removeItem(at: folder) }
+        NoteDocument.onUnsaved = nil
+        NoteDocument.retryDelays = [1, 3]
+        for folder in folders {
+            unlock(folder)
+            try? FileManager.default.removeItem(at: folder)
+        }
     }
 
     private func makeNote(_ text: String) -> (NoteDocument, URL) {
@@ -520,6 +536,173 @@ final class NoteDocumentTests: XCTestCase {
         makeReadable(url)
         XCTAssertEqual(onDisk(url), "theirs\n")
         XCTAssertEqual(Array(copies(of: url).values), ["one\nmine\n"])
+    }
+
+    // MARK: - A note that can't be written (#165)
+
+    /// Makes `folder` one that can't be written in, as on a read-only disk or in a folder Notebook may no longer write
+    /// to: a note there can't be saved, as it is written next to itself first and then put in place.
+    private func lock(_ folder: URL) {
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: folder.path)
+    }
+
+    private func unlock(_ folder: URL) {
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.path)
+    }
+
+    /// The notes kept in Notebook's folder, by name, with what they say.
+    private func kept() -> [String: String] {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: unsavedFolder.path)) ?? []
+        return Dictionary(uniqueKeysWithValues: names.map { ($0, onDisk(unsavedFolder.appendingPathComponent($0)) ?? "") })
+    }
+
+    /// Left as its folder can't be written for a moment: the note stays among those being written, quitting waits for
+    /// it, and it is written when tried again. Nothing is kept elsewhere, and nothing is said.
+    func testANoteLeftThatCantBeWrittenIsTriedAgain() async throws {
+        let (note, url) = makeNote("one\n")
+        let folder = url.deletingLastPathComponent()
+        lock(folder)
+        note.update(text: "one\ntyped as the disk filled up\n")
+        note.close()
+        try await until("failed") { note.failedWrites == 1 }
+        XCTAssertTrue(NoteDocument.isWriting)
+        unlock(folder)
+        await NoteDocument.allWritten()
+        XCTAssertEqual(onDisk(url), "one\ntyped as the disk filled up\n")
+        XCTAssertEqual(note.failedWrites, 0)
+        XCTAssertTrue(told.isEmpty)
+        XCTAssertEqual(kept(), [:])
+    }
+
+    /// Left, and still not written when tried again: what was typed is kept as a note in Notebook's folder, named after
+    /// it, the app is told where and why, and only then does quitting go on. The note stays as it was last saved.
+    func testANoteLeftThatStillCantBeWrittenIsKeptInNotebooksFolder() async throws {
+        let (note, url) = makeNote("one\n")
+        lock(url.deletingLastPathComponent())
+        note.update(text: "one\ntyped on a read-only disk\n")
+        note.close()
+        var events: [String] = []
+        NoteDocument.onUnsaved = { [weak self] in
+            self?.told.append($0)
+            events.append("told")
+        }
+        NoteDocument.whenAllWritten { events.append("quit") }
+        try await until("quit") { events.contains("quit") }
+        XCTAssertEqual(events, ["told", "quit"])
+        XCTAssertEqual(note.failedWrites, 3, "written once and tried twice more")
+        XCTAssertEqual(kept(), ["Note.md": "one\ntyped on a read-only disk\n"])
+        let unsaved = try XCTUnwrap(told.first)
+        XCTAssertEqual(unsaved.copy?.lastPathComponent, "Note.md")
+        XCTAssertEqual(unsaved.name, "Note")
+        XCTAssertNotNil(unsaved.reason)
+        XCTAssertEqual(onDisk(url), "one\n")
+    }
+
+    /// Two notes of the same name kept: neither copy is written over.
+    func testNotesKeptInNotebooksFolderTakeANameEach() async throws {
+        let (first, url) = makeNote("one\n")
+        let (second, other) = makeNote("two\n")
+        lock(url.deletingLastPathComponent())
+        lock(other.deletingLastPathComponent())
+        first.update(text: "one, typed\n")
+        second.update(text: "two, typed\n")
+        first.close()
+        second.close()
+        await NoteDocument.allWritten()
+        XCTAssertEqual(Set(kept().keys), ["Note.md", "Note 2.md"])
+        XCTAssertEqual(Set(kept().values), ["one, typed\n", "two, typed\n"])
+        XCTAssertEqual(told.count, 2)
+    }
+
+    /// Not written, and Notebook's folder can't be written either: the app is asked, with what was typed, and the note
+    /// waits for the answer, quitting with it. Try Again tries all of it again: asked again while it still fails, then
+    /// written once the folder can be written.
+    func testANoteThatCantBeWrittenNorKeptWaitsForAnAnswer() async throws {
+        let (note, url) = makeNote("one\n")
+        let folder = url.deletingLastPathComponent()
+        lock(folder)
+        lock(unsavedFolder)
+        note.update(text: "one\ntyped with a full disk\n")
+        note.close()
+        try await until("asked") { told.count == 1 }
+        XCTAssertNil(told[0].copy)
+        XCTAssertEqual(told[0].text, "one\ntyped with a full disk\n")
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertTrue(NoteDocument.isWriting, "quitting goes on without it")
+        told[0].tryAgain()
+        try await until("asked again") { told.count == 2 }
+        XCTAssertTrue(NoteDocument.isWriting)
+        unlock(folder)
+        told[1].tryAgain()
+        await NoteDocument.allWritten()
+        XCTAssertEqual(onDisk(url), "one\ntyped with a full disk\n")
+        XCTAssertEqual(told.count, 2)
+        XCTAssertEqual(kept(), [:])
+    }
+
+    /// Asked, and the text went elsewhere (Copy Text): the note is let go, as it was last saved.
+    func testANoteNotKeptIsLetGoOnceAnswered() async throws {
+        let (note, url) = makeNote("one\n")
+        lock(url.deletingLastPathComponent())
+        lock(unsavedFolder)
+        note.update(text: "one\ntyped\n")
+        note.close()
+        try await until("asked") { told.count == 1 }
+        told[0].letGo()
+        await NoteDocument.allWritten()
+        XCTAssertEqual(onDisk(url), "one\n")
+        XCTAssertEqual(told.count, 1)
+    }
+
+    /// Left with a conflict, in a folder that can't be written: the copy that keeps both can't go next to the note, so
+    /// it goes into Notebook's folder. The note keeps the other device's text.
+    func testAConflictCopyThatCantBeWrittenIsKeptInNotebooksFolder() async throws {
+        let (note, url) = makeNote("one\ntwo\n")
+        note.update(text: "one mine\ntwo\n")
+        try "one theirs\ntwo\n".write(to: url, atomically: true, encoding: .utf8)
+        lock(url.deletingLastPathComponent())
+        note.close()
+        await NoteDocument.allWritten()
+        XCTAssertEqual(onDisk(url), "one theirs\ntwo\n")
+        XCTAssertEqual(copies(of: url), [:])
+        XCTAssertEqual(kept(), ["Note.md": "one mine\ntwo\n"])
+        XCTAssertEqual(told.count, 1)
+    }
+
+    /// A note still open that can't be written is tried again by itself, without more typing, and written once it can.
+    func testAnOpenNoteThatCantBeWrittenIsTriedAgain() async throws {
+        let (note, url) = makeNote("one\n")
+        let folder = url.deletingLastPathComponent()
+        lock(folder)
+        note.update(text: "one\ntwo\n")
+        note.saveNow()
+        try await until("failed") { note.failedWrites == 1 }
+        unlock(folder)
+        try await until("written") { onDisk(url) == "one\ntwo\n" }
+        XCTAssertTrue(told.isEmpty)
+        note.close()
+    }
+
+    /// A note still open keeps what was typed on screen once trying again is over: nothing is kept elsewhere, and
+    /// quitting doesn't wait for it, until it is left. Then it is kept at once, without trying again for as long.
+    func testAnOpenNoteThatCantBeWrittenIsKeptOnceLeft() async throws {
+        let (note, url) = makeNote("one\n")
+        lock(url.deletingLastPathComponent())
+        note.update(text: "one\ntwo\n")
+        note.saveNow()
+        try await until("tried again") { note.failedWrites == 3 }
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertFalse(NoteDocument.isWriting)
+        XCTAssertTrue(told.isEmpty)
+        XCTAssertEqual(kept(), [:])
+        note.update(text: "one\ntwo\nthree\n")
+        note.close()
+        try await until("kept") { told.count == 1 }
+        XCTAssertEqual(note.failedWrites, 4, "tried again after it was left")
+        await NoteDocument.allWritten()
+        XCTAssertEqual(kept(), ["Note.md": "one\ntwo\nthree\n"])
+        XCTAssertEqual(onDisk(url), "one\n")
     }
 
     /// A note left while it is still written, then put in the Trash: what was typed goes along, and the note doesn't

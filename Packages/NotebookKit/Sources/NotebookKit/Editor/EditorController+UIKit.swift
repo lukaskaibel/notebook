@@ -123,6 +123,8 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     func updateEditability() {
         textView.isEditable = !isWaitingForText && !isReadOnly
         textView.titleField.isEnabled = !isWaitingForText && !isReadOnly
+        // What a double-tap on a line or a to-do does depends on it.
+        textView.reader.invalidate()
     }
 
     /// The next change to the note fades in, as a file read in the background does (`FileLoadingView`): above all the

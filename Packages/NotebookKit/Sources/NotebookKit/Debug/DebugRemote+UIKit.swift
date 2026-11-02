@@ -109,7 +109,32 @@ enum DebugRemote {
             // pdfpaper <paper>: other paper for the page in view.
             if let paper = PaperStyle(rawValue: argument) { workspace.pdfEditing.changePaper(to: paper) }
         case "pdfdeletepage":
-            workspace.pdfEditing.deletePage()
+            // pdfdeletepage [n]: Delete Page, of the page in view or of page n (counted from 1), as the overview does.
+            if let number = numbers.first { workspace.pdfEditing.deletePage(at: Int(number) - 1) } else { workspace.pdfEditing.deletePage() }
+        case "pdfoverview":
+            // pdfoverview [off]: All Pages, the page overview.
+            if argument == "off" { workspace.pdfEditing.showsOverview = false } else { workspace.pdfEditing.showOverview() }
+        case "pdfmovepage":
+            // pdfmovepage <from> <to>: a page dragged to another place in the overview, counted from 1.
+            if numbers.count >= 2 { workspace.pdfEditing.movePage(at: Int(numbers[0]) - 1, to: Int(numbers[1]) - 1) }
+        case "pdfduplicatepage":
+            // pdfduplicatepage [n]: Duplicate, of page n (counted from 1) or the page in view.
+            workspace.pdfEditing.duplicatePage(at: numbers.first.map { Int($0) - 1 } ?? workspace.pdfEditing.pageIndex)
+        case "pdfgotopage":
+            // pdfgotopage <n>: a page tapped in the overview.
+            if let number = numbers.first { workspace.pdfEditing.goToPage(at: Int(number) - 1) }
+        case "pdfthumb":
+            // pdfthumb <n> <path>: the overview's picture of page n, 300 points wide, as a PNG at path.
+            let words = argument.split(separator: " ", maxSplits: 1).map(String.init)
+            guard words.count == 2, let session = workspace.pdfEditing.session, let number = Int(words[0]) else { break }
+            let pages = session.pages
+            guard pages.indices.contains(number - 1) else { break }
+            let path = (words[1] as NSString).expandingTildeInPath
+            Task { @MainActor in
+                let image = await session.thumbnail(of: pages[number - 1], width: 300, scale: 2)
+                try? image?.pngData()?.write(to: URL(fileURLWithPath: path))
+                log("pdfthumb \(number): \(image.map { "\($0.size.width)x\($0.size.height)" } ?? "none") → \(path)")
+            }
         case "pdfpicture":
             // pdfpicture [transparent]: a picture on the page in view, as from the photo library: a JPEG photo, or a
             // PNG with see-through parts.
@@ -220,6 +245,12 @@ enum DebugRemote {
                 picker.dismiss(animated: true)
                 editor.insertPictures([picture])
             }
+        case "unsaved":
+            // unsaved [ok|open|copy|again]: the alerts about notes that couldn't be saved; with an answer, the first is
+            // answered as its button does.
+            for report in workspace.unsavedReports { log("unsaved: \(report.title) | \(report.message)") }
+            let answers: [String: UnsavedReport.Answer] = ["ok": .ok, "open": .show, "copy": .copyText, "again": .tryAgain]
+            if let report = workspace.unsavedReports.first, let answer = answers[argument] { workspace.answer(report, answer) }
         case "locations":
             // locations: each location's name and place, as Settings shows them.
             log("locations: " + workspace.locations.map { "\($0.name) (\($0.place)) \($0.path)" }.joined(separator: " | "))
@@ -544,6 +575,20 @@ enum DebugRemote {
             log("current \(workspace.currentURL?.path ?? "none") editing \(workspace.isEditing) selection \(editor.selection) scroll \(editor.scrollTop) top \(editor.topInset) titleAway \(workspace.isTitleScrolledAway) heading \(String(describing: workspace.currentHeading))")
         case "text":
             log(editor.text)
+        case "reading":
+            // What VoiceOver goes through in the note: label | value | traits | frame | actions, one a line.
+            let elements = (editor.textView.accessibilityElements ?? []).compactMap { $0 as? NSObject }
+            log(elements.map { element in
+                let actions = (element.accessibilityCustomActions ?? []).map(\.name).joined(separator: ",")
+                return "\(element.accessibilityLabel ?? "") | \(element.accessibilityValue ?? "") | \(element.accessibilityTraits.rawValue) | \(element.accessibilityFrame) | \(actions)"
+            }.joined(separator: "\n"))
+        case "axaction":
+            // axaction <label>|<action>: one of the actions VoiceOver offers for what it reads in the note as <label>.
+            let names = argument.components(separatedBy: "|")
+            let elements = (editor.textView.accessibilityElements ?? []).compactMap { $0 as? NSObject }
+            guard let element = elements.first(where: { $0.accessibilityLabel == names[0] }) else { return log("no element \(names[0])") }
+            guard let action = element.accessibilityCustomActions?.first(where: { $0.name == names.last }) else { return log("no action \(names.last ?? "")") }
+            log("performed \(action.actionHandler?(action) ?? false)")
         case "easing":
             // easing <text>: the weight and size of the text's first letter on each of the next 20 frames, to see a
             // change of style ease in (`format bold` right before it).

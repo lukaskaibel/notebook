@@ -293,6 +293,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         loadCount += 1
         #if os(iOS)
         undoStack.clear()
+        textView.reader.reset()
         openStep = nil
         previousSelection = NSRange(location: 0, length: 0)
         layoutManager.selectedRanges = []
@@ -491,6 +492,9 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         }
         isApplyingStyle = false
         if !isLoading { invalidateGlyphs(of: lines) }
+        #if os(iOS)
+        textView.reader.invalidate()
+        #endif
     }
 
     /// Lines styled again get their glyphs made again: which characters are hidden is decided when glyphs are made,
@@ -607,6 +611,9 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         isApplyingStyle = false
         lineSignatures = computeSignatures()
         invalidateGlyphs(of: lines)
+        #if os(iOS)
+        textView.reader.invalidate()
+        #endif
     }
 
     /// The typeface, size, spacing or width changed in the settings: the whole note is set again, keeping the line

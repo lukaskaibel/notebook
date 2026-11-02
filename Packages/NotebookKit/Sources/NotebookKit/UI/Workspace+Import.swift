@@ -16,7 +16,7 @@ extension Workspace {
         let change = keepForUndo(FileChange(.make, "Import"))
         changeFiles { [self] follow in
             let folder = follow(folder)
-            let imported = await Task.detached(priority: .userInitiated) { () -> (result: AppleNotesImport.Result, listings: [FileNode.Listing], madeFolder: Bool) in
+            let imported = await Task.detached(priority: .userInitiated) { () -> (result: AppleNotesImport.Result, listings: [FileNode.Listing], madeFolder: Bool, snapshots: [FileSnapshot?]) in
                 let accessing = sources.map { $0.startAccessingSecurityScopedResource() }
                 defer { for (source, did) in zip(sources, accessing) where did { source.stopAccessingSecurityScopedResource() } }
                 // The Inbox, the first time.
@@ -24,14 +24,17 @@ extension Workspace {
                 if madeFolder { try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) }
                 let result = AppleNotesImport.run(sources, into: folder)
                 let shown = result.added.filter { FileNode.samePath($0.deletingLastPathComponent(), folder) }
-                return (result, shown.compactMap { FileNode.listing(of: $0) }, madeFolder)
+                // As each is now, for Undo to tell whether you have changed it since.
+                return (result, shown.compactMap { FileNode.listing(of: $0) }, madeFolder, result.added.map { FileSnapshot(of: $0) })
             }.value
             let added = imported.result.added
-            change.parts = added.dropFirst().map { url in
+            change.parts = zip(added, imported.snapshots).dropFirst().map { url, snapshot in
                 let part = FileChange(.make, "Import")
                 part.after = url
+                part.made = snapshot
                 return part
             }
+            change.made = imported.snapshots.first ?? nil
             changeDone(change, to: added.first)
             let parent = folder.deletingLastPathComponent()
             showChanges(in: imported.madeFolder ? [parent, folder] : [folder],

@@ -456,11 +456,26 @@ enum DebugRemote {
         case "closefile":
             // closefile: closes the last of the notes' own windows, as its close button does.
             FileWindows.shared.windows.last?.performClose(nil)
+        case "quit":
+            // quit: as ⌘Q, after this command: quitting can wait for notes (`.terminateLater`), and the remote would wait
+            // inside its own timer, which can't fire again meanwhile. Not from the main queue either, which stops
+            // taking blocks while one waits.
+            NSApp.perform(#selector(NSApplication.terminate(_:)), with: nil, afterDelay: 0)
+        case "reportswaiting":
+            // reportswaiting: what waits for Notebook to come to the front (`reportInFront`) shows, as if it had.
+            workspace?.showReportsWaiting()
         case "sheet":
             // sheet [cancel]: the sheet over the window, such as Attach File's Open panel; with cancel, closes it as
             // its Cancel button does.
+            // sheet press <button>: an alert's button, as clicking it does. An alert's texts and buttons are logged.
             guard let window, let sheet = window.attachedSheet else { log("sheet: none"); break }
             log("sheet: \(type(of: sheet)) \(sheet.frame.size)")
+            func views(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(views) }
+            let all = sheet.contentView.map(views) ?? []
+            for field in all.compactMap({ $0 as? NSTextField }) where !field.stringValue.isEmpty { log("  text: \(field.stringValue)") }
+            let buttons = all.compactMap { $0 as? NSButton }.filter { !$0.title.isEmpty }
+            for button in buttons { log("  button: \(button.title)") }
+            if argument.hasPrefix("press ") { buttons.first { $0.title == String(argument.dropFirst(6)) }?.performClick(nil) }
             if argument == "cancel" { (sheet as? NSSavePanel)?.cancel(nil) ?? window.endSheet(sheet, returnCode: .cancel) }
         case "attachfiles":
             // attachfiles <path>[|<path>…]: what choosing those files in Attach File's Open panel puts in the note.

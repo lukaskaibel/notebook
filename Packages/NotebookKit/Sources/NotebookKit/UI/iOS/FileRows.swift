@@ -476,9 +476,22 @@ struct FileAlerts: ViewModifier {
             } message: { problem in
                 Text(problem.message)
             }
+            // One after another; its buttons answer it, which lets it go (`answer`).
+            .alert(workspace.unsavedReports.first?.title ?? "", isPresented: Binding(get: { !workspace.unsavedReports.isEmpty }, set: { _ in }),
+                   presenting: workspace.unsavedReports.first) { report in
+                if report.copy != nil {
+                    Button("OK", role: .cancel) { workspace.answer(report, .ok) }
+                    Button("Open") { workspace.answer(report, .show) }
+                } else {
+                    Button("Copy Text") { workspace.answer(report, .copyText) }
+                    Button("Try Again") { workspace.answer(report, .tryAgain) }
+                }
+            } message: { report in
+                Text(report.message)
+            }
             // No Undo alert over these, which a shake would bring up: they take the focus, and UIKit offers the files'
             // Undo from the window behind them.
-            .onChange(of: workspace.deleting != nil || workspace.problem != nil) { _, asks in
+            .onChange(of: workspace.deleting != nil || workspace.problem != nil || !workspace.unsavedReports.isEmpty) { _, asks in
                 UIApplication.shared.applicationSupportsShakeToEdit = !asks
             }
     }

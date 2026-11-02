@@ -31,6 +31,9 @@ final class FileChange {
     var remembered: Remembered?
     /// Deleted for good once you agreed to it, where there is no Recently Deleted: Redo does it again without asking.
     var forGood = false
+    /// What a file Notebook made was like then. Where a place has no Recently Deleted, Undo deletes it for good without
+    /// asking only while it still is: a new note left empty, not one written in since, nor an import edited since.
+    var made: FileSnapshot?
     /// The undo manager it is kept in.
     weak var manager: UndoManager?
     /// When it was done or undone last, counted with the changes to the note's text (`UndoOrder`).
@@ -262,7 +265,12 @@ extension Workspace {
     /// file made or thrown away, else by renaming or moving it.
     private func takeBack(_ change: FileChange, undoing: Bool) {
         changeFiles { [self] follow in
-            for part in change.parts { _ = await takeBackNow(part, undoing: undoing, follow: follow) }
+            var parts: [FileChange] = []
+            for part in change.parts {
+                // One that couldn't be taken back, or that you are asked about, is no longer the change's.
+                if await takeBackNow(part, undoing: undoing, follow: follow) { parts.append(part) }
+            }
+            change.parts = parts
             // Couldn't: what Undo or Redo would do with it next can't be done either.
             if await !takeBackNow(change, undoing: undoing, follow: follow) { dropFromUndo(change) }
         }
@@ -276,7 +284,18 @@ extension Workspace {
         if change.kind == (undoing ? .make : .trash) {
             let remembered = remembered(source)
             change.remembered = remembered
-            result = await throwAwayNow(source, asking: change.kind == .trash && !change.forGood ? remembered : nil)
+            if change.kind == .trash {
+                result = await throwAwayNow(source, asking: change.forGood ? nil : remembered)
+            } else {
+                #if os(iOS)
+                // Drawn on in the PDF open now, saved or not yet: not as it was made. Looked at before the PDF closes,
+                // which ends its drawing.
+                let drawnOn = pdfEditing.session.map { FileNode.isSameOrInside($0.url, source) && $0.isTouched } == true
+                #else
+                let drawnOn = false
+                #endif
+                result = await throwAwayNow(source, asking: remembered, unlessAsMade: drawnOn ? nil : change.made)
+            }
             if result != nil { NoteHistory.shared.trash(source, as: remembered.history) }
         } else if let target, change.kind == (undoing ? .trash : .make) {
             result = await putBackNow(source, to: target, remembered: change.remembered)
@@ -289,17 +308,19 @@ extension Workspace {
     }
 
     /// To the Trash, or on iPhone and iPad, where a place has no Recently Deleted, deleted for good (as it was when
-    /// you deleted it, or made a moment ago), waiting for Undo out of sight. Where it went. `asking`, for Redo of Move
-    /// to Trash: deleted for good only once you say so, as the first time, with what Notebook knew about it.
-    private func throwAwayNow(_ url: URL, asking: FileChange.Remembered? = nil) async -> URL? {
+    /// you deleted it, or as Notebook made it), waiting for Undo out of sight. Where it went. `asking`, with what
+    /// Notebook knew about it: deleted for good only once you say so, as when you delete it. For Redo of Move to Trash,
+    /// and for Undo of a file Notebook made, unless it is as it was made (`unlessAsMade`): nothing would be lost.
+    private func throwAwayNow(_ url: URL, asking: FileChange.Remembered? = nil, unlessAsMade made: FileSnapshot? = nil) async -> URL? {
         let trashed = await trashNow(url)
         if trashed.done {
             if trashed.place == nil { beep() }
             return trashed.place
         }
         #if os(iOS)
-        if let asking, FileManager.default.fileExists(atPath: url.path) {
-            // Redo can't bring it again then: "Delete immediately?" keeps its own Undo.
+        // Looked at once what was typed in it is saved (`trashNow`), which counts too.
+        if let asking, FileManager.default.fileExists(atPath: url.path), await !isAsMade(url, made) {
+            // Undo or Redo can't do it then: "Delete immediately?" keeps its own Undo.
             rememberedForDeleting[url.path] = asking
             beginLeaving(url)
             deleteQuestions.ask(url)
@@ -311,6 +332,15 @@ extension Workspace {
         beep()
         return nil
     }
+
+    #if os(iOS)
+    /// Whether a file Notebook made is as it was made (`made`), looked at off the main thread: nothing would be lost
+    /// with it.
+    private func isAsMade(_ url: URL, _ made: FileSnapshot?) async -> Bool {
+        guard let made else { return false }
+        return await Task.detached(priority: .userInitiated) { made.matches(url) }.value
+    }
+    #endif
 
     /// Puts a file back from the Trash where it was, or next to that with a number when its name is taken now, with
     /// what Notebook knew about it. The file that was open opens again.
