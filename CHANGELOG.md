@@ -29,6 +29,11 @@ versions follow [semantic versioning](https://semver.org).
 - Pages for any PDF you write on, on iPhone and iPad: pull past the last page and let go for a new one, of the paper
   and size of the page before it, so you can write on after the last slide of a lecture. Page in the toolbar adds a
   page after the one in view, gives a page other paper with what is on it, or deletes it; Undo puts it back.
+- All Pages, on iPhone and iPad: every page of a handwritten note, or of any PDF you write on, small and side by side,
+  as Files shows files. Drag a page to another place, touch and hold one to duplicate or delete it, or tap one to go to
+  it. What you wrote and the pictures go with their page, Undo and Redo take back each change, and the PDF has its
+  pages in the new order in every app. On the iPad it is the grid in the toolbar while you write; on the iPhone it is
+  in Add.
 - Pictures on PDF pages, on iPhone and iPad: Add, in the toolbar and in the tool picker, puts photos, pictures from
   the camera, scans or pictures from Files on the page in view, picked, to drag where you want them. The lasso picks
   them up again later to move, resize, turn, duplicate or delete them, with the strokes around them. Notebook draws

@@ -7,10 +7,11 @@ import PDFKit
 import PencilKit
 
 /// What a PDF drawn on is to be, to be written into the file: its pages in order, each one of the file's as it was
-/// when drawing started or a new page of paper, and what is now on each page drawn on.
+/// when drawing started or a new page of paper, and what is now on each page drawn on. The file's pages can come in
+/// any order, and one can come more than once: a page moved, and a page duplicated.
 struct PDFPlan: Sendable {
     enum Origin: Equatable, Sendable {
-        /// The page with this number in `PDFPageWriter.write`'s `base`.
+        /// The page with this number in `PDFPageWriter.write`'s `base`. A copy of it, the second time it is there.
         case base(Int)
         case new
     }
@@ -79,7 +80,7 @@ enum PDFPageWriter {
             for picture in slot.content?.pictures ?? [] { if let image = picture.image { images[picture.id] = image } }
         }
         let carriers = Carriers()
-        try apply(plan, to: document, images: images, carriers: carriers)
+        try apply(plan, to: document, base: base, images: images, carriers: carriers)
         let written = try compacted(document, images: images, carriers: carriers) ?? document
         // Entries PDFKit doesn't know are written only once read, on the Mac at least.
         for index in 0..<written.pageCount { written.page(at: index)?.annotations.forEach(keepEntries) }
@@ -98,24 +99,51 @@ enum PDFPageWriter {
     }
 
     /// Makes the document read from `base` into what the plan says. `images` are the pictures in `base`, by id.
-    static func apply(_ plan: PDFPlan, to document: PDFDocument, images: [String: PictureImage] = [:], carriers: Carriers) throws {
-        // The file's pages stay in their order; the ones the plan doesn't have go.
+    static func apply(_ plan: PDFPlan, to document: PDFDocument, base: Data, images: [String: PictureImage] = [:], carriers: Carriers) throws {
         let kept = plan.slots.compactMap { slot -> Int? in
             if case .base(let index) = slot.origin { return index }
             return nil
         }
-        guard kept == kept.sorted(), Set(kept).count == kept.count, kept.allSatisfy({ $0 >= 0 && $0 < document.pageCount }) else {
+        guard kept.allSatisfy({ $0 >= 0 && $0 < document.pageCount }) else {
             throw PDFWriteError.pagesMissing(kept, document.pageCount)
         }
-        let keep = Set(kept)
-        for index in stride(from: document.pageCount - 1, through: 0, by: -1) where !keep.contains(index) {
+        // The pages in the plan's order: the file's own the first time, a copy read from `base` after that, new paper.
+        let originals = (0..<document.pageCount).compactMap { document.page(at: $0) }
+        var used = Set<Int>()
+        var pages: [PDFPage] = []
+        for slot in plan.slots {
+            switch slot.origin {
+            case .base(let index) where used.insert(index).inserted:
+                pages.append(originals[index])
+            case .base(let index):
+                // A page of a document of its own, as a picture is carried in: what it has keeps its look until written.
+                guard let copies = PDFDocument(data: base), let copy = copies.page(at: index) else { throw PDFWriteError.pagesMissing(kept, document.pageCount) }
+                carriers.documents.append(copies)
+                copy.annotations.forEach(keepEntries)
+                pages.append(copy)
+            case .new:
+                guard let page = NotebookPaper.page(slot.paper ?? .blank, size: slot.size) else { throw PDFWriteError.noPaper }
+                pages.append(page)
+            }
+        }
+        // The ones the plan doesn't have go; the rest are put in its order, the file's own moved rather than copied.
+        let own = Set(pages.map(ObjectIdentifier.init))
+        for index in stride(from: document.pageCount - 1, through: 0, by: -1) where !own.contains(ObjectIdentifier(originals[index])) {
             document.removePage(at: index)
+        }
+        let isOriginal = Set(originals.map(ObjectIdentifier.init))
+        for (position, page) in pages.enumerated() where document.page(at: position) !== page {
+            if isOriginal.contains(ObjectIdentifier(page)) {
+                let index = document.index(for: page)
+                guard index != NSNotFound else { throw PDFWriteError.pagesMissing(kept, originals.count) }
+                document.exchangePage(at: position, withPageAt: index)
+            } else {
+                document.insert(page, at: position)
+            }
         }
         for (position, slot) in plan.slots.enumerated() {
             switch slot.origin {
             case .new:
-                guard let page = NotebookPaper.page(slot.paper ?? .blank, size: slot.size) else { throw PDFWriteError.noPaper }
-                document.insert(page, at: position)
                 if let inserted = document.page(at: position), let paper = slot.paper { NotebookPaper.mark(inserted, as: paper) }
             case .base:
                 guard let paper = slot.paper, let old = document.page(at: position), NotebookPaper.style(of: old) != paper else { continue }

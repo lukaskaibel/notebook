@@ -8,8 +8,9 @@ import ImageIO
 import PencilKit
 import UniformTypeIdentifiers
 
-/// The sample handwritten note: lecture notes on Cornell paper and a page of squared paper, written as a hand writes,
-/// with a highlight, a ring, a sketch and a photo of the blackboard on them.
+/// The sample handwritten note: lecture notes on Cornell paper, worked tasks on squared and dotted paper, questions on
+/// lined paper and the next lecture begun, written as a hand writes, with a highlight, a ring, sketches and a photo of
+/// the blackboard on them. Five pages of four papers, for All Pages to show.
 enum DemoHandwriting {
     static func writeLecture(to url: URL) {
         let size = PaperSize.a4.size
@@ -23,6 +24,9 @@ enum DemoHandwriting {
         let plan = PDFPlan(slots: [
             PDFPlan.Slot(origin: .base(0), size: size, content: PageContent(drawing: first, pictures: board)),
             PDFPlan.Slot(origin: .new, paper: .squared, size: size, content: PageContent(drawing: second)),
+            PDFPlan.Slot(origin: .new, paper: .lined, size: size, content: PageContent(drawing: questions())),
+            PDFPlan.Slot(origin: .new, paper: .dotted, size: size, content: PageContent(drawing: vectors())),
+            PDFPlan.Slot(origin: .new, paper: .cornell, size: size, content: PageContent(drawing: nextLecture())),
         ])
         guard let data = try? PDFPageWriter.make(plan, base: base) else { return }
         try? data.write(to: url)
@@ -91,6 +95,51 @@ enum DemoHandwriting {
         }
         pen.write("λ", size: 1.4, at: CGPoint(x: origin.x + 5 * unit + 8, y: origin.y + 6), color: ink, seed: 41)
         pen.write("both roots are eigenvalues", size: 1.3, at: CGPoint(x: 40, y: 560), color: ink, seed: 42)
+        return PKDrawing(strokes: pen.strokes)
+    }
+
+    /// Lined paper: questions for the tutorial, on its lines (from 30 mm, 8 mm apart), right of its margin.
+    private static func questions() -> PKDrawing {
+        var pen = Pen()
+        let ink: UInt32 = 0x1F2328, blue: UInt32 = 0x2853A8, red: UInt32 = 0xD8432F
+        func line(_ number: Int) -> CGFloat { 30 * millimetre + CGFloat(number) * 8 * millimetre - 3 }
+        pen.write("Open questions", size: 1.9, at: CGPoint(x: 84, y: line(0)), color: blue, width: 3.5, seed: 51)
+        pen.write("1. complex eigenvalues: a rotation?", size: 1.3, at: CGPoint(x: 84, y: line(2)), color: ink, seed: 52)
+        pen.write("2. is every A diagonalisable?", size: 1.3, at: CGPoint(x: 84, y: line(3)), color: ink, seed: 53)
+        pen.write("3. eigenvalues of A² are λ²", size: 1.3, at: CGPoint(x: 84, y: line(4)), color: ink, seed: 54)
+        pen.write("ask in the tutorial!", size: 1.3, at: CGPoint(x: 84, y: line(6)), color: red, seed: 55)
+        return PKDrawing(strokes: pen.strokes)
+    }
+
+    /// Dotted paper: the eigenvectors of the lecture's matrix, drawn, at right angles.
+    private static func vectors() -> PKDrawing {
+        var pen = Pen()
+        let ink: UInt32 = 0x1F2328, blue: UInt32 = 0x2853A8, red: UInt32 = 0xD8432F
+        pen.write("Sheet 3, task 4", size: 1.9, at: CGPoint(x: 40, y: 70), color: blue, width: 3.5, seed: 61)
+        pen.write("λ = 1:  v = (1, -1)", size: 1.4, at: CGPoint(x: 40, y: 116), color: ink, seed: 62)
+        pen.write("λ = 3:  v = (1, 1)", size: 1.4, at: CGPoint(x: 40, y: 146), color: ink, seed: 63)
+        let origin = CGPoint(x: 180, y: 380)
+        pen.stroke(pen.hand([(origin.x - 120, origin.y), (origin.x + 160, origin.y)], smooth: false, seed: 64), color: ink, width: 2.8)
+        pen.stroke(pen.hand([(origin.x, origin.y + 130), (origin.x, origin.y - 150)], smooth: false, seed: 65), color: ink, width: 2.8)
+        pen.arrow(from: origin, to: CGPoint(x: origin.x + 100, y: origin.y - 100), color: blue, seed: 66)
+        pen.arrow(from: origin, to: CGPoint(x: origin.x + 100, y: origin.y + 100), color: red, seed: 67)
+        pen.write("λ = 3", size: 1.3, at: CGPoint(x: origin.x + 108, y: origin.y - 102), color: blue, seed: 68)
+        pen.write("λ = 1", size: 1.3, at: CGPoint(x: origin.x + 108, y: origin.y + 116), color: red, seed: 69)
+        pen.write("at right angles: A is symmetric", size: 1.3, at: CGPoint(x: 40, y: 580), color: ink, seed: 70)
+        return PKDrawing(strokes: pen.strokes)
+    }
+
+    /// Cornell paper again: the next lecture, begun.
+    private static func nextLecture() -> PKDrawing {
+        var pen = Pen()
+        let ink: UInt32 = 0x1F2328, blue: UInt32 = 0x2853A8
+        pen.write("Lecture 5 · Diagonalisation", size: 2.1, at: CGPoint(x: 26, y: 58), color: blue, width: 3.6, seed: 81)
+        pen.write("Mon 2 Nov", size: 1.15, at: CGPoint(x: 486, y: 56), color: ink, seed: 82)
+        pen.write("idea", size: 1.2, at: CGPoint(x: 22, y: line(1)), color: ink, seed: 83)
+        pen.write("look at A in the basis", size: 1.3, at: CGPoint(x: 196, y: line(1)), color: ink, seed: 84)
+        pen.write("of its eigenvectors:", size: 1.3, at: CGPoint(x: 196, y: line(2)), color: ink, seed: 85)
+        pen.write("then it only stretches", size: 1.3, at: CGPoint(x: 196, y: line(3)), color: ink, seed: 86)
+        pen.write("along each axis", size: 1.3, at: CGPoint(x: 196, y: line(4)), color: ink, seed: 87)
         return PKDrawing(strokes: pen.strokes)
     }
 
@@ -256,10 +305,12 @@ enum DemoHandwriting {
             "y": (5, [[(0, 4.5), (2.6, 10)], [(5, 4.5), (2.6, 10), (1.6, 12.6), (0.4, 13.4)]]),
             "z": (4.4, [[(0, 4.6), (4.2, 4.6), (0, 10), (4.4, 10)]]),
             "A": (6, [[(0, 10), (3, 0), (6, 10)], [(1.2, 6.4), (4.8, 6.4)]]),
+            "D": (5.6, [[(0, 0), (0, 10)], [(0, 0), (2.6, 0), (4.6, 1), (5.6, 3.4), (5.6, 6.6), (4.6, 9), (2.6, 10), (0, 10)]]),
             "E": (5, [[(5, 0), (0, 0), (0, 10), (5, 10)], [(0, 5), (4, 5)]]),
             "I": (1, [[(0.5, 0), (0.5, 10)]]),
             "L": (4.8, [[(0, 0), (0, 10), (4.8, 10)]]),
             "M": (7, [[(0, 10), (0, 0), (3.5, 6.4), (7, 0), (7, 10)]]),
+            "N": (5.6, [[(0, 10), (0, 0), (5.6, 10), (5.6, 0)]]),
             "O": (6.4, [[(3.2, 0), (1, 1.4), (0, 5), (1, 8.6), (3.2, 10), (5.4, 8.6), (6.4, 5), (5.4, 1.4), (3.2, 0)]]),
             "S": (5.4, [[(5, 1.2), (3.6, 0), (1.6, 0), (0.3, 1.2), (0.6, 3.2), (2.6, 4.6), (4.6, 6), (5.4, 8), (4.4, 9.6), (2.4, 10), (0.4, 9)]]),
             "0": (5, [[(2.5, 0), (0.6, 1.2), (0, 5), (0.6, 8.8), (2.5, 10), (4.4, 8.8), (5, 5), (4.4, 1.2), (2.5, 0)]]),
@@ -267,6 +318,7 @@ enum DemoHandwriting {
             "2": (5, [[(0.3, 2.2), (1.4, 0.4), (3, 0), (4.4, 0.8), (4.8, 2.6), (4, 4.6), (0, 10), (5, 10)]]),
             "3": (4.8, [[(0.4, 1.2), (2, 0), (3.8, 0.4), (4.6, 2), (3.8, 3.8), (2, 4.6)], [(2, 4.6), (4, 5.4), (4.8, 7.4), (3.8, 9.4), (2, 10), (0.2, 9)]]),
             "4": (5, [[(3.8, 10), (3.8, 0), (0, 7), (5, 7)]]),
+            "5": (4.8, [[(4.4, 0), (0.8, 0), (0.4, 4.4), (2.2, 3.8), (3.8, 4.2), (4.8, 6), (4.6, 8.4), (3.2, 9.8), (1.6, 10), (0, 9.2)]]),
             "6": (4.8, [[(4.2, 0.6), (2.6, 0), (1, 1), (0.1, 4), (0.2, 7.6), (1.2, 9.6), (2.6, 10), (4.2, 9.4), (4.8, 7.6), (4.2, 5.8), (2.6, 5.2), (1, 5.8), (0.2, 7.2)]]),
             "=": (4, [[(0, 5), (4, 5)], [(0, 7.4), (4, 7.4)]]),
             "-": (3.4, [[(0, 6.4), (3.4, 6.4)]]),
