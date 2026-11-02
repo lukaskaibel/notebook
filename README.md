@@ -147,7 +147,9 @@ menu, ⌥⌘N and ⌘K make a handwritten note too. It is a PDF in the folder, o
 Letter as Settings says. The tools are
 the system's, as in Notes: pens, pencil, marker, eraser, lasso and ruler, with Apple Pencil or a finger. Pull past the
 last page and let go, and a new one comes, of the paper and size of the page before it. Page in the toolbar adds a
-page after the one in view, gives a page other paper with everything on it, or takes it out. Add, in the toolbar and
+page after the one in view, gives a page other paper with everything on it, or takes it out. All Pages, the grid in
+the toolbar (in Add on the iPhone), shows every page small, side by side: drag one to another place, touch and hold one
+to duplicate or delete it, or tap one to go to it; what is on a page goes with it. Add, in the toolbar and
 in the tool picker, puts a photo, a picture from the camera, a scan or a picture from Files on the page; it comes
 picked, to drag where you want it, and the lasso picks it up again later, with the strokes around it, to move, resize,
 turn, duplicate or delete. Undo goes back through strokes, pictures and pages alike.
@@ -386,10 +388,10 @@ pages one under the other: there at once, and back where you left it when you re
 as sharp as the text, and a PDF changed in another app or on another device shows the change while it's open. The
 pencil above a PDF lets you write and draw right on its pages, where you are: on iPhone and iPad with Apple Pencil and
 the system's tools, on the Mac with the mouse, the trackpad or a tablet and the palette from drawing in notes, while two
-fingers still scroll. On iPhone and iPad you also put pictures on the pages and add pages, as in a handwritten note, and
-what you draw is saved as you go; on the Mac it is saved when you click the pencil again or press Escape. The strokes
-are in the PDF, as lines every PDF app shows sharp, and Notebook can change them later on any of your devices. On the
-Mac, select text and press ⌃⌘H, or right-click it, to highlight it in one of five colours; right-click a highlight to
+fingers still scroll. On iPhone and iPad you also put pictures on the pages and add, move and duplicate pages, as in a
+handwritten note, and what you draw is saved as you go; on the Mac it is saved when you click the pencil again or press
+Escape. The strokes are in the PDF, as lines every PDF app shows sharp, and Notebook can change them later on any of
+your devices. On the Mac, select text and press ⌃⌘H, or right-click it, to highlight it in one of five colours; right-click a highlight to
 change its colour or remove it. Highlights are the PDF's own, as Preview's are, and ⌘Z takes them back. The pen above a
 picture marks it up as in Files on iPhone and iPad, and saves what you add into the picture itself. A
 picture fits the window on the same grey, never larger than it is; pinch or double-click to zoom in on a spot. A video plays with the system's
@@ -516,11 +518,12 @@ screens.
 - **Drawings in notes,** with PencilKit: Apple Pencil, a finger, the mouse, the trackpad or a tablet. Each is a PNG
   that other apps show, with its strokes kept next to it so it stays a drawing in Notebook.
 - **Handwritten notes** on iPhone and iPad: PDFs of blank, lined, squared, dotted or Cornell paper to write in with
-  Apple Pencil or a finger, with pages that come as you need them and pictures to place on them.
+  Apple Pencil or a finger, with pages that come as you need them, all of them at a glance to reorder, and pictures to
+  place on them.
 - **PDFs, pictures, videos and other files** open in the window: PDFs and pictures as in Preview, videos as in
   QuickTime Player, the rest in Quick Look. Double-click one in the sidebar to open it in its own app, such as Preview.
   You write and draw right on a PDF's pages, saved into the PDF, and on the Mac highlight its text; on iPhone and iPad
-  you also put pictures on the pages and add pages, and pictures get Markup.
+  you also put pictures on the pages and add and reorder pages, and pictures get Markup.
 - **Search** for the names of notes, files and folders, headings, words in notes and PDFs, and the text in pictures,
   scans and handwriting, in the background as you type. ⌘K finds the same and runs commands.
 - **Spotlight** finds your notes by their names and words too, on the Mac, iPhone and iPad, and opens them in
@@ -553,7 +556,8 @@ A handwritten note is a PDF, and what Notebook adds to a PDF stays in it. The pa
 itself. The strokes on a page are one stamp annotation whose look is made of lines, with the PencilKit strokes in an
 entry of its own (`/NotebookDrawing`) for Notebook to change them again. Each picture is a stamp of its own whose look
 is the picture, kept as a JPEG, with where it is and how far it is turned in `/NotebookPicture`. A hidden annotation on
-a page Notebook made says which paper it is (`/NotebookPaper`). Every save writes the PDF anew with only what its pages
+a page Notebook made says which paper it is (`/NotebookPaper`). A page moved in All Pages is the same page of the PDF in
+its new place, and a duplicate is a copy of it with everything on it. Every save writes the PDF anew with only what its pages
 use, so a PDF you write in for months stays the size of what is on it; one with an outline, a form or Markup's own
 drawings is written as PDFKit writes it, which keeps those.
 
@@ -823,6 +827,7 @@ Replace; otherwise ⌥⌘F searches. On iPhone and iPad:
 | Tap the pen above a PDF | Write and draw on its pages; what you write is saved into the PDF as you go |
 | While writing on a PDF: pull past the last page and let go | A new page, of the paper and size of the page before it |
 | While writing on a PDF: Add, Page | Pictures and new pages; the page in view's paper, or Delete Page (on the iPhone both are in Add) |
+| While writing on a PDF: All Pages (on the iPhone in Add) | Every page small: drag one to move it, touch and hold it to duplicate or delete it, tap it to go to it |
 | While writing on a PDF: the lasso on a picture | Pick it up: drag it, resize or turn it by its corners, duplicate or delete it |
 | Tap the name of a PDF or other file at the top | Rename it |
 | While drawing: one finger, two fingers | Draw, scroll (where only Apple Pencil draws, a finger scrolls) |
@@ -846,9 +851,9 @@ Planned, and not built yet:
 - On iPhone and iPad there is no Settings › App Icon (iOS only switches between icons built into the app), no PNG
   export and no window of its own for a single file.
 - **Sketches** as files of their own, next to your notes rather than in one.
-- **Handwritten notes on the Mac:** you write on their pages there as on any PDF, but new handwritten notes, new pages
-  and pictures on pages are on iPhone and iPad only. Pages can't be reordered yet, and text boxes and shapes aren't
-  offered: the PDF couldn't keep them as other apps show them.
+- **Handwritten notes on the Mac:** you write on their pages there as on any PDF, but new handwritten notes, new pages,
+  pictures on pages and All Pages are on iPhone and iPad only. Text boxes and shapes aren't offered: the PDF couldn't
+  keep them as other apps show them.
 - Translations: the app is in English only.
 
 Which version brings what is in the [milestones](https://github.com/lukaskaibel/notebook/milestones), about a week

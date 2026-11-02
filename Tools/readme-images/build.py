@@ -127,7 +127,7 @@ for theme in [] if only == "devices" else ["dark", "light"]:
 
 def devices(theme, scene=""):
     """The iPad with the note and its outline, and the iPhone with the note, in front of it at the lower right; or, for
-    "-handwriting", both with the handwritten note and the pen on."""
+    "-handwriting", the iPad with the handwritten note and the pen on, and the iPhone with its pages in All Pages."""
     ipad = Image.open(f"{raw}/ipad{scene}-{theme}.png").convert("RGBA")
     iphone = Image.open(f"{raw}/iphone{scene}-{theme}.png").convert("RGBA")
     # The screens' own corners: 18 points on the iPad at 2x, 55 on the iPhone at 3x.

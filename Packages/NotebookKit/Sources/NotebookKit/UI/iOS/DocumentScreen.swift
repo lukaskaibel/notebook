@@ -43,6 +43,13 @@ struct DocumentScreen: View {
                     .presentationDetents([.medium, .large])
                     .ignoresSafeArea()
             }
+            .sheet(isPresented: Binding(get: { workspace.pdfEditing.showsOverview && workspace.drawsOnPDF == url },
+                                        set: { workspace.pdfEditing.showsOverview = $0 }),
+                   onDismiss: { workspace.pdfEditing.overviewClosed() }) {
+                PageOverview(editing: workspace.pdfEditing)
+                    // On the iPad, room for a lecture's pages at a time.
+                    .presentationSizing(.page)
+            }
             #if DEBUG
             .onReceive(NotificationCenter.default.publisher(for: .notebookDebug)) { notification in
                 guard isOpen else { return }
@@ -142,6 +149,9 @@ struct DocumentScreen: View {
                 let drawing = workspace.drawsOnPDF == url
                 if drawing, workspace.pdfEditing.pageCount > 0 {
                     // Where it is narrow, one menu, which leaves room for Done Drawing.
+                    if sizeClass != .compact {
+                        Button { workspace.pdfEditing.showOverview() } label: { Label("All Pages", systemImage: "square.grid.2x2") }
+                    }
                     PDFAddMenu(editing: workspace.pdfEditing, hasPage: sizeClass == .compact)
                     if sizeClass != .compact { PDFPageMenu(editing: workspace.pdfEditing) }
                 }
@@ -327,6 +337,7 @@ struct PDFAddMenu: View {
                 }
             }
             if hasPage {
+                Button { editing.showOverview() } label: { Label("All Pages", systemImage: "square.grid.2x2") }
                 PDFPageItems(editing: editing)
             } else {
                 PaperMenu(title: "Add Page", symbol: "doc.badge.plus") { editing.addPage($0) }

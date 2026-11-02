@@ -109,7 +109,32 @@ enum DebugRemote {
             // pdfpaper <paper>: other paper for the page in view.
             if let paper = PaperStyle(rawValue: argument) { workspace.pdfEditing.changePaper(to: paper) }
         case "pdfdeletepage":
-            workspace.pdfEditing.deletePage()
+            // pdfdeletepage [n]: Delete Page, of the page in view or of page n (counted from 1), as the overview does.
+            if let number = numbers.first { workspace.pdfEditing.deletePage(at: Int(number) - 1) } else { workspace.pdfEditing.deletePage() }
+        case "pdfoverview":
+            // pdfoverview [off]: All Pages, the page overview.
+            if argument == "off" { workspace.pdfEditing.showsOverview = false } else { workspace.pdfEditing.showOverview() }
+        case "pdfmovepage":
+            // pdfmovepage <from> <to>: a page dragged to another place in the overview, counted from 1.
+            if numbers.count >= 2 { workspace.pdfEditing.movePage(at: Int(numbers[0]) - 1, to: Int(numbers[1]) - 1) }
+        case "pdfduplicatepage":
+            // pdfduplicatepage [n]: Duplicate, of page n (counted from 1) or the page in view.
+            workspace.pdfEditing.duplicatePage(at: numbers.first.map { Int($0) - 1 } ?? workspace.pdfEditing.pageIndex)
+        case "pdfgotopage":
+            // pdfgotopage <n>: a page tapped in the overview.
+            if let number = numbers.first { workspace.pdfEditing.goToPage(at: Int(number) - 1) }
+        case "pdfthumb":
+            // pdfthumb <n> <path>: the overview's picture of page n, 300 points wide, as a PNG at path.
+            let words = argument.split(separator: " ", maxSplits: 1).map(String.init)
+            guard words.count == 2, let session = workspace.pdfEditing.session, let number = Int(words[0]) else { break }
+            let pages = session.pages
+            guard pages.indices.contains(number - 1) else { break }
+            let path = (words[1] as NSString).expandingTildeInPath
+            Task { @MainActor in
+                let image = await session.thumbnail(of: pages[number - 1], width: 300, scale: 2)
+                try? image?.pngData()?.write(to: URL(fileURLWithPath: path))
+                log("pdfthumb \(number): \(image.map { "\($0.size.width)x\($0.size.height)" } ?? "none") → \(path)")
+            }
         case "pdfpicture":
             // pdfpicture [transparent]: a picture on the page in view, as from the photo library: a JPEG photo, or a
             // PNG with see-through parts.
