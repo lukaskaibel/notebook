@@ -49,8 +49,8 @@ extension Workspace {
     func tellAboutUnsavedNotes() {
         guard !ProcessInfo.isTesting else { return }
         NoteDocument.onUnsaved = { [weak self] in self?.tell($0) }
-        // Kept in case Notebook was ended, and its note written after all: nothing to tell.
-        NoteDocument.onWrittenAfterAll = { Self.forget($0.lastPathComponent) }
+        // Kept in case Notebook was ended, and its note written after all (or the copy someone's own): nothing to tell.
+        NoteDocument.onCopyLetGo = { Self.forget($0.lastPathComponent) }
         let untold = Self.untold
         guard !untold.isEmpty else { return }
         let folder = UnsavedNotes.folder

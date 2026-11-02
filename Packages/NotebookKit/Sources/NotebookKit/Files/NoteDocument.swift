@@ -105,12 +105,19 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     /// Told about a note left whose text couldn't be written, kept in Notebook's folder or not: the app says so. Also
     /// about a copy kept while the note may still be written (`UnsavedNote.mayStillBeWritten`), for the next launch.
     static var onUnsaved: ((UnsavedNote) -> Void)?
-    /// Told that such a copy was thrown away again, its note written after all: nothing to say about it.
-    static var onWrittenAfterAll: ((URL) -> Void)?
+    /// Told that such a copy is no longer the note's: thrown away again, its note written after all (or typed back to
+    /// what was), or changed in Notebook's folder since, so that what was typed went into another. Nothing to say about
+    /// it.
+    static var onCopyLetGo: ((URL) -> Void)?
     /// Notebook is out of sight on iPhone and iPad (in the background, or behind the app switcher): iOS may end it once
     /// it is suspended, or you may swipe it away, before trying again is over. A note that can't be written meanwhile,
-    /// open or not, keeps what was typed in Notebook's folder at once.
-    static var mayBeEnded = false
+    /// open or not, keeps what was typed in Notebook's folder at once, and so does one that couldn't as it went.
+    static var mayBeEnded = false {
+        didSet {
+            guard mayBeEnded, !oldValue else { return }
+            for document in all.allObjects where !document.isClosed || writing.contains(document) { document.keepIfNotWritten() }
+        }
+    }
     /// Where notes are read and written. The coordinated reads and writes wait for iCloud without holding a thread.
     private nonisolated static let fileQueue: OperationQueue = {
         let queue = OperationQueue()
@@ -280,7 +287,11 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         saveTimer = nil
         // Whether there is anything to save is known once what is being written is: typed back to what was saved
         // before, the text differs from what is being written.
-        guard isWorking || canSave else { return }
+        guard isWorking || canSave else {
+            // Typed back to what was saved, say: a copy kept meanwhile isn't needed (`next`).
+            if keptCopy != nil { next() }
+            return
+        }
         wantsSave = true
         next()
     }
@@ -518,6 +529,11 @@ public final class NoteDocument: NSObject, NSFilePresenter {
             if Self.mayBeEnded, !isEmpty, keptCopy?.text != text { wantsToKeepUnsaved = true }
         case .keptUnsaved(let mine, let copy, let mayStillBeWritten):
             let unsaved = UnsavedNote(note: url, copy: copy, reason: whyNotWritten, text: mine, mayStillBeWritten: mayStillBeWritten, document: self)
+            // The copy kept before was changed there, and what was typed went into another: that one is someone's own.
+            if let earlier = keptCopy, let copy, !FileNode.samePath(copy, earlier.url) {
+                keptCopy = nil
+                Self.onCopyLetGo?(earlier.url)
+            }
             if mayStillBeWritten {
                 // Said only at the next launch, should Notebook be ended before the note is written. With no copy, it
                 // is still on screen, or tried again.
@@ -533,7 +549,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
                 Self.onUnsaved?(unsaved)
             }
         case .thrownAway(let copy):
-            Self.onWrittenAfterAll?(copy)
+            Self.onCopyLetGo?(copy)
         case .failed:
             break
         }
@@ -580,6 +596,14 @@ public final class NoteDocument: NSObject, NSFilePresenter {
                 finish(.keptUnsaved(mine, at: UnsavedNotes.keep(mine, of: url, over: earlier), mayStillBeWritten: mayStillBeWritten))
             }
         }
+    }
+
+    /// Notebook went out of sight: a note that couldn't be written as it went, still open or still to be tried again,
+    /// keeps what was typed now, as it would had the write failed now (`mayBeEnded`). Not one waiting for an answer.
+    private func keepIfNotWritten() {
+        guard failedWrites > 0, hasUnsavedChanges, !isEmpty, !isAskingAboutUnsaved, keptCopy?.text != text else { return }
+        wantsToKeepUnsaved = true
+        next()
     }
 
     /// The note was written after all: the copy kept in Notebook's folder meanwhile goes, unless it was changed there.
