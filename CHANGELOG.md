@@ -63,7 +63,9 @@ versions follow [semantic versioning](https://semver.org).
   no longer takes what you typed with it. Notebook tries again a few seconds later; if it still can't, it keeps what
   you typed as a note in its folder Unsaved Notes (on iPhone and iPad in On My iPhone › Notebook) and says so, with
   Show in Finder or Open. If even that can't be written, it asks you to copy the text or try again, and quitting waits
-  for your answer (#165).
+  for your answer. On iPhone and iPad, switching to another app with such a note open keeps what you typed there at
+  once, so it is safe if iOS closes Notebook or you swipe it away, and Notebook tells you the next time you open it;
+  once the note can be saved after all, the copy goes again (#165, #273).
 
 ## [1.1.0] – 2026-10-29
 

@@ -23,6 +23,8 @@ final class NoteDocumentTests: XCTestCase {
         UserDefaults.standard.removeObject(forKey: "NotebookSlowWrites")
         await NoteDocument.allWritten()
         NoteDocument.onUnsaved = nil
+        NoteDocument.onWrittenAfterAll = nil
+        NoteDocument.mayBeEnded = false
         NoteDocument.retryDelays = [1, 3]
         for folder in folders {
             unlock(folder)
@@ -703,6 +705,149 @@ final class NoteDocumentTests: XCTestCase {
         await NoteDocument.allWritten()
         XCTAssertEqual(kept(), ["Note.md": "one\ntwo\nthree\n"])
         XCTAssertEqual(onDisk(url), "one\n")
+    }
+
+    // MARK: - Out of sight on iPhone and iPad (#273)
+
+    /// Switching apps with a note open that can't be written: iOS may end Notebook once it is suspended, or you may swipe
+    /// it away, before trying again is over. So what was typed is kept in Notebook's folder after the first failed write,
+    /// once, and only for the next launch to say; trying again goes on, and the note stays as it was last saved.
+    func testAnOpenNoteThatCantBeWrittenOutOfSightIsKeptAtOnce() async throws {
+        let (note, url) = makeNote("one\n")
+        let folder = url.deletingLastPathComponent()
+        lock(folder)
+        NoteDocument.mayBeEnded = true
+        note.update(text: "one\ntyped, then switched apps\n")
+        note.saveNow()
+        try await until("kept") { told.count == 1 }
+        XCTAssertEqual(note.failedWrites, 1, "kept before it is tried again")
+        XCTAssertTrue(told[0].mayStillBeWritten)
+        XCTAssertEqual(told[0].copy?.lastPathComponent, "Note.md")
+        XCTAssertNotNil(told[0].reason)
+        XCTAssertEqual(kept(), ["Note.md": "one\ntyped, then switched apps\n"])
+        XCTAssertTrue(NoteDocument.isWriting, "tried again")
+        await NoteDocument.allWritten()
+        XCTAssertEqual(note.failedWrites, 3)
+        XCTAssertEqual(told.count, 1, "kept once")
+        XCTAssertEqual(kept(), ["Note.md": "one\ntyped, then switched apps\n"])
+        XCTAssertEqual(onDisk(url), "one\n")
+        unlock(folder)
+        note.close()
+    }
+
+    /// The usual way on the iPhone: typing in a note that can't be written, which says nothing while it is open, then
+    /// switching apps. As Notebook goes out of sight its save fails again, and what was typed is kept then.
+    func testANoteTriedAgainInFrontIsKeptAsNotebookGoesOutOfSight() async throws {
+        let (note, url) = makeNote("one\n")
+        let folder = url.deletingLastPathComponent()
+        lock(folder)
+        note.update(text: "one\ntwo\n")
+        note.saveNow()
+        await NoteDocument.allWritten()
+        XCTAssertEqual(note.failedWrites, 3)
+        XCTAssertTrue(told.isEmpty)
+        NoteDocument.mayBeEnded = true
+        // What `Workspace.saveAll` does.
+        note.saveNow()
+        try await until("kept") { told.count == 1 }
+        XCTAssertEqual(kept(), ["Note.md": "one\ntwo\n"])
+        XCTAssertFalse(NoteDocument.isWriting, "Notebook can be suspended")
+        unlock(folder)
+        note.close()
+    }
+
+    /// Back in front, more is typed, and out of sight again the note still can't be written: the copy is written over,
+    /// not a second one made. Once the note is written, the copy goes again, and the app hears so: nothing is said about
+    /// it at the next launch.
+    func testACopyKeptOutOfSightFollowsTheNoteAndGoesOnceItIsWritten() async throws {
+        var writtenAfterAll: [URL] = []
+        NoteDocument.onWrittenAfterAll = { writtenAfterAll.append($0) }
+        let (note, url) = makeNote("one\n")
+        let folder = url.deletingLastPathComponent()
+        lock(folder)
+        NoteDocument.mayBeEnded = true
+        note.update(text: "one\ntwo\n")
+        note.saveNow()
+        await NoteDocument.allWritten()
+        NoteDocument.mayBeEnded = false
+        note.update(text: "one\ntwo\nthree\n")
+        note.saveNow()
+        await NoteDocument.allWritten()
+        XCTAssertEqual(told.count, 1, "nothing more kept in front")
+        NoteDocument.mayBeEnded = true
+        note.saveNow()
+        try await until("kept again") { told.count == 2 }
+        XCTAssertEqual(told[1].copy, told[0].copy)
+        XCTAssertTrue(told[1].mayStillBeWritten)
+        XCTAssertEqual(kept(), ["Note.md": "one\ntwo\nthree\n"])
+        NoteDocument.mayBeEnded = false
+        unlock(folder)
+        note.saveNow()
+        await NoteDocument.allWritten()
+        XCTAssertEqual(onDisk(url), "one\ntwo\nthree\n")
+        XCTAssertEqual(kept(), [:])
+        XCTAssertEqual(writtenAfterAll, told[0].copy.map { [$0] })
+        note.close()
+    }
+
+    /// Kept out of sight, then left in front while it still can't be written: once trying again is over, the copy is
+    /// written over with what was typed since, and said now.
+    func testACopyKeptOutOfSightIsKeptOverAndSaidOnceTheNoteIsLeft() async throws {
+        let (note, url) = makeNote("one\n")
+        lock(url.deletingLastPathComponent())
+        NoteDocument.mayBeEnded = true
+        note.update(text: "one\ntwo\n")
+        note.saveNow()
+        try await until("kept") { told.count == 1 }
+        NoteDocument.mayBeEnded = false
+        note.update(text: "one\ntwo\nthree\n")
+        note.close()
+        await NoteDocument.allWritten()
+        XCTAssertEqual(told.count, 2)
+        XCTAssertFalse(told[1].mayStillBeWritten)
+        XCTAssertEqual(told[1].copy, told[0].copy)
+        XCTAssertEqual(kept(), ["Note.md": "one\ntwo\nthree\n"])
+        XCTAssertEqual(onDisk(url), "one\n")
+    }
+
+    /// Left as Notebook goes out of sight: kept at once all the same, and said once trying again is over, as one copy.
+    func testANoteLeftOutOfSightIsKeptAtOnceAndSaidOnceTriedAgain() async throws {
+        let (note, url) = makeNote("one\n")
+        lock(url.deletingLastPathComponent())
+        NoteDocument.mayBeEnded = true
+        note.update(text: "one\ntwo\n")
+        note.close()
+        try await until("kept") { told.count == 1 }
+        XCTAssertTrue(told[0].mayStillBeWritten)
+        XCTAssertEqual(note.failedWrites, 1)
+        await NoteDocument.allWritten()
+        XCTAssertEqual(told.count, 2)
+        XCTAssertFalse(told[1].mayStillBeWritten)
+        XCTAssertEqual(told[1].copy, told[0].copy)
+        XCTAssertEqual(kept(), ["Note.md": "one\ntwo\n"])
+    }
+
+    /// A copy changed in Notebook's folder since it was kept, as in the Files app, is someone's own now: what is typed
+    /// after it goes into a new one, and it stays when the note is written.
+    func testACopyChangedInNotebooksFolderIsLeftAlone() async throws {
+        let (note, url) = makeNote("one\n")
+        let folder = url.deletingLastPathComponent()
+        lock(folder)
+        NoteDocument.mayBeEnded = true
+        note.update(text: "one\ntwo\n")
+        note.saveNow()
+        await NoteDocument.allWritten()
+        try "changed in Files\n".write(to: unsavedFolder.appendingPathComponent("Note.md"), atomically: true, encoding: .utf8)
+        note.update(text: "one\ntwo\nthree\n")
+        note.saveNow()
+        await NoteDocument.allWritten()
+        XCTAssertEqual(kept(), ["Note.md": "changed in Files\n", "Note 2.md": "one\ntwo\nthree\n"])
+        NoteDocument.mayBeEnded = false
+        unlock(folder)
+        note.close()
+        await NoteDocument.allWritten()
+        XCTAssertEqual(onDisk(url), "one\ntwo\nthree\n")
+        XCTAssertEqual(kept(), ["Note.md": "changed in Files\n"])
     }
 
     /// A note left while it is still written, then put in the Trash: what was typed goes along, and the note doesn't

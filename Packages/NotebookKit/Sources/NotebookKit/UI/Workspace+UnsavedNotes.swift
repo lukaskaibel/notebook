@@ -49,6 +49,8 @@ extension Workspace {
     func tellAboutUnsavedNotes() {
         guard !ProcessInfo.isTesting else { return }
         NoteDocument.onUnsaved = { [weak self] in self?.tell($0) }
+        // Kept in case Notebook was ended, and its note written after all: nothing to tell.
+        NoteDocument.onWrittenAfterAll = { Self.forget($0.lastPathComponent) }
         let untold = Self.untold
         guard !untold.isEmpty else { return }
         let folder = UnsavedNotes.folder
@@ -57,7 +59,7 @@ extension Workspace {
                 untold.filter { FileManager.default.fileExists(atPath: folder.appendingPathComponent($0.copy).path) }
             }.value
             // Moved or thrown away since: found already.
-            for gone in untold where !found.contains(gone) { Self.forget(gone) }
+            for gone in untold where !found.contains(gone) { Self.forget(gone.copy) }
             for told in found {
                 show(UnsavedReport(name: told.name, copy: folder.appendingPathComponent(told.copy), reason: told.reason))
             }
@@ -67,10 +69,12 @@ extension Workspace {
     private func tell(_ unsaved: UnsavedNote) {
         let report = UnsavedReport(name: unsaved.name, copy: unsaved.copy, reason: unsaved.reason, unsaved: unsaved.copy == nil ? unsaved : nil)
         guard let untold = report.untold else { return ask(report) }
-        // Remembered until it was shown: quitting doesn't leave it untold.
+        // Remembered until it was shown: quitting doesn't leave it untold. Kept again, it is one copy.
+        Self.forget(untold.copy)
         Self.untold.append(untold)
-        // As the Mac quits, it is told at the next launch.
-        guard !hasQuit else { return }
+        // As the Mac quits, it is told at the next launch; so is a copy kept as Notebook went out of sight on iPhone
+        // and iPad, in case it is ended there, unless its note is written after all.
+        guard !hasQuit, !unsaved.mayStillBeWritten else { return }
         show(report)
     }
 
@@ -115,7 +119,7 @@ extension Workspace {
         #if os(iOS)
         unsavedReports.removeAll { $0.id == report.id }
         #endif
-        if let untold = report.untold { Self.forget(untold) }
+        if let untold = report.untold { Self.forget(untold.copy) }
         switch answer {
         case .ok:
             break
@@ -157,8 +161,9 @@ extension Workspace {
         }
     }
 
-    private static func forget(_ told: UnsavedReport.Untold) {
-        guard let index = untold.firstIndex(of: told) else { return }
-        untold.remove(at: index)
+    /// Forgets the copy of this name: told, gone, or thrown away again.
+    private static func forget(_ copy: String) {
+        guard untold.contains(where: { $0.copy == copy }) else { return }
+        untold.removeAll { $0.copy == copy }
     }
 }
