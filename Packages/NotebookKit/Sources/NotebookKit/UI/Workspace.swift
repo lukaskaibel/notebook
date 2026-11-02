@@ -1645,11 +1645,13 @@ public final class Workspace: NSObject {
                 return nil
             }
             let inbox = inbox.map(follow)
-            let made = await Task.detached(priority: .userInitiated) { () -> (url: URL, folder: URL, listing: FileNode.Listing?, folderListing: FileNode.Listing?)? in
+            let made = await Task.detached(priority: .userInitiated) { () -> (url: URL, folder: URL, listing: FileNode.Listing?, folderListing: FileNode.Listing?, snapshot: FileSnapshot?)? in
                 let folder = inbox.flatMap { FileManager.default.fileExists(atPath: chosen.path) ? nil : $0 } ?? chosen
                 guard let made = FileOperations.createNote(in: folder, title: title ?? "Untitled", text: text) else { return nil }
-                return (made.url, folder, FileNode.listing(of: made.url), made.madeFolder ? FileNode.listing(of: folder) ?? FileNode.Listing(url: folder, kind: .folder) : nil)
+                return (made.url, folder, FileNode.listing(of: made.url), made.madeFolder ? FileNode.listing(of: folder) ?? FileNode.Listing(url: folder, kind: .folder) : nil,
+                        FileSnapshot(of: made.url))
             }.value
+            change.made = made?.snapshot
             changeDone(change, to: made?.url)
             guard let made else {
                 report("The note couldn’t be made.", "Notebook can’t write in “\(folderName(chosen))”.")
@@ -1684,11 +1686,13 @@ public final class Workspace: NSObject {
                 return nil
             }
             let inbox = inbox.map(follow)
-            let made = await Task.detached(priority: .userInitiated) { () -> (url: URL, folder: URL, listing: FileNode.Listing?, folderListing: FileNode.Listing?)? in
+            let made = await Task.detached(priority: .userInitiated) { () -> (url: URL, folder: URL, listing: FileNode.Listing?, folderListing: FileNode.Listing?, snapshot: FileSnapshot?)? in
                 let folder = inbox.flatMap { FileManager.default.fileExists(atPath: chosen.path) ? nil : $0 } ?? chosen
                 guard let made = FileOperations.createHandwrittenNote(in: folder, paper: paper, size: size) else { return nil }
-                return (made.url, folder, FileNode.listing(of: made.url), made.madeFolder ? FileNode.listing(of: folder) ?? FileNode.Listing(url: folder, kind: .folder) : nil)
+                return (made.url, folder, FileNode.listing(of: made.url), made.madeFolder ? FileNode.listing(of: folder) ?? FileNode.Listing(url: folder, kind: .folder) : nil,
+                        FileSnapshot(of: made.url))
             }.value
+            change.made = made?.snapshot
             changeDone(change, to: made?.url)
             guard let made else {
                 report("The handwritten note couldn’t be made.", "Notebook can’t write in “\(folderName(chosen))”.")
@@ -1739,9 +1743,10 @@ public final class Workspace: NSObject {
         let change = keepForUndo(FileChange(.make, "New Folder"))
         changeFiles { [self] follow in
             let parent = follow(parent)
-            let made = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?)? in
-                FileOperations.createFolder(in: parent, name: name).map { ($0, FileNode.listing(of: $0)) }
+            let made = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?, snapshot: FileSnapshot?)? in
+                FileOperations.createFolder(in: parent, name: name).map { ($0, FileNode.listing(of: $0), FileSnapshot(of: $0)) }
             }.value
+            change.made = made?.snapshot
             changeDone(change, to: made?.url)
             guard let made else {
                 return report("The folder couldn’t be made.", "Notebook can’t write in “\(folderName(parent))”.")
@@ -1971,16 +1976,19 @@ public final class Workspace: NSObject {
             let folder = follow(folder)
             let sources = copies.map(follow)
             let made = await Task.detached(priority: .userInitiated) {
-                sources.map { url -> (url: URL, listing: FileNode.Listing?)? in
+                sources.map { url -> (url: URL, listing: FileNode.Listing?, snapshot: FileSnapshot?)? in
                     let destination = FileOperations.uniqueURL(in: folder, name: url.deletingPathExtension().lastPathComponent, extension: url.pathExtension.isEmpty ? nil : url.pathExtension)
                     let accessing = url.startAccessingSecurityScopedResource()
                     defer { if accessing { url.stopAccessingSecurityScopedResource() } }
                     guard (try? FileManager.default.copyItem(at: url, to: destination)) != nil else { return nil }
                     NoteHistory.shared.made(destination)
-                    return (destination, FileNode.listing(of: destination))
+                    return (destination, FileNode.listing(of: destination), FileSnapshot(of: destination))
                 }
             }.value
-            for (change, copy) in zip(changes, made) { changeDone(change, to: copy?.url) }
+            for (change, copy) in zip(changes, made) {
+                change.made = copy?.snapshot
+                changeDone(change, to: copy?.url)
+            }
             if made.contains(where: { $0 == nil }) { beep() }
             showChanges(in: [folder], adding: made.compactMap { $0?.listing })
         }
@@ -2229,10 +2237,11 @@ public final class Workspace: NSObject {
         let change = keepForUndo(FileChange(.make, "Duplicate"))
         return changeFiles { [self] follow in
             let url = follow(url)
-            let result = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?)? in
+            let result = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?, snapshot: FileSnapshot?)? in
                 guard let copy = FileOperations.duplicate(url) else { return nil }
-                return (copy, FileNode.listing(of: copy))
+                return (copy, FileNode.listing(of: copy), FileSnapshot(of: copy))
             }.value
+            change.made = result?.snapshot
             changeDone(change, to: result?.url)
             guard let copy = result?.url else {
                 beep()
