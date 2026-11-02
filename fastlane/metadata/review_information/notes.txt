@@ -1,6 +1,6 @@
 Notebook is a notes app for the Markdown files in folders the user chooses. It has no accounts and no server (Guideline 4.8 does not apply).
 
-To review without notes of your own, choose "Try Sample Notes" on the first screen ("Try Sample Notes…" on the Mac). On the Mac it asks where to put them (Documents, say) and makes a folder Sample Notes there; on iPhone and iPad it makes it in the app's own folder, which the Files app shows under On My iPhone › Notebook. The folder then shows in the sidebar, with notes, pictures, a drawing, PDFs and to-dos. Every feature works there. To use your own files instead, choose "Open iCloud Drive" or "Choose another folder…".
+To review without notes of your own, choose "Try Sample Notes" on the first screen ("Try Sample Notes…" on the Mac). On the Mac it asks where to put them (Documents, say) and makes a folder Sample Notes there; on iPhone and iPad it makes it in the app's own folder, which the Files app shows under On My iPhone › Notebook. The folder then shows in the sidebar, with notes, pictures, a drawing, PDFs and to-dos. Every feature works there. For your own files, choose "Open iCloud Drive" or "Choose another folder…".
 
 The Mac app runs in the App Sandbox and reaches only the folders the user chose (security-scoped bookmarks).
 
