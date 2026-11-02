@@ -307,6 +307,25 @@ public final class SearchIndex {
     /// Folders left out with everything in them, as the sidebar leaves them out.
     nonisolated private static let skippedFolders: Set<String> = ["node_modules", "DerivedData", ".build", "Pods"]
 
+    /// Whether the walk reads what is at `url`, somewhere in `root` (a location's folder): nothing on the way there is
+    /// hidden by a name starting with ".", by the system's hidden flag or as a folder it leaves out (`node_modules`), or
+    /// is a package, whose insides it doesn't read. Only what it reads is found by a link.
+    nonisolated static func reads(_ url: URL, in root: URL) -> Bool {
+        let path = HiddenFolders.withoutPrivate(url.standardizedFileURL.path)
+        let rootPath = HiddenFolders.withoutPrivate(root.standardizedFileURL.path)
+        guard path.hasPrefix(rootPath + "/") else { return false }
+        let names = path.dropFirst(rootPath.count + 1).split(separator: "/").map(String.init)
+        var current = root.standardizedFileURL
+        for (index, name) in names.enumerated() {
+            current.appendPathComponent(name)
+            guard !name.hasPrefix("."), !skippedFolders.contains(name) else { return false }
+            var info = stat()
+            if stat(current.path, &info) == 0, info.st_flags & UInt32(UF_HIDDEN) != 0 { return false }
+            if index < names.count - 1, (try? current.resourceValues(forKeys: [.isPackageKey]).isPackage) == true { return false }
+        }
+        return true
+    }
+
     /// Goes through the files in `folder` (an address in the location folder `root`) and, if `deep`, in every folder in
     /// it, as the sidebar shows them: without hidden files and packages' insides. Calls `listed` with each folder whose
     /// files it goes through, before them, and `each` with every file, and whether it is new or changed since `known`. A

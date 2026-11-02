@@ -109,9 +109,13 @@ public struct Location: Identifiable, Codable, Equatable, Sendable {
     }
 
     /// The folder a file is under in this location, the location's own or a linked one, with the place the sidebar
-    /// gives it ("iCloud Drive › Desktop").
+    /// gives it ("iCloud Drive › Desktop"). In either form the system gives an address ("/private/var/…" and "/var/…").
     func folder(containing path: String) -> (url: URL, place: String, linked: LinkedFolder?)? {
-        folders.first { path == $0.url.path || path.hasPrefix($0.url.path + "/") }
+        let path = HiddenFolders.withoutPrivate(path)
+        return folders.first { folder in
+            let folderPath = HiddenFolders.withoutPrivate(folder.url.path)
+            return path == folderPath || path.hasPrefix(folderPath + "/")
+        }
     }
 
     /// The location's own folder, then the linked ones.
@@ -143,7 +147,7 @@ public struct Location: Identifiable, Codable, Equatable, Sendable {
     }
 
     func isLinkedFolder(_ url: URL) -> Bool {
-        linked.contains { $0.url.path == url.standardizedFileURL.path }
+        linked.contains { FileNode.samePath($0.url, url.standardizedFileURL) }
     }
 
     /// Looks up the linked folders again: iCloud Drive's, for now.

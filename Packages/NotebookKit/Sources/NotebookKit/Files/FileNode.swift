@@ -282,6 +282,12 @@ public final class FileNode: NSObject, Observable {
         HiddenFolders.withoutPrivate(a.path) == HiddenFolders.withoutPrivate(b.path)
     }
 
+    /// A folder, not a package such as an app or a .textbundle, which is a file.
+    nonisolated static func isFolder(_ url: URL) -> Bool {
+        let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
+        return values?.isDirectory == true && values?.isPackage != true
+    }
+
     /// Whether a file is `folder` itself or somewhere in it.
     nonisolated static func isSameOrInside(_ url: URL, _ folder: URL) -> Bool {
         let path = HiddenFolders.withoutPrivate(url.path)

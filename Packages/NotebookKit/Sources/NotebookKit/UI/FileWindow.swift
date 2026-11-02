@@ -64,25 +64,19 @@ public final class FileWindows {
         panel.allowsMultipleSelection = true
         guard panel.runModal() == .OK else { return }
         for url in panel.urls {
-            if Self.isFolder(url) { Workspace.shared.openFolder(url) } else { open(url) }
+            if FileNode.isFolder(url) { Workspace.shared.openFolder(url) } else { open(url) }
         }
     }
 
     /// Folders and notes from the Finder or the Dock icon.
     public func open(_ urls: [URL]) {
         for url in urls {
-            if Self.isFolder(url) {
+            if FileNode.isFolder(url) {
                 Workspace.shared.openFolder(url)
             } else if FileKind(url: url, isDirectory: false) == .note {
                 open(url)
             }
         }
-    }
-
-    /// A folder, not a package such as an app or a .textbundle.
-    static func isFolder(_ url: URL) -> Bool {
-        let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
-        return values?.isDirectory == true && values?.isPackage != true
     }
 
     var windows: [NSWindow] { controllers.values.compactMap(\.window) }
@@ -377,7 +371,7 @@ public final class NotebookAppDelegate: NSObject, NSApplicationDelegate {
             let reply = QuitReply()
             Task { @MainActor in
                 await workspace.todosWritten()
-                await withCheckedContinuation { done in PDFInk.whenWritten { done.resume() } }
+                await PDFInk.written()
                 reply.send()
             }
             Task { @MainActor in

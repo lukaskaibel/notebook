@@ -61,6 +61,11 @@ struct PageContent: Sendable {
 enum PDFPageWriter {
     nonisolated static func write(_ plan: PDFPlan, base: Data, to url: URL) throws {
         let data = try make(plan, base: base)
+        #if DEBUG
+        // `-NotebookSlowDrawingSaves <seconds>`: a slow save, for trying out what waits for it.
+        let delay = UserDefaults.standard.double(forKey: "NotebookSlowDrawingSaves")
+        if delay > 0 { Thread.sleep(forTimeInterval: delay) }
+        #endif
         var failure: Error?
         var coordination: NSError?
         // Written in place, so the file keeps its tags, its colour and its place in the folder.
@@ -110,6 +115,9 @@ enum PDFPageWriter {
         // The pages in the plan's order: the file's own the first time, a copy read from `base` after that, new paper.
         let originals = (0..<document.pageCount).compactMap { document.page(at: $0) }
         var used = Set<Int>()
+        // `base` read again for the copies, each time for one copy of any of its pages: as often as the page copied
+        // most often has copies, not for every copy.
+        var copies: [(document: PDFDocument, used: Set<Int>)] = []
         var pages: [PDFPage] = []
         for slot in plan.slots {
             switch slot.origin {
@@ -117,8 +125,15 @@ enum PDFPageWriter {
                 pages.append(originals[index])
             case .base(let index):
                 // A page of a document of its own, as a picture is carried in: what it has keeps its look until written.
-                guard let copies = PDFDocument(data: base), let copy = copies.page(at: index) else { throw PDFWriteError.pagesMissing(kept, document.pageCount) }
-                carriers.documents.append(copies)
+                if !copies.contains(where: { !$0.used.contains(index) }) {
+                    guard let read = PDFDocument(data: base) else { throw PDFWriteError.pagesMissing(kept, document.pageCount) }
+                    carriers.documents.append(read)
+                    copies.append((read, []))
+                }
+                guard let round = copies.firstIndex(where: { !$0.used.contains(index) }), let copy = copies[round].document.page(at: index) else {
+                    throw PDFWriteError.pagesMissing(kept, document.pageCount)
+                }
+                copies[round].used.insert(index)
                 copy.annotations.forEach(keepEntries)
                 pages.append(copy)
             case .new:
@@ -223,11 +238,13 @@ enum PDFPageWriter {
     }
 
     /// The entries PDFKit doesn't know: it keeps one when the annotation goes to another page or document only once
-    /// it has been read.
+    /// it has been read. Markup's only on its drawings (`MarkupDrawings.isMarkup`); on others PDFKit writes what it
+    /// knows of them and leaves it out.
     static func keepEntries(of annotation: PDFAnnotation) {
-        for key in [MarkupDrawings.notebookKey, PDFPictures.key, NotebookPaper.key, MarkupDrawings.extrasKey] {
+        for key in [MarkupDrawings.notebookKey, PDFPictures.key, NotebookPaper.key] {
             _ = annotation.value(forAnnotationKey: key)
         }
+        if MarkupDrawings.isMarkup(annotation) { _ = annotation.value(forAnnotationKey: MarkupDrawings.extrasKey) }
     }
 
     /// The document written anew with only what its pages use. PDFKit writes again everything the file had, the

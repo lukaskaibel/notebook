@@ -389,13 +389,15 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         handleTap(hit, at: point)
     }
 
-    func handleTap(_ hit: Hit, at point: CGPoint) {
+    /// False when it did nothing: the second tap of a double tap on a to-do's circle.
+    @discardableResult
+    func handleTap(_ hit: Hit, at point: CGPoint) -> Bool {
         switch hit {
         case .checkbox(let line):
             // A double tap ticks once: its second tap is where the first was on the screen, though the note may have
             // moved under it (a to-do that repeats keeps the ticked line under the finger).
             let onScreen = textView.convert(point, to: nil)
-            if let last = lastCheckboxTap, Date.now.timeIntervalSince(last.time) < 0.4, hypot(onScreen.x - last.point.x, onScreen.y - last.point.y) < 24 { return }
+            if let last = lastCheckboxTap, Date.now.timeIntervalSince(last.time) < 0.4, hypot(onScreen.x - last.point.x, onScreen.y - last.point.y) < 24 { return false }
             lastCheckboxTap = (.now, onScreen)
             UISelectionFeedbackGenerator().selectionChanged()
             toggleCheckbox(line: line)
@@ -421,6 +423,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         case .todo(let line, let part):
             showTodoReminder(line: line, part: part)
         }
+        return true
     }
 
     // MARK: - The keyboard

@@ -14,6 +14,8 @@ enum DebugRemote {
     private static weak var workspace: Workspace?
     private static var path = ""
     private static var waitUntil: Date?
+    /// What `hold` keeps, as VoiceOver keeps the element it is on.
+    private static var held: NSObject?
 
     static func startIfRequested(workspace: Workspace) {
         guard timer == nil, let file = UserDefaults.standard.string(forKey: "debugCommandFile") else { return }
@@ -120,6 +122,15 @@ enum DebugRemote {
         case "pdfduplicatepage":
             // pdfduplicatepage [n]: Duplicate, of page n (counted from 1) or the page in view.
             workspace.pdfEditing.duplicatePage(at: numbers.first.map { Int($0) - 1 } ?? workspace.pdfEditing.pageIndex)
+        case "pdfoverviewscroll":
+            // pdfoverviewscroll [seconds]: All Pages scrolled to the end and back over that long (4 s), a step every
+            // frame as a finger would, and how smooth it was: the frames, the longest one and the time lost to slow ones.
+            func find(_ view: UIView) -> UICollectionView? {
+                (view as? UICollectionView).flatMap { $0.accessibilityIdentifier == "All Pages" ? $0 : nil } ?? view.subviews.lazy.compactMap(find).first
+            }
+            let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
+            guard let grid = windows.lazy.compactMap(find).first else { log("pdfoverviewscroll: no All Pages"); break }
+            ScrollMeter.run(grid, seconds: numbers.first ?? 4) { log("pdfoverviewscroll: \($0)") }
         case "pdfgotopage":
             // pdfgotopage <n>: a page tapped in the overview.
             if let number = numbers.first { workspace.pdfEditing.goToPage(at: Int(number) - 1) }
@@ -582,6 +593,30 @@ enum DebugRemote {
                 let actions = (element.accessibilityCustomActions ?? []).map(\.name).joined(separator: ",")
                 return "\(element.accessibilityLabel ?? "") | \(element.accessibilityValue ?? "") | \(element.accessibilityTraits.rawValue) | \(element.accessibilityFrame) | \(actions)"
             }.joined(separator: "\n"))
+        case "hold":
+            // hold <label>: keeps what VoiceOver reads in the note as <label> (or starting so), as VoiceOver keeps the
+            // element it is on while the note changes under it; `activateheld` double-taps it then.
+            let elements = (editor.textView.accessibilityElements ?? []).compactMap { $0 as? NSObject }
+            held = elements.first { $0.accessibilityLabel == argument } ?? elements.first { $0.accessibilityLabel?.hasPrefix(argument) == true }
+            log("hold \(argument): \(held.map { "\(type(of: $0))" } ?? "nothing")")
+        case "activateheld":
+            log("activateheld: \(held?.accessibilityLabel ?? "nothing") \(held?.accessibilityActivate() ?? false)")
+        case "heldpoint":
+            // Where VoiceOver taps for what `hold` keeps when its double-tap does nothing, in the screen's points, and
+            // what it reads now.
+            let point = held?.accessibilityActivationPoint ?? .zero
+            log("heldpoint \(Int(point.x.rounded())) \(Int(point.y.rounded())) \(held?.accessibilityLabel ?? "") | \(held?.accessibilityValue ?? "")")
+        case "reloadtext":
+            // reloadtext <old>|<new>: the note changed on another device, the first <old> in it now <new> (\n for a line
+            // break), taken in as Change from Another Device.
+            let parts = argument.replacingOccurrences(of: "\\n", with: "\n").components(separatedBy: "|")
+            guard parts.count == 2, let range = editor.text.range(of: parts[0]) else { return log("reloadtext: not found") }
+            editor.reload(text: editor.text.replacingCharacters(in: range, with: parts[1]))
+            log("reloadtext: done")
+        case "axfocus":
+            // What VoiceOver was moved to when the keyboard went from the note, since the last time this was asked.
+            log("axfocus \(editor.textView.reader.lastFocused ?? "none")")
+            editor.textView.reader.lastFocused = nil
         case "axaction":
             // axaction <label>|<action>: one of the actions VoiceOver offers for what it reads in the note as <label>.
             let names = argument.components(separatedBy: "|")
@@ -781,6 +816,52 @@ extension EditorController {
         guard let hit = hitTest(point) else { return DebugRemote.log("nothing at \(point)") }
         DebugRemote.log("tap \(hit)")
         handleTap(hit, at: point)
+    }
+}
+
+/// Scrolls a scroll view to its end and back, a step every frame, and says how long the frames took: a frame that
+/// takes longer than it should is one the main thread was busy for.
+@MainActor
+private final class ScrollMeter: NSObject {
+    private static var running: ScrollMeter?
+    private let scrollView: UIScrollView
+    private let seconds: Double
+    private let done: (String) -> Void
+    private var start: CFTimeInterval?
+    private var last: CFTimeInterval?
+    private var frames: [Double] = []
+    private var expected = 1.0 / 60
+
+    private init(_ scrollView: UIScrollView, seconds: Double, done: @escaping (String) -> Void) {
+        self.scrollView = scrollView
+        self.seconds = seconds
+        self.done = done
+    }
+
+    static func run(_ scrollView: UIScrollView, seconds: Double, done: @escaping (String) -> Void) {
+        let meter = ScrollMeter(scrollView, seconds: seconds, done: done)
+        running = meter
+        CADisplayLink(target: meter, selector: #selector(tick(_:))).add(to: .main, forMode: .common)
+    }
+
+    @objc private func tick(_ link: CADisplayLink) {
+        if let last { frames.append(link.timestamp - last) }
+        last = link.timestamp
+        expected = link.targetTimestamp - link.timestamp
+        let start = start ?? link.timestamp
+        self.start = start
+        let time = (link.timestamp - start) / seconds
+        let inset = scrollView.adjustedContentInset
+        let end = max(scrollView.contentSize.height + inset.bottom - scrollView.bounds.height, -inset.top)
+        let way = time < 0.5 ? time * 2 : max(0, 2 - time * 2)
+        scrollView.contentOffset.y = -inset.top + (end + inset.top) * way
+        guard time >= 1 else { return }
+        link.invalidate()
+        let slow = frames.filter { $0 > expected * 1.5 }
+        let lost = frames.reduce(0) { $0 + max(0, $1 - expected) }
+        done(String(format: "%d frames of %.1f ms, longest %.1f ms, %d slow, %.0f ms lost (%.0f ms/s)", frames.count, expected * 1000,
+                    (frames.max() ?? 0) * 1000, slow.count, lost * 1000, lost * 1000 / seconds))
+        Self.running = nil
     }
 }
 #endif

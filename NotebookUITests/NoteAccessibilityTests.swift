@@ -88,6 +88,113 @@ final class NoteAccessibilityTests: XCTestCase {
         XCTAssertTrue(find(.staticText, line + " Or not.").waitForExistence(timeout: 30), app.debugDescription)
     }
 
+    /// A note that ends in something other than a line, here the Kyoto trip's flight tickets, and a new, empty note
+    /// have where to write as their last element: a double-tap there starts writing at the end (#279).
+    func testTheEndOfANoteCanBeWrittenAt() throws {
+        launch()
+        open("Travel", "Kyoto trip")
+        XCTAssertTrue(find(.button, "Write at the end").waitForExistence(timeout: 30), app.debugDescription)
+        // Without a line break after the tickets, as another app may leave it: writing goes on a line of its own.
+        XCTAssertEqual(remote("reloadtext ![[Flight tickets.pdf]]\\n|![[Flight tickets.pdf]]"), "reloadtext: done")
+        XCTAssertTrue(remote("text").hasSuffix("![[Flight tickets.pdf]]"))
+        XCTAssertEqual(remote("activate Write at the end"), "activate Write at the end: ReadingElement true")
+        let hide = app.buttons.matching(NSPredicate(format: "label == %@", "Hide Keyboard")).firstMatch
+        XCTAssertTrue(hide.waitForExistence(timeout: 30), app.debugDescription)
+        app.typeText("Souvenirs")
+        let text = remote("text")
+        XCTAssertTrue(text.contains("![[Flight tickets.pdf]]\nSouvenirs"), "written after the tickets: \(text)")
+        hide.tap()
+
+        remote("newnote Empty")
+        remote("wait 1")
+        remote("blurall")
+        let write = find(.button, "Write in the note")
+        XCTAssertTrue(write.waitForExistence(timeout: 30), "an empty note: \(app.debugDescription)")
+        let reading = remote("reading")
+        XCTAssertEqual(reading.components(separatedBy: "\n").last?.hasPrefix("Write in the note |  | 1 |"), true, "a button, last: \(reading)")
+        XCTAssertEqual(remote("activate Write in the note"), "activate Write in the note: ReadingElement true")
+        XCTAssertTrue(hide.waitForExistence(timeout: 30), app.debugDescription)
+        app.typeText("First line")
+        XCTAssertEqual(remote("text"), "First line")
+    }
+
+    /// VoiceOver stays on the element it is on while the note changes under it. When to-dos come in above from another
+    /// device, its double-tap ticks the to-do it was on, and so does the tap VoiceOver makes at its activation point when
+    /// an app doesn't act on the double-tap; when the to-do itself was written over, neither ticks anything (#279).
+    func testADoubleTapTicksTheToDoItWasOnAfterLinesMove() throws {
+        launch()
+        open("Travel", "Kyoto trip")
+        XCTAssertTrue(find(.button, "Rain jacket").waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertEqual(remote("hold Rain jacket"), "hold Rain jacket: ReadingElement")
+        let before = held()
+        XCTAssertEqual(remote("reloadtext - [x] Passport|- [ ] Umbrella\\n- [ ] Sun cream\\n- [x] Passport"), "reloadtext: done")
+        // Where VoiceOver taps: the circle of the to-do it is on, two lines further down now.
+        let after = held()
+        XCTAssertEqual(after.reading, "Rain jacket | Not completed")
+        XCTAssertGreaterThan(after.point.y, before.point.y + 40, "moved down with its line")
+        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: after.point.x, dy: after.point.y)).tap()
+        XCTAssertTrue(waitForText { $0.contains("- [x] Rain jacket") }, remote("text"))
+        var text = remote("text")
+        XCTAssertTrue(text.contains("- [ ] Power adapter") && text.contains("- [ ] Umbrella\n- [ ] Sun cream\n"), "nothing else ticked: \(text)")
+        // And VoiceOver's double-tap itself, back.
+        remote("wait 0.5")
+        XCTAssertEqual(remote("activateheld"), "activateheld: Rain jacket true")
+        XCTAssertTrue(waitForText { $0.contains("- [ ] Rain jacket") }, remote("text"))
+
+        XCTAssertEqual(remote("hold Power adapter, type A"), "hold Power adapter, type A: ReadingElement")
+        XCTAssertEqual(remote("reloadtext Power adapter, type A|Phone charger"), "reloadtext: done")
+        // Written over at the same place: its double-tap does nothing and says so, and VoiceOver has nowhere to tap,
+        // where Phone charger's circle is now.
+        XCTAssertEqual(remote("activateheld"), "activateheld: Power adapter, type A true")
+        XCTAssertEqual(held().point, CGPoint(x: -10_000, y: -10_000))
+        text = remote("text")
+        XCTAssertTrue(text.contains("- [ ] Phone charger"), "not ticked: \(text)")
+        XCTAssertTrue(find(.button, "Phone charger").waitForExistence(timeout: 15), "read as it is now: \(app.debugDescription)")
+    }
+
+    /// A repeating to-do ticked other than by VoiceOver's double-tap (a tap, another device, a notification) gets the
+    /// date it was done and its next one above it: VoiceOver stays on it, and on it again after Undo (#279).
+    func testVoiceOverStaysOnATickedRepeatingToDo() throws {
+        launch()
+        open("Inbox", "Errands")
+        let plants = app.textViews["Note"].firstMatch.descendants(matching: .button).matching(NSPredicate(format: "label BEGINSWITH %@", "Water the plants")).firstMatch
+        XCTAssertTrue(plants.waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertTrue(remote("hold Water the plants").hasSuffix(": ReadingElement"))
+        let before = held()
+        plants.tap()
+        XCTAssertTrue(waitForText { $0.contains("- [x] Water the plants") }, remote("text"))
+        let ticked = held()
+        XCTAssertTrue(ticked.reading.hasSuffix("| Completed"), "the ticked one, not the next one above it: \(ticked.reading)")
+        XCTAssertEqual(ticked.point.y, before.point.y, accuracy: 2, "still under the finger: the note moves up as the next one goes in above")
+        remote("undo")
+        XCTAssertTrue(waitForText { !$0.contains("- [x] Water the plants") }, remote("text"))
+        let undone = held()
+        XCTAssertTrue(undone.reading.hasSuffix("| Not completed"), undone.reading)
+        XCTAssertNotEqual(undone.point, CGPoint(x: -10_000, y: -10_000), "still in the note")
+    }
+
+    /// When the keyboard goes from the note, VoiceOver goes back to the line written in; when Find in Note takes the
+    /// keyboard, VoiceOver stays in its field (#279).
+    func testAnotherFieldKeepsVoiceOver() throws {
+        launch()
+        open("Personal", "Weekend")
+        let line = "Market on Saturday morning, cooking with Mia in the evening. Sunday stays empty on purpose."
+        XCTAssertTrue(find(.staticText, line).waitForExistence(timeout: 30), app.debugDescription)
+        let hide = app.buttons.matching(NSPredicate(format: "label == %@", "Hide Keyboard")).firstMatch
+        XCTAssertTrue(remote("activate \(line)").hasSuffix("ReadingElement true"))
+        XCTAssertTrue(hide.waitForExistence(timeout: 30), app.debugDescription)
+        remote("blur")
+        XCTAssertEqual(remote("axfocus"), "axfocus \(line)", "back to the line")
+
+        XCTAssertTrue(remote("activate \(line)").hasSuffix("ReadingElement true"))
+        XCTAssertTrue(hide.waitForExistence(timeout: 30), app.debugDescription)
+        remote("findinnote")
+        let deadline = Date().addingTimeInterval(15)
+        while !remote("focused").contains("findBar true"), Date() < deadline {}
+        XCTAssertFalse(remote("focused").hasPrefix("focused MarkdownTextView"), "Find in Note has the keyboard")
+        XCTAssertEqual(remote("axfocus"), "axfocus none", "VoiceOver stays in Find in Note's field")
+    }
+
     // MARK: - Steps
 
     private func launch() {
@@ -123,6 +230,25 @@ final class NoteAccessibilityTests: XCTestCase {
     private func waitFor(_ element: XCUIElement, value: String, file: StaticString = #filePath, line: UInt = #line) {
         let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", value), object: element)
         XCTAssertEqual(XCTWaiter().wait(for: [expectation], timeout: 15), .completed, "\(element.value ?? "")", file: file, line: line)
+    }
+
+    /// Where VoiceOver would tap for the element `hold` kept, on the screen, and what it reads now.
+    private func held(file: StaticString = #filePath, line: UInt = #line) -> (point: CGPoint, reading: String) {
+        let parts = remote("heldpoint").split(separator: " ", maxSplits: 3).map(String.init)
+        guard parts.count >= 3, let x = Double(parts[1]), let y = Double(parts[2]) else {
+            XCTFail("heldpoint: \(parts)", file: file, line: line)
+            return (.zero, "")
+        }
+        return (CGPoint(x: x, y: y), parts.count > 3 ? parts[3] : "")
+    }
+
+    /// Waits until the note's text is as asked.
+    private func waitForText(_ condition: (String) -> Bool) -> Bool {
+        let deadline = Date().addingTimeInterval(15)
+        while Date() < deadline {
+            if condition(remote("text")) { return true }
+        }
+        return false
     }
 
     /// Runs a debug remote command in the app and returns what it logged for it.

@@ -617,7 +617,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     /// app the Mac has for it. A folder already opens and closes with each click.
     func openOnItsOwn(row: Int) {
         guard let url = url(at: row) else { return }
-        guard !((outline.item(atRow: row) as? FileNode)?.isFolder ?? FileWindows.isFolder(url)) else { return }
+        guard !((outline.item(atRow: row) as? FileNode)?.isFolder ?? FileNode.isFolder(url)) else { return }
         workspace.openOnItsOwn(url)
     }
 

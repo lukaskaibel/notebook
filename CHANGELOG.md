@@ -49,8 +49,7 @@ versions follow [semantic versioning](https://semver.org).
   `![[Kyoto.jpg]]`, and shows as before: the picture, or the file's card. It isn't stored a second time next to the
   note, and the link follows the file when you rename or move it. Files from anywhere else, such as Downloads, are still
   copied next to the note, so the note keeps them when Downloads is emptied; drop with Option held for a copy of one
-  from your folders too.
-
+  from your folders too. A folder goes in as a link to it, never as a copy, and only from your folders.
 - On iPhone and iPad, what you write on a PDF is saved a moment after you stop, not only when you put the pen away,
   leave the PDF or leave Notebook. Drawing on a PDF there uses the canvas Markup has, so pictures on a page can be picked
   and moved.
@@ -63,8 +62,11 @@ versions follow [semantic versioning](https://semver.org).
   ("dash, left bracket, space, right bracket, Buy milk"). Headings are headings, a to-do says whether it is completed
   and a double-tap ticks it, as a tap on its circle does, links are links, pictures and drawings are read by their
   names, a table row by row, and a to-do's date or place is a button that changes it. A double-tap on a line starts
-  writing at its end; while you write, the note is one text field as before, and the to-do the caret is in can be
-  ticked from VoiceOver's actions (#214).
+  writing at its end, and "Write at the end", last in the note ("Write in the note" in an empty one), on a line of its
+  own after it all; while you write, the note is one text field as before, and the to-do the caret is in can be ticked
+  from VoiceOver's actions. VoiceOver stays on a to-do when lines come in above it from another device or it is ticked
+  there, and a double-tap on one that was written over there reads it as it is now rather than ticking it. Switch
+  Control, Voice Control and Full Keyboard Access go through the note the same way (#214, #279).
 - Putting the pen away on a PDF, or taking it up, no longer makes the pages flash empty for a moment.
 - A PDF you draw in on iPhone or iPad no longer grows a little with every save: it is written anew with only what its
   pages use (#244).
@@ -76,6 +78,18 @@ versions follow [semantic versioning](https://semver.org).
   you typed as a note in its folder Unsaved Notes (on iPhone and iPad in On My iPhone › Notebook) and says so, with
   Show in Finder or Open. If even that can't be written, it asks you to copy the text or try again, and quitting waits
   for your answer (#165).
+- On iPhone and iPad, Undo of a new handwritten note you wrote in and left a moment ago no longer deletes it while what
+  you wrote is still being saved: it waits for the save and, where there is no Recently Deleted, asks first. A PDF moved
+  to the Trash or deleted waits for its drawing to be saved too, and what you wrote just before leaving a PDF still goes
+  in when an earlier change was still being saved (#275).
+- On iPhone and iPad, a page you duplicate, give other paper, delete or bring back with Undo or Redo while the PDF also
+  changes on another device keeps what is under your writing, its slide or its paper, rather than coming back on blank
+  paper or on another page (#277).
+- All Pages, on iPhone and iPad, draws the small pages in the background, so opening and scrolling it no longer
+  stutters while the pages of a long scanned PDF are drawn (#278).
+  for your answer. On iPhone and iPad, switching to another app with such a note open keeps what you typed there at
+  once, so it is safe if iOS closes Notebook or you swipe it away, and Notebook tells you the next time you open it;
+  once the note can be saved after all, the copy goes again (#165, #273).
 
 ## [1.1.0] – 2026-10-29
 
