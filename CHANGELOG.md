@@ -48,11 +48,17 @@ versions follow [semantic versioning](https://semver.org).
 - On iPhone and iPad, where a place has no Recently Deleted, Undo of a new note, a new folder, a copy or an import from
   Apple Notes no longer deletes it for good once you have written in it or changed it since: it asks first, as Delete
   does there. One left as Notebook made it still goes without a question (#169).
+- A note that can't be saved as you leave it (a full disk, a read-only disk, a folder Notebook may no longer write to)
+  no longer takes what you typed with it. Notebook tries again a few seconds later; if it still can't, it keeps what
+  you typed as a note in its folder Unsaved Notes (on iPhone and iPad in On My iPhone › Notebook) and says so, with
+  Show in Finder or Open. If even that can't be written, it asks you to copy the text or try again, and quitting waits
+  for your answer (#165).
 
-## [1.1.0] – not released yet
+## [1.1.0] – 2026-10-29
 
 Widgets, Share to Notebook, version history, repeating to-dos, to-dos in no note and import from Apple Notes; on iPhone
-and iPad, drawing on PDFs right on the page.
+and iPad, drawing on PDFs right on the page. It came to the App Store for the Mac on 29 October 2026 and for iPhone and
+iPad on 1 November.
 
 ### Added
 

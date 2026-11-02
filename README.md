@@ -46,8 +46,8 @@
 
 > **Version 1.1.0** covers writing, organising and finding notes day to day, on the Mac, iPhone and iPad, and adds
 > widgets, Share to Notebook, version history, repeating to-dos and import from Apple Notes. Notebook is
-> [in the App Store](https://apps.apple.com/app/id6823609514) for the Mac, iPhone and iPad, free; the App Store has
-> 1.0.0 until Apple has reviewed 1.1.0. You can also build it from source (five minutes, see below).
+> [in the App Store](https://apps.apple.com/app/id6823609514) for the Mac, iPhone and iPad, free. You can also build it
+> from source (five minutes, see below).
 
 ## Why
 
@@ -619,6 +619,14 @@ after Notebook was closed.
 Notes are saved in the background, so a slow disk or iCloud holding a note never makes the window wait. What you typed
 in a note you have just left is still written, and Notebook doesn't quit before it is. A note open in the main window
 and in a window of its own is one note: what you type in either shows in the other.
+
+When a note can't be saved (the disk is full or read-only, or Notebook may no longer write in its folder), Notebook
+tries again a second and then three seconds later. A note you have left that still can't be saved keeps what you
+typed as a note of its own in Notebook's folder Unsaved Notes, named after it, and Notebook says so: on the Mac that
+folder is in the app's Application Support folder (Show in Finder in the alert), on iPhone and iPad it is
+On My iPhone › Notebook › Unsaved Notes in the Files app. The note itself stays as it was last saved. If the copy
+can't be written either, Notebook asks you to copy what you typed or try again, and doesn't quit before you answer. If
+it quits first, it tells you about a copy it kept the next time it opens.
 
 Notes in iCloud Drive that aren't downloaded yet are fetched so that search finds them; other files that live only in
 iCloud show a cloud in the sidebar and download when you open them. A note that isn't on your Mac, iPhone or iPad yet

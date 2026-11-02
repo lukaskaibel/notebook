@@ -13,7 +13,9 @@ import Synchronization
 ///
 /// Saving, reading the file again after a change made elsewhere and settling a conflict happen off the main thread, one
 /// at a time, so the window never waits for the disk or for iCloud. A note left while it is still writing is kept until
-/// it is done, and quitting, the Trash, renames and moves wait for it.
+/// it is done, and quitting, the Trash, renames and moves wait for it. A write that fails is tried again a little later;
+/// a note left that still can't be written keeps what was typed in Notebook's own folder (`UnsavedNotes`), and the app
+/// says so.
 @MainActor
 @Observable
 public final class NoteDocument: NSObject, NSFilePresenter {
@@ -82,6 +84,23 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     /// Where the file was before it went (into the Trash, say), for a copy kept after that.
     @ObservationIgnored private var deletedFrom: URL?
     @ObservationIgnored private var isPresenting = true
+    /// Writes that failed one after another (a full disk, a disk taken out, a folder Notebook may no longer write to),
+    /// and why the last one did, as the system says it, when it did. Each is tried again a little later (`retryDelays`);
+    /// once the note was left and that didn't help either, what was typed is kept in Notebook's own folder
+    /// (`keepUnsaved`).
+    @ObservationIgnored private(set) var failedWrites = 0
+    @ObservationIgnored private var whyNotWritten: String?
+    /// What failed was the copy that keeps both next to the note (`keepBoth`), not the note itself.
+    @ObservationIgnored private var failedCopying = false
+    @ObservationIgnored private var retryTimer: Timer?
+    @ObservationIgnored private var wantsToKeepUnsaved = false
+    /// How long after the first failed write it is tried again, and after the second.
+    static var retryDelays: [TimeInterval] = [1, 3]
+    /// Left, not written, and not kept in Notebook's folder either: held, and quitting with it, until you say what to do
+    /// (`UnsavedNote`).
+    @ObservationIgnored private var isAskingAboutUnsaved = false
+    /// Told about a note left whose text couldn't be written, kept in Notebook's folder or not: the app says so.
+    static var onUnsaved: ((UnsavedNote) -> Void)?
     /// Where notes are read and written. The coordinated reads and writes wait for iCloud without holding a thread.
     private nonisolated static let fileQueue: OperationQueue = {
         let queue = OperationQueue()
@@ -363,6 +382,12 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         case settled(String)
         /// What was typed here went into a copy next to the note, which says this.
         case keptBoth(String)
+        /// It couldn't be written, for this reason when the system gave one; `copying`: the copy that keeps both next to
+        /// it couldn't (`keepBoth`).
+        case notWritten(String?, copying: Bool)
+        /// The note was left and still couldn't be written: this text went into a note in Notebook's own folder, here,
+        /// or, nil, nowhere either.
+        case keptUnsaved(String, at: URL?)
         case failed
     }
 
@@ -383,12 +408,18 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         }
         if let settling {
             self.settling = nil
+            cancelRetry()
             return settle(settling)
+        }
+        if wantsToKeepUnsaved {
+            wantsToKeepUnsaved = false
+            return keepUnsaved()
         }
         if wantsSave, canSave {
             // It reads what changed elsewhere too.
             wantsSave = false
             wantsRead = false
+            cancelRetry()
             return save()
         }
         wantsSave = false
@@ -419,6 +450,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         switch outcome {
         case .written(let written, let modified):
             savedText = written
+            failedWrites = 0
             if let modified { self.modified = modified }
             onSave?()
             // While you write, now and then: the text as it was written.
@@ -450,10 +482,83 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         case .keptBoth(let disk):
             text = disk
             savedText = disk
+            failedWrites = 0
             noteWhetherChangedSinceOpening()
+        case .notWritten(let why, let copying):
+            whyNotWritten = why
+            failedCopying = copying
+            failedWrites += 1
+            // The note stays as it is on disk while the copy that keeps both waits to be written.
+            if copying { wantsSave = false }
+            if failedWrites <= Self.retryDelays.count {
+                tryAgain(after: Self.retryDelays[failedWrites - 1])
+            } else if isClosed, !isEmpty {
+                // Nothing more is typed here: never let go of it without keeping it. A note still open keeps it on
+                // screen, and its saves go on as you type, until it is left.
+                wantsToKeepUnsaved = true
+            }
+        case .keptUnsaved(let mine, let copy):
+            wantsSave = false
+            // Nowhere to keep it: it waits for an answer, unless there is no one to ask.
+            if copy == nil, Self.onUnsaved != nil { isAskingAboutUnsaved = true }
+            Self.onUnsaved?(UnsavedNote(note: url, copy: copy, reason: whyNotWritten, text: mine, document: self))
         case .failed:
             break
         }
+        next()
+    }
+
+    /// Tries the write that failed again in a while, and the note stays among those being written meanwhile: quitting
+    /// waits for it. The timer fires in every mode, also while the Mac waits to quit.
+    private func tryAgain(after delay: TimeInterval) {
+        cancelRetry()
+        let timer = Timer(timeInterval: delay, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.retry() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        retryTimer = timer
+    }
+
+    private func retry() {
+        retryTimer = nil
+        if failedCopying {
+            keepBoth()
+        } else if canSave || moves > 0 {
+            wantsSave = true
+        } else if isClosed, hasUnsavedChanges, !isEmpty {
+            // Gone meanwhile, say: what was typed is kept all the same.
+            wantsToKeepUnsaved = true
+        }
+        next()
+    }
+
+    private func cancelRetry() {
+        retryTimer?.invalidate()
+        retryTimer = nil
+    }
+
+    /// The note was left and couldn't be written, also when tried again: what was typed goes into a note of its own in
+    /// Notebook's folder (`UnsavedNotes`), and the app says where; or, when that can't be written either, asks.
+    private func keepUnsaved() {
+        let (mine, url) = (text, url)
+        work { finish in
+            Self.fileQueue.addOperation { finish(.keptUnsaved(mine, at: UnsavedNotes.keep(mine, of: url))) }
+        }
+    }
+
+    /// Try Again, asked about a note left that couldn't be written or kept: written once more, tried again a little
+    /// later as before, then kept or asked about again.
+    func tryAgainToSave() {
+        guard isAskingAboutUnsaved else { return }
+        isAskingAboutUnsaved = false
+        failedWrites = 0
+        retry()
+    }
+
+    /// What was typed went elsewhere (Copy Text): the note is let go.
+    func letGoOfUnsaved() {
+        guard isAskingAboutUnsaved else { return }
+        isAskingAboutUnsaved = false
         next()
     }
 
@@ -471,7 +576,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         let write = NSFileAccessIntent.writingIntent(with: url, options: [])
         work { finish in
             NSFileCoordinator(filePresenter: self).coordinate(with: [read, write], queue: Self.fileQueue) { error in
-                finish(error == nil ? self.write(mine, over: base, at: write.url) : .failed)
+                finish(error.map { .notWritten($0.localizedDescription, copying: false) } ?? self.write(mine, over: base, at: write.url))
             }
         }
     }
@@ -486,7 +591,11 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         } else if FileManager.default.fileExists(atPath: url.path) {
             return .unreadable
         }
-        guard FileOperations.write(Data(mine.utf8), to: url) else { return .failed }
+        do {
+            try FileOperations.replace(url, with: Data(mine.utf8))
+        } catch {
+            return .notWritten(error.localizedDescription, copying: false)
+        }
         return .written(mine, modified: Self.modificationDate(url))
     }
 
@@ -589,7 +698,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
                     Self.fileQueue.addOperation {
                         guard disk != mine else { return finish(.keptBoth(mine)) }
                         let kept = Self.writeCopy(of: note, from: device, text: mine)
-                        finish(kept ? .keptBoth(disk ?? mine) : .failed)
+                        finish(kept ? .keptBoth(disk ?? mine) : .notWritten(nil, copying: true))
                     }
                 }
             }
@@ -719,7 +828,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     /// Keeps the note among those quitting waits for while it is writing, or holds what was typed during a move. A note
     /// left stops hearing about its file once it is done.
     private func updateWriting() {
-        if isWorking || (moves > 0 && hasUnsavedChanges) {
+        if isWorking || retryTimer != nil || isAskingAboutUnsaved || (moves > 0 && hasUnsavedChanges) {
             guard !Self.writing.contains(self) else { return }
             Self.writing.append(self)
             #if os(iOS)
