@@ -261,6 +261,10 @@ struct FileActions: View {
             }
         }
         Section {
+            // The file itself, as Copy in Files: pasted in a note it is a link to it.
+            if !isLocation {
+                Button { workspace.copyFile(url) } label: { Label("Copy", systemImage: "doc.on.doc") }
+            }
             if !isFolder {
                 Button { workspace.copyLink(url) } label: { Label("Copy Link", systemImage: "link") }
             }

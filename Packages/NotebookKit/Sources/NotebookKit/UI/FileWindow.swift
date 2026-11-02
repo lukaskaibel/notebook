@@ -339,6 +339,12 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
         return nil
     }
 
+    /// A file of the locations, for a note in one of them: a note from elsewhere, which links don't reach from,
+    /// takes a copy.
+    func editor(_ editor: EditorController, linkTo file: URL) -> FileLink? {
+        library?.libraryLink(to: file, from: url)
+    }
+
     func editorNoteName(_ editor: EditorController) -> String {
         url.deletingPathExtension().lastPathComponent
     }
