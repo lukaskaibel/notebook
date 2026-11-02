@@ -596,6 +596,7 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
     /// were carried in it and the pictures it has.
     private func saved(_ pages: [PDFPage], counted: Int, date: Date?, base newBase: (data: Data, places: [Int: Int], pictures: Set<String>)?, failure: Error?) {
         isSaving = false
+        lastSaveFailed = failure != nil
         defer {
             updateWriting()
             let waiting = whenSaved
@@ -668,27 +669,43 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
     /// Renames and moves of the PDF under way: saves wait for them, to go where the PDF is then.
     private var moves = 0
     private var whenSaved: [() -> Void] = []
+    private var lastSaveFailed = false
 
     /// Notebook is about to rename or move `url`, a PDF or a folder it is in: what was drawn in it is written where it
     /// is still, a save under way too, and later saves wait until it has moved (`endMoving`), so that none goes to
     /// where it was (#288).
     static func beginMoving(_ url: URL) async -> [PDFDrawingSession] {
         let sessions = all.allObjects.filter { FileNode.isSameOrInside($0.url, url) }
-        for session in sessions {
-            session.save()
-            session.moves += 1
-        }
-        for session in sessions {
-            // Read from where it is, still being read, and written there.
-            if session.base == nil, !session.baseIsUnreadable {
-                await withCheckedContinuation { done in session.whenBaseRead.append { done.resume() } }
-            }
-            if session.isSaving {
-                await withCheckedContinuation { done in session.whenSaved.append { done.resume() } }
-            }
-        }
+        for session in sessions { await session.writeAll() }
+        for session in sessions { session.moves += 1 }
         await PDFInk.written()
         return sessions
+    }
+
+    /// Writes all that was drawn where the PDF is: a save under way, and what was drawn while it was written too, until
+    /// nothing is left (or a save fails, which says so).
+    private func writeAll() async {
+        while true {
+            // Read from where it is still.
+            if base == nil, !baseIsUnreadable {
+                await withCheckedContinuation { done in whenBaseRead.append { done.resume() } }
+            }
+            if isSaving {
+                await withCheckedContinuation { done in whenSaved.append { done.resume() } }
+                continue
+            }
+            guard hasUnsavedChanges, !lastSaveFailed else { return }
+            save()
+            // One that can't begin (the PDF unreadable or gone) has nothing to wait for.
+            guard isSaving else { return }
+        }
+    }
+
+    /// Whether drawing before is still being written into the PDF at `url`: drawing on it again waits until it is, and
+    /// the PDF is read again, so that nothing written then is drawn over (as after a rename: that session saves its
+    /// last strokes there).
+    static func isWriting(_ url: URL) -> Bool {
+        writing.contains { FileNode.samePath($0.url, url) }
     }
 
     /// The rename or move of `url` is done, to `new` (nil when it couldn't be): the sessions save there from now on,

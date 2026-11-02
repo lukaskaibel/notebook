@@ -49,6 +49,29 @@ final class PDFSavingUITests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: old.path), "written again under its old name")
     }
 
+    func testWhatIsWrittenWhileASaveRunsGoesAlongWithARename() throws {
+        launch()
+        let old = folder.appendingPathComponent("Lecture 4.pdf"), new = folder.appendingPathComponent("Eigenvalues.pdf")
+        let before = pictures(old)
+        remote("open University/Linear algebra/Lecture 4.pdf")
+        remote("wait 2")
+        remote("pdfpen")
+        remote("wait 3")
+        // A picture; once its save has begun, another, and the rename at once.
+        remote("pdfpicture")
+        remote("wait 2.5")
+        remote("pdfpicture")
+        remote("rename Eigenvalues")
+        waitFor("both pictures in the renamed PDF") { self.pictures(new) == before + 2 }
+        // Written in again under the new name, on the page the second picture is on: that one stays.
+        remote("wait 3")
+        remote("pdfpicture")
+        waitFor("the third picture in the renamed PDF") { self.pictures(new) == before + 3 }
+        remote("wait 4")
+        XCTAssertEqual(pictures(new), before + 3, "a picture went again")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: old.path), "written again under its old name")
+    }
+
     func testAPDFMovedWhileItIsSavedKeepsWhatWasWritten() throws {
         launch()
         let old = folder.appendingPathComponent("Lecture 4.pdf"), new = library.appendingPathComponent("Archive/Lecture 4.pdf")

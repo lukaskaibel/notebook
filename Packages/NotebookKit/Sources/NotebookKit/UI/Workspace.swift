@@ -1495,8 +1495,11 @@ public final class Workspace: NSObject {
         history = history.map(fix)
         relocation = (old.standardizedFileURL, new.standardizedFileURL, UUID())
         if let current = currentURL { currentURL = fix(current) }
-        // The pen stays on over a PDF renamed or moved while you write in it.
+        #if os(iOS)
+        // The pen stays on over a PDF renamed or moved while you write in it, once what was drawn is written there
+        // (`PDFDrawingSession.isWriting`).
         if let drawn = drawsOnPDF { drawsOnPDF = fix(drawn) }
+        #endif
         // A file deleted while its rename was under way stays out of the lists under its new name.
         if !leaving.isEmpty { leaving = Dictionary(leaving.map { (fix($0.key), $0.value) }, uniquingKeysWith: +) }
         // Else ⌘N would make the folder again under its old name, for the note.
