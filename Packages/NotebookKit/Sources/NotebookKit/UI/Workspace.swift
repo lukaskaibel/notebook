@@ -59,8 +59,8 @@ public final class Workspace: NSObject {
     @ObservationIgnored let widgets = WidgetKeeping()
     #if os(macOS)
     /// Reports waiting for Notebook to come to the front (`reportInFront`).
-    @ObservationIgnored var reportsWaiting: [(title: String, message: String)] = []
-    @ObservationIgnored var reportsObserver: NSObjectProtocol?
+    @ObservationIgnored var reportsWaiting: [() -> Void] = []
+    @ObservationIgnored var reportsObservers: [NSObjectProtocol] = []
     #endif
     /// The last change to a to-do's file, which the next waits for, and what to-dos' lines became (`current(_:)`).
     @ObservationIgnored var lastTodoWrite: Task<Void, Never>?
@@ -186,6 +186,11 @@ public final class Workspace: NSObject {
     var quickLookURL: URL?
     /// Something that couldn't be done, for an alert.
     var problem: Problem?
+    #if os(iOS)
+    /// Notes left that couldn't be written, for alerts one after another: kept in Notebook's folder, or asking what to
+    /// do (`Workspace+UnsavedNotes`).
+    var unsavedReports: [UnsavedReport] = []
+    #endif
     /// Counts Search (⌥⌘F), which puts the caret in the search field.
     var searchRequest = 0
     #if os(iOS)
@@ -250,7 +255,7 @@ public final class Workspace: NSObject {
     /// `.assets` files the open note used, so the ones it drops can go to the Trash when you leave it.
     @ObservationIgnored private var assetsInUse = Set<String>()
     /// Saved as the app quits: asking the app to quit, and then quitting, both say so.
-    @ObservationIgnored private var hasQuit = false
+    @ObservationIgnored private(set) var hasQuit = false
     /// Every folder Move To offers, in order (`prepareMoveFolders`).
     @ObservationIgnored private var moveFolders: MoveFolders?
     @ObservationIgnored private var preparingMoveFolders: MoveFolders.Key?
@@ -357,9 +362,12 @@ public final class Workspace: NSObject {
             if let store = SearchIndex.storeURL(library: url.path, name: "History", in: .cachesDirectory) {
                 NoteHistory.shared.keepOnDevice(in: store.appendingPathComponent("History.noindex", isDirectory: true))
             }
-            // So do its to-dos in no note.
+            // So do its to-dos in no note, and what was typed in its notes that couldn't be written.
             if let store = SearchIndex.storeURL(library: url.path, name: "To-dos", in: .cachesDirectory) {
                 looseTodos.keepOnDevice(in: store.appendingPathComponent("To-dos.noindex", isDirectory: true))
+            }
+            if let store = SearchIndex.storeURL(library: url.path, name: "Unsaved Notes", in: .applicationSupportDirectory) {
+                UnsavedNotes.keep(in: store)
             }
             #if DEBUG
             if UserDefaults.standard.bool(forKey: "NotebookDemo"), DemoLibrary.create(at: url) {
@@ -414,6 +422,7 @@ public final class Workspace: NSObject {
         reminders.onChange = { [weak self] in self?.remindersChanged() }
         readTextInPictures(NotebookSettings.shared.readsTextInPictures)
         watchForDueReminders()
+        tellAboutUnsavedNotes()
         let last = temporaryLocations ? nil : UserDefaults.standard.string(forKey: "lastOpened").map(Self.rerooted)
         locationsChanged(resolving: true, reading: last.map { [$0] } ?? [])
         if let last, FileManager.default.fileExists(atPath: last) {
@@ -2398,39 +2407,67 @@ public final class Workspace: NSObject {
         let alert = NSAlert()
         alert.messageText = title
         alert.informativeText = message
-        let front = NSApp.orderedWindows.first { $0.isVisible && !($0 is NSPanel) }
-        let fileWindow = front?.windowController is FileWindowController ? front : nil
-        if let window = fileWindow ?? editor.textView.window ?? NSApp.mainWindow { alert.beginSheetModal(for: window) } else { alert.runModal() }
+        present(alert)
         #else
         problem = Problem(title: title, message: message)
         #endif
     }
 
+    #if os(macOS)
+    /// Shows an alert where `report` does, and hands over the button chosen.
+    func present(_ alert: NSAlert, then answer: ((NSApplication.ModalResponse) -> Void)? = nil) {
+        let front = NSApp.orderedWindows.first { $0.isVisible && !($0 is NSPanel) }
+        let fileWindow = front?.windowController is FileWindowController ? front : nil
+        if let window = fileWindow ?? editor.textView.window ?? NSApp.mainWindow ?? front {
+            alert.beginSheetModal(for: window) { answer?($0) }
+        } else {
+            answer?(alert.runModal())
+        }
+    }
+    #endif
+
     /// Something that couldn't be done that nobody asked for just now, as what was shared to Notebook while it was
     /// closed: told once Notebook is in front, never as an alert of its own while it runs in the background without a
     /// window, as after a launch at login.
     func reportInFront(_ title: String, _ message: String) {
+        inFront { [weak self] in self?.report(title, message) }
+    }
+
+    /// Does `show` at once when Notebook is in front with a window, else once it is: not as an alert of its own before
+    /// the window is up, as at launch.
+    func inFront(_ show: @escaping () -> Void) {
         #if os(macOS)
-        guard NSApp.isActive else {
-            reportsWaiting.append((title, message))
-            if reportsObserver == nil {
-                reportsObserver = NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
-                    // Once its window is up.
-                    DispatchQueue.main.async { MainActor.assumeIsolated { self?.showReportsWaiting() } }
+        guard NSApp.isActive, hasWindowInFront else {
+            reportsWaiting.append(show)
+            if reportsObservers.isEmpty {
+                for name in [NSApplication.didBecomeActiveNotification, NSWindow.didBecomeMainNotification] {
+                    reportsObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                        // Once its window is up.
+                        DispatchQueue.main.async {
+                            MainActor.assumeIsolated {
+                                guard let self, NSApp.isActive, self.hasWindowInFront else { return }
+                                self.showReportsWaiting()
+                            }
+                        }
+                    })
                 }
             }
             return
         }
         #endif
-        report(title, message)
+        show()
     }
 
     #if os(macOS)
+    private var hasWindowInFront: Bool {
+        NSApp.windows.contains { $0.isVisible && !($0 is NSPanel) }
+    }
+
     /// What waited for Notebook to come to the front.
     func showReportsWaiting() {
         let waiting = reportsWaiting
         reportsWaiting = []
-        for (title, message) in waiting { report(title, message) }
+        for show in waiting { show() }
     }
     #endif
 

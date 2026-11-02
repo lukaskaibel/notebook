@@ -220,6 +220,12 @@ enum DebugRemote {
                 picker.dismiss(animated: true)
                 editor.insertPictures([picture])
             }
+        case "unsaved":
+            // unsaved [ok|open|copy|again]: the alerts about notes that couldn't be saved; with an answer, the first is
+            // answered as its button does.
+            for report in workspace.unsavedReports { log("unsaved: \(report.title) | \(report.message)") }
+            let answers: [String: UnsavedReport.Answer] = ["ok": .ok, "open": .show, "copy": .copyText, "again": .tryAgain]
+            if let report = workspace.unsavedReports.first, let answer = answers[argument] { workspace.answer(report, answer) }
         case "locations":
             // locations: each location's name and place, as Settings shows them.
             log("locations: " + workspace.locations.map { "\($0.name) (\($0.place)) \($0.path)" }.joined(separator: " | "))
