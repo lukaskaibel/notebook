@@ -88,6 +88,77 @@ final class NoteAccessibilityTests: XCTestCase {
         XCTAssertTrue(find(.staticText, line + " Or not.").waitForExistence(timeout: 30), app.debugDescription)
     }
 
+    /// A note that ends in something other than a line, here the Kyoto trip's flight tickets, and a new, empty note
+    /// have where to write as their last element: a double-tap there starts writing at the end (#279).
+    func testTheEndOfANoteCanBeWrittenAt() throws {
+        launch()
+        open("Travel", "Kyoto trip")
+        XCTAssertTrue(find(.button, "Write at the end").waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertEqual(remote("activate Write at the end"), "activate Write at the end: ReadingElement true")
+        let hide = app.buttons.matching(NSPredicate(format: "label == %@", "Hide Keyboard")).firstMatch
+        XCTAssertTrue(hide.waitForExistence(timeout: 30), app.debugDescription)
+        app.typeText("Souvenirs")
+        let text = remote("text")
+        XCTAssertTrue(text.contains("![[Flight tickets.pdf]]\nSouvenirs"), "written after the tickets: \(text)")
+        hide.tap()
+
+        remote("newnote Empty")
+        remote("wait 1")
+        remote("blurall")
+        let write = find(.button, "Write in the note")
+        XCTAssertTrue(write.waitForExistence(timeout: 30), "an empty note: \(app.debugDescription)")
+        let reading = remote("reading")
+        XCTAssertEqual(reading.components(separatedBy: "\n").last?.hasPrefix("Write in the note |  | 1 |"), true, "a button, last: \(reading)")
+        XCTAssertEqual(remote("activate Write in the note"), "activate Write in the note: ReadingElement true")
+        XCTAssertTrue(hide.waitForExistence(timeout: 30), app.debugDescription)
+        app.typeText("First line")
+        XCTAssertEqual(remote("text"), "First line")
+    }
+
+    /// VoiceOver stays on the element it is on while the note changes under it. When to-dos come in above from another
+    /// device, its double-tap ticks the to-do it was on, not the one that took its line; when the to-do itself was
+    /// written over, it does nothing (#279).
+    func testADoubleTapTicksTheToDoItWasOnAfterLinesMove() throws {
+        launch()
+        open("Travel", "Kyoto trip")
+        XCTAssertTrue(find(.button, "Rain jacket").waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertEqual(remote("hold Rain jacket"), "hold Rain jacket: ReadingElement")
+        XCTAssertEqual(remote("reloadtext - [x] Passport|- [ ] Umbrella\\n- [ ] Sun cream\\n- [x] Passport"), "reloadtext: done")
+        XCTAssertEqual(remote("activateheld"), "activateheld: Rain jacket true")
+        var text = remote("text")
+        XCTAssertTrue(text.contains("- [x] Rain jacket"), text)
+        XCTAssertTrue(text.contains("- [ ] Power adapter") && text.contains("- [ ] Umbrella\n- [ ] Sun cream\n"), "nothing else ticked: \(text)")
+
+        XCTAssertEqual(remote("hold Power adapter, type A"), "hold Power adapter, type A: ReadingElement")
+        XCTAssertEqual(remote("reloadtext Power adapter, type A|Phone charger"), "reloadtext: done")
+        XCTAssertEqual(remote("activateheld"), "activateheld: Power adapter, type A false")
+        text = remote("text")
+        XCTAssertTrue(text.contains("- [ ] Phone charger"), "not ticked: \(text)")
+        XCTAssertTrue(find(.button, "Phone charger").waitForExistence(timeout: 15), "read as it is now: \(app.debugDescription)")
+    }
+
+    /// When the keyboard goes from the note, VoiceOver goes back to the line written in; when Find in Note takes the
+    /// keyboard, VoiceOver stays in its field (#279).
+    func testAnotherFieldKeepsVoiceOver() throws {
+        launch()
+        open("Personal", "Weekend")
+        let line = "Market on Saturday morning, cooking with Mia in the evening. Sunday stays empty on purpose."
+        XCTAssertTrue(find(.staticText, line).waitForExistence(timeout: 30), app.debugDescription)
+        let hide = app.buttons.matching(NSPredicate(format: "label == %@", "Hide Keyboard")).firstMatch
+        XCTAssertTrue(remote("activate \(line)").hasSuffix("ReadingElement true"))
+        XCTAssertTrue(hide.waitForExistence(timeout: 30), app.debugDescription)
+        remote("blur")
+        XCTAssertEqual(remote("axfocus"), "axfocus \(line)", "back to the line")
+
+        XCTAssertTrue(remote("activate \(line)").hasSuffix("ReadingElement true"))
+        XCTAssertTrue(hide.waitForExistence(timeout: 30), app.debugDescription)
+        remote("findinnote")
+        let deadline = Date().addingTimeInterval(15)
+        while !remote("focused").contains("findBar true"), Date() < deadline {}
+        XCTAssertFalse(remote("focused").hasPrefix("focused MarkdownTextView"), "Find in Note has the keyboard")
+        XCTAssertEqual(remote("axfocus"), "axfocus none", "VoiceOver stays in Find in Note's field")
+    }
+
     // MARK: - Steps
 
     private func launch() {

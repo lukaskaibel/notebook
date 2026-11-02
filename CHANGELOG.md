@@ -51,8 +51,11 @@ versions follow [semantic versioning](https://semver.org).
   ("dash, left bracket, space, right bracket, Buy milk"). Headings are headings, a to-do says whether it is completed
   and a double-tap ticks it, as a tap on its circle does, links are links, pictures and drawings are read by their
   names, a table row by row, and a to-do's date or place is a button that changes it. A double-tap on a line starts
-  writing at its end; while you write, the note is one text field as before, and the to-do the caret is in can be
-  ticked from VoiceOver's actions (#214).
+  writing at its end, and "Write at the end", last in the note ("Write in the note" in an empty one), after it all;
+  while you write, the note is one text field as before, and the to-do the caret is in can be ticked from VoiceOver's
+  actions. VoiceOver stays on its line when lines come in above it from another device, and a to-do changed there
+  isn't ticked until VoiceOver has read it again. Switch Control, Voice Control and Full Keyboard Access go through
+  the note the same way (#214, #279).
 - Putting the pen away on a PDF, or taking it up, no longer makes the pages flash empty for a moment.
 - A PDF you draw in on iPhone or iPad no longer grows a little with every save: it is written anew with only what its
   pages use (#244).

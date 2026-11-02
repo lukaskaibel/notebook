@@ -14,6 +14,8 @@ enum DebugRemote {
     private static weak var workspace: Workspace?
     private static var path = ""
     private static var waitUntil: Date?
+    /// What `hold` keeps, as VoiceOver keeps the element it is on.
+    private static var held: NSObject?
 
     static func startIfRequested(workspace: Workspace) {
         guard timer == nil, let file = UserDefaults.standard.string(forKey: "debugCommandFile") else { return }
@@ -575,6 +577,25 @@ enum DebugRemote {
                 let actions = (element.accessibilityCustomActions ?? []).map(\.name).joined(separator: ",")
                 return "\(element.accessibilityLabel ?? "") | \(element.accessibilityValue ?? "") | \(element.accessibilityTraits.rawValue) | \(element.accessibilityFrame) | \(actions)"
             }.joined(separator: "\n"))
+        case "hold":
+            // hold <label>: keeps what VoiceOver reads in the note as <label>, as VoiceOver keeps the element it is on
+            // while the note changes under it; `activateheld` double-taps it then.
+            let elements = (editor.textView.accessibilityElements ?? []).compactMap { $0 as? NSObject }
+            held = elements.first { $0.accessibilityLabel == argument }
+            log("hold \(argument): \(held.map { "\(type(of: $0))" } ?? "nothing")")
+        case "activateheld":
+            log("activateheld: \(held?.accessibilityLabel ?? "nothing") \(held?.accessibilityActivate() ?? false)")
+        case "reloadtext":
+            // reloadtext <old>|<new>: the note changed on another device, the first <old> in it now <new> (\n for a line
+            // break), taken in as Change from Another Device.
+            let parts = argument.replacingOccurrences(of: "\\n", with: "\n").components(separatedBy: "|")
+            guard parts.count == 2, let range = editor.text.range(of: parts[0]) else { return log("reloadtext: not found") }
+            editor.reload(text: editor.text.replacingCharacters(in: range, with: parts[1]))
+            log("reloadtext: done")
+        case "axfocus":
+            // What VoiceOver was moved to when the keyboard went from the note, since the last time this was asked.
+            log("axfocus \(editor.textView.reader.lastFocused ?? "none")")
+            editor.textView.reader.lastFocused = nil
         case "axaction":
             // axaction <label>|<action>: one of the actions VoiceOver offers for what it reads in the note as <label>.
             let names = argument.components(separatedBy: "|")

@@ -10,7 +10,10 @@ final class ReadingTests: XCTestCase {
         // Nothing being written in: no marks next to a caret.
         h.window.makeFirstResponder(nil)
         h.settle()
-        return (h, h.editor.readingItems())
+        var items = h.editor.readingItems()
+        // Last, where writing goes on at the end (`testAnEmptyNoteCanBeWrittenIn`).
+        XCTAssertEqual(items.popLast()?.kind, .end)
+        return (h, items)
     }
 
     func testLinesReadAsTheyShow() {
@@ -122,5 +125,131 @@ final class ReadingTests: XCTestCase {
         for item in items {
             for mark in ["#", "[", "]", "*", ">", "-"] { XCTAssertFalse(item.label.contains(mark), "\(item.label) has \(mark)") }
         }
+    }
+
+    // MARK: - Writing at the end (#279)
+
+    /// An empty note, or one with only blank lines, has nothing to read: what is left is to write in it.
+    func testAnEmptyNoteCanBeWrittenIn() throws {
+        for text in ["", "\n\n"] {
+            let h = reading(text).0
+            let items = h.editor.readingItems()
+            XCTAssertEqual(items.map(\.label), ["Write in the note"], text.debugDescription)
+            let end = try XCTUnwrap(items.last)
+            XCTAssertEqual(end.kind, .end)
+            XCTAssertNil(end.hit, "a double-tap writes")
+            XCTAssertEqual(end.caret, (text as NSString).length, "at the very end")
+            let frame = try XCTUnwrap(h.editor.readingFrame(of: end))
+            XCTAssertGreaterThanOrEqual(frame.height, 44, "big enough for a fingertip")
+        }
+    }
+
+    /// Below a table or a picture at the end there is no line to double-tap: the end is its own.
+    func testANoteEndingInATableOrAPictureCanBeWrittenAfterIt() throws {
+        for text in ["Days\n\n| Day | Area |\n| --- | --- |\n| 1 | Fushimi |", "The gate\n\n![](.assets/torii.png)\n"] {
+            let h = reading(text).0
+            let items = h.editor.readingItems()
+            let end = try XCTUnwrap(items.last)
+            XCTAssertEqual(end.kind, .end, text)
+            XCTAssertEqual(end.label, "Write at the end")
+            XCTAssertEqual(end.caret, (text as NSString).length)
+            let last = try XCTUnwrap(h.editor.readingFrame(of: items[items.count - 2]))
+            let below = try XCTUnwrap(h.editor.readingFrame(of: end))
+            XCTAssertGreaterThanOrEqual(below.minY, last.maxY - 0.5, "under what the note ends in: \(text)")
+        }
+    }
+
+    // MARK: - Lines followed through changes (#279)
+
+    /// Where each line of `old` is once the text is `new`, changed as Change from Another Device changes it: only the
+    /// part between what the two share at the start and at the end.
+    private func moves(_ old: String, _ new: String) throws -> [Int?] {
+        let h = EditorHarness(old)
+        let change = try XCTUnwrap(h.editor.change(to: new))
+        let length = (change.replacement as NSString).length
+        let moves = LineMoves(from: MarkdownParser.parse(old), to: MarkdownParser.parse(new),
+                              edited: NSRange(location: change.range.location, length: length), changeInLength: length - change.range.length)
+        return MarkdownParser.parse(old).lines.indices.map { moves($0) }
+    }
+
+    func testLinesMoveWithWhatIsAddedAbove() throws {
+        // Another device's to-do above, which starts as the one below it does: the edit cuts into that one's line.
+        XCTAssertEqual(try moves("- [ ] Buy milk\n- [ ] Pay rent\n", "- [ ] Bread\n- [ ] Buy milk\n- [ ] Pay rent\n"), [1, 2, 3])
+        XCTAssertEqual(try moves("# Week\n- [ ] Buy milk\n- [ ] Pay rent\n", "# Week\nMonday\n\n- [ ] Buy milk\n- [ ] Pay rent\n"), [0, 3, 4, 5])
+        // Taken away above.
+        XCTAssertEqual(try moves("- [ ] Bread\n- [ ] Buy milk\n- [ ] Pay rent\n", "- [ ] Buy milk\n- [ ] Pay rent\n"), [nil, 0, 1, 2])
+    }
+
+    func testALineChangedWithinItStays() throws {
+        // Ticked elsewhere, or a word put right: the same line.
+        XCTAssertEqual(try moves("- [ ] Buy milk\n- [ ] Pay rent\n", "- [x] Buy milk\n- [ ] Pay rent\n"), [0, 1, 2])
+        XCTAssertEqual(try moves("- [ ] Buy milk\n- [ ] Pay rent\n", "- [ ] Buy oat milk\n- [ ] Pay rent\n"), [0, 1, 2])
+    }
+
+    func testALineMadeIntoOthersIsGone() throws {
+        // Joined with the next: neither is the line it was.
+        XCTAssertEqual(try moves("- [ ] Buy milk\n- [ ] Pay rent", "- [ ] Buy milk- [ ] Pay rent"), [nil, nil])
+        // Split in two.
+        XCTAssertEqual(try moves("- [ ] Buy milk and bread\n- [ ] Pay rent", "- [ ] Buy milk\n- [ ] and bread\n- [ ] Pay rent"), [nil, 2])
+        // Written over within the line: the same line, which reads as something else now, so VoiceOver's element for
+        // it doesn't stay (`isStill`).
+        XCTAssertEqual(try moves("- [ ] Buy milk\n- [ ] Pay rent\n", "- [ ] Call Mia\n- [ ] Pay rent\n"), [0, 1, 2])
+    }
+
+    /// VoiceOver's element for an item stays only while it reads the same, a to-do ticked or not.
+    func testAnElementStaysOnlyWhileItsItemReadsTheSame() throws {
+        let (h, items) = reading("## Week\n- [ ] Buy milk\n")
+        h.editor.toggleCheckbox(line: 1)
+        h.settle()
+        let ticked = h.editor.readingItems()
+        XCTAssertTrue(ticked[1].isStill(items[1]), "ticked, the same to-do")
+        XCTAssertTrue(ticked[0].isStill(items[0]))
+        h.editor.reload(text: "## Week\n- [x] Call Mia\n")
+        h.settle()
+        let written = h.editor.readingItems()
+        XCTAssertFalse(written[1].isStill(ticked[1]), "written over, another to-do")
+        XCTAssertFalse(written[1].isStill(written[0]), "a heading is not a to-do")
+    }
+
+    /// The next one of a repeating to-do goes in above the ticked one, which moves down with its tick.
+    func testATickedRepeatingToDoMovesDown() throws {
+        let h = EditorHarness("Plants\n- [ ] Water the plants 🔁 every week 📅 2026-11-02\n- [ ] Pay rent\n")
+        h.settle()
+        var old = h.editor.document
+        var lines = Array(old.lines.indices).map { Optional($0) }
+        let observer = StorageEdits(h.editor.storage) { edited, delta in
+            let new = MarkdownParser.parse(h.editor.storage.string)
+            let moves = LineMoves(from: old, to: new, edited: edited, changeInLength: delta)
+            lines = lines.map { $0.flatMap { moves($0) } }
+            old = new
+        }
+        h.editor.toggleCheckbox(line: 1)
+        h.settle()
+        withExtendedLifetime(observer) {}
+        XCTAssertTrue(h.text.contains("- [x] Water the plants"), h.text)
+        let ticked = try XCTUnwrap(lines[1])
+        XCTAssertTrue(h.editor.document.lines[ticked].range.location == (h.text as NSString).range(of: "- [x] Water").location, "\(lines) \(h.text)")
+        XCTAssertEqual(lines[2], ticked + 1, "Pay rent below it")
+        XCTAssertEqual(lines[0], 0)
+    }
+}
+
+/// Says what changed in a text storage, each edit as `didProcessEditing` has it, before the editor restyles it.
+@MainActor
+private final class StorageEdits: NSObject {
+    private var token: NSObjectProtocol?
+
+    init(_ storage: NSTextStorage, _ changed: @escaping (NSRange, Int) -> Void) {
+        super.init()
+        token = NotificationCenter.default.addObserver(forName: NSTextStorage.willProcessEditingNotification, object: storage, queue: nil) { note in
+            guard let storage = note.object as? NSTextStorage, storage.editedMask.contains(.editedCharacters) else { return }
+            let edited = storage.editedRange
+            let delta = storage.changeInLength
+            MainActor.assumeIsolated { changed(edited, delta) }
+        }
+    }
+
+    deinit {
+        if let token { NotificationCenter.default.removeObserver(token) }
     }
 }

@@ -22,6 +22,9 @@ struct ReadingItem: Equatable {
         case pill
         /// A table's row, a diagram, a formula, the note's properties: a tap opens them for editing.
         case block
+        /// After the last line: a double-tap starts writing at the end, which an empty note, or one that ends in a
+        /// table or a picture, has no line for.
+        case end
     }
 
     /// Something else it can do, for VoiceOver's actions.
@@ -44,16 +47,32 @@ struct ReadingItem: Equatable {
     var actions: [Action] = []
     /// Where the caret goes to write in it: the end of its words.
     var caret: Int?
+
+    /// Whether it is what `other` was, read the same, though a to-do may have been ticked or a heading's level changed:
+    /// only then does VoiceOver's element stay on it, and act. A line written over from another device is something
+    /// else, which VoiceOver hasn't read.
+    func isStill(_ other: ReadingItem) -> Bool {
+        guard label == other.label else { return false }
+        switch (kind, other.kind) {
+        case (.todo, .todo), (.heading, .heading): return true
+        default: return kind == other.kind
+        }
+    }
 }
 
 extension EditorController {
     /// What VoiceOver reads of the note, in order: each line as it shows, and after a line the links, pictures and dates
-    /// in it, which can be acted on.
+    /// in it, which can be acted on; last, where writing goes on at the end.
     func readingItems() -> [ReadingItem] {
         guard !isWaitingForText, storage.length == document.length else { return [] }
         // The text itself, not a copy of it for every line.
         let text = storage.mutableString
-        return document.lines.indices.flatMap { readingItems(onLine: $0, in: text) }
+        var items = document.lines.indices.flatMap { readingItems(onLine: $0, in: text) }
+        if textView.isEditable {
+            items.append(ReadingItem(kind: .end, label: items.isEmpty ? "Write in the note" : "Write at the end", line: document.lines.count,
+                                     range: NSRange(location: storage.length, length: 0), caret: storage.length))
+        }
+        return items
     }
 
     /// The words of a to-do's state, as Reminders says them.
@@ -235,8 +254,19 @@ extension EditorController {
 
     /// Where an item is drawn, in the text view's coordinates.
     func readingFrame(of item: ReadingItem) -> CGRect? {
-        guard item.range.upperBound <= storage.length, item.range.length > 0 else { return nil }
         let origin = textOrigin
+        if item.kind == .end {
+            // The empty line after a last line break, or the room under the last line: as wide as the text and tall
+            // enough for a fingertip.
+            if storage.length == 0 {
+                layoutManager.ensureLayout(for: container)
+            } else {
+                layoutManager.ensureLayout(forCharacterRange: NSRange(location: storage.length - 1, length: 1))
+            }
+            let top = layoutManager.extraLineFragmentTextContainer != nil ? layoutManager.extraLineFragmentRect.minY : layoutManager.usedRect(for: container).maxY
+            return CGRect(x: origin.x, y: origin.y + top, width: container.size.width, height: 44)
+        }
+        guard item.range.upperBound <= storage.length, item.range.length > 0 else { return nil }
         // A picture, a pill, a block, or an empty to-do's circle: the object's box.
         if item.range.length == 1, let object = layoutManager.object(at: item.range.location) {
             guard let rect = object.isBlock && item.row == nil ? layoutManager.blockObjectRect(at: item.range.location, origin: origin)
@@ -248,6 +278,67 @@ extension EditorController {
         let glyphs = layoutManager.glyphRange(forCharacterRange: item.range, actualCharacterRange: nil)
         guard glyphs.length > 0 else { return nil }
         return layoutManager.boundingRect(forGlyphRange: glyphs, in: container).offsetBy(dx: origin.x, dy: origin.y)
+    }
+}
+
+/// Where the lines of a text went in one edit of it, so that what VoiceOver is on stays with its line: a line above the
+/// edit stays, one below it moves by the lines the edit added or took away, one it changed only within stays too, and
+/// of the lines it went through those that came out the same are found again (another device's to-do above one that
+/// starts the same, `- [ ] `, cuts into that one). Any other line is gone.
+struct LineMoves {
+    private let old: MarkdownDocument
+    private let new: MarkdownDocument
+    private let edited: NSRange
+    private let delta: Int
+    /// The lines the edit went through that came out the same, old to new.
+    private var found: [Int: Int] = [:]
+
+    /// `edited` is in the new text's characters, and the edit changed its length by `delta`, as `didProcessEditing` has them.
+    init(from old: MarkdownDocument, to new: MarkdownDocument, edited: NSRange, changeInLength delta: Int) {
+        self.old = old
+        self.new = new
+        self.edited = edited
+        self.delta = delta
+        guard !old.lines.isEmpty, !new.lines.isEmpty else { return }
+        let gone = (old.lineIndex(containing: edited.location)...old.lineIndex(containing: edited.upperBound - delta)).filter { kept($0) == nil }
+        let came = (new.lineIndex(containing: edited.location)...new.lineIndex(containing: edited.upperBound)).filter { !isKept(new: $0) }
+        guard !gone.isEmpty, !came.isEmpty else { return }
+        // In order: the first of the same words for the first line that had them.
+        var lines: [Int: [Int]] = [:]
+        for line in came.reversed() { lines[new.lines[line].textHash, default: []].append(line) }
+        var next = 0
+        for line in gone {
+            let hash = old.lines[line].textHash
+            while let first = lines[hash]?.last, first < next { lines[hash]?.removeLast() }
+            guard let match = lines[hash]?.popLast(), new.lines[match].range.length == old.lines[line].range.length else { continue }
+            found[line] = match
+            next = match + 1
+        }
+    }
+
+    /// Where a line of the old text is in the new one; nil when the edit made it into others.
+    func callAsFunction(_ line: Int) -> Int? { kept(line) ?? found[line] }
+
+    private var lineDelta: Int { new.lines.count - old.lines.count }
+
+    /// The line the same, moved, or changed only within its words.
+    private func kept(_ index: Int) -> Int? {
+        guard let line = old.lines[safe: index] else { return nil }
+        let oldEnd = edited.upperBound - delta
+        if line.fullRange.upperBound <= edited.location { return index }
+        // Wholly after the edit, and a line of its own there still.
+        if line.range.location >= oldEnd, new.lines[safe: index + lineDelta]?.range.location == line.range.location + delta { return index + lineDelta }
+        // A to-do ticked, a word put right.
+        if lineDelta == 0, edited.location >= line.range.location, oldEnd <= line.range.upperBound { return index }
+        return nil
+    }
+
+    /// Whether a line of the new text is one `kept` gives.
+    private func isKept(new index: Int) -> Bool {
+        let line = new.lines[index]
+        if line.fullRange.upperBound <= edited.location { return true }
+        if line.range.location >= edited.upperBound, old.lines[safe: index - lineDelta]?.range.location == line.range.location - delta { return true }
+        return lineDelta == 0 && edited.location >= line.range.location && edited.upperBound <= line.range.upperBound
     }
 }
 
