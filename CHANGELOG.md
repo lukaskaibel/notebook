@@ -68,6 +68,9 @@ versions follow [semantic versioning](https://semver.org).
   you wrote is still being saved: it waits for the save and, where there is no Recently Deleted, asks first. A PDF moved
   to the Trash or deleted waits for its drawing to be saved too, and what you wrote just before leaving a PDF still goes
   in when an earlier change was still being saved (#275).
+- On iPhone and iPad, a page you duplicate, give other paper, delete or bring back with Undo or Redo while the PDF also
+  changes on another device keeps what is under your writing, its slide or its paper, rather than coming back on blank
+  paper or on another page (#277).
 
 ## [1.1.0] – 2026-10-29
 

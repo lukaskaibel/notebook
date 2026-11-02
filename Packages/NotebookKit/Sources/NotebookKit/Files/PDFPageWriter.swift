@@ -115,6 +115,9 @@ enum PDFPageWriter {
         // The pages in the plan's order: the file's own the first time, a copy read from `base` after that, new paper.
         let originals = (0..<document.pageCount).compactMap { document.page(at: $0) }
         var used = Set<Int>()
+        // `base` read again for the copies, each time for one copy of any of its pages: as often as the page copied
+        // most often has copies, not for every copy.
+        var copies: [(document: PDFDocument, used: Set<Int>)] = []
         var pages: [PDFPage] = []
         for slot in plan.slots {
             switch slot.origin {
@@ -122,8 +125,15 @@ enum PDFPageWriter {
                 pages.append(originals[index])
             case .base(let index):
                 // A page of a document of its own, as a picture is carried in: what it has keeps its look until written.
-                guard let copies = PDFDocument(data: base), let copy = copies.page(at: index) else { throw PDFWriteError.pagesMissing(kept, document.pageCount) }
-                carriers.documents.append(copies)
+                if !copies.contains(where: { !$0.used.contains(index) }) {
+                    guard let read = PDFDocument(data: base) else { throw PDFWriteError.pagesMissing(kept, document.pageCount) }
+                    carriers.documents.append(read)
+                    copies.append((read, []))
+                }
+                guard let round = copies.firstIndex(where: { !$0.used.contains(index) }), let copy = copies[round].document.page(at: index) else {
+                    throw PDFWriteError.pagesMissing(kept, document.pageCount)
+                }
+                copies[round].used.insert(index)
                 copy.annotations.forEach(keepEntries)
                 pages.append(copy)
             case .new:
