@@ -268,7 +268,7 @@ final class MarkdownTextView: NSTextView {
     }
 
     override func paste(_ sender: Any?) {
-        if controller?.paste(from: .general, at: nil) != true { super.paste(sender) }
+        if controller?.paste(from: appPasteboard, at: nil) != true { super.paste(sender) }
     }
 
     override func pasteAsPlainText(_ sender: Any?) {

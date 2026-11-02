@@ -854,6 +854,21 @@ public final class SearchIndex {
         return Self.resolve(target, from: note, byName: byName, byPath: byPath)?.url
     }
 
+    /// The shortest `[[link]]` address that finds a file from `note`: its name (a note's without ".md"), with as many of
+    /// its folders in front as it takes, as links are rewritten when files move. A file the index hasn't read yet gets
+    /// the shortest address that finds nothing else, which finds it once the index has read it.
+    public func linkAddress(for url: URL, from note: URL?) -> String {
+        _ = version
+        let name = FileKind(url: url, isDirectory: false) == .note ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent
+        let folders = url.standardizedFileURL.deletingLastPathComponent().pathComponents.dropFirst()
+        for count in 0...folders.count {
+            let address = (folders.suffix(count) + [name]).joined(separator: "/")
+            guard let found = Self.resolve(address, from: note, byName: byName, byPath: byPath) else { return address }
+            if FileNode.samePath(found.url, url) { return address }
+        }
+        return name
+    }
+
     /// The notes of a file name ("Plan.md"), ignoring case and accents, wherever they are: for a note looked for by its
     /// name alone, which `resolve` would read as a link ("C# notes" as the heading "notes" of "C").
     func notes(named fileName: String) -> [Entry] {

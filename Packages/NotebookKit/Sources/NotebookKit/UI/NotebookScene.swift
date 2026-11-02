@@ -45,6 +45,13 @@ public struct NotebookScene: Scene {
             }
             CommandGroup(after: .pasteboard) {
                 Divider()
+                // The file itself, as ⌘C in the Finder: the one selected in the sidebar while it has the keyboard, else
+                // the file open in the window in front, whatever it is.
+                Button { if let file = workspace.fileToCopy { workspace.copyFile(file) } else { beep() } } label: {
+                    Label("Copy File", systemImage: "doc.on.doc")
+                }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+                .disabled(workspace.fileInFront == nil && !workspace.isMainWindowInFront)
                 Button { workspace.attachFiles() } label: { Label("Attach File…", systemImage: "paperclip") }
                     .keyboardShortcut("a", modifiers: [.command, .shift])
                     .disabled(!workspace.hasNoteInFront)

@@ -137,12 +137,24 @@ func openExternally(_ url: URL) {
     #endif
 }
 
+#if os(macOS)
+/// The pasteboard copying and pasting use: the general one, or in a debug build launched with
+/// `-NotebookPasteboard <name>` one of its own, so trying the app out leaves your clipboard alone.
+@MainActor
+var appPasteboard: NSPasteboard {
+    #if DEBUG
+    if let name = UserDefaults.standard.string(forKey: "NotebookPasteboard") { return NSPasteboard(name: NSPasteboard.Name(name)) }
+    #endif
+    return .general
+}
+#endif
+
 /// Puts text on the general pasteboard.
 @MainActor
 func copyToPasteboard(_ string: String) {
     #if os(macOS)
-    NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(string, forType: .string)
+    appPasteboard.clearContents()
+    appPasteboard.setString(string, forType: .string)
     #else
     UIPasteboard.general.string = string
     #endif
