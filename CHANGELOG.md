@@ -49,8 +49,7 @@ versions follow [semantic versioning](https://semver.org).
   `![[Kyoto.jpg]]`, and shows as before: the picture, or the file's card. It isn't stored a second time next to the
   note, and the link follows the file when you rename or move it. Files from anywhere else, such as Downloads, are still
   copied next to the note, so the note keeps them when Downloads is emptied; drop with Option held for a copy of one
-  from your folders too.
-
+  from your folders too. A folder goes in as a link to it, never as a copy, and only from your folders.
 - On iPhone and iPad, what you write on a PDF is saved a moment after you stop, not only when you put the pen away,
   leave the PDF or leave Notebook. Drawing on a PDF there uses the canvas Markup has, so pictures on a page can be picked
   and moved.

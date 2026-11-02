@@ -41,7 +41,7 @@ extension Workspace {
     }
 
     /// Edit › Attach File…: pictures, PDFs and other files chosen in the Open panel go in at the caret, stored next to
-    /// the note as if they were dropped there; notes go in as links.
+    /// the note as if they were dropped there; notes, and files already in your folders, go in as links.
     func attachFiles() {
         guard let active = activeEditor(), let window = active.window else { return beep() }
         let editor = active.editor
@@ -49,7 +49,7 @@ extension Workspace {
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
         panel.prompt = "Attach"
-        panel.message = "Pictures, PDFs and other files go in the note; notes go in as links."
+        panel.message = "Pictures, PDFs and other files go in the note; notes and files from your folders go in as links."
         panel.beginSheetModal(for: window) { [weak editor] response in
             MainActor.assumeIsolated {
                 guard response == .OK, let editor, !panel.urls.isEmpty else { return }
