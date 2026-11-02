@@ -45,6 +45,11 @@ versions follow [semantic versioning](https://semver.org).
 - Putting the pen away on a PDF, or taking it up, no longer makes the pages flash empty for a moment.
 - A PDF you draw in on iPhone or iPad no longer grows a little with every save: it is written anew with only what its
   pages use (#244).
+- A note that can't be saved as you leave it (a full disk, a read-only disk, a folder Notebook may no longer write to)
+  no longer takes what you typed with it. Notebook tries again a few seconds later; if it still can't, it keeps what
+  you typed as a note in its folder Unsaved Notes (on iPhone and iPad in On My iPhone › Notebook) and says so, with
+  Show in Finder or Open. If even that can't be written, it asks you to copy the text or try again, and quitting waits
+  for your answer (#165).
 
 ## [1.1.0] – 2026-10-29
 
