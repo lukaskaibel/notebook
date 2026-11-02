@@ -166,7 +166,7 @@ any PDF does, its writing as sharp as the page, and the pencil writes on it ther
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/handwriting-dark.webp">
-  <img alt="Lecture 4.pdf on an iPad with the pen on: notes on eigenvalues on Cornell paper, written by hand, with an equation marked in yellow, a photo of the blackboard on the page, the result ringed in red and a sketch of two arrows, and the tool picker below; in front of it an iPhone with the same page" src="Design/screenshots/handwriting-light.webp">
+  <img alt="Lecture 4.pdf on an iPad with the pen on: notes on eigenvalues on Cornell paper, written by hand, with an equation marked in yellow, a photo of the blackboard on the page, the result ringed in red and a sketch of two arrows, and the tool picker below; in front of it an iPhone showing All Pages, the note's five pages small on Cornell, squared, lined and dotted paper" src="Design/screenshots/handwriting-light.webp">
 </picture>
 
 ### Tables, diagrams, code and maths
@@ -406,7 +406,7 @@ lists each kind of file has a symbol of its own, in the accent colour as folders
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/quicklook-dark.webp">
-  <img alt="Flight tickets.pdf open in the window, its page on grey as in Preview, with its kind, size, page count, dates and folder in the inspector" src="Design/screenshots/quicklook-light.webp">
+  <img alt="Flight tickets.pdf open in the window, its page on grey as in Preview, the booking reference highlighted in yellow, the flight out underlined in red and the way back ticked in green, with its kind, size, page count, dates and folder in the inspector" src="Design/screenshots/quicklook-light.webp">
 </picture>
 
 ### A Mac app, made of the Mac's parts
