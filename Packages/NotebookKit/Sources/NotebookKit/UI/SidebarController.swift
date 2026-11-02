@@ -617,7 +617,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     /// app the Mac has for it. A folder already opens and closes with each click.
     func openOnItsOwn(row: Int) {
         guard let url = url(at: row) else { return }
-        guard !((outline.item(atRow: row) as? FileNode)?.isFolder ?? FileWindows.isFolder(url)) else { return }
+        guard !((outline.item(atRow: row) as? FileNode)?.isFolder ?? FileNode.isFolder(url)) else { return }
         workspace.openOnItsOwn(url)
     }
 
@@ -771,6 +771,10 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             add(menu, isHidden ? "Unhide Folder" : "Hide Folder", isHidden ? "eye" : "eye.slash") { [weak self] in self?.workspace.setHidden(url, !isHidden) }
         }
         menu.addItem(.separator())
+        // As the Finder's, with the key Copy File has in the Edit menu.
+        let copy = add(menu, "Copy “\(Workspace.shownName(url))”", "doc.on.doc") { [weak self] in self?.workspace.copyFile(url) }
+        copy.keyEquivalent = "c"
+        copy.keyEquivalentModifierMask = [.command, .shift]
         if !isFolder { add(menu, "Copy Link", "link") { [weak self] in self?.workspace.copyLink(url) } }
         add(menu, "Show in Finder", "folder") { [weak self] in self?.workspace.revealInFinder(url) }
         if !isLinked {
@@ -787,10 +791,19 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         return item
     }
 
-    private func add(_ menu: NSMenu, _ title: String, _ symbol: String, action: @escaping () -> Void) {
+    @discardableResult
+    private func add(_ menu: NSMenu, _ title: String, _ symbol: String, action: @escaping () -> Void) -> NSMenuItem {
         let item = ClosureMenuItem(title: title, action: action)
         item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
         menu.addItem(item)
+        return item
+    }
+
+    /// The keys the menu shows are the Edit menu's, for the selected file: never its items, which are for the row
+    /// last clicked.
+    func menuHasKeyEquivalent(_ menu: NSMenu, for event: NSEvent, target: AutoreleasingUnsafeMutablePointer<AnyObject?>,
+                              action: UnsafeMutablePointer<Selector?>) -> Bool {
+        false
     }
 
     // MARK: - Drag and drop
@@ -853,7 +866,8 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     }
 }
 
-/// Keys the Finder has: Return renames, ⌘⌫ moves to the Trash, Space shows Quick Look. Tab goes on into the note, as it
+/// Keys the Finder has: Return renames, ⌘⌫ moves to the Trash, Space shows Quick Look, ⌘C copies the file. Tab goes on
+/// into the note, as it
 /// goes from the list to the note in Notes and Mail.
 final class SidebarOutlineView: NSOutlineView {
     weak var controller: SidebarController?
@@ -917,6 +931,16 @@ final class SidebarOutlineView: NSOutlineView {
         }
     }
 
+    /// Edit › Copy (⌘C) copies the selected file, as in the Finder.
+    @objc func copy(_ sender: Any?) {
+        guard let controller, let url = controller.selectedURL else { return beep() }
+        controller.workspace.copyFile(url)
+    }
+
+    override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+        if item.action == #selector(copy(_:)) { return controller?.selectedURL != nil }
+        return super.validateUserInterfaceItem(item)
+    }
 }
 
 final class SidebarHeaderCell: NSTableCellView {

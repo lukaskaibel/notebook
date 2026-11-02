@@ -307,6 +307,25 @@ public final class SearchIndex {
     /// Folders left out with everything in them, as the sidebar leaves them out.
     nonisolated private static let skippedFolders: Set<String> = ["node_modules", "DerivedData", ".build", "Pods"]
 
+    /// Whether the walk reads what is at `url`, somewhere in `root` (a location's folder): nothing on the way there is
+    /// hidden by a name starting with ".", by the system's hidden flag or as a folder it leaves out (`node_modules`), or
+    /// is a package, whose insides it doesn't read. Only what it reads is found by a link.
+    nonisolated static func reads(_ url: URL, in root: URL) -> Bool {
+        let path = HiddenFolders.withoutPrivate(url.standardizedFileURL.path)
+        let rootPath = HiddenFolders.withoutPrivate(root.standardizedFileURL.path)
+        guard path.hasPrefix(rootPath + "/") else { return false }
+        let names = path.dropFirst(rootPath.count + 1).split(separator: "/").map(String.init)
+        var current = root.standardizedFileURL
+        for (index, name) in names.enumerated() {
+            current.appendPathComponent(name)
+            guard !name.hasPrefix("."), !skippedFolders.contains(name) else { return false }
+            var info = stat()
+            if stat(current.path, &info) == 0, info.st_flags & UInt32(UF_HIDDEN) != 0 { return false }
+            if index < names.count - 1, (try? current.resourceValues(forKeys: [.isPackageKey]).isPackage) == true { return false }
+        }
+        return true
+    }
+
     /// Goes through the files in `folder` (an address in the location folder `root`) and, if `deep`, in every folder in
     /// it, as the sidebar shows them: without hidden files and packages' insides. Calls `listed` with each folder whose
     /// files it goes through, before them, and `each` with every file, and whether it is new or changed since `known`. A
@@ -852,6 +871,21 @@ public final class SearchIndex {
     public func resolve(_ target: String, from note: URL?) -> URL? {
         _ = version
         return Self.resolve(target, from: note, byName: byName, byPath: byPath)?.url
+    }
+
+    /// The shortest `[[link]]` address that finds a file from `note`: its name (a note's without ".md"), with as many of
+    /// its folders in front as it takes, as links are rewritten when files move. A file the index hasn't read yet gets
+    /// the shortest address that finds nothing else, which finds it once the index has read it.
+    public func linkAddress(for url: URL, from note: URL?) -> String {
+        _ = version
+        let name = FileKind(url: url, isDirectory: false) == .note ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent
+        let folders = url.standardizedFileURL.deletingLastPathComponent().pathComponents.dropFirst()
+        for count in 0...folders.count {
+            let address = (folders.suffix(count) + [name]).joined(separator: "/")
+            guard let found = Self.resolve(address, from: note, byName: byName, byPath: byPath) else { return address }
+            if FileNode.samePath(found.url, url) { return address }
+        }
+        return name
     }
 
     /// The notes of a file name ("Plan.md"), ignoring case and accents, wherever they are: for a note looked for by its

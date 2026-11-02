@@ -223,12 +223,12 @@ final class HandwrittenNoteTests: XCTestCase {
         XCTAssertLessThan(again.count, made.count + 2_000)
     }
 
-    func testAPageOfAnotherPDFIsDuplicatedAndMoved() throws {
-        // Slides: text of their own, which a copy of the page has too, and which moves with its page.
+    /// Slides: a page for each title, text of their own.
+    private func slides(_ titles: [String]) throws -> Data {
         let slides = NSMutableData()
-        var box = CGRect(x: 0, y: 0, width: 720, height: 540)
+        var box = CGRect(origin: .zero, size: slideSize)
         let context = try XCTUnwrap(CGContext(consumer: CGDataConsumer(data: slides)!, mediaBox: &box, nil))
-        for title in ["Eigenvalues", "Eigenvectors"] {
+        for title in titles {
             context.beginPDFPage(nil)
             let line = CTLineCreateWithAttributedString(NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 40)]))
             context.textPosition = CGPoint(x: 60, y: 400)
@@ -236,16 +236,196 @@ final class HandwrittenNoteTests: XCTestCase {
             context.endPDFPage()
         }
         context.closePDF()
+        return slides as Data
+    }
+
+    private let slideSize = CGSize(width: 720, height: 540)
+
+    /// The text of each page.
+    private func titles(_ data: Data) -> [String?] {
+        guard let document = PDFDocument(data: data) else { return [] }
+        return (0..<document.pageCount).map { document.page(at: $0)?.string?.trimmingCharacters(in: .whitespacesAndNewlines) }
+    }
+
+    private func papers(_ data: Data) -> [PaperStyle?] {
+        guard let document = PDFDocument(data: data) else { return [] }
+        return (0..<document.pageCount).map { NotebookPaper.style(of: document.page(at: $0)!) }
+    }
+
+    private func strokeCounts(_ data: Data) -> [Int] {
+        guard let document = PDFDocument(data: data) else { return [] }
+        return (0..<document.pageCount).map { strokeCount(on: document.page(at: $0)!) }
+    }
+
+    func testAPageOfAnotherPDFIsDuplicatedAndMoved() throws {
+        // Slides: text of their own, which a copy of the page has too, and which moves with its page.
         let plan = PDFPlan(slots: [
-            PDFPlan.Slot(origin: .base(1), size: box.size),
-            PDFPlan.Slot(origin: .base(0), size: box.size, content: PageContent(drawing: drawing)),
-            PDFPlan.Slot(origin: .base(0), size: box.size),
+            PDFPlan.Slot(origin: .base(1), size: slideSize),
+            PDFPlan.Slot(origin: .base(0), size: slideSize, content: PageContent(drawing: drawing)),
+            PDFPlan.Slot(origin: .base(0), size: slideSize),
         ])
-        let document = try XCTUnwrap(PDFDocument(data: try PDFPageWriter.make(plan, base: slides as Data)))
+        let document = try XCTUnwrap(PDFDocument(data: try PDFPageWriter.make(plan, base: try slides(["Eigenvalues", "Eigenvectors"]))))
         let pages = (0..<document.pageCount).map { document.page(at: $0)! }
         XCTAssertEqual(pages.map { $0.string?.trimmingCharacters(in: .whitespacesAndNewlines) }, ["Eigenvectors", "Eigenvalues", "Eigenvalues"])
         XCTAssertEqual(pages.map(strokeCount), [0, 1, 0])
         XCTAssertTrue(pages.allSatisfy { NotebookPaper.style(of: $0) == nil })
+    }
+
+    func testPagesCopiedAgainAndAgain() throws {
+        // Every page more than once, one of them four times, with strokes on one copy.
+        let titles = ["Eigenvalues", "Eigenvectors", "Diagonalisation"]
+        let order = [0, 1, 2, 0, 1, 0, 2, 0]
+        var slots = order.map { PDFPlan.Slot(origin: .base($0), size: slideSize) }
+        slots[5].content = PageContent(drawing: strokes(2))
+        let made = try PDFPageWriter.make(PDFPlan(slots: slots), base: try slides(titles))
+        XCTAssertEqual(self.titles(made), order.map { titles[$0] })
+        XCTAssertEqual(strokeCounts(made), [0, 0, 0, 0, 0, 2, 0, 0])
+    }
+
+    // MARK: - Saves into a file changed elsewhere
+
+    /// Saves as `PDFDrawingSession` does: from `base`, the PDF as it was read when drawing started, or, once the file
+    /// changed elsewhere (another device), into the file as it is then, each page from where it was last saved.
+    private struct Saves {
+        var origins: PDFPageOrigins<Int>
+        var base: Data
+        /// The file.
+        var file: Data
+        private var changedElsewhere = false
+
+        /// The file's pages are 0, 1, 2…
+        init(_ data: Data) throws {
+            let document = try XCTUnwrap(PDFDocument(data: data))
+            origins = PDFPageOrigins(pages: (0..<document.pageCount).map { (page: $0, size: document.page(at: $0)!.bounds(for: .cropBox).size) })
+            base = data
+            file = data
+        }
+
+        struct Started {
+            var pages: [Int]
+            var plan: PDFPlan
+            var savedOrigins: [PDFPlan.Origin]
+        }
+
+        /// A save of the pages in this order begins; it is written with `finish`, and pages can change meanwhile.
+        func begin(_ pages: [Int]) -> Started {
+            Started(pages: pages, plan: PDFPlan(slots: pages.map { origins.slot(of: $0)! }), savedOrigins: pages.map(origins.savedOrigin))
+        }
+
+        mutating func finish(_ save: Started) throws {
+            var plan = save.plan
+            let rebased = changedElsewhere
+            if rebased {
+                base = file
+                for index in plan.slots.indices { plan.slots[index].origin = save.savedOrigins[index] }
+            }
+            file = try PDFPageWriter.make(plan, base: base)
+            changedElsewhere = false
+            origins.saved(save.pages, rebased: rebased)
+        }
+
+        mutating func save(_ pages: [Int]) throws {
+            try finish(begin(pages))
+        }
+
+        /// Another device changes the file.
+        mutating func changeElsewhere(_ change: (PDFDocument) -> Void) throws {
+            let document = try XCTUnwrap(PDFDocument(data: file))
+            change(document)
+            file = try XCTUnwrap(document.dataRepresentation())
+            changedElsewhere = true
+        }
+    }
+
+    /// Lined, squared and dotted paper.
+    private func threePapers() throws -> Data {
+        try PDFPageWriter.make(PDFPlan(slots: [
+            PDFPlan.Slot(origin: .base(0), size: PaperSize.a4.size),
+            PDFPlan.Slot(origin: .new, paper: .squared, size: PaperSize.a4.size),
+            PDFPlan.Slot(origin: .new, paper: .dotted, size: PaperSize.a4.size),
+        ]), base: try notebook(.lined))
+    }
+
+    func testACopyMadeDuringASaveKeepsItsSlideAfterAChangeElsewhere() throws {
+        // The first slide duplicated while a save runs; the next save goes into the file changed on another device.
+        var saves = try Saves(try slides(["Eigenvalues", "Eigenvectors"]))
+        let save = saves.begin([0, 1])
+        saves.origins.add(2, from: 0)
+        try saves.finish(save)
+        try saves.changeElsewhere { PDFInk.put([1: self.strokes(3)], in: $0) }
+        try saves.save([0, 2, 1])
+        XCTAssertEqual(titles(saves.file), ["Eigenvalues", "Eigenvalues", "Eigenvectors"])
+        XCTAssertEqual(strokeCounts(saves.file), [0, 0, 3])
+
+        // The same, with the save it was made during the one into the file changed elsewhere.
+        saves = try Saves(try slides(["Eigenvalues", "Eigenvectors"]))
+        try saves.changeElsewhere { PDFInk.put([1: self.strokes(3)], in: $0) }
+        let rebased = saves.begin([0, 1])
+        saves.origins.add(2, from: 0)
+        try saves.finish(rebased)
+        try saves.save([0, 2, 1])
+        XCTAssertEqual(titles(saves.file), ["Eigenvalues", "Eigenvalues", "Eigenvectors"])
+        XCTAssertEqual(strokeCounts(saves.file), [0, 0, 3])
+    }
+
+    func testACopyMadeDuringASaveKeepsItsPaperAfterAChangeElsewhere() throws {
+        var saves = try Saves(try threePapers())
+        let save = saves.begin([0, 1, 2])
+        saves.origins.add(3, from: 1)
+        try saves.finish(save)
+        try saves.changeElsewhere { PDFInk.put([0: self.strokes(3)], in: $0) }
+        try saves.save([0, 1, 3, 2])
+        XCTAssertEqual(papers(saves.file), [.lined, .squared, .squared, .dotted])
+        XCTAssertEqual(strokeCounts(saves.file), [3, 0, 0, 0])
+    }
+
+    func testUndoOfDeleteAfterAChangeElsewhereBringsBackThePagesThatWereThere() throws {
+        // The first page deleted and saved into the file changed elsewhere; Undo puts it back.
+        var saves = try Saves(try threePapers())
+        try saves.changeElsewhere { PDFInk.put([0: self.strokes(3)], in: $0) }
+        try saves.save([1, 2])
+        XCTAssertEqual(papers(saves.file), [.squared, .dotted])
+        try saves.save([0, 1, 2])
+        XCTAssertEqual(papers(saves.file), [.lined, .squared, .dotted])
+        XCTAssertEqual(strokeCounts(saves.file), [3, 0, 0])
+    }
+
+    func testRedoOfDuplicateAfterAChangeElsewherePutsTheCopyOnItsPage() throws {
+        // The second page duplicated and saved; Undo takes the copy out, saved into the file changed elsewhere; Redo.
+        var saves = try Saves(try threePapers())
+        saves.origins.add(3, from: 1)
+        try saves.save([0, 1, 3, 2])
+        try saves.changeElsewhere { PDFInk.put([0: self.strokes(3)], in: $0) }
+        try saves.save([0, 1, 2])
+        XCTAssertEqual(papers(saves.file), [.lined, .squared, .dotted])
+        try saves.save([0, 1, 3, 2])
+        XCTAssertEqual(papers(saves.file), [.lined, .squared, .squared, .dotted])
+        XCTAssertEqual(strokeCounts(saves.file), [3, 0, 0, 0])
+
+        // Undone and saved first, then Redo into the file changed elsewhere: the copy from where its page is.
+        saves = try Saves(try threePapers())
+        saves.origins.add(3, from: 1)
+        try saves.save([0, 1, 3, 2])
+        try saves.save([0, 1, 2])
+        try saves.changeElsewhere { PDFInk.put([0: self.strokes(3)], in: $0) }
+        try saves.save([0, 1, 3, 2])
+        XCTAssertEqual(papers(saves.file), [.lined, .squared, .squared, .dotted])
+        XCTAssertEqual(strokeCounts(saves.file), [3, 0, 0, 0])
+    }
+
+    func testOtherPaperAfterAChangeElsewhereKeepsWhatThePageHad() throws {
+        // A slide given lined paper, saved into the file changed elsewhere, with what the other device wrote on it.
+        var saves = try Saves(try slides(["Eigenvalues", "Eigenvectors"]))
+        saves.origins.add(2, from: 1, paper: .lined)
+        try saves.changeElsewhere { PDFInk.put([1: self.strokes(3)], in: $0) }
+        try saves.save([0, 2])
+        XCTAssertEqual(papers(saves.file), [nil, .lined])
+        XCTAssertEqual(strokeCounts(saves.file), [0, 3])
+        // Undo gives it the slide back, with those strokes.
+        try saves.save([0, 1])
+        XCTAssertEqual(titles(saves.file), ["Eigenvalues", "Eigenvectors"])
+        XCTAssertEqual(papers(saves.file), [nil, nil])
+        XCTAssertEqual(strokeCounts(saves.file), [0, 3])
     }
 
     func testAPageThatIsntThereIsntWritten() throws {

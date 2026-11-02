@@ -9,6 +9,9 @@ import UniformTypeIdentifiers
 /// and files dropped or pasted in are stored next to the note in `.assets`, hidden from the Finder.
 extension EditorController {
     static let fragmentIdentifier = "com.lukaskbl.notebook.fragment"
+    /// On the iPhone and iPad, a file Copy File copied, by its address: there the pasteboard has the file only as one
+    /// to copy, and a note links to the file where it is (`Workspace.copyFile`).
+    static let copiedFileType = "com.lukaskbl.notebook.file"
 
     typealias Clipping = (range: NSRange, markdown: String, fragment: Data?, file: URL?)
 
@@ -56,7 +59,7 @@ extension EditorController {
     @discardableResult
     func copySelection(cut: Bool) -> Bool {
         guard let clipping = clipping(cut: cut) else { return false }
-        let pasteboard = NSPasteboard.general
+        let pasteboard = appPasteboard
         pasteboard.clearContents()
         pasteboard.writeObjects([pasteboardItem(for: clipping)])
         if cut { replace(clipping.range, with: "", select: NSRange(location: clipping.range.location, length: 0), actionName: "Cut") }
@@ -78,9 +81,10 @@ extension EditorController {
 
         if let data = pasteboard.data(forType: Self.fragmentType), pasteFragment(data, at: target) { return true }
 
-        // Files from the Finder or the sidebar.
+        // Files from the Finder or the sidebar, or copied with Copy File. Dropped with Option held, the Mac's key for a
+        // copy, files of the locations are copied in rather than linked.
         if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL], !urls.isEmpty {
-            return pasteFiles(urls, at: target)
+            return pasteFiles(urls, at: target, linking: index == nil || !NSEvent.modifierFlags.contains(.option))
         }
 
         // Photos from Photos, pictures from Safari, attachments from Mail: files that are written once they are dropped.
@@ -148,7 +152,8 @@ extension EditorController {
                 let files = received.files.flatMap { $0 }
                 // By then another note may be open, which they aren't for.
                 guard let self, !files.isEmpty, self.loadCount == note else { return }
-                _ = self.pasteFiles(files, at: NSRange(location: min(target.location, self.storage.length), length: 0))
+                // Written for the drop in a folder of their own that goes again: copied, never linked, notes too.
+                _ = self.pasteFiles(files, at: NSRange(location: min(target.location, self.storage.length), length: 0), temporary: true)
             }
         }
     }
@@ -168,24 +173,76 @@ extension EditorController {
         return true
     }
 
-    /// Notes become links to them; pictures and other files are copied into `.assets` and shown on lines of their own.
-    func pasteFiles(_ urls: [URL], at target: NSRange) -> Bool {
+    /// Files of the locations become links to them where they are (`FileLink`), so a picture copied from the sidebar
+    /// isn't stored twice; so do notes from elsewhere. Other files from elsewhere, such as Downloads, which gets
+    /// emptied, are copied into `.assets`; pictures and files show on lines of their own. Without `linking` (Option
+    /// held while dropping), files of the locations are copied too; `temporary` files, written for a drop in a folder
+    /// that goes again (Photos, Mail), are copied whatever they are, notes too. A folder is never copied, nor anything
+    /// the note is in, such as the .textbundle of a note opened from the Finder: one of the locations goes in as a link,
+    /// any other not at all. A package from elsewhere (an app, an .rtfd), which can be large, is copied off the main
+    /// thread and goes in once it is there. A file gone since it was copied doesn't go in. True when the files were taken
+    /// care of, with a beep for those that couldn't go in, so that nothing else is pasted in their place, such as their
+    /// names.
+    func pasteFiles(_ urls: [URL], at target: NSRange, linking: Bool = true, temporary: Bool = false) -> Bool {
         var blocks: [String] = []
         var inline: [String] = []
+        var packages: [URL] = []
+        var refused = false
         for url in urls {
-            if url.pathExtension.lowercased() == "md", let link = noteLink(for: url) {
+            let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+            // Also one iCloud hasn't brought down to this iPhone or iPad yet.
+            if !FileOperations.exists(url) {
+                refused = true
+            } else if !temporary, linking || FileNode.isFolder(url), let link = delegate?.editor(self, linkTo: url) {
+                if link.isBlock { blocks.append(link.markdown) } else { inline.append(link.markdown) }
+            } else if isDirectory {
+                if FileNode.isFolder(url) || folder.map({ FileNode.isSameOrInside($0, url) }) ?? true { refused = true } else { packages.append(url) }
+            } else if !temporary, url.pathExtension.lowercased() == "md", let link = noteLink(for: url) {
                 inline.append(link)
             } else if let stored = storeAsset(copying: url) {
                 let name = url.lastPathComponent
                 blocks.append(MarkdownStyler.isImageFile(url) ? "![](\(stored))" : "![\(name)](\(stored))")
+            } else {
+                refused = true
             }
         }
         if !inline.isEmpty {
             let text = inline.joined(separator: " ")
-            replace(target, with: text, select: NSRange(location: target.location + (text as NSString).length, length: 0), actionName: "Paste")
+            // Next to a picture or a file's card, which has its line to itself, a link goes on a line of its own.
+            if isOnObjectLine(target) {
+                insertOnOwnLines(text, at: target)
+            } else {
+                replace(target, with: text, select: NSRange(location: target.location + (text as NSString).length, length: 0), actionName: "Paste")
+            }
         }
         if !blocks.isEmpty { insertOnOwnLines(blocks.joined(separator: "\n"), at: inline.isEmpty ? target : selection) }
-        return !inline.isEmpty || !blocks.isEmpty
+        if !packages.isEmpty { storeLater(packages, at: inline.isEmpty && blocks.isEmpty ? target.location : selection.location) }
+        if refused { beep() }
+        return !inline.isEmpty || !blocks.isEmpty || !packages.isEmpty || refused
+    }
+
+    /// Packages from elsewhere, copied into `.assets` off the main thread and put in at `location` once they are there,
+    /// each on a line of its own, while the note is still open; otherwise the copies go again.
+    private func storeLater(_ packages: [URL], at location: Int) {
+        guard let folder, delegate?.editor(self, mayWriteIn: folder) ?? true else { return beep() }
+        let note = loadCount
+        Task { [weak self] in
+            let stored = await Task.detached(priority: .userInitiated) {
+                packages.compactMap { url -> URL? in
+                    let accessing = url.startAccessingSecurityScopedResource()
+                    defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+                    return FileOperations.storeAsset(copying: url, in: folder)
+                }
+            }.value
+            guard let self, self.loadCount == note else {
+                Task.detached { FileOperations.removeStoredAssets(stored) }
+                return
+            }
+            if stored.count < packages.count { beep() }
+            guard !stored.isEmpty else { return }
+            let markdown = stored.map { "![\($0.lastPathComponent)](\(Self.markdownPath($0.lastPathComponent)))" }.joined(separator: "\n")
+            self.insertOnOwnLines(markdown, at: NSRange(location: min(location, self.storage.length), length: 0))
+        }
     }
 
     /// Plain text, with its line breaks made Unix ones.
@@ -223,6 +280,13 @@ extension EditorController {
         replace(range, with: text, select: NSRange(location: range.location + (text as NSString).length, length: 0), actionName: "Insert")
     }
 
+    /// Whether a place is on the line of a picture, a file's card or another block drawn in place of its Markdown.
+    private func isOnObjectLine(_ range: NSRange) -> Bool {
+        let line = nsText.lineRange(for: NSRange(location: min(range.location, storage.length), length: 0))
+        guard line.length > 0, line.location < storage.length else { return false }
+        return layoutManager.object(at: line.location)?.isBlock == true
+    }
+
     /// Markdown that marks a line or a span rather than being text: a heading's #s, a list item's bullet or checkbox,
     /// a quote's >, the stars around bold.
     private func isMark(_ index: Int) -> Bool {
@@ -248,8 +312,10 @@ extension EditorController {
         return FileOperations.uniqueAssetURL(named: name, in: assets)
     }
 
-    /// Copies a file into `.assets` and returns its Markdown path.
+    /// Copies a file into `.assets` and returns its Markdown path. Never a folder or package, which could hold the note
+    /// and so `.assets` itself, and take a while to copy (`storeLater`).
     func storeAsset(copying url: URL) -> String? {
+        guard (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) != true else { return nil }
         if let assets = assetsFolder, url.deletingLastPathComponent().standardizedFileURL == assets.standardizedFileURL {
             return Self.markdownPath(url.lastPathComponent)
         }

@@ -539,7 +539,9 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
             }) else { return true }
             if pasteFragment(data, at: target) { return true }
         }
-        if let urls = pasteboard.urls?.filter(\.isFileURL), !urls.isEmpty {
+        // A file copied with Copy File, then files.
+        let copied = pasteboard.data(forPasteboardType: Self.copiedFileType).flatMap { String(data: $0, encoding: .utf8) }.map { URL(fileURLWithPath: $0) }
+        if let urls = copied.map({ [$0] }) ?? pasteboard.urls?.filter(\.isFileURL), !urls.isEmpty {
             guard mayStore(urls, orRetry: { [weak self] in self?.insertFiles(urls) }) else { return true }
             if pasteFiles(urls, at: target) { return true }
         }
@@ -649,18 +651,28 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
                 if let item = await self.load(provider) { dropped.append(item) }
             }
             defer { dropped.forEach { $0.throwAway() } }
-            // Large files take a while: by then another note may be open, which they aren't for.
-            guard !dropped.isEmpty, await self.mayStoreAssets(), self.loadCount == note else { return }
+            // Large files take a while: by then another note may be open, which they aren't for. Links need no folder.
+            guard !dropped.isEmpty, self.loadCount == note else { return }
+            if !dropped.allSatisfy(\.isLink) {
+                guard await self.mayStoreAssets(), self.loadCount == note else { return }
+            }
             let markdown = dropped.compactMap(self.store)
             guard !markdown.isEmpty else { return }
             self.insertOnOwnLines(markdown.joined(separator: "\n"), at: NSRange(location: min(location, self.storage.length), length: 0))
         }
     }
 
-    /// A dropped item, read: a picture, or a copy of a file, in a folder of its own among the temporary files.
+    /// A dropped item, read: a picture, a copy of a file, in a folder of its own among the temporary files, or a file
+    /// of the locations, from the sidebar or Files, which goes in as a link to it.
     private enum Dropped {
         case picture(UIImage)
         case file(URL)
+        case link(FileLink)
+
+        var isLink: Bool {
+            if case .link = self { return true }
+            return false
+        }
 
         func throwAway() {
             if case .file(let url) = self { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
@@ -669,6 +681,12 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
 
     /// Reads a dropped item, before anything of it is stored.
     private func load(_ provider: NSItemProvider) async -> Dropped? {
+        if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+            let url: URL? = await withCheckedContinuation { continuation in
+                _ = provider.loadObject(ofClass: URL.self) { url, _ in continuation.resume(returning: url) }
+            }
+            if let url, url.isFileURL, let link = delegate?.editor(self, linkTo: url) { return .link(link) }
+        }
         if !provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier), provider.canLoadObject(ofClass: UIImage.self) {
             let image: UIImage? = await withCheckedContinuation { continuation in
                 provider.loadObject(ofClass: UIImage.self) { object, _ in continuation.resume(returning: object as? UIImage) }
@@ -698,6 +716,8 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         case .file(let url):
             guard let stored = storeAsset(copying: url) else { return nil }
             return MarkdownStyler.isImageFile(url) ? "![](\(stored))" : "![\(url.lastPathComponent)](\(stored))"
+        case .link(let link):
+            return link.markdown
         }
     }
 
@@ -736,9 +756,10 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         return false
     }
 
-    /// The same for files to put in: notes become links, which need no folder; anything else is copied into `.assets`.
+    /// The same for files to put in: notes and files of the locations become links, which need no folder; anything
+    /// else is copied into `.assets`.
     private func mayStore(_ files: [URL], orRetry retry: @escaping () -> Void) -> Bool {
-        files.allSatisfy { $0.pathExtension.lowercased() == "md" } || mayStoreAssets(orRetry: retry)
+        files.allSatisfy { $0.pathExtension.lowercased() == "md" || delegate?.editor(self, linkTo: $0) != nil } || mayStoreAssets(orRetry: retry)
     }
 
     /// Whether pasting text copied in Notebook copies pictures and files into `.assets`: those of a note elsewhere.

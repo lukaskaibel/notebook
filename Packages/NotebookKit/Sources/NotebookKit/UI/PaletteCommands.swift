@@ -76,6 +76,10 @@ extension Workspace {
                     toggleDrawing()
                 })
             }
+            list.append(PaletteCommand(id: "copy-file", title: "Copy File", symbol: "doc.on.doc", section: section, keys: ["⇧", "⌘", "C"],
+                                       keywords: ["clipboard", "pasteboard"]) { [self] in
+                copyFile(url)
+            })
             list.append(PaletteCommand(id: "link", title: "Copy Link", symbol: "link", section: section) { [self] in copyLink(url) })
             #if os(macOS)
             list.append(PaletteCommand(id: "finder", title: "Show in Finder", symbol: "finder", section: section, keywords: ["reveal"]) { [self] in

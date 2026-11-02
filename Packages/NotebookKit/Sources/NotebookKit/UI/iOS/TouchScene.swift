@@ -53,6 +53,7 @@ struct TouchRootView: View {
             }
         }
         .tint(Color.theme(Theme.accent))
+        .copiedCapsule(workspace)
         .onChange(of: sizeClass, initial: true) { _, size in workspace.showsPhoneScreens = size == .compact }
         .quickLookPreview($workspace.quickLookURL)
         .alert(conflictTitle, isPresented: Binding(get: { workspace.note?.conflict != nil }, set: { _ in }), presenting: workspace.note?.conflict) { _ in
@@ -63,12 +64,19 @@ struct TouchRootView: View {
             Text("It changed on \(conflict.source) while you were editing it here. Keep both to have the other version as a copy next to it.")
         }
         .onChange(of: scenePhase) { _, phase in
+            // Out of sight, iOS may end Notebook once it is suspended, or you may swipe it away: a note that can't be
+            // written keeps what was typed in Notebook's folder at once.
+            NoteDocument.mayBeEnded = phase != .active
             switch phase {
             case .background:
                 workspace.saveAll()
                 workspace.scheduleReminderRefresh()
             case .inactive: workspace.saveAll()
-            case .active: workspace.refresh()
+            case .active:
+                workspace.refresh()
+                // Back in front: a note that couldn't be written is tried again, and a copy kept meanwhile goes once
+                // it is.
+                workspace.note?.saveNow()
             @unknown default: break
             }
         }
@@ -137,6 +145,10 @@ struct TouchCommands: Commands {
         // a note with the keyboard, and takes ⌥⌘F for its Find and Replace while you type. Never dimmed: the menu bar
         // doesn't hear of a note loading.
         CommandGroup(after: .pasteboard) {
+            // The file that is open, whatever it is, as ⌘C copies a file in Files.
+            Button { if let url = workspace.currentURL { workspace.copyFile(url) } } label: { Label("Copy File", systemImage: "doc.on.doc") }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+                .disabled(workspace.currentURL == nil || workspace.showsTodos)
             Button { workspace.editor.findInNote() } label: { Label("Find…", systemImage: "magnifyingglass") }
                 .keyboardShortcut("f", modifiers: .command)
             Button { workspace.editor.findInNote(replacing: true) } label: { Label("Find and Replace…", systemImage: "arrow.left.arrow.right") }

@@ -107,7 +107,11 @@ address. A PDF or any other file on a line of its own becomes a card with a prev
 </picture>
 
 Paste or drop a picture, from the Finder, Photos or Safari, or choose it with Attach File (Edit › Attach File… on the
-Mac), and it's saved next to the note, in a hidden `.assets` folder, as PNG or JPEG so that other apps can show it. Drag
+Mac), and it's saved next to the note, in a hidden `.assets` folder, as PNG or JPEG so that other apps can show it. A
+file that's already in one of your folders isn't stored twice: it goes in as a link to it where it is, `![[Kyoto.jpg]]`,
+which shows the picture or the file's card all the same and follows the file when it moves (drop it with Option held for
+a copy). A folder from your folders goes in as a link to it; folders are never copied into a note. Copy a file in the sidebar with Copy in its menu, or the open one with ⇧⌘C, and paste it in a note, the Finder,
+Mail or Messages; a small capsule says what was copied. Drag
 a picture or file card to another place in the note to move it, or into another note, a folder in the sidebar, the
 Finder or another app for a copy. Delete it from the note and the file goes to the Trash once you leave the note, unless
 another note in the folder still uses it. Move a note to another folder and its pictures move along.
@@ -514,7 +518,10 @@ screens.
   and the text eases into each new look. With a keyboard the marks next to the caret unfold and fold away; on the touch
   keyboard they stay hidden.
 - **Pictures and files in notes.** Paste or drop them in, and drag them around the note or out of it;
-  `![[embeds]]` of other notes show an excerpt, of files a card with a preview.
+  `![[embeds]]` of other notes show an excerpt, of files a card with a preview. Files from your folders go in as links
+  to them where they are; from anywhere else, as copies next to the note.
+- **Copy a whole file,** as ⌘C does in the Finder: Copy in the sidebar's menu, or ⇧⌘C for the file that's open, any
+  kind of file. Paste it in the Finder, Mail, Messages or a note.
 - **Drawings in notes,** with PencilKit: Apple Pencil, a finger, the mouse, the trackpad or a tablet. Each is a PNG
   that other apps show, with its strokes kept next to it so it stays a drawing in Notebook.
 - **Handwritten notes** on iPhone and iPad: PDFs of blank, lined, squared, dotted or Cornell paper to write in with
@@ -584,7 +591,7 @@ delete it.
 | Picture | `![](.assets/Weekend%202026-10-14%20at%2015.32.10.png)` | The picture, fitted to the width |
 | Drawing | `![Drawing](.assets/Weekend%20drawing%202026-10-16%20at%2010.20.15.png)`, with `Weekend drawing 2026-10-16 at 10.20.15.drawing` next to the picture | The drawing, as wide as the text, to draw in again |
 | Link to a note or file | `[[Recipes]]`, `[[Recipes\|text]]`, `[[Offer.pdf]]` | A link you click; dashed when the target doesn't exist yet |
-| Embed | `![[Recipes]]`, `![[Offer.pdf]]` | An excerpt of the note, or a card for the file |
+| Embed | `![[Recipes]]`, `![[Offer.pdf]]`, `![[Kyoto.jpg]]` | An excerpt of the note, a card for the file, the picture |
 | Web link | `[text](https://…)` | The text, with a pencil to edit the address |
 | Checklist | `- [ ]`, `- [x]` | A round checkbox, filled when done; done items turn grey |
 | In progress, cancelled | `- [/]`, `- [-]` | A half-filled circle; a grey one with a cross, the to-do struck through |
@@ -630,7 +637,9 @@ typed as a note of its own in Notebook's folder Unsaved Notes, named after it, a
 folder is in the app's Application Support folder (Show in Finder in the alert), on iPhone and iPad it is
 On My iPhone › Notebook › Unsaved Notes in the Files app. The note itself stays as it was last saved. If the copy
 can't be written either, Notebook asks you to copy what you typed or try again, and doesn't quit before you answer. If
-it quits first, it tells you about a copy it kept the next time it opens.
+it quits first, it tells you about a copy it kept the next time it opens. On iPhone and iPad, where iOS may close
+Notebook once you have switched to another app, a note open as you switch keeps its copy there at once, and Notebook
+tells you about it the next time you open it; if the note can be saved after all, the copy goes again.
 
 Notes in iCloud Drive that aren't downloaded yet are fetched so that search finds them; other files that live only in
 iCloud show a cloud in the sidebar and download when you open them. A note that isn't on your Mac, iPhone or iPad yet
@@ -723,6 +732,7 @@ exported it rather than when you wrote it.
 | ⌘N | New note in the current folder, or with none, in the default folder |
 | ⇧⌘N | New folder in the current folder, named in place |
 | ⌘D | Duplicate the note |
+| ⇧⌘C | Copy the file itself, to paste in the Finder, Mail or a note: the open one, or in the sidebar the one selected (⌘C there too) |
 | ⌘Z, ⇧⌘Z | Undo and redo: typing, and changes to files (the Trash, a rename, a move, a new note or folder), newest first |
 | ⌘F, ⇧⌘F | Find in the note, find and replace; ⌘G and ⇧⌘G for the next and previous |
 | ⌥⌘F | Search every note, as Notes searches its list |
@@ -751,7 +761,7 @@ While writing:
 | ⇧⌘L | Checklist |
 | ⇧⌘U | Mark as checked |
 | ⇧⌘7, ⇧⌘9 | Bulleted list, numbered list |
-| ⇧⌘A | Attach a file: pictures, PDFs and other files go in at the caret |
+| ⇧⌘A | Attach a file: pictures, PDFs and other files go in at the caret; notes and files from your folders as links |
 | ⌘' | Block quote |
 | Tab, ⇧Tab | Nest or un-nest a list item (in code: indent) |
 | ⌥⌘] and ⌥⌘[ | Increase and decrease indent |

@@ -46,6 +46,21 @@ final class LooseTodosTests: XCTestCase {
         workspace.looseTodos.url.flatMap { try? String(contentsOf: $0, encoding: .utf8) }
     }
 
+    /// A to-do just added and typed in, then taken away (Undo of New To-do) before a reading of its file has it: it
+    /// goes from the list at once, although it was added saying something else. Whether a reading came in between
+    /// used to decide whether it stayed.
+    func testATodoTypedInAndTakenAwayBeforeItIsReadGoes() throws {
+        let list = TodoList()
+        let url = base.appendingPathComponent("To-dos.md")
+        let empty = "- [ ] 📅 2026-11-02"
+        let typed = "- [ ] Call the plumber 📅 2026-11-02"
+        list.add(TodoList.Item(url: url, note: "", modified: nil, todo: try XCTUnwrap(TodoList.todo([empty], line: 0)), isLoose: true))
+        list.patch(TodoReference(url: url, line: 0, source: empty), to: typed, under: nil)
+        XCTAssertEqual(list.items.map(\.todo.source), [typed])
+        list.patch(TodoReference(url: url, line: 0, source: typed), to: nil, under: nil)
+        XCTAssertEqual(list.items.map(\.todo.source), [], "taken away")
+    }
+
     func testTodosInNoNoteAreListedAfterTheNotesOnes() async throws {
         let workspace = try await makeWorkspace(loose: "- [ ] Call the plumber\n- [x] Water the plants\n- [ ] Ask Mia about the bike\n")
         let texts = workspace.todos.items.map(\.todo.text)

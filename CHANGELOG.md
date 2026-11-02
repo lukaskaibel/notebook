@@ -38,15 +38,26 @@ versions follow [semantic versioning](https://semver.org).
   the camera, scans or pictures from Files on the page in view, picked, to drag where you want them. The lasso picks
   them up again later to move, resize, turn, duplicate or delete them, with the strokes around them. Notebook draws
   them as sharp as the handwriting however far you zoom in, and every PDF app shows them where you put them.
+- Copy a whole file, as in the Finder: right-click it in the sidebar and choose Copy, or press ⇧⌘C for the file that's
+  open, whatever it is, a note, a PDF, a picture or a video (in the sidebar, ⌘C copies the one selected). Paste it in the
+  Finder for a copy, in Mail or Messages to send it, or in an app for pictures. A small capsule says what was copied.
+  On iPhone and iPad, Copy is in a file's menu, and ⇧⌘C works with a keyboard.
 
 ### Changed
 
+- A file pasted or dropped in a note that's already in one of your folders goes in as a link to it where it is, such as
+  `![[Kyoto.jpg]]`, and shows as before: the picture, or the file's card. It isn't stored a second time next to the
+  note, and the link follows the file when you rename or move it. Files from anywhere else, such as Downloads, are still
+  copied next to the note, so the note keeps them when Downloads is emptied; drop with Option held for a copy of one
+  from your folders too. A folder goes in as a link to it, never as a copy, and only from your folders.
 - On iPhone and iPad, what you write on a PDF is saved a moment after you stop, not only when you put the pen away,
   leave the PDF or leave Notebook. Drawing on a PDF there uses the canvas Markup has, so pictures on a page can be picked
   and moved.
 
 ### Fixed
 
+- Undo right after typing in a new to-do in To-dos takes it out of the list at once. It could stay there, though gone
+  from its file, until the list was read again.
 - On iPhone and iPad, VoiceOver reads a note as it shows, line by line, rather than as one text with its Markdown
   ("dash, left bracket, space, right bracket, Buy milk"). Headings are headings, a to-do says whether it is completed
   and a double-tap ticks it, as a tap on its circle does, links are links, pictures and drawings are read by their
@@ -67,6 +78,18 @@ versions follow [semantic versioning](https://semver.org).
   you typed as a note in its folder Unsaved Notes (on iPhone and iPad in On My iPhone › Notebook) and says so, with
   Show in Finder or Open. If even that can't be written, it asks you to copy the text or try again, and quitting waits
   for your answer (#165).
+- On iPhone and iPad, Undo of a new handwritten note you wrote in and left a moment ago no longer deletes it while what
+  you wrote is still being saved: it waits for the save and, where there is no Recently Deleted, asks first. A PDF moved
+  to the Trash or deleted waits for its drawing to be saved too, and what you wrote just before leaving a PDF still goes
+  in when an earlier change was still being saved (#275).
+- On iPhone and iPad, a page you duplicate, give other paper, delete or bring back with Undo or Redo while the PDF also
+  changes on another device keeps what is under your writing, its slide or its paper, rather than coming back on blank
+  paper or on another page (#277).
+- All Pages, on iPhone and iPad, draws the small pages in the background, so opening and scrolling it no longer
+  stutters while the pages of a long scanned PDF are drawn (#278).
+  for your answer. On iPhone and iPad, switching to another app with such a note open keeps what you typed there at
+  once, so it is safe if iOS closes Notebook or you swipe it away, and Notebook tells you the next time you open it;
+  once the note can be saved after all, the copy goes again (#165, #273).
 
 ## [1.1.0] – 2026-10-29
 

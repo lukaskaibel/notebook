@@ -227,6 +227,9 @@ public final class Workspace: NSObject {
     /// True while the keyboard is up for the note or its title.
     private(set) var isEditing = false
     #endif
+    /// The file Copy File copied a moment ago, which a capsule over the window says: observed on its own, as the
+    /// capsule is all that shows it.
+    @ObservationIgnored let copied = CopiedNotice()
     /// The last file or folder renamed or moved, so screens showing it follow it to its new place.
     private(set) var relocation: (from: URL, to: URL, id: UUID)?
     @ObservationIgnored private var watcher: FileWatcher?
@@ -680,9 +683,8 @@ public final class Workspace: NSObject {
 
     /// A folder's name as the sidebar shows it: a location's, a linked folder's, or the folder's own.
     func folderName(_ url: URL) -> String {
-        let path = url.standardizedFileURL.path
-        if let location = locations.first(where: { $0.url.path == path }) { return location.name }
-        if let linked = locations.lazy.flatMap(\.linked).first(where: { $0.url.path == path }) { return linked.name }
+        if let location = locations.first(where: { FileNode.samePath($0.url, url.standardizedFileURL) }) { return location.name }
+        if let linked = locations.lazy.flatMap(\.linked).first(where: { FileNode.samePath($0.url, url.standardizedFileURL) }) { return linked.name }
         return url.lastPathComponent
     }
 
@@ -2113,8 +2115,10 @@ public final class Workspace: NSObject {
         // Their own windows close; what was typed there is saved first.
         FileWindows.shared.close(atOrInside: url)
         #endif
-        // What was typed in notes there goes along to the Trash, rather than coming back where they were.
+        // What was typed in notes there goes along to the Trash, rather than coming back where they were, and what
+        // was drawn in PDFs there, a save under way too: Undo of a new handwritten note looks at it as written.
         await NoteDocument.save(atOrInside: url)
+        await PDFDrawingSession.save(atOrInside: url)
         let trashed = await Task.detached(priority: .userInitiated, operation: { FileOperations.moveToTrash(url) }).value
         guard trashed.done else { return trashed }
         thrownAway(url)
@@ -2166,6 +2170,7 @@ public final class Workspace: NSObject {
     func deleteNow(_ url: URL) async -> (done: Bool, place: URL?) {
         if let current = currentURL, FileNode.isSameOrInside(current, url) { closeThrownAway() }
         await NoteDocument.save(atOrInside: url)
+        await PDFDrawingSession.save(atOrInside: url)
         let deleted = await Task.detached(priority: .userInitiated, operation: { FileOperations.delete(url) }).value
         if deleted.done { thrownAway(url) }
         return deleted
@@ -2648,6 +2653,10 @@ extension Workspace: EditorControllerDelegate {
 
     public func editor(_ editor: EditorController, resolve target: String) -> URL? {
         index.resolve(target, from: currentURL)
+    }
+
+    public func editor(_ editor: EditorController, linkTo url: URL) -> FileLink? {
+        libraryLink(to: url, from: currentURL)
     }
 
     public func editorNoteName(_ editor: EditorController) -> String {

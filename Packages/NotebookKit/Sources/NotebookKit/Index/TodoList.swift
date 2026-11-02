@@ -135,10 +135,12 @@ final class TodoList {
         guard let index = Self.index(of: todo.source, in: todo.url, near: todo.line, among: items) else { return }
         let old = items[index].todo
         let changed = source.flatMap { Self.todo([$0] + (under ?? old.lines.map(\.source)), line: old.line) }
-        // One just added and not read yet stays added, as it is now.
-        // Another just added can say the same: it keeps its own.
+        // One just added and not read yet stays added, as it is now: found by what its line says now too, as it was
+        // added saying something else, before you typed in it. Another just added can say the same: it keeps its own.
         func isThis(_ patch: Patch) -> Bool {
-            FileNode.samePath(patch.url, todo.url) && patch.source == todo.source && (patch.added == nil || patch.line == old.line)
+            guard FileNode.samePath(patch.url, todo.url) else { return false }
+            guard patch.added != nil else { return patch.source == todo.source }
+            return patch.line == old.line && (patch.source == todo.source || patch.todo?.source == todo.source)
         }
         var added = patches.first(where: isThis)?.added
         added?.todo = changed ?? old
