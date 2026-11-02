@@ -753,6 +753,45 @@ final class HandwrittenNoteTests: XCTestCase {
         XCTAssertEqual(markup.bounds, stamp.bounds)
     }
 
+    func testWhatWasDrawnOnAMacStaysAsItWas() throws {
+        // As the Mac writes a PDF: a stroke drawn with Preview's Markup (an ink annotation, the Mac's own entry next to
+        // it) and a highlight on the first page, strokes drawn with Notebook on the Mac on the second (#254).
+        let url = folder.appendingPathComponent("Drawn on a Mac.pdf")
+        let document = try XCTUnwrap(PDFDocument(data: try notebook(.lined, pages: 2)))
+        let path = NSBezierPath()
+        path.move(to: NSPoint(x: 80, y: 600))
+        path.line(to: NSPoint(x: 300, y: 640))
+        let ink = PDFAnnotation(bounds: CGRect(x: 60, y: 580, width: 260, height: 80), forType: .ink, withProperties: nil)
+        ink.add(path)
+        document.page(at: 0)?.addAnnotation(ink)
+        let highlight = PDFAnnotation(bounds: CGRect(x: 80, y: 700, width: 200, height: 20), forType: .highlight, withProperties: nil)
+        highlight.quadrilateralPoints = [NSPoint(x: 0, y: 20), NSPoint(x: 200, y: 20), NSPoint(x: 0, y: 0), NSPoint(x: 200, y: 0)].map { NSValue(point: $0) }
+        document.page(at: 0)?.addAnnotation(highlight)
+        XCTAssertTrue(document.write(to: url))
+        try PDFInk.change(url) { PDFInk.put([1: self.drawing], in: $0) }
+        let base = try Data(contentsOf: url)
+
+        // Markup's entry is read on its drawings only: the ink annotation isn't one (#284).
+        let read = try XCTUnwrap(PDFDocument(data: base)?.page(at: 0))
+        let mac = try XCTUnwrap(read.annotations.first { $0.type == "Ink" })
+        XCTAssertNotNil(mac.value(forAnnotationKey: MarkupDrawings.extrasKey), "written as the Mac writes it")
+        XCTAssertFalse(MarkupDrawings.isMarkup(mac))
+        XCTAssertNil(MarkupDrawings.strokes(in: mac, on: read))
+
+        // The first page duplicated and written on, the second as it was, a page of paper added.
+        let made = try PDFPageWriter.make(PDFPlan(slots: [
+            PDFPlan.Slot(origin: .base(0), size: PaperSize.a4.size, content: PageContent(drawing: strokes(2))),
+            PDFPlan.Slot(origin: .base(0), size: PaperSize.a4.size),
+            PDFPlan.Slot(origin: .base(1), size: PaperSize.a4.size),
+            PDFPlan.Slot(origin: .new, paper: .squared, size: PaperSize.a4.size),
+        ]), base: base)
+        let written = try XCTUnwrap(PDFDocument(data: made))
+        let pages = (0..<written.pageCount).map { written.page(at: $0)! }
+        XCTAssertEqual(pages.map { $0.annotations.filter { $0.type == "Ink" }.count }, [1, 1, 0, 0])
+        XCTAssertEqual(pages.map { $0.annotations.filter { $0.type == "Highlight" }.count }, [1, 1, 0, 0])
+        XCTAssertEqual(pages.map(strokeCount), [2, 0, 1, 0])
+    }
+
     func testAPDFWithAnOutlineOrAFormIsntWrittenAnew() throws {
         // What lives outside the pages would be lost: such a PDF is written as PDFKit writes it.
         let document = try XCTUnwrap(PDFDocument(data: try notebook(.lined, pages: 2)))

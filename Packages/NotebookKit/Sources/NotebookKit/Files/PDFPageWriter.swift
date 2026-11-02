@@ -279,11 +279,13 @@ enum PDFPageWriter {
     }
 
     /// The entries PDFKit doesn't know: it keeps one when the annotation goes to another page or document only once
-    /// it has been read.
+    /// it has been read. Markup's only on its drawings (`MarkupDrawings.isMarkup`); on others PDFKit writes what it
+    /// knows of them and leaves it out.
     static func keepEntries(of annotation: PDFAnnotation) {
-        for key in [MarkupDrawings.notebookKey, PDFPictures.key, NotebookPaper.key, MarkupDrawings.extrasKey] {
+        for key in [MarkupDrawings.notebookKey, PDFPictures.key, NotebookPaper.key] {
             _ = annotation.value(forAnnotationKey: key)
         }
+        if MarkupDrawings.isMarkup(annotation) { _ = annotation.value(forAnnotationKey: MarkupDrawings.extrasKey) }
     }
 
     /// The document written anew with only what its pages use. PDFKit writes again everything the file had, the
