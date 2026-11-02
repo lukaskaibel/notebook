@@ -77,7 +77,9 @@ versions follow [semantic versioning](https://semver.org).
   no longer takes what you typed with it. Notebook tries again a few seconds later; if it still can't, it keeps what
   you typed as a note in its folder Unsaved Notes (on iPhone and iPad in On My iPhone › Notebook) and says so, with
   Show in Finder or Open. If even that can't be written, it asks you to copy the text or try again, and quitting waits
-  for your answer (#165).
+  for your answer. On iPhone and iPad, switching to another app with such a note open keeps what you typed there at
+  once, so it is safe if iOS closes Notebook or you swipe it away, and Notebook tells you the next time you open it;
+  once the note can be saved after all, the copy goes again (#165, #273).
 - On iPhone and iPad, Undo of a new handwritten note you wrote in and left a moment ago no longer deletes it while what
   you wrote is still being saved: it waits for the save and, where there is no Recently Deleted, asks first. A PDF moved
   to the Trash or deleted waits for its drawing to be saved too, and what you wrote just before leaving a PDF still goes
@@ -88,9 +90,6 @@ versions follow [semantic versioning](https://semver.org).
   is in the PDF again too (#277, #291).
 - All Pages, on iPhone and iPad, draws the small pages in the background, so opening and scrolling it no longer
   stutters while the pages of a long scanned PDF are drawn (#278).
-  for your answer. On iPhone and iPad, switching to another app with such a note open keeps what you typed there at
-  once, so it is safe if iOS closes Notebook or you swipe it away, and Notebook tells you the next time you open it;
-  once the note can be saved after all, the copy goes again (#165, #273).
 - Renaming or moving a PDF right after writing in it keeps what you wrote in it: it is saved into the PDF under its
   new name or in its new folder, rather than into a new file with the old name next to it, and the pen stays on
   (#288).
