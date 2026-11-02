@@ -173,6 +173,7 @@ files="Right next to the PDFs and photos they go with."
 todos="Dates, places and repeats, written in the note."
 widget="New Note, today's to-dos, or a note you pick."
 versions="Go back to an earlier one, changes marked."
+handwriting="On lined, squared or dotted paper, saved as a PDF."
 # The steps that put Notebook's New Note and Today widgets on a new iPhone's Home Screen, in points. Home, twice, goes to
 # its first page (the app just ran from the second); Apple's Maps widget and Calendar stack go first, so Notebook's
 # are the only ones. The gallery's button is called " Add Widget".
@@ -201,27 +202,28 @@ if [ "$only" != ipad ]; then
   mkdir -p "$framed/iphone" "$raw/iphone"
   # Each scene waits a few seconds first, until the sample notes are read and their links found.
   shot "$iphone" iphone 01-note light "The ease of Notes." "$notes" "wait 6" "open Travel/Kyoto trip.md" "wait 3"
+  # A handwritten note, the pen on: the lecture notes on Cornell paper, with the tool picker under them.
+  shot "$iphone" iphone 02-handwriting light "Write by hand, too." "$handwriting" \
+    "wait 6" "open University/Linear algebra/Lecture 4.pdf" "wait 2" "pdfpen" "wait 3"
   # One folder per screen, as in the Files app: the notes among the trip's PDFs and photo.
-  shot "$iphone" iphone 02-folder light "Your notes are files." "$files" "wait 6" "push Travel" "wait 3"
+  shot "$iphone" iphone 03-folder light "Your notes are files." "$files" "wait 6" "push Travel" "wait 3"
   # Writing, with the bar above the keyboard; scrolled back to the top, which the keyboard moved.
-  shot "$iphone" iphone 03-writing light "Writes like Notes." "Checklists, links and photos from the bar." \
+  shot "$iphone" iphone 04-writing light "Writes like Notes." "Checklists, links and photos from the bar." \
     "wait 6" "open Personal/Weekend.md" "wait 2" "focus end" "wait 3" "scroll 0" "wait 3"
-  shot "$iphone" iphone 04-todos light "Every to-do in one list." "$todos" "wait 8" "showtodos" "wait 3"
+  shot "$iphone" iphone 05-todos light "Every to-do in one list." "$todos" "wait 8" "showtodos" "wait 3"
   # Version History from the note's ⋯ menu, the iPhone's version from Sunday open, with its changes marked.
-  shot "$iphone" iphone 06-versions light "Every version, kept." "$versions" "wait 6" "open Travel/Kyoto trip.md" \
+  shot "$iphone" iphone 07-versions light "Every version, kept." "$versions" "wait 6" "open Travel/Kyoto trip.md" \
     "wait 2" "browseversions" "wait 3" "pickversion 2" "wait 3" "showchanges 1" "wait 2"
   # Search, the keyboard put away: a few letters found in a name, in notes, in a PDF and in a photographed receipt.
-  shot "$iphone" iphone 07-search light "Finds it from a few letters." "In names, notes, PDFs and pictures." \
+  shot "$iphone" iphone 08-search light "Finds it from a few letters." "In names, notes, PDFs and pictures." \
     "wait 12" "search kyo" "wait 3" "resign" "wait 2"
-  shot "$iphone" iphone 08-blocks dark "Tables, code and diagrams." "Drawn right in the note." \
+  shot "$iphone" iphone 09-blocks dark "Tables, code and diagrams." "Drawn right in the note." \
     "wait 6" "open Projects/Notebook roadmap.md" "wait 3"
-  shot "$iphone" iphone 09-drawing light "Draw right in the note." "Sketch a map or a thought with your finger." \
-    "wait 6" "open Travel/Getting to the ryokan.md" "wait 3"
   # Further down the trip: links, a callout, a table and the flight tickets, a PDF in the note.
   shot "$iphone" iphone 10-objects light "Links, tables and PDFs in the note." "The PDF stays a file, right beside it." \
     "wait 6" "open Travel/Kyoto trip.md" "wait 3" "scroll 700" "wait 4"
   # Last, since it starts the Home Screen afresh.
-  widgets "$iphone" iphone 05-widgets "Notes on your Home Screen." "$widget" "${iphone_widgets[@]}"
+  widgets "$iphone" iphone 06-widgets "Notes on your Home Screen." "$widget" "${iphone_widgets[@]}"
   keep iphone 1320 2868
   xcrun simctl status_bar "$iphone" clear
   xcrun simctl shutdown "$iphone"
@@ -234,28 +236,28 @@ if [ "$only" != iphone ]; then
   mkdir -p "$framed/ipad" "$raw/ipad"
   # In portrait the note fills the screen; it shows its outline where it has headings.
   shot "$ipad" ipad 01-note light "The ease of Notes." "$notes" "wait 8" "open Travel/Kyoto trip.md" "outline" "wait 3"
+  # A handwritten note, the pen on: the lecture notes on Cornell paper, with the tool picker under them.
+  shot "$ipad" ipad 02-handwriting light "Write by hand, too." "$handwriting" \
+    "wait 8" "open University/Linear algebra/Lecture 4.pdf" "wait 2" "pdfpen" "wait 3"
   # The sidebar next to the note, the trip's folder open with its PDFs and photo among the notes.
-  shot "$ipad" ipad 02-folder light "Your notes are files." "$files" "wait 8" "open Travel/Kyoto trip.md" "wait 2" \
+  shot "$ipad" ipad 03-folder light "Your notes are files." "$files" "wait 8" "open Travel/Kyoto trip.md" "wait 2" \
     "sidebar" "wait 3"
   # Typing with a keyboard attached (and its shortcuts bar off), the caret right after a word just made bold, its marks
   # still showing. A simulator run without the Simulator app's window has no keyboard, so the debug remote stands in.
-  shot "$ipad" ipad 03-typing light "Markdown that gets out of the way." "The marks fade as you type." \
+  shot "$ipad" ipad 04-typing light "Markdown that gets out of the way." "The marks fade as you type." \
     "wait 8" "keyboard on" "open Personal/Weekend.md" "wait 2" "focus end" "wait 0.5" "touchkeyboard hide" "wait 1" \
     "type \\n## Sunday" "wait 0.5" "key return" "type - [ ] A long walk by the **lake" "wait 0.5" "type **" "wait 2"
-  shot "$ipad" ipad 04-todos light "Every to-do in one list." "$todos" "wait 10" "showtodos" "wait 3"
-  shot "$ipad" ipad 06-versions light "Every version, kept." "$versions" "wait 8" "open Travel/Kyoto trip.md" \
+  shot "$ipad" ipad 05-todos light "Every to-do in one list." "$todos" "wait 10" "showtodos" "wait 3"
+  shot "$ipad" ipad 07-versions light "Every version, kept." "$versions" "wait 8" "open Travel/Kyoto trip.md" \
     "wait 2" "browseversions" "wait 3" "pickversion 2" "wait 3" "showchanges 1" "wait 2"
   # ⌘K over the note, with a few letters typed and the keyboard put away.
-  shot "$ipad" ipad 07-palette light "Finds it from a few letters." "⌘K searches everything and runs any command." \
+  shot "$ipad" ipad 08-palette light "Finds it from a few letters." "⌘K searches everything and runs any command." \
     "wait 10" "open Travel/Kyoto trip.md" "wait 2" "palette" "wait 1" "palettetype kyo" "wait 2" "resign" "wait 2"
-  shot "$ipad" ipad 08-math dark "Maths, as you write it." "LaTeX in dollar signs, drawn in the note." \
+  shot "$ipad" ipad 09-math dark "Maths, as you write it." "LaTeX in dollar signs, drawn in the note." \
     "wait 8" "open University/Linear algebra/Week 3.md" "outline" "wait 3"
-  # Drawing, with the system's tools at the bottom.
-  shot "$ipad" ipad 09-drawing light "Draw right in the note." "With Apple Pencil, next to your words." \
-    "wait 8" "open Travel/Getting to the ryokan.md" "wait 2" "drawing 0" "wait 3"
   shot "$ipad" ipad 10-blocks light "Tables, code and diagrams." "Drawn right in the note." \
     "wait 8" "open Projects/Notebook roadmap.md" "outline" "wait 3"
-  widgets "$ipad" ipad 05-widgets "Notes on your Home Screen." "$widget" "${ipad_widgets[@]}"
+  widgets "$ipad" ipad 06-widgets "Notes on your Home Screen." "$widget" "${ipad_widgets[@]}"
   keep ipad 2064 2752
   xcrun simctl status_bar "$ipad" clear
   xcrun simctl shutdown "$ipad"
