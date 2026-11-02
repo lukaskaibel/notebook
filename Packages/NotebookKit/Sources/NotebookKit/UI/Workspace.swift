@@ -1495,6 +1495,11 @@ public final class Workspace: NSObject {
         history = history.map(fix)
         relocation = (old.standardizedFileURL, new.standardizedFileURL, UUID())
         if let current = currentURL { currentURL = fix(current) }
+        #if os(iOS)
+        // The pen stays on over a PDF renamed or moved while you write in it, once what was drawn is written there
+        // (`PDFDrawingSession.isWriting`).
+        if let drawn = drawsOnPDF { drawsOnPDF = fix(drawn) }
+        #endif
         // A file deleted while its rename was under way stays out of the lists under its new name.
         if !leaving.isEmpty { leaving = Dictionary(leaving.map { (fix($0.key), $0.value) }, uniquingKeysWith: +) }
         // Else ⌘N would make the folder again under its old name, for the note.
@@ -1813,8 +1818,9 @@ public final class Workspace: NSObject {
         let isNote = FileKind(url: url, isDirectory: false) == .note
         let links = updatingLinks && !undoing ? linkSnapshot() : nil
         let document = noteMoving(with: url)
-        // What notes there are writing is written where they are still.
+        // What notes there are writing is written where they are still, and what was drawn in PDFs there.
         let documents = await NoteDocument.beginMoving(url)
+        let drawings = await PDFDrawingSession.beginMoving(url)
         let result = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?)? in
             let renamed = fileName ? FileOperations.rename(url, toFileName: name, presenter: document) : FileOperations.rename(url, to: name, presenter: document)
             guard let renamed else { return nil }
@@ -1824,11 +1830,12 @@ public final class Workspace: NSObject {
         }.value
         guard let renamed = result?.url else {
             NoteDocument.endMoving(documents, from: url, to: nil)
+            PDFDrawingSession.endMoving(drawings, from: url, to: nil)
             let shown = fileName && isNote ? (name as NSString).deletingPathExtension : name
             report("The name “\(shown)” is already taken.", "Please choose a different name.")
             return nil
         }
-        moved(url, to: renamed, listing: result?.listing, document: document, documents: documents)
+        moved(url, to: renamed, listing: result?.listing, document: document, documents: documents, drawings: drawings)
         if undoing {
             takeBackLinks(change?.links, from: url, to: renamed)
         } else if let links {
@@ -1865,6 +1872,7 @@ public final class Workspace: NSObject {
         let links = undoing ? nil : linkSnapshot()
         let document = noteMoving(with: url)
         let documents = await NoteDocument.beginMoving(url)
+        let drawings = await PDFDrawingSession.beginMoving(url)
         let name = fileName ?? url.lastPathComponent
         let result = await Task.detached(priority: .userInitiated) { () -> (url: URL, listing: FileNode.Listing?, assets: (names: Set<String>, renamed: Bool)?)? in
             // Read before it moves only when that is quick: a note still in iCloud would have to come down first.
@@ -1879,6 +1887,7 @@ public final class Workspace: NSObject {
         }.value
         guard let result else {
             NoteDocument.endMoving(documents, from: url, to: nil)
+            PDFDrawingSession.endMoving(drawings, from: url, to: nil)
             beep()
             return nil
         }
@@ -1891,7 +1900,7 @@ public final class Workspace: NSObject {
                 FileOperations.cleanUpAssets(in: source, candidates: assets.names)
             }
         }
-        self.moved(url, to: moved, listing: result.listing, document: document, documents: documents)
+        self.moved(url, to: moved, listing: result.listing, document: document, documents: documents, drawings: drawings)
         // A picture whose name another had there came under a name of its own: the open note takes in what it says now.
         if result.assets?.renamed == true { document?.presentedItemDidChange() }
         if undoing {
@@ -1918,9 +1927,11 @@ public final class Workspace: NSObject {
     }
 
     /// A file Notebook renamed or moved, followed everywhere: by the notes open in it (`documents`, the main window's
-    /// `document` among them), by what remembers files by their address, and in the sidebar, at once.
-    private func moved(_ old: URL, to new: URL, listing: FileNode.Listing?, document: NoteDocument?, documents: [NoteDocument]) {
+    /// `document` among them) and the PDFs drawn on there (`drawings`), by what remembers files by their address, and
+    /// in the sidebar, at once.
+    private func moved(_ old: URL, to new: URL, listing: FileNode.Listing?, document: NoteDocument?, documents: [NoteDocument], drawings: [PDFDrawingSession]) {
         NoteDocument.endMoving(documents, from: old, to: new)
+        PDFDrawingSession.endMoving(drawings, from: old, to: new)
         #if os(macOS)
         sidebar?.follow(from: old, to: new)
         #endif

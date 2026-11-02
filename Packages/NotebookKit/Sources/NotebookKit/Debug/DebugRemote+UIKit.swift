@@ -173,6 +173,9 @@ enum DebugRemote {
             workspace.pdfEditing.session?.debugRotateFirstPicture(by: CGFloat(numbers.first ?? 0.3))
         case "pdfsave":
             workspace.pdfEditing.session?.save()
+        case "pdfdeletepicture":
+            // pdfdeletepicture: the first picture on the page in view taken off, as the lasso's Delete does.
+            workspace.pdfEditing.session?.debugDeletePicture()
         case "pdfundo":
             workspace.pdfEditing.session?.undo.undo()
         case "pdfredo":

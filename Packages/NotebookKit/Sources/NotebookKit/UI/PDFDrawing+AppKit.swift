@@ -10,7 +10,8 @@ import PencilKit
 /// itself (`PDFInk`), the same way the iPad does.
 @MainActor
 final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvider {
-    let url: URL
+    /// Where the PDF is: it follows a rename or move by Notebook (`endMoving`).
+    private(set) var url: URL
     private weak var view: PDFView?
     /// Strokes are undone here, on whichever page they were drawn. Each is a step of its own.
     let strokeUndo: UndoManager = {
@@ -24,6 +25,9 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
     private var edited: Set<Int> = []
     /// Drawn on since it was last saved.
     private var isSaved = true
+    /// Renames and moves of the PDF under way: a save waits for them, to go where the PDF is then.
+    private var moves = 0
+    private var savesAfterMove = false
     private var resigning: NSObjectProtocol?
     private let report: (String, String) -> Void
     /// Turns drawing off, as Done does: Escape on a page.
@@ -50,6 +54,29 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
     static func save(atOrInside url: URL) async {
         for session in active.allObjects where FileNode.isSameOrInside(session.url, url) { session.save() }
         await PDFInk.written()
+    }
+
+    /// Notebook is about to rename or move `url`, a PDF or a folder it is in: what was drawn is written where it is
+    /// still, and later saves wait until it has moved (`endMoving`).
+    static func beginMoving(_ url: URL) async -> [PDFDrawingSession] {
+        let sessions = active.allObjects.filter { FileNode.isSameOrInside($0.url, url) }
+        for session in sessions {
+            session.save()
+            session.moves += 1
+        }
+        await PDFInk.written()
+        return sessions
+    }
+
+    /// The rename or move of `url` is done, to `new` (nil when it couldn't be): the sessions save there from now on.
+    static func endMoving(_ sessions: [PDFDrawingSession], from url: URL, to new: URL?) {
+        for session in sessions {
+            if let new { session.url = Workspace.relocated(session.url, from: url, to: new) }
+            session.moves -= 1
+            guard session.moves == 0, session.savesAfterMove else { continue }
+            session.savesAfterMove = false
+            session.save()
+        }
     }
 
     /// Puts canvases over the pages.
@@ -102,6 +129,10 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
     /// Writes the pages drawn on since the last save into the PDF, in the background.
     func save() {
         guard hasChanges, !isSaved else { return }
+        guard moves == 0 else {
+            savesAfterMove = true
+            return
+        }
         isSaved = true
         let changes = edited.reduce(into: [Int: PKDrawing]()) { $0[$1] = drawings[$1] ?? PKDrawing() }
         PDFInk.save(url, failure: "Your drawing couldn’t be saved in “\(url.lastPathComponent)”.", report: report) { PDFInk.put(changes, in: $0) }

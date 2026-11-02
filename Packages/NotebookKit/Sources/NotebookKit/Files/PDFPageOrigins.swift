@@ -64,18 +64,43 @@ struct PDFPageOrigins<Page: Hashable> {
         return .new
     }
 
+    /// The pages of `base` that pages come from which aren't in the file as last saved: taken out before that save,
+    /// or put back since. A save into the file changed elsewhere carries them along into what saves start from then
+    /// (`PDFPageWriter.rebase`), so Undo can still put them back as they were.
+    func carried() -> [Int] {
+        Set(entries.compactMap { page, entry -> Int? in
+            guard case .base(let index) = entry.origin, savedOrigin(of: page) == .new else { return nil }
+            return index
+        }).sorted()
+    }
+
     /// A save of `pages`, in this order, was written. `rebased`: into the file as it was changed elsewhere, which
-    /// saves start from now, so every page, those taken out too, comes from where it was saved before.
-    mutating func saved(_ pages: [Page], rebased: Bool) {
+    /// saves start from now, so every page, those taken out too, comes from where it was saved before, or from where
+    /// its page of the old base was carried (`carried`). The pages that are new paper now, as they were in neither.
+    @discardableResult
+    mutating func saved(_ pages: [Page], rebased: Bool, carried: [Int: Int] = [:]) -> [Page] {
+        var lost: [Page] = []
         if rebased {
-            let origins = entries.keys.map { ($0, savedOrigin(of: $0)) }
-            for (page, origin) in origins {
+            let origins = entries.map { page, entry in (page, entry.origin, entry.origin.rebased(saved: savedOrigin(of: page), carried: carried)) }
+            for (page, old, origin) in origins {
                 entries[page]?.origin = origin
+                guard origin == .new else { continue }
+                if case .base = old { lost.append(page) }
                 // A page of the file that isn't in it any more: new paper, its strokes and pictures on it.
-                if origin == .new, entries[page]?.paper == nil { entries[page]?.paper = .blank }
+                if entries[page]?.paper == nil { entries[page]?.paper = .blank }
             }
         }
         for page in entries.keys { entries[page]?.savedPlace = nil }
         for (place, page) in pages.enumerated() { entries[page]?.savedPlace = place }
+        return lost
+    }
+}
+
+extension PDFPlan.Origin {
+    /// Where the page from here comes from in the file changed elsewhere: where it was last saved (`saved`), else,
+    /// carried along (`PDFPageWriter.rebase`), where this page of the old base is now (`places`, by its number there).
+    func rebased(saved: PDFPlan.Origin, carried places: [Int: Int]) -> PDFPlan.Origin {
+        guard saved == .new, case .base(let index) = self, let place = places[index] else { return saved }
+        return .base(place)
     }
 }
