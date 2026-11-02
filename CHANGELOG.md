@@ -64,6 +64,10 @@ versions follow [semantic versioning](https://semver.org).
   you typed as a note in its folder Unsaved Notes (on iPhone and iPad in On My iPhone › Notebook) and says so, with
   Show in Finder or Open. If even that can't be written, it asks you to copy the text or try again, and quitting waits
   for your answer (#165).
+- On iPhone and iPad, Undo of a new handwritten note you wrote in and left a moment ago no longer deletes it while what
+  you wrote is still being saved: it waits for the save and, where there is no Recently Deleted, asks first. A PDF moved
+  to the Trash or deleted waits for its drawing to be saved too, and what you wrote just before leaving a PDF still goes
+  in when an earlier change was still being saved (#275).
 
 ## [1.1.0] – 2026-10-29
 

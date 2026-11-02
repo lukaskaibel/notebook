@@ -61,6 +61,11 @@ struct PageContent: Sendable {
 enum PDFPageWriter {
     nonisolated static func write(_ plan: PDFPlan, base: Data, to url: URL) throws {
         let data = try make(plan, base: base)
+        #if DEBUG
+        // `-NotebookSlowDrawingSaves <seconds>`: a slow save, for trying out what waits for it.
+        let delay = UserDefaults.standard.double(forKey: "NotebookSlowDrawingSaves")
+        if delay > 0 { Thread.sleep(forTimeInterval: delay) }
+        #endif
         var failure: Error?
         var coordination: NSError?
         // Written in place, so the file keeps its tags, its colour and its place in the folder.

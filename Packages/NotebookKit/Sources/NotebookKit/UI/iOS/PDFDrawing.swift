@@ -17,6 +17,8 @@ import UIKit
 final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvider {
     let url: URL
     private weak var view: PDFView?
+    /// The PDF drawn on, which saves take the pages from, also once its view has gone.
+    private var document: PDFDocument?
     private let toolPicker = PKToolPicker()
     /// Keeps the tool picker up: it shows while its responder is focused, and no one canvas is (pages come and go).
     private lazy var anchor = ToolAnchor(session: self)
@@ -29,6 +31,9 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
     /// The PDF as it was read when drawing started, and when the file was last changed by this session.
     private var base: Data?
     private var written: Date?
+    /// The file couldn't be read when drawing started: nothing can be saved into it, which is said once.
+    private var baseIsUnreadable = false
+    private var toldUnreadable = false
     private var pausedGestures: [UIGestureRecognizer] = []
     private var scrollTouches: Int?
     private var bottomInset: CGFloat = 0
@@ -83,6 +88,7 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
         isActive = true
         isFinished = false
         guard let document = view.document else { return }
+        self.document = document
         if slots.isEmpty {
             for index in 0..<document.pageCount {
                 guard let page = document.page(at: index) else { continue }
@@ -161,16 +167,19 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
         adder.detach()
         if let background { NotificationCenter.default.removeObserver(background) }
         background = nil
-        guard let view else { return }
-        if let scrollView = view.scrollView {
-            if let scrollTouches { scrollView.panGestureRecognizer.minimumNumberOfTouches = scrollTouches }
-            scrollTouches = nil
-            scrollView.contentInset.bottom -= bottomInset
-            bottomInset = 0
-            scrollView.panGestureRecognizer.removeTarget(self, action: #selector(panned(_:)))
+        if let view {
+            if let scrollView = view.scrollView {
+                if let scrollTouches { scrollView.panGestureRecognizer.minimumNumberOfTouches = scrollTouches }
+                scrollTouches = nil
+                scrollView.contentInset.bottom -= bottomInset
+                bottomInset = 0
+                scrollView.panGestureRecognizer.removeTarget(self, action: #selector(panned(_:)))
+            }
+            view.isInMarkupMode = false
         }
-        view.isInMarkupMode = false
+        // Also once the view has gone: the pages are the document's.
         if hasUnsavedChanges { save() }
+        updateWriting()
     }
 
     /// The saved PDF is shown, or nothing was changed: its pages draw the strokes now, and the canvases go.
@@ -463,6 +472,7 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
         saveTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.save() }
         }
+        updateWriting()
     }
 
     /// The PDF as it was read, from the file, before any save.
@@ -474,6 +484,7 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     self?.base = data
+                    self?.baseIsUnreadable = data == nil
                     self?.written = date
                 }
             }
@@ -488,10 +499,16 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
     /// Writes what changed into the PDF, in the background. One save at a time; changes made meanwhile come after.
     func save() {
         saveTimer?.invalidate()
-        guard hasUnsavedChanges, !isSaving, let document = view?.document else { return }
+        defer { updateWriting() }
+        guard hasUnsavedChanges, !isSaving, let document else { return }
         guard let base else {
             // Still being read: the save comes once it is.
-            scheduleSave(after: 0.3)
+            if !baseIsUnreadable {
+                scheduleSave(after: 0.3)
+            } else if !toldUnreadable {
+                toldUnreadable = true
+                report("Your drawing couldn’t be saved in “\(url.lastPathComponent)”.", "The PDF couldn’t be read.")
+            }
             return
         }
         isSaving = true
@@ -540,6 +557,7 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
 
     private func saved(_ pages: [PDFPage], counted: Int, date: Date?, base newBase: Data?, failure: Error?) {
         isSaving = false
+        defer { updateWriting() }
         if let failure {
             report("Your drawing couldn’t be saved in “\(url.lastPathComponent)”.", failure.localizedDescription)
             return
@@ -565,6 +583,38 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
             // Done drawing: the PDF is read again, and its pages draw what was drawn.
             FileLoading.didWrite(url)
         }
+    }
+
+    // MARK: - Saves under way
+
+    /// The sessions with something to write, ended ones too: kept until it is written, so what was drawn last in a PDF
+    /// left during a save still goes in, and the Trash and Undo can wait for it (`save(atOrInside:)`).
+    private static var writing: [PDFDrawingSession] = []
+    private var whenWritten: [() -> Void] = []
+
+    /// A save under way, or one to come in a moment.
+    private var isWriting: Bool { isSaving || saveTimer?.isValid == true }
+
+    private func updateWriting() {
+        if isWriting {
+            if !Self.writing.contains(where: { $0 === self }) { Self.writing.append(self) }
+        } else {
+            Self.writing.removeAll { $0 === self }
+            let waiting = whenWritten
+            whenWritten = []
+            waiting.forEach { $0() }
+        }
+    }
+
+    /// What was drawn in the PDFs at `url` or in it is written, a save under way too: before the file goes to the Trash
+    /// or is deleted, and before Undo looks at whether a new handwritten note is still as it was made.
+    static func save(atOrInside url: URL) async {
+        let sessions = writing.filter { FileNode.isSameOrInside($0.url, url) }
+        for session in sessions { session.save() }
+        for session in sessions where session.isWriting {
+            await withCheckedContinuation { done in session.whenWritten.append { done.resume() } }
+        }
+        await PDFInk.written()
     }
 
     // MARK: - Canvases
