@@ -71,6 +71,8 @@ versions follow [semantic versioning](https://semver.org).
 - On iPhone and iPad, a page you duplicate, give other paper, delete or bring back with Undo or Redo while the PDF also
   changes on another device keeps what is under your writing, its slide or its paper, rather than coming back on blank
   paper or on another page (#277).
+- All Pages, on iPhone and iPad, draws the small pages in the background, so opening and scrolling it no longer
+  stutters while the pages of a long scanned PDF are drawn (#278).
 
 ## [1.1.0] – 2026-10-29
 

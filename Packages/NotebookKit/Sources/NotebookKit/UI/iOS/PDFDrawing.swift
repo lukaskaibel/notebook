@@ -34,6 +34,9 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
     /// The file couldn't be read when drawing started: nothing can be saved into it, which is said once.
     private var baseIsUnreadable = false
     private var toldUnreadable = false
+    /// Counts the times `base` was read, for the thumbnails drawn from it; and what waits for the first.
+    private var baseVersion = 0
+    private var whenBaseRead: [() -> Void] = []
     private var pausedGestures: [UIGestureRecognizer] = []
     private var scrollTouches: Int?
     private var bottomInset: CGFloat = 0
@@ -362,27 +365,46 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
 
     private var revisions: [ObjectIdentifier: Int] = [:]
 
-    /// A picture of the page as it is now, `width` points wide: the page, with what its canvas has on it, or what
-    /// the page had for one not shown yet. On white, as the page is paper.
+    /// Draws what is under the canvases for the thumbnails, off the main thread.
+    private let renderer = PageRenderer()
+
+    /// A picture of the page as it is now, `width` points wide, on white, as the page is paper. The page as the file
+    /// has it, or its paper, is drawn in the background; only what was changed on it since drawing started, its
+    /// canvas, is drawn over it here.
     func thumbnail(of page: PDFPage, width: CGFloat, scale: CGFloat) async -> UIImage? {
         let crop = page.bounds(for: .cropBox)
         guard crop.width > 0, crop.height > 0, width > 0 else { return nil }
         let pixels = CGSize(width: (width * scale).rounded(), height: (width * scale * crop.height / crop.width).rounded())
-        guard let context = CGContext(data: nil, width: Int(pixels.width), height: Int(pixels.height), bitsPerComponent: 8, bytesPerRow: 0,
-                                      space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
-                                      bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return nil }
-        context.setFillColor(UIColor.white.cgColor)
-        context.fill(CGRect(origin: .zero, size: pixels))
+        if base == nil, !baseIsUnreadable {
+            await withCheckedContinuation { done in whenBaseRead.append { done.resume() } }
+        }
+        let entry = origins[HeldPage(page)]
+        let editor = editors[ObjectIdentifier(page)].flatMap { $0.isEdited ? $0 : nil }
+        let under: PageRenderer.Under
+        if let paper = entry?.paper {
+            under = .paper(paper)
+        } else if case .base(let index)? = entry?.origin, let base {
+            // Without its strokes and pictures when its canvas has them.
+            under = .file(base, version: baseVersion, page: index, marks: editor == nil)
+        } else {
+            under = .paper(.blank)
+        }
+        guard let image = await renderer.image(of: under, size: crop.size, pixels: pixels) else { return nil }
+        guard let markup = editor?.controller.markup else { return UIImage(cgImage: image, scale: scale, orientation: .up) }
+        guard let context = PageRenderer.context(pixels) else { return nil }
+        context.draw(image, in: CGRect(origin: .zero, size: pixels))
         context.scaleBy(x: pixels.width / crop.width, y: pixels.height / crop.height)
         context.interpolationQuality = .high
-        // While drawing, the page leaves out its strokes and pictures, which the canvas has.
-        page.draw(with: .cropBox, to: context)
-        let markup = editors[ObjectIdentifier(page)]?.controller.markup ?? PageEditor.markup(of: page).markup
         // Measured from the top left.
         context.translateBy(x: 0, y: crop.height)
         context.scaleBy(x: 1, y: -1)
         await markup.draw(in: context, frame: CGRect(origin: .zero, size: crop.size))
         return context.makeImage().map { UIImage(cgImage: $0, scale: scale, orientation: .up) }
+    }
+
+    /// The page overview has gone: the PDF read for its thumbnails goes too.
+    func thumbnailsDone() {
+        renderer.forget()
     }
 
     // MARK: - Pictures
@@ -468,13 +490,19 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
             let data = FileLoading.read(url) { try? Data(contentsOf: $0) }
             let date = Self.modificationDate(url)
             DispatchQueue.main.async {
-                MainActor.assumeIsolated {
-                    self?.base = data
-                    self?.baseIsUnreadable = data == nil
-                    self?.written = date
-                }
+                MainActor.assumeIsolated { self?.read(data, at: date) }
             }
         }
+    }
+
+    private func read(_ data: Data?, at date: Date?) {
+        base = data
+        baseIsUnreadable = data == nil
+        baseVersion += 1
+        written = date
+        let waiting = whenBaseRead
+        whenBaseRead = []
+        waiting.forEach { $0() }
     }
 
     /// Asked of the disk each time: a URL keeps what it was told.
@@ -550,7 +578,10 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
         }
         written = date
         // Changed elsewhere, the file as it was then is what pages come from now, from where they were in it.
-        if let newBase { base = newBase }
+        if let newBase {
+            base = newBase
+            baseVersion += 1
+        }
         origins.saved(pages.map(HeldPage.init), rebased: newBase != nil)
         savedChanges = max(savedChanges, counted)
         if hasUnsavedChanges {
@@ -756,6 +787,78 @@ private struct HeldPage: Hashable {
 
     static func == (a: HeldPage, b: HeldPage) -> Bool { a.page === b.page }
     func hash(into hasher: inout Hasher) { hasher.combine(ObjectIdentifier(page)) }
+}
+
+/// Draws pages for the page overview's thumbnails in the background, one after the other: a page of the PDF that saves
+/// start from, read once for all of them, or a page of paper.
+private final class PageRenderer: @unchecked Sendable {
+    enum Under {
+        /// Page `page` of `base` (read for the `version`th time), with Notebook's strokes and pictures (`marks`) or
+        /// without them, for a page whose canvas has them.
+        case file(Data, version: Int, page: Int, marks: Bool)
+        case paper(PaperStyle)
+    }
+
+    private let queue = DispatchQueue(label: "Notebook.PageThumbnails", qos: .userInitiated)
+    /// On `queue` only: `base` read, and the annotations of Notebook's strokes and pictures on its pages.
+    private var document: (version: Int, document: PDFDocument)?
+    private var marksByPage: [Int: [PDFAnnotation]] = [:]
+
+    /// The page drawn on white, `pixels` large, from its crop box of `size` points.
+    func image(of under: Under, size: CGSize, pixels: CGSize) async -> CGImage? {
+        await withCheckedContinuation { done in
+            queue.async { done.resume(returning: self.draw(under, size: size, pixels: pixels)) }
+        }
+    }
+
+    func forget() {
+        queue.async {
+            self.document = nil
+            self.marksByPage = [:]
+        }
+    }
+
+    static func context(_ pixels: CGSize) -> CGContext? {
+        CGContext(data: nil, width: Int(pixels.width), height: Int(pixels.height), bitsPerComponent: 8, bytesPerRow: 0,
+                  space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
+    }
+
+    private func draw(_ under: Under, size: CGSize, pixels: CGSize) -> CGImage? {
+        guard let context = Self.context(pixels) else { return nil }
+        context.setFillColor(CGColor(gray: 1, alpha: 1))
+        context.fill(CGRect(origin: .zero, size: pixels))
+        context.interpolationQuality = .high
+        switch under {
+        case .paper(let paper):
+            context.scaleBy(x: pixels.width / size.width, y: pixels.height / size.height)
+            // Measured from the top left.
+            context.translateBy(x: 0, y: size.height)
+            context.scaleBy(x: 1, y: -1)
+            NotebookPaper.draw(paper, size: size, in: context)
+        case .file(let base, let version, let index, let withMarks):
+            if document?.version != version {
+                document = PDFDocument(data: base).map { (version, $0) }
+                marksByPage = [:]
+            }
+            guard let page = document?.document.page(at: index) else { break }
+            let crop = page.bounds(for: .cropBox)
+            guard crop.width > 0, crop.height > 0 else { break }
+            context.scaleBy(x: pixels.width / crop.width, y: pixels.height / crop.height)
+            let hidden = withMarks ? [] : marks(on: page, at: index).filter(\.shouldDisplay)
+            hidden.forEach { $0.shouldDisplay = false }
+            page.draw(with: .cropBox, to: context)
+            hidden.forEach { $0.shouldDisplay = true }
+        }
+        return context.makeImage()
+    }
+
+    /// The strokes a canvas takes over from the page, and its pictures.
+    private func marks(on page: PDFPage, at index: Int) -> [PDFAnnotation] {
+        if let found = marksByPage[index] { return found }
+        let found = page.annotations.filter { MarkupDrawings.strokes(in: $0, on: page) != nil || $0.value(forAnnotationKey: PDFPictures.key) != nil }
+        marksByPage[index] = found
+        return found
+    }
 }
 
 /// The canvas over one page, and what Notebook knows of the pictures on it.
@@ -1053,6 +1156,7 @@ final class PDFEditing {
     func overviewClosed() {
         showsOverview = false
         session?.cover(false)
+        session?.thumbnailsDone()
     }
 
     func movePage(at index: Int, to destination: Int) { session?.movePage(at: index, to: destination) }
