@@ -80,8 +80,9 @@ versions follow [semantic versioning](https://semver.org).
   to the Trash or deleted waits for its drawing to be saved too, and what you wrote just before leaving a PDF still goes
   in when an earlier change was still being saved (#275).
 - On iPhone and iPad, a page you duplicate, give other paper, delete or bring back with Undo or Redo while the PDF also
-  changes on another device keeps what is under your writing, its slide or its paper, rather than coming back on blank
-  paper or on another page (#277).
+  changes on another device keeps what is under your writing, its slide or its paper, and what is written on it,
+  rather than coming back on blank paper or on another page; a picture you take off and put back with Undo meanwhile
+  is in the PDF again too (#277, #291).
 - All Pages, on iPhone and iPad, draws the small pages in the background, so opening and scrolling it no longer
   stutters while the pages of a long scanned PDF are drawn (#278).
   for your answer. On iPhone and iPad, switching to another app with such a note open keeps what you typed there at

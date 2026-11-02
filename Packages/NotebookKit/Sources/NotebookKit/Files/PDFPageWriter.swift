@@ -27,6 +27,22 @@ struct PDFPlan: Sendable {
     }
 
     var slots: [Slot]
+
+    /// What the pictures written without what they show do show, for those `ids` (what the base has) doesn't have,
+    /// from `base`, a PDF that had them.
+    mutating func fillPictures(missingFrom ids: Set<String>, from base: Data) {
+        let missing = Set(slots.flatMap { $0.content?.pictures.filter { $0.image == nil }.map(\.id) ?? [] }).subtracting(ids)
+        guard !missing.isEmpty, let document = CGDataProvider(data: base as CFData).flatMap(CGPDFDocument.init) else { return }
+        let images = PDFPictures.images(in: document)
+        for index in slots.indices {
+            guard let pictures = slots[index].content?.pictures else { continue }
+            slots[index].content?.pictures = pictures.map { picture in
+                var picture = picture
+                if picture.image == nil, missing.contains(picture.id) { picture.image = images[picture.id] }
+                return picture
+            }
+        }
+    }
 }
 
 /// Why a PDF drawn on couldn't be written. Not expected to happen: it says where, for a report.
@@ -95,6 +111,31 @@ enum PDFPageWriter {
         // Only now: the looks of the pictures carried in are still the carriers' until written.
         withExtendedLifetime(carriers) {}
         return try Data(contentsOf: temporary)
+    }
+
+    /// The file as it was changed elsewhere, as what saves start from now (`current`), with pages of the old `base`
+    /// after its own (`keeping`): pages taken out, or put back since, that the file doesn't have, so Undo can put them
+    /// back as they were. Where each of those is in it.
+    static func rebase(_ current: Data, keeping kept: [Int], from base: Data) throws -> (base: Data, places: [Int: Int]) {
+        guard !kept.isEmpty else { return (current, [:]) }
+        guard let document = PDFDocument(data: current), !document.isLocked, let old = PDFDocument(data: base) else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        // Taken before any goes in: a page goes from its document into the other.
+        let pages = kept.compactMap { index in old.page(at: index).map { (index, $0) } }
+        var places: [Int: Int] = [:]
+        for (index, page) in pages {
+            places[index] = document.pageCount
+            document.insert(page, at: document.pageCount)
+        }
+        // Written again, the file's own pages too keep only what has been read.
+        for index in 0..<document.pageCount { document.page(at: index)?.annotations.forEach(keepEntries) }
+        let temporary = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("pdf")
+        defer { try? FileManager.default.removeItem(at: temporary) }
+        guard document.write(to: temporary) else { throw PDFWriteError.notWritten }
+        // Only now: what those pages have keeps reading its look from the old base until written.
+        withExtendedLifetime(old) {}
+        return (try Data(contentsOf: temporary), places)
     }
 
     /// The PDFs pictures were carried in from. A stamp moved from one keeps reading its look from it, so they stay
