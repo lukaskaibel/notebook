@@ -46,8 +46,8 @@
 
 > **Version 1.1.0** covers writing, organising and finding notes day to day, on the Mac, iPhone and iPad, and adds
 > widgets, Share to Notebook, version history, repeating to-dos and import from Apple Notes. Notebook is
-> [in the App Store](https://apps.apple.com/app/id6823609514) for the Mac, iPhone and iPad, free; the App Store has
-> 1.0.0 until Apple has reviewed 1.1.0. You can also build it from source (five minutes, see below).
+> [in the App Store](https://apps.apple.com/app/id6823609514) for the Mac, iPhone and iPad, free. You can also build it
+> from source (five minutes, see below).
 
 ## Why
 

@@ -51,10 +51,11 @@ versions follow [semantic versioning](https://semver.org).
   Show in Finder or Open. If even that can't be written, it asks you to copy the text or try again, and quitting waits
   for your answer (#165).
 
-## [1.1.0] – not released yet
+## [1.1.0] – 2026-10-29
 
 Widgets, Share to Notebook, version history, repeating to-dos, to-dos in no note and import from Apple Notes; on iPhone
-and iPad, drawing on PDFs right on the page.
+and iPad, drawing on PDFs right on the page. It came to the App Store for the Mac on 29 October 2026 and for iPhone and
+iPad on 1 November.
 
 ### Added
 
