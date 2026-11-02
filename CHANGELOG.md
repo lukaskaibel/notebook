@@ -38,8 +38,18 @@ versions follow [semantic versioning](https://semver.org).
   the camera, scans or pictures from Files on the page in view, picked, to drag where you want them. The lasso picks
   them up again later to move, resize, turn, duplicate or delete them, with the strokes around them. Notebook draws
   them as sharp as the handwriting however far you zoom in, and every PDF app shows them where you put them.
+- Copy a whole file, as in the Finder: right-click it in the sidebar and choose Copy, or press ⇧⌘C for the file that's
+  open, whatever it is, a note, a PDF, a picture or a video (in the sidebar, ⌘C copies the one selected). Paste it in the
+  Finder for a copy, in Mail or Messages to send it, or in an app for pictures. A small capsule says what was copied.
+  On iPhone and iPad, Copy is in a file's menu, and ⇧⌘C works with a keyboard.
 
 ### Changed
+
+- A file pasted or dropped in a note that's already in one of your folders goes in as a link to it where it is, such as
+  `![[Kyoto.jpg]]`, and shows as before: the picture, or the file's card. It isn't stored a second time next to the
+  note, and the link follows the file when you rename or move it. Files from anywhere else, such as Downloads, are still
+  copied next to the note, so the note keeps them when Downloads is emptied; drop with Option held for a copy of one
+  from your folders too.
 
 - On iPhone and iPad, what you write on a PDF is saved a moment after you stop, not only when you put the pen away,
   leave the PDF or leave Notebook. Drawing on a PDF there uses the canvas Markup has, so pictures on a page can be picked
@@ -47,6 +57,8 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- Undo right after typing in a new to-do in To-dos takes it out of the list at once. It could stay there, though gone
+  from its file, until the list was read again.
 - On iPhone and iPad, VoiceOver reads a note as it shows, line by line, rather than as one text with its Markdown
   ("dash, left bracket, space, right bracket, Buy milk"). Headings are headings, a to-do says whether it is completed
   and a double-tap ticks it, as a tap on its circle does, links are links, pictures and drawings are read by their

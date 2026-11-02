@@ -53,6 +53,7 @@ struct TouchRootView: View {
             }
         }
         .tint(Color.theme(Theme.accent))
+        .copiedCapsule(workspace)
         .onChange(of: sizeClass, initial: true) { _, size in workspace.showsPhoneScreens = size == .compact }
         .quickLookPreview($workspace.quickLookURL)
         .alert(conflictTitle, isPresented: Binding(get: { workspace.note?.conflict != nil }, set: { _ in }), presenting: workspace.note?.conflict) { _ in
@@ -137,6 +138,10 @@ struct TouchCommands: Commands {
         // a note with the keyboard, and takes ⌥⌘F for its Find and Replace while you type. Never dimmed: the menu bar
         // doesn't hear of a note loading.
         CommandGroup(after: .pasteboard) {
+            // The file that is open, whatever it is, as ⌘C copies a file in Files.
+            Button { if let url = workspace.currentURL { workspace.copyFile(url) } } label: { Label("Copy File", systemImage: "doc.on.doc") }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+                .disabled(workspace.currentURL == nil || workspace.showsTodos)
             Button { workspace.editor.findInNote() } label: { Label("Find…", systemImage: "magnifyingglass") }
                 .keyboardShortcut("f", modifiers: .command)
             Button { workspace.editor.findInNote(replacing: true) } label: { Label("Find and Replace…", systemImage: "arrow.left.arrow.right") }
