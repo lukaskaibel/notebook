@@ -148,7 +148,7 @@ echo "Taking screenshots…"
 mkdir -p "$work/framed"
 rm -f "$work/framed"/*.png
 # The order is the store's: the note, its folders and how it writes, then to-dos, reminders, versions, search, what a
-# note holds, and a PDF in the window. Two digits, since fastlane takes them in the order of their names.
+# note holds, and writing on a PDF. Two digits, since fastlane takes them in the order of their names.
 shot 01-note light "The ease of Notes." "Every note a Markdown file in your iCloud Drive." "open Travel/Kyoto trip.md"
 # Customize Folder… from Travel, with the symbols suggested for its name, over a note of words only: the popover's
 # glass shows what is behind it.
@@ -187,7 +187,10 @@ shot 08-blocks dark "Tables, code and diagrams." "Drawn right in the note." "ope
 shot 09-drawing light "Draw right in the note." "With the trackpad or the mouse, next to your words." \
   "open Travel/Getting to the ryokan.md" "wait 1" "drawing 0"
 say "drawing end"
-shot 10-pdf light "PDFs and pictures, in the window." "Everything else opens in Quick Look." "open Travel/Flight tickets.pdf" "wait 1"
+# A handwritten note from the iPad, the pencil on: what was written there can be changed here, and more drawn.
+shot 10-pdf light "Write and highlight on PDFs." "Handwritten notes from your iPad, on the Mac too." \
+  "open University/Linear algebra/Lecture 4.pdf" "wait 1" "pdfpen" "wait 1.5"
+say "pdfpen off"
 mkdir -p "$out"
 [ "$slots" = "  " ] && rm -f "$out"/*.png
 mv "$work/framed"/*.png "$out"/

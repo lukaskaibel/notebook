@@ -4,17 +4,18 @@ Notebook keeps every note as a plain Markdown file, in your own iCloud Drive or 
 
 And it writes like Notes. Headings, bold, lists and checklists look finished as you type, and their Markdown marks show only on the line you're writing. Pictures, PDFs and drawings go right into the note. On the Mac, iPhone and iPad it's an Apple app through and through: widgets, Spotlight, Shortcuts, the share sheet, Apple Pencil and the keyboard shortcuts you know.
 
-NEW IN 1.1
-• Widgets for a new note, today's to-dos and a note of your choice, and New Note in Control Center
-• Version history: every earlier version of a note, with what changed marked
-• Share to Notebook from any app
-• Import from Apple Notes
-• To-dos that repeat, and to-dos that don't need a note
+NEW IN 1.2
+• Handwritten notes on blank, lined, squared, dotted or Cornell paper, with Apple Pencil or a finger
+• All Pages: see every page at once, drag them into a new order, duplicate and delete them
+• Pictures on any page, and pages added as you write, on handwritten notes and every PDF
+• Draw on PDFs and highlight their text on the Mac too
+• VoiceOver reads a note as you see it
 
 WRITE
 • Tables, code, maths and Mermaid diagrams, drawn right in the note
 • Pictures, PDFs and files in the note, kept in a hidden .assets folder beside it
-• Drawings with Apple Pencil, a finger, the mouse or the trackpad, and on iPhone and iPad right on PDFs
+• Drawings with Apple Pencil, a finger, the mouse or the trackpad, in the note and right on PDFs
+• Version history: every earlier version of a note, with what changed marked
 • [[Links]] between notes that keep working when you rename or move them
 
 FIND
@@ -27,6 +28,7 @@ TO-DOS
 
 YOUR FOLDERS
 • iCloud Drive as the Finder shows it, with drag and drop, and Undo for moves, renames and the Trash
+• Share to Notebook from any app, widgets for a new note, today's to-dos and a note, and import from Apple Notes
 • Folder symbols and colours, kept where the Finder keeps them
 
 PRIVATE

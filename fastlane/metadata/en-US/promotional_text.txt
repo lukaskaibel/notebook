@@ -1,1 +1,1 @@
-New in 1.1: widgets, version history, Share to Notebook, repeating to-dos and import from Apple Notes. Your notes stay Markdown files, next to your other documents.
+New in 1.2: handwritten notes. Write with Apple Pencil on lined, squared or dotted paper, kept as PDFs in your own folders, right next to your typed notes.

@@ -150,7 +150,7 @@ The app and the listing are in English (U.S.) only, for now (#27).
 `fastlane/metadata/en-US/release_notes.txt`, for users, from the changelog: what a version brings first, then the
 fixes most would notice. The first version had none.
 
-The texts and screenshots in the repository are for one version, `STORE_TEXTS_VERSION` in the Fastfile (1.1.0 now). An
+The texts and screenshots in the repository are for one version, `STORE_TEXTS_VERSION` in the Fastfile (1.2.0 now). An
 upload for an earlier version, such as Mac 1.0 sent back by App Review and uploaded again, leaves its What's New,
 promotional text, description and screenshots as App Store Connect has them, since 1.1's would describe what 1.0
 doesn't have; the subtitle, keywords and the other texts go up. With each release whose texts are rewritten,
