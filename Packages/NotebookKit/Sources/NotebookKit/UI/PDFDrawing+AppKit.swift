@@ -45,6 +45,13 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
         for session in active.allObjects { session.save() }
     }
 
+    /// What was drawn in the PDFs at `url` or in it is written, saves asked for before too: before they go to the
+    /// Trash, so what was drawn goes along.
+    static func save(atOrInside url: URL) async {
+        for session in active.allObjects where FileNode.isSameOrInside(session.url, url) { session.save() }
+        await PDFInk.written()
+    }
+
     /// Puts canvases over the pages.
     func start(in view: PDFView) {
         self.view = view

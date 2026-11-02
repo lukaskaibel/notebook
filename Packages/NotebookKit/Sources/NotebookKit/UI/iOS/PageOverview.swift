@@ -74,6 +74,7 @@ private final class PageGridController: UIViewController, UICollectionViewDelega
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         collectionView.backgroundColor = .systemGroupedBackground
         collectionView.alwaysBounceVertical = true
+        collectionView.accessibilityIdentifier = "All Pages"
         collectionView.delegate = self
         collectionView.dragDelegate = self
         collectionView.dropDelegate = self
