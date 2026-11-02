@@ -524,6 +524,33 @@ final class AppleNotesImportTests: XCTestCase {
         XCTAssertTrue(exists(inbox.appendingPathComponent(".assets/mine.png")), "a picture that was there went too")
     }
 
+    /// What the import added is kept as it came, for Undo where a place has no Recently Deleted (iPhone and iPad): it
+    /// deletes for good without asking only what is still as it came, not a folder with a note you have edited since.
+    func testUndoKnowsWhatWasEditedSinceTheImport() async throws {
+        let loose = base.appendingPathComponent("Errands.md")
+        try write("Errands\n- [ ] Post office\n", to: loose)
+        let (workspace, _) = try await makeWindow()
+
+        workspace.importFromAppleNotes([archive, loose], into: inbox)
+        await workspace.changeFiles { _ in }.value
+        let imported = try XCTUnwrap(workspace.fileUndoLog.nextUndo)
+        let changes = [imported] + imported.parts
+        let folder = inbox.appendingPathComponent("Archive")
+        let errands = inbox.appendingPathComponent("Errands.md")
+        func made(_ url: URL) throws -> FileSnapshot {
+            let change = try XCTUnwrap(changes.first { $0.after.map { FileNode.samePath($0, url) } == true }, "\(url.lastPathComponent) not among them")
+            return try XCTUnwrap(change.made, "\(url.lastPathComponent) not kept as it came")
+        }
+        XCTAssertEqual(changes.count, 2)
+        XCTAssertTrue(try made(folder).matches(folder))
+        XCTAssertTrue(try made(errands).matches(errands))
+
+        let trip = folder.appendingPathComponent("Trip to Kyoto.md")
+        try write(try read(trip) + "\nBook the ryokan.\n", to: trip)
+        XCTAssertFalse(try made(folder).matches(folder), "a note in it edited")
+        XCTAssertTrue(try made(errands).matches(errands), "the note not edited")
+    }
+
     private func until(_ what: String, seconds: Double = TestRun.patience, _ condition: () -> Bool) async throws {
         let end = Date().addingTimeInterval(seconds)
         while !condition() {
