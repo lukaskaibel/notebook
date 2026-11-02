@@ -7,7 +7,7 @@ import UIKit
 /// Clicks on the things drawn in place of Markdown: a checkbox ticks, a link opens, a picture is selected like a
 /// character, a table or diagram opens for editing right where you clicked.
 extension EditorController {
-    enum Hit {
+    enum Hit: Equatable {
         case checkbox(line: Int)
         case link(LinkTarget.Kind)
         case picture(range: NSRange, url: URL?)
