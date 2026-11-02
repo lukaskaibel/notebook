@@ -233,6 +233,27 @@ final class FileUndoTests: XCTestCase {
         XCTAssertTrue(exists(ideas))
     }
 
+    /// On the Mac, Undo takes a new note written in to the Trash all the same, and Redo brings it back as it was.
+    func testUndoTakesANewNoteWrittenInToTheTrash() async throws {
+        let (workspace, manager) = try await makeWindow()
+        let making = await workspace.newNote(in: papers).value
+        let untitled = try XCTUnwrap(making)
+        let textView = workspace.editor.textView
+        window?.makeFirstResponder(textView)
+        textView.insertText("Milk", replacementRange: textView.selectedRange())
+        try await settle(workspace, manager)
+        // Another note forgets the typing, not the New Note.
+        workspace.open(draft)
+        try await settle(workspace, manager)
+        await NoteDocument.allWritten()
+        XCTAssertEqual(manager.undoMenuItemTitle, "Undo New Note")
+
+        try await undo(workspace, manager)
+        XCTAssertFalse(exists(untitled))
+        try await redo(workspace, manager)
+        XCTAssertEqual(text(untitled), "Milk")
+    }
+
     /// A new note left empty goes away by itself, and with it its New Note in Undo.
     func testANewNoteLeftEmptyLeavesNothingToUndo() async throws {
         let (workspace, manager) = try await makeWindow()
@@ -243,6 +264,67 @@ final class FileUndoTests: XCTestCase {
         try await until("the empty note went") { !self.exists(untitled) }
         try await settle(workspace, manager)
         XCTAssertFalse(manager.canUndo)
+    }
+
+    // MARK: - As it was made
+
+    // On iPhone and iPad, where a place has no Recently Deleted, Undo of a file Notebook made deletes it for good without
+    // asking only while it is as it was made (`FileChange.made`), and otherwise asks, as Delete does there.
+
+    /// A new note left as it came, open or not, is as it was made. Written in, it isn't; emptied again, nothing would
+    /// be lost with it.
+    func testANewNoteIsAsMadeUntilItIsWrittenIn() async throws {
+        let (workspace, _) = try await makeWindow()
+        let making = await workspace.newNote(in: papers).value
+        let untitled = try XCTUnwrap(making)
+        let made = try XCTUnwrap(workspace.fileUndoLog.nextUndo?.made, "not kept as it was made")
+        workspace.saveAll()
+        await NoteDocument.allWritten()
+        XCTAssertTrue(made.matches(untitled), "left as it came")
+
+        let textView = workspace.editor.textView
+        window?.makeFirstResponder(textView)
+        textView.insertText("Milk", replacementRange: textView.selectedRange())
+        workspace.saveAll()
+        await NoteDocument.allWritten()
+        XCTAssertEqual(text(untitled), "Milk")
+        XCTAssertFalse(made.matches(untitled), "written in")
+
+        textView.setSelectedRange(NSRange(location: 0, length: 4))
+        textView.deleteBackward(nil)
+        workspace.saveAll()
+        await NoteDocument.allWritten()
+        XCTAssertEqual(text(untitled), "")
+        XCTAssertTrue(made.matches(untitled), "emptied again")
+    }
+
+    /// A new folder is as it was made while nothing is in it; a note in it, it isn't.
+    func testANewFolderIsAsMadeWhileNothingIsInIt() async throws {
+        let (workspace, manager) = try await makeWindow()
+        let ideas = papers.appendingPathComponent("Ideas")
+        workspace.newFolder(in: papers, named: "Ideas")
+        try await settle(workspace, manager)
+        let made = try XCTUnwrap(workspace.fileUndoLog.nextUndo?.made)
+        XCTAssertTrue(made.matches(ideas))
+
+        let plan = ideas.appendingPathComponent("Plan.md")
+        try "# Plan\n".write(to: plan, atomically: true, encoding: .utf8)
+        XCTAssertFalse(made.matches(ideas), "a note in it")
+        try FileManager.default.removeItem(at: plan)
+        XCTAssertTrue(made.matches(ideas), "the note gone again")
+    }
+
+    /// A copy changed later is no longer as it was made, even with as much text as before.
+    func testACopyChangedIsNoLongerAsMade() async throws {
+        let (workspace, _) = try await makeWindow()
+        let copying = await workspace.duplicate(draft).value
+        let copy = try XCTUnwrap(copying)
+        let made = try XCTUnwrap(workspace.fileUndoLog.nextUndo?.made)
+        XCTAssertTrue(made.matches(copy))
+
+        let changed = try XCTUnwrap(text(copy)).replacingOccurrences(of: "Draft", with: "Final")
+        try changed.write(to: copy, atomically: true, encoding: .utf8)
+        XCTAssertFalse(made.matches(copy))
     }
 
     // MARK: - With the text

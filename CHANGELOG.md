@@ -45,6 +45,9 @@ versions follow [semantic versioning](https://semver.org).
 - Putting the pen away on a PDF, or taking it up, no longer makes the pages flash empty for a moment.
 - A PDF you draw in on iPhone or iPad no longer grows a little with every save: it is written anew with only what its
   pages use (#244).
+- On iPhone and iPad, where a place has no Recently Deleted, Undo of a new note, a new folder, a copy or an import from
+  Apple Notes no longer deletes it for good once you have written in it or changed it since: it asks first, as Delete
+  does there. One left as Notebook made it still goes without a question (#169).
 
 ## [1.1.0] – not released yet
 

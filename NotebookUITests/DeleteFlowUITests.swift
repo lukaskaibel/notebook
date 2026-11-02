@@ -6,6 +6,8 @@ import XCTest
 /// test starts the app on fresh sample notes in its own home folder, so nothing of yours is touched. With `TEST_RUNNER_PACE=<seconds>` the tests wait that long between steps, for a recording of the screen.
 final class DeleteFlowUITests: XCTestCase {
     var app: XCUIApplication!
+    /// The sample notes, when the test changes them itself, as another app would (`launch(inReach:)`).
+    var library: URL?
 
     override func setUp() {
         super.setUp()
@@ -15,6 +17,7 @@ final class DeleteFlowUITests: XCTestCase {
 
     override func tearDown() {
         app?.terminate()
+        if let library { try? FileManager.default.removeItem(at: library) }
         super.tearDown()
     }
 
@@ -221,12 +224,82 @@ final class DeleteFlowUITests: XCTestCase {
         assertShown("Shared link", within: 3)
     }
 
+    // MARK: - Undo of what Notebook made
+
+    /// Undo of a copy, where a place has no Recently Deleted: as it was made, it is deleted without a question. Changed
+    /// since, here by another app, Undo asks first, as Delete does there, and Cancel keeps it as it is.
+    func testWithoutRecentlyDeletedUndoAsksAboutACopyChangedSince() throws {
+        launch(slowWrites: 0, recentlyDeleted: false, inReach: true)
+        let copy = try XCTUnwrap(library).appendingPathComponent("Inbox/Errands copy.md")
+        tap("Inbox")
+        duplicate("Errands")
+        undoByShaking("Undo Duplicate")
+        assertGone("Errands copy", within: 3)
+        XCTAssertFalse(app.alerts.buttons["Cancel"].waitForExistence(timeout: 2), "asked about a copy as it was made: \(app.debugDescription)")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: copy.path))
+
+        duplicate("Errands")
+        try (String(contentsOf: copy, encoding: .utf8) + "- [ ] Stamps\n").write(to: copy, atomically: true, encoding: .utf8)
+        undoByShaking("Undo Duplicate")
+        let cancel = app.alerts.buttons["Cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.alerts.staticTexts["Delete “Errands copy” immediately?"].exists, app.debugDescription)
+        pause()
+        cancel.tap()
+        assertShown("Errands copy", within: 3)
+        XCTAssertTrue(try String(contentsOf: copy, encoding: .utf8).contains("Stamps"), "not as it was")
+    }
+
+    /// A new note written in, where a place has no Recently Deleted: Undo asks before it deletes it, and Delete does.
+    func testWithoutRecentlyDeletedUndoAsksAboutANewNoteWrittenIn() throws {
+        try XCTSkipIf(isPad, "the iPhone's first screen has New Note")
+        launch(slowWrites: 0, recentlyDeleted: false)
+        tap("New Note")
+        app.typeText("Plans\nCall the plumber")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        assertShown("Plans", within: 5)
+        undoByShaking("Undo Rename")
+        assertShown("Untitled", within: 5)
+        undoByShaking("Undo New Note")
+        let delete = app.alerts.buttons["Delete"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.alerts.staticTexts["Delete “Untitled” immediately?"].exists, app.debugDescription)
+        pause()
+        delete.tap()
+        assertGone("Untitled", within: 3)
+    }
+
+    private func duplicate(_ name: String) {
+        row(name).press(forDuration: 1.2)
+        tap("Duplicate")
+        assertShown("\(name) copy", within: 5)
+    }
+
+    /// Shakes, and takes Undo in the alert that says what it takes back.
+    private func undoByShaking(_ title: String, file: StaticString = #filePath, line: UInt = #line) {
+        pause()
+        shake()
+        let undo = app.alerts.buttons["Undo"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 10), app.debugDescription, file: file, line: line)
+        XCTAssertTrue(app.alerts.staticTexts[title].exists, app.debugDescription, file: file, line: line)
+        pause(0.5)
+        undo.tap()
+    }
+
     // MARK: -
 
-    private func launch(slowWrites: Double, recentlyDeleted: Bool = true) {
+    /// `inReach`: the sample notes in a folder of the test's own, where it can change them as another app would; else
+    /// in the app's home.
+    private func launch(slowWrites: Double, recentlyDeleted: Bool = true, inReach: Bool = false) {
         app = XCUIApplication()
-        // A `~` is the app's home in the Simulator.
-        app.launchArguments = ["-NotebookLibrary", "~/Documents/UITests-\(UUID().uuidString)", "-NotebookLibraryName", "Library",
+        // A `~` is the app's home in the Simulator, which has no sandbox to keep the app out of the test's folders.
+        var path = "~/Documents/UITests-\(UUID().uuidString)"
+        if inReach {
+            let library = FileManager.default.temporaryDirectory.appendingPathComponent("UITests-\(UUID().uuidString)", isDirectory: true)
+            self.library = library
+            path = library.path
+        }
+        app.launchArguments = ["-NotebookLibrary", path, "-NotebookLibraryName", "Library",
                                "-NotebookDemo", "YES", "-NotebookTips", "hide", "-NotebookSlowWrites", "\(slowWrites)",
                                "-NotebookNoRecentlyDeleted", recentlyDeleted ? "NO" : "YES",
                                "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
