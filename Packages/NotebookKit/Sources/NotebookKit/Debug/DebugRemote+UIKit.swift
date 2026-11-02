@@ -554,6 +554,13 @@ enum DebugRemote {
             guard let folder = url(argument) ?? workspace.locations.first?.url else { break }
             let rows = workspace.visibleChildren(of: folder).map { $0.name + ($0.isFolder && workspace.isHidden($0.url) ? " (hidden)" : "") }
             log("rows \(argument): \(rows.joined(separator: ", "))")
+        case "copyfile":
+            // copyfile <path>: what Copy in a file's menu does.
+            if let url = url(argument) { workspace.copyFile(url) }
+            log("copyfile \(argument): pasteboard \(UIPasteboard.general.types)")
+        case "paste":
+            // paste: what Paste in the note's menu does, at the caret.
+            log("paste: \(editor.paste(from: .general))")
         case "exists":
             log("exists \(argument): \(url(argument).map { FileManager.default.fileExists(atPath: $0.path) } ?? false)")
         case "ls":

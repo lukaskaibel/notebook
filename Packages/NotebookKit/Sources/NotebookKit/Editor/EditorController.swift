@@ -30,6 +30,9 @@ public protocol EditorControllerDelegate: AnyObject {
     func editor(_ editor: EditorController, commitTitle title: String)
     func editor(_ editor: EditorController, suggestionsFor query: String) -> [LinkSuggestion]
     func editor(_ editor: EditorController, resolve target: String) -> URL?
+    /// How a file pasted or dropped in the note goes in when it is in one of the locations: as a link to it where it
+    /// is. Nil for a file from elsewhere, which is copied next to the note.
+    func editor(_ editor: EditorController, linkTo url: URL) -> FileLink?
     /// The note's name, used to name pictures pasted into it.
     func editorNoteName(_ editor: EditorController) -> String
     /// The headings or the word count changed.
@@ -71,9 +74,24 @@ public extension EditorControllerDelegate {
     func editor(_ editor: EditorController, showTodoReminderOnLine line: Int, part: TodoPart) {}
     func editor(_ editor: EditorController, tickedRepeatingTodo source: String, line: Int, next: String) {}
     func editor(_ editor: EditorController, mayWriteIn folder: URL) -> Bool { true }
+    func editor(_ editor: EditorController, linkTo url: URL) -> FileLink? { nil }
     #if os(iOS)
     func editor(_ editor: EditorController, askToWriteIn folder: URL) async -> Bool { false }
     #endif
+}
+
+/// A file of the locations as it goes in a note where it is pasted or dropped: a link to it where it is, which shows
+/// a picture and a file's card as the note's own do.
+public struct FileLink: Sendable, Equatable {
+    /// `[[Plan]]` for a note, `![[Kyoto.jpg]]` for another file, a Markdown link for a folder.
+    public var markdown: String
+    /// On lines of its own, as a picture or a file's card; else in the line, as a link to a note or a folder.
+    public var isBlock: Bool
+
+    public init(markdown: String, isBlock: Bool) {
+        self.markdown = markdown
+        self.isBlock = isBlock
+    }
 }
 
 /// Notebook's editor: a TextKit 1 text view whose storage holds the note's Markdown exactly, styled so that it reads as
