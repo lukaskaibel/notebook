@@ -15,7 +15,8 @@ import UIKit
 /// started (its `base`), so Undo can put back a page that was taken out, whatever was saved meanwhile.
 @MainActor
 final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvider {
-    let url: URL
+    /// Where the PDF is: it follows a rename or move by Notebook (`endMoving`).
+    private(set) var url: URL
     private weak var view: PDFView?
     /// The PDF drawn on, which saves take the pages from, also once its view has gone.
     private var document: PDFDocument?
@@ -63,6 +64,8 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
     init(url: URL, report: @escaping (String, String) -> Void) {
         self.url = url
         self.report = report
+        super.init()
+        Self.all.add(self)
     }
 
     var hasUnsavedChanges: Bool { changes != savedChanges }
@@ -514,7 +517,8 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
     func save() {
         saveTimer?.invalidate()
         defer { updateWriting() }
-        guard hasUnsavedChanges, !isSaving, let document else { return }
+        // During a rename or move, once it is done (`endMoving`).
+        guard hasUnsavedChanges, !isSaving, moves == 0, let document else { return }
         guard let base else {
             // Still being read: the save comes once it is.
             if !baseIsUnreadable {
@@ -571,7 +575,12 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
 
     private func saved(_ pages: [PDFPage], counted: Int, date: Date?, base newBase: Data?, failure: Error?) {
         isSaving = false
-        defer { updateWriting() }
+        defer {
+            updateWriting()
+            let waiting = whenSaved
+            whenSaved = []
+            waiting.forEach { $0() }
+        }
         if let failure {
             report("Your drawing couldn’t be saved in “\(url.lastPathComponent)”.", failure.localizedDescription)
             return
@@ -622,6 +631,47 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
             await withCheckedContinuation { done in session.whenWritten.append { done.resume() } }
         }
         await PDFInk.written()
+    }
+
+    // MARK: - Renames and moves
+
+    /// Every session, for a rename or move of its PDF.
+    private static let all = NSHashTable<PDFDrawingSession>.weakObjects()
+    /// Renames and moves of the PDF under way: saves wait for them, to go where the PDF is then.
+    private var moves = 0
+    private var whenSaved: [() -> Void] = []
+
+    /// Notebook is about to rename or move `url`, a PDF or a folder it is in: what was drawn in it is written where it
+    /// is still, a save under way too, and later saves wait until it has moved (`endMoving`), so that none goes to
+    /// where it was (#288).
+    static func beginMoving(_ url: URL) async -> [PDFDrawingSession] {
+        let sessions = all.allObjects.filter { FileNode.isSameOrInside($0.url, url) }
+        for session in sessions {
+            session.save()
+            session.moves += 1
+        }
+        for session in sessions {
+            // Read from where it is, still being read, and written there.
+            if session.base == nil, !session.baseIsUnreadable {
+                await withCheckedContinuation { done in session.whenBaseRead.append { done.resume() } }
+            }
+            if session.isSaving {
+                await withCheckedContinuation { done in session.whenSaved.append { done.resume() } }
+            }
+        }
+        await PDFInk.written()
+        return sessions
+    }
+
+    /// The rename or move of `url` is done, to `new` (nil when it couldn't be): the sessions save there from now on,
+    /// what was drawn meanwhile first.
+    static func endMoving(_ sessions: [PDFDrawingSession], from url: URL, to new: URL?) {
+        for session in sessions {
+            if let new { session.url = Workspace.relocated(session.url, from: url, to: new) }
+            session.moves -= 1
+            guard session.moves == 0, session.hasUnsavedChanges else { continue }
+            if session.isActive { session.scheduleSave() } else { session.save() }
+        }
     }
 
     // MARK: - Canvases

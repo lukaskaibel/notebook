@@ -87,6 +87,9 @@ versions follow [semantic versioning](https://semver.org).
   for your answer. On iPhone and iPad, switching to another app with such a note open keeps what you typed there at
   once, so it is safe if iOS closes Notebook or you swipe it away, and Notebook tells you the next time you open it;
   once the note can be saved after all, the copy goes again (#165, #273).
+- Renaming or moving a PDF right after writing in it keeps what you wrote in it: it is saved into the PDF under its
+  new name or in its new folder, rather than into a new file with the old name next to it, and the pen stays on
+  (#288).
 
 ## [1.1.0] – 2026-10-29
 
