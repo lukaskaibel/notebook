@@ -305,27 +305,37 @@ final class HandwrittenNoteTests: XCTestCase {
             var pages: [Int]
             var plan: PDFPlan
             var savedOrigins: [PDFPlan.Origin]
+            var carried: [Int]
         }
 
-        /// A save of the pages in this order begins; it is written with `finish`, and pages can change meanwhile.
-        func begin(_ pages: [Int]) -> Started {
-            Started(pages: pages, plan: PDFPlan(slots: pages.map { origins.slot(of: $0)! }), savedOrigins: pages.map(origins.savedOrigin))
+        /// A save of the pages in this order begins, with what is on those drawn on (`content`); it is written with
+        /// `finish`, and pages can change meanwhile.
+        func begin(_ pages: [Int], content: [Int: PageContent] = [:]) -> Started {
+            var plan = PDFPlan(slots: pages.map { origins.slot(of: $0)! })
+            for (index, page) in pages.enumerated() { plan.slots[index].content = content[page] }
+            return Started(pages: pages, plan: plan, savedOrigins: pages.map(origins.savedOrigin), carried: origins.carried())
         }
 
         mutating func finish(_ save: Started) throws {
             var plan = save.plan
             let rebased = changedElsewhere
+            var places: [Int: Int] = [:]
             if rebased {
-                base = file
-                for index in plan.slots.indices { plan.slots[index].origin = save.savedOrigins[index] }
+                let old = base
+                (base, places) = try PDFPageWriter.rebase(file, keeping: save.carried, from: old)
+                for index in plan.slots.indices {
+                    plan.slots[index].origin = plan.slots[index].origin.rebased(saved: save.savedOrigins[index], carried: places)
+                }
+                let ids = CGDataProvider(data: base as CFData).flatMap(CGPDFDocument.init).map(PDFPictures.ids) ?? []
+                plan.fillPictures(missingFrom: ids, from: old)
             }
             file = try PDFPageWriter.make(plan, base: base)
             changedElsewhere = false
-            origins.saved(save.pages, rebased: rebased)
+            origins.saved(save.pages, rebased: rebased, carried: places)
         }
 
-        mutating func save(_ pages: [Int]) throws {
-            try finish(begin(pages))
+        mutating func save(_ pages: [Int], content: [Int: PageContent] = [:]) throws {
+            try finish(begin(pages, content: content))
         }
 
         /// Another device changes the file.
@@ -388,6 +398,67 @@ final class HandwrittenNoteTests: XCTestCase {
         try saves.save([0, 1, 2])
         XCTAssertEqual(papers(saves.file), [.lined, .squared, .dotted])
         XCTAssertEqual(strokeCounts(saves.file), [3, 0, 0])
+    }
+
+    func testUndoOfDeleteAfterASaveAndAChangeElsewhereBringsThePageBackAsItWas() throws {
+        // The second page (dotted, two strokes and a photo) deleted and saved; another device writes on the first; a
+        // stroke anywhere is saved into that; then Undo puts the page back.
+        let jpeg = photo()
+        var saves = try Saves(try threePages(photo: jpeg))
+        try saves.save([0, 2])
+        try saves.changeElsewhere { PDFInk.put([0: self.strokes(5)], in: $0) }
+        try saves.save([0, 2])
+        XCTAssertEqual(papers(saves.file), [.lined, .squared])
+        // The page isn't in the file, but in what saves start from now, with its photo.
+        let base = try XCTUnwrap(CGDataProvider(data: saves.base as CFData).flatMap(CGPDFDocument.init))
+        XCTAssertEqual(PDFPictures.ids(in: base), ["photo"])
+        try saves.save([0, 1, 2])
+        XCTAssertEqual(papers(saves.file), [.lined, .dotted, .squared])
+        XCTAssertEqual(strokeCounts(saves.file), [5, 2, 3])
+        let written = try XCTUnwrap(CGDataProvider(data: saves.file as CFData).flatMap(CGPDFDocument.init))
+        XCTAssertEqual(PDFPictures.images(in: written, pages: [1])["photo"]?.jpeg, jpeg)
+
+        // Undone right after the change elsewhere, the page is in the save into it.
+        saves = try Saves(try threePages(photo: jpeg))
+        try saves.save([0, 2])
+        try saves.changeElsewhere { PDFInk.put([0: self.strokes(5)], in: $0) }
+        try saves.save([0, 1, 2])
+        XCTAssertEqual(papers(saves.file), [.lined, .dotted, .squared])
+        XCTAssertEqual(strokeCounts(saves.file), [5, 2, 3])
+        // And it stays so in the saves after.
+        try saves.save([0, 1, 2])
+        XCTAssertEqual(papers(saves.file), [.lined, .dotted, .squared])
+    }
+
+    func testAPictureTakenOffAndPutBackAfterAChangeElsewhereIsWritten() throws {
+        // The photo on the second page, in the file when drawing started, taken off and saved; another device writes on
+        // the first page; Undo puts the photo back, as the canvas has it, without what it shows (the file had it).
+        let jpeg = photo()
+        var saves = try Saves(try threePages(photo: jpeg))
+        let photo = PDFPicture(id: "photo", frame: CGRect(x: 80, y: 300, width: 360, height: 240))
+        try saves.save([0, 1, 2], content: [1: PageContent(drawing: strokes(2))])
+        XCTAssertEqual(pictureIDs(saves.file), [[], [], []])
+        try saves.changeElsewhere { PDFInk.put([0: self.strokes(5)], in: $0) }
+        try saves.save([0, 1, 2], content: [1: PageContent(drawing: strokes(2), pictures: [photo])])
+        XCTAssertEqual(pictureIDs(saves.file), [[], ["photo"], []])
+        let written = try XCTUnwrap(CGDataProvider(data: saves.file as CFData).flatMap(CGPDFDocument.init))
+        XCTAssertEqual(PDFPictures.images(in: written)["photo"]?.jpeg, jpeg)
+        XCTAssertEqual(strokeCounts(saves.file), [5, 2, 3])
+    }
+
+    private func pictureIDs(_ data: Data) -> [[String]] {
+        guard let document = PDFDocument(data: data) else { return [] }
+        return (0..<document.pageCount).map { PDFPictures.pictures(on: document.page(at: $0)!).map(\.picture.id) }
+    }
+
+    func testUndoOfDeleteOfASlideAfterASaveAndAChangeElsewhere() throws {
+        var saves = try Saves(try slides(["Eigenvalues", "Eigenvectors", "Diagonalisation"]))
+        try saves.save([0, 2])
+        try saves.changeElsewhere { PDFInk.put([1: self.strokes(3)], in: $0) }
+        try saves.save([0, 2])
+        try saves.save([0, 1, 2])
+        XCTAssertEqual(titles(saves.file), ["Eigenvalues", "Eigenvectors", "Diagonalisation"])
+        XCTAssertEqual(strokeCounts(saves.file), [0, 0, 3])
     }
 
     func testRedoOfDuplicateAfterAChangeElsewherePutsTheCopyOnItsPage() throws {

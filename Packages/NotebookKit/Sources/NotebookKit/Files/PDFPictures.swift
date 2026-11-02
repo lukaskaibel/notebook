@@ -238,6 +238,25 @@ enum PDFPictures {
     /// doesn't hand out an annotation's look. A JPEG comes out as it went in.
     static func images(in document: CGPDFDocument, pages: Set<Int>? = nil) -> [String: PictureImage] {
         var found: [String: PictureImage] = [:]
+        forEachPicture(in: document, pages: pages) { annotation, picture in
+            var appearances: CGPDFDictionaryRef?
+            var normal: CGPDFStreamRef?
+            guard CGPDFDictionaryGetDictionary(annotation, "AP", &appearances), let appearances,
+                  CGPDFDictionaryGetStream(appearances, "N", &normal), let normal,
+                  let image = firstImage(in: normal, depth: 0) else { return }
+            found[picture.id] = image
+        }
+        return found
+    }
+
+    /// The ids of the pictures Notebook put in a PDF, without what they show.
+    static func ids(in document: CGPDFDocument) -> Set<String> {
+        var found: Set<String> = []
+        forEachPicture(in: document, pages: nil) { _, picture in found.insert(picture.id) }
+        return found
+    }
+
+    private static func forEachPicture(in document: CGPDFDocument, pages: Set<Int>?, _ body: (CGPDFDictionaryRef, PDFPicture) -> Void) {
         for number in 1...max(document.numberOfPages, 1) {
             guard pages?.contains(number - 1) ?? true, let page = document.page(at: number), let dictionary = page.dictionary else { continue }
             var annotations: CGPDFArrayRef?
@@ -246,15 +265,9 @@ enum PDFPictures {
                 var annotation: CGPDFDictionaryRef?
                 guard CGPDFArrayGetDictionary(annotations, index, &annotation), let annotation,
                       let entry = string(in: annotation, "NotebookPicture"), let picture = parse(entry) else { continue }
-                var appearances: CGPDFDictionaryRef?
-                var normal: CGPDFStreamRef?
-                guard CGPDFDictionaryGetDictionary(annotation, "AP", &appearances), let appearances,
-                      CGPDFDictionaryGetStream(appearances, "N", &normal), let normal,
-                      let image = firstImage(in: normal, depth: 0) else { continue }
-                found[picture.id] = image
+                body(annotation, picture)
             }
         }
-        return found
     }
 
     /// The first picture a look draws, looked for through the forms it draws too.

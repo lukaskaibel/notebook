@@ -352,7 +352,9 @@ private struct PDFKitView: UIViewRepresentable {
             return
         }
         if view.document !== document { show(document, in: view) }
-        if isDrawing, view.document != nil {
+        // Drawing before is still being written into it, as after a rename: drawing starts once that is written and the
+        // PDF read again, which updates this view again.
+        if isDrawing, view.document != nil, !PDFDrawingSession.isWriting(url) {
             let session = PDFDrawingSession(url: url, report: report)
             coordinator.drawing = session
             coordinator.drawnDocument = view.document
