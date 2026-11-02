@@ -377,7 +377,7 @@ public final class NotebookAppDelegate: NSObject, NSApplicationDelegate {
             let reply = QuitReply()
             Task { @MainActor in
                 await workspace.todosWritten()
-                await withCheckedContinuation { done in PDFInk.whenWritten { done.resume() } }
+                await PDFInk.written()
                 reply.send()
             }
             Task { @MainActor in

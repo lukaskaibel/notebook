@@ -2116,8 +2116,10 @@ public final class Workspace: NSObject {
         // Their own windows close; what was typed there is saved first.
         FileWindows.shared.close(atOrInside: url)
         #endif
-        // What was typed in notes there goes along to the Trash, rather than coming back where they were.
+        // What was typed in notes there goes along to the Trash, rather than coming back where they were, and what
+        // was drawn in PDFs there, a save under way too: Undo of a new handwritten note looks at it as written.
         await NoteDocument.save(atOrInside: url)
+        await PDFDrawingSession.save(atOrInside: url)
         let trashed = await Task.detached(priority: .userInitiated, operation: { FileOperations.moveToTrash(url) }).value
         guard trashed.done else { return trashed }
         thrownAway(url)
@@ -2169,6 +2171,7 @@ public final class Workspace: NSObject {
     func deleteNow(_ url: URL) async -> (done: Bool, place: URL?) {
         if let current = currentURL, FileNode.isSameOrInside(current, url) { closeThrownAway() }
         await NoteDocument.save(atOrInside: url)
+        await PDFDrawingSession.save(atOrInside: url)
         let deleted = await Task.detached(priority: .userInitiated, operation: { FileOperations.delete(url) }).value
         if deleted.done { thrownAway(url) }
         return deleted

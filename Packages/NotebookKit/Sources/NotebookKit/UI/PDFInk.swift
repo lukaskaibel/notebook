@@ -43,6 +43,11 @@ enum PDFInk {
         if writing == 0 { done() } else { whenDone.append(done) }
     }
 
+    /// Once every change asked for is written.
+    @MainActor static func written() async {
+        await withCheckedContinuation { done in whenWritten { done.resume() } }
+    }
+
     /// Each page's strokes in place of the ones it had. `drawings` are by page number, measured from the top left of
     /// each page's crop box.
     nonisolated static func put(_ drawings: [Int: PKDrawing], in document: PDFDocument) {

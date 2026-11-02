@@ -8,6 +8,8 @@ final class DeleteFlowUITests: XCTestCase {
     var app: XCUIApplication!
     /// The sample notes, when the test changes them itself, as another app would (`launch(inReach:)`).
     var library: URL?
+    /// Commands for the app's debug remote, for steps a test can't take by touch, such as drawing (`remote`).
+    private let commands = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("commands-\(UUID().uuidString).txt")
 
     override func setUp() {
         super.setUp()
@@ -18,6 +20,8 @@ final class DeleteFlowUITests: XCTestCase {
     override func tearDown() {
         app?.terminate()
         if let library { try? FileManager.default.removeItem(at: library) }
+        try? FileManager.default.removeItem(at: commands)
+        try? FileManager.default.removeItem(at: commands.appendingPathExtension("log"))
         super.tearDown()
     }
 
@@ -250,6 +254,30 @@ final class DeleteFlowUITests: XCTestCase {
         XCTAssertTrue(try String(contentsOf: copy, encoding: .utf8).contains("Stamps"), "not as it was")
     }
 
+    /// Undo of a new handwritten note written in and left a moment ago, while what was written is still being saved
+    /// (here for 3 s): it waits for the save, and as the note isn't as it was made any more, it asks first.
+    func testWithoutRecentlyDeletedUndoAsksAboutAHandwrittenNoteStillBeingSaved() throws {
+        launch(slowWrites: 0, recentlyDeleted: false, inReach: true, slowDrawingSaves: 3)
+        let untitled = try XCTUnwrap(library).appendingPathComponent("Inbox/Untitled.pdf")
+        remote("newhandwritten lined")
+        remote("wait 3")
+        let made = try XCTUnwrap(size(of: untitled), "no new handwritten note")
+        // A picture on its page, as from the photo library, and another note at once: the save starts as it is left.
+        remote("pdfpicture")
+        remote("open Inbox/Errands.md")
+        remote("wait 0.5")
+        remote("menuundo")
+        let cancel = app.alerts.buttons["Cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 15), "deleted without asking: \(app.debugDescription)")
+        XCTAssertTrue(app.alerts.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Delete “Untitled")).firstMatch.exists, app.debugDescription)
+        cancel.tap()
+        XCTAssertGreaterThan(size(of: untitled) ?? 0, made + 1000, "the picture isn't in it")
+    }
+
+    private func size(of url: URL) -> Int? {
+        (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int
+    }
+
     private func duplicate(_ name: String) {
         row(name).press(forDuration: 1.2)
         tap("Duplicate")
@@ -271,7 +299,7 @@ final class DeleteFlowUITests: XCTestCase {
 
     /// `inReach`: the sample notes in a folder of the test's own, where it can change them as another app would; else
     /// in the app's home.
-    private func launch(slowWrites: Double, recentlyDeleted: Bool = true, inReach: Bool = false) {
+    private func launch(slowWrites: Double, recentlyDeleted: Bool = true, inReach: Bool = false, slowDrawingSaves: Double = 0) {
         app = XCUIApplication()
         // A `~` is the app's home in the Simulator, which has no sandbox to keep the app out of the test's folders.
         var path = "~/Documents/UITests-\(UUID().uuidString)"
@@ -284,9 +312,32 @@ final class DeleteFlowUITests: XCTestCase {
                                "-NotebookDemo", "YES", "-NotebookTips", "hide", "-NotebookSlowWrites", "\(slowWrites)",
                                "-NotebookNoRecentlyDeleted", recentlyDeleted ? "NO" : "YES",
                                "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        if slowDrawingSaves > 0 {
+            FileManager.default.createFile(atPath: commands.path, contents: nil)
+            app.launchArguments += ["-NotebookSlowDrawingSaves", "\(slowDrawingSaves)", "-debugCommandFile", commands.path]
+        }
         app.launch()
         if isPad { XCUIDevice.shared.orientation = .landscapeLeft }
         pause()
+    }
+
+    /// Runs a debug remote command in the app, once it has done the ones before.
+    private func remote(_ command: String, file: StaticString = #filePath, line: UInt = #line) {
+        let log = commands.appendingPathExtension("log")
+        let handle = try? FileHandle(forWritingTo: commands)
+        handle?.seekToEndOfFile()
+        handle?.write(Data((command + "\n").utf8))
+        try? handle?.close()
+        let deadline = Date().addingTimeInterval(20)
+        while Date() < deadline {
+            if ((try? String(contentsOf: log, encoding: .utf8)) ?? "").contains("> \(command)\n") {
+                // A wait is done once the next command runs.
+                if command.hasPrefix("wait "), let seconds = Double(command.dropFirst(5)) { Thread.sleep(forTimeInterval: seconds) }
+                return
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
+        XCTFail("no answer to \(command)", file: file, line: line)
     }
 
     /// Shakes the device, as the Simulator's Device › Shake does.

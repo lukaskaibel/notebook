@@ -17,6 +17,8 @@ import UIKit
 final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvider {
     let url: URL
     private weak var view: PDFView?
+    /// The PDF drawn on, which saves take the pages from, also once its view has gone.
+    private var document: PDFDocument?
     private let toolPicker = PKToolPicker()
     /// Keeps the tool picker up: it shows while its responder is focused, and no one canvas is (pages come and go).
     private lazy var anchor = ToolAnchor(session: self)
@@ -24,11 +26,17 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
     let undo = UndoManager()
     /// A canvas for each page shown since drawing started, kept so its Undo has it to go back to.
     private var editors: [ObjectIdentifier: PageEditor] = [:]
-    /// Where each page of the document shown comes from, and what happened to it.
-    private var slots: [ObjectIdentifier: Slot] = [:]
+    /// Where each page comes from, and where it was saved: those taken out too, which Undo can put back.
+    private var origins = PDFPageOrigins<HeldPage>()
     /// The PDF as it was read when drawing started, and when the file was last changed by this session.
     private var base: Data?
     private var written: Date?
+    /// The file couldn't be read when drawing started: nothing can be saved into it, which is said once.
+    private var baseIsUnreadable = false
+    private var toldUnreadable = false
+    /// Counts the times `base` was read, for the thumbnails drawn from it; and what waits for the first.
+    private var baseVersion = 0
+    private var whenBaseRead: [() -> Void] = []
     private var pausedGestures: [UIGestureRecognizer] = []
     private var scrollTouches: Int?
     private var bottomInset: CGFloat = 0
@@ -52,15 +60,6 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
     private var isFinished = false
     private var shownIndex: Int?
 
-    private struct Slot {
-        var origin: PDFPlan.Origin
-        var paper: PaperStyle?
-        var size: CGSize
-    }
-
-    /// Each page's place when last saved, which is its number in the file since then.
-    private var savedPlaces: [ObjectIdentifier: Int] = [:]
-
     init(url: URL, report: @escaping (String, String) -> Void) {
         self.url = url
         self.report = report
@@ -83,12 +82,11 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
         isActive = true
         isFinished = false
         guard let document = view.document else { return }
-        if slots.isEmpty {
-            for index in 0..<document.pageCount {
-                guard let page = document.page(at: index) else { continue }
-                slots[ObjectIdentifier(page)] = Slot(origin: .base(index), size: page.bounds(for: .cropBox).size)
-                savedPlaces[ObjectIdentifier(page)] = index
-            }
+        self.document = document
+        if origins.isEmpty {
+            origins = PDFPageOrigins(pages: (0..<document.pageCount).compactMap { document.page(at: $0) }.map {
+                (page: HeldPage($0), size: $0.bounds(for: .cropBox).size)
+            })
             readBase()
         }
         view.addSubview(anchor)
@@ -161,16 +159,19 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
         adder.detach()
         if let background { NotificationCenter.default.removeObserver(background) }
         background = nil
-        guard let view else { return }
-        if let scrollView = view.scrollView {
-            if let scrollTouches { scrollView.panGestureRecognizer.minimumNumberOfTouches = scrollTouches }
-            scrollTouches = nil
-            scrollView.contentInset.bottom -= bottomInset
-            bottomInset = 0
-            scrollView.panGestureRecognizer.removeTarget(self, action: #selector(panned(_:)))
+        if let view {
+            if let scrollView = view.scrollView {
+                if let scrollTouches { scrollView.panGestureRecognizer.minimumNumberOfTouches = scrollTouches }
+                scrollTouches = nil
+                scrollView.contentInset.bottom -= bottomInset
+                bottomInset = 0
+                scrollView.panGestureRecognizer.removeTarget(self, action: #selector(panned(_:)))
+            }
+            view.isInMarkupMode = false
         }
-        view.isInMarkupMode = false
+        // Also once the view has gone: the pages are the document's.
         if hasUnsavedChanges { save() }
+        updateWriting()
     }
 
     /// The saved PDF is shown, or nothing was changed: its pages draw the strokes now, and the canvases go.
@@ -197,7 +198,7 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
 
     /// The paper of a page, if Notebook made it.
     func paper(of page: PDFPage) -> PaperStyle? {
-        slots[ObjectIdentifier(page)]?.paper ?? NotebookPaper.style(of: page)
+        origins[HeldPage(page)]?.paper ?? NotebookPaper.style(of: page)
     }
 
     /// A new page after `index` (or at the end), as large as the page before it and of its paper, or of `paper`.
@@ -208,56 +209,54 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
         let style = paper ?? self.paper(of: before) ?? NotebookSettings.shared.paper
         let size = before.bounds(for: .cropBox).size
         guard let page = NotebookPaper.page(style, size: size) else { return }
-        insert(page, at: after + 1, slot: Slot(origin: .new, paper: style, size: size), named: "Add Page")
+        origins.add(HeldPage(page), paper: style, size: size)
+        insert(page, at: after + 1, named: "Add Page")
         view.go(to: page)
         changed?()
     }
 
     /// Takes the page out; Undo puts it back.
     func removePage(at index: Int) {
-        guard let view, let document = view.document, document.pageCount > 1, let page = document.page(at: index),
-              let slot = slots[ObjectIdentifier(page)] else { return }
-        remove(page, slot: slot, named: "Delete Page")
+        guard let view, let document = view.document, document.pageCount > 1, let page = document.page(at: index) else { return }
+        remove(page, named: "Delete Page")
     }
 
     /// Other paper for a page, with what is on it.
     func changePaper(of index: Int, to paper: PaperStyle) {
-        guard let view, let document = view.document, let old = document.page(at: index), let slot = slots[ObjectIdentifier(old)],
+        guard let view, let document = view.document, let old = document.page(at: index), origins[HeldPage(old)] != nil,
               self.paper(of: old) != paper, let page = NotebookPaper.page(paper, size: old.bounds(for: .cropBox).size) else { return }
-        var new = slot
-        new.paper = paper
-        swap(old, for: page, slots: (slot, new))
+        // In the file, the page with what it has, on other paper.
+        origins.add(HeldPage(page), from: HeldPage(old), paper: paper)
+        swap(old, for: page)
         undo.setActionName("Change Paper")
     }
 
     /// One page in the place of another, the canvas going along with what is on it.
-    private func swap(_ old: PDFPage, for page: PDFPage, slots: (old: Slot, new: Slot)) {
+    private func swap(_ old: PDFPage, for page: PDFPage) {
         guard let view, let document = view.document else { return }
         let index = document.index(for: old)
         guard index != NSNotFound else { return }
         let editor = editor(for: old)
         document.insert(page, at: index)
         document.removePage(at: index + 1)
-        self.slots[ObjectIdentifier(old)] = nil
-        self.slots[ObjectIdentifier(page)] = slots.new
         editors[ObjectIdentifier(page)] = editor
         editor.page = page
         MarkupDrawings.setEditing(true, pictures: true, on: page)
         undo.registerUndo(withTarget: self) { session in
-            MainActor.assumeIsolated { session.swap(page, for: old, slots: (slots.new, slots.old)) }
+            MainActor.assumeIsolated { session.swap(page, for: old) }
         }
         reload(view)
         session(edited: editor)
     }
 
-    private func insert(_ page: PDFPage, at index: Int, slot: Slot, named name: String) {
+    /// Puts a page in, one known to `origins`: new, or put back by Undo or Redo from wherever it is by then.
+    private func insert(_ page: PDFPage, at index: Int, named name: String) {
         guard let view, let document = view.document else { return }
         keepingInView {
             document.insert(page, at: min(index, document.pageCount))
-            slots[ObjectIdentifier(page)] = slot
             MarkupDrawings.setEditing(true, pictures: true, on: page)
             undo.registerUndo(withTarget: self) { session in
-                MainActor.assumeIsolated { session.remove(page, slot: slot, named: name) }
+                MainActor.assumeIsolated { session.remove(page, named: name) }
             }
             undo.setActionName(name)
             reload(view)
@@ -265,15 +264,14 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
         madeChange()
     }
 
-    private func remove(_ page: PDFPage, slot: Slot, named name: String) {
+    private func remove(_ page: PDFPage, named name: String) {
         guard let view, let document = view.document else { return }
         let index = document.index(for: page)
         guard index != NSNotFound, document.pageCount > 1 else { return }
         keepingInView {
             document.removePage(at: index)
-            slots[ObjectIdentifier(page)] = nil
             undo.registerUndo(withTarget: self) { session in
-                MainActor.assumeIsolated { session.insert(page, at: index, slot: slot, named: name) }
+                MainActor.assumeIsolated { session.insert(page, at: index, named: name) }
             }
             undo.setActionName(name)
             reload(view)
@@ -325,9 +323,9 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
 
     /// A copy of the page right after it, with what is on it now; Undo takes it out again.
     func duplicatePage(at index: Int) {
-        guard let document = view?.document, let page = document.page(at: index), let slot = slots[ObjectIdentifier(page)] else { return }
+        guard let document = view?.document, let page = document.page(at: index), let entry = origins[HeldPage(page)] else { return }
         // Paper is made anew. A page of the file is copied, and saved as a copy of it; its canvas shows what is on it.
-        guard let copy = slot.paper.flatMap({ NotebookPaper.page($0, size: slot.size) }) ?? page.copy() as? PDFPage else { return }
+        guard let copy = entry.paper.flatMap({ NotebookPaper.page($0, size: entry.size) }) ?? page.copy() as? PDFPage else { return }
         // A copy draws its stamps as PDFKit does, unlike the page it was made from: not those of the strokes.
         for annotation in copy.annotations where MarkupDrawings.strokes(in: annotation, on: copy) != nil {
             annotation.shouldDisplay = false
@@ -335,9 +333,9 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
         let original = editor(for: page)
         editor(for: copy).take(original)
         editors[ObjectIdentifier(copy)]?.isEdited = true
-        // Where its page is in the file, for a save into the file changed elsewhere meanwhile.
-        savedPlaces[ObjectIdentifier(copy)] = savedPlaces[ObjectIdentifier(page)]
-        insert(copy, at: index + 1, slot: slot, named: "Duplicate Page")
+        // From where its page is, also in a save into the file changed elsewhere meanwhile.
+        origins.add(HeldPage(copy), from: HeldPage(page))
+        insert(copy, at: index + 1, named: "Duplicate Page")
     }
 
     /// Something is in front of the pages, such as the page overview: the tool picker goes until it is gone, as it
@@ -367,27 +365,46 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
 
     private var revisions: [ObjectIdentifier: Int] = [:]
 
-    /// A picture of the page as it is now, `width` points wide: the page, with what its canvas has on it, or what
-    /// the page had for one not shown yet. On white, as the page is paper.
+    /// Draws what is under the canvases for the thumbnails, off the main thread.
+    private let renderer = PageRenderer()
+
+    /// A picture of the page as it is now, `width` points wide, on white, as the page is paper. The page as the file
+    /// has it, or its paper, is drawn in the background; only what was changed on it since drawing started, its
+    /// canvas, is drawn over it here.
     func thumbnail(of page: PDFPage, width: CGFloat, scale: CGFloat) async -> UIImage? {
         let crop = page.bounds(for: .cropBox)
         guard crop.width > 0, crop.height > 0, width > 0 else { return nil }
         let pixels = CGSize(width: (width * scale).rounded(), height: (width * scale * crop.height / crop.width).rounded())
-        guard let context = CGContext(data: nil, width: Int(pixels.width), height: Int(pixels.height), bitsPerComponent: 8, bytesPerRow: 0,
-                                      space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
-                                      bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return nil }
-        context.setFillColor(UIColor.white.cgColor)
-        context.fill(CGRect(origin: .zero, size: pixels))
+        if base == nil, !baseIsUnreadable {
+            await withCheckedContinuation { done in whenBaseRead.append { done.resume() } }
+        }
+        let entry = origins[HeldPage(page)]
+        let editor = editors[ObjectIdentifier(page)].flatMap { $0.isEdited ? $0 : nil }
+        let under: PageRenderer.Under
+        if let paper = entry?.paper {
+            under = .paper(paper)
+        } else if case .base(let index)? = entry?.origin, let base {
+            // Without its strokes and pictures when its canvas has them.
+            under = .file(base, version: baseVersion, page: index, marks: editor == nil)
+        } else {
+            under = .paper(.blank)
+        }
+        guard let image = await renderer.image(of: under, size: crop.size, pixels: pixels) else { return nil }
+        guard let markup = editor?.controller.markup else { return UIImage(cgImage: image, scale: scale, orientation: .up) }
+        guard let context = PageRenderer.context(pixels) else { return nil }
+        context.draw(image, in: CGRect(origin: .zero, size: pixels))
         context.scaleBy(x: pixels.width / crop.width, y: pixels.height / crop.height)
         context.interpolationQuality = .high
-        // While drawing, the page leaves out its strokes and pictures, which the canvas has.
-        page.draw(with: .cropBox, to: context)
-        let markup = editors[ObjectIdentifier(page)]?.controller.markup ?? PageEditor.markup(of: page).markup
         // Measured from the top left.
         context.translateBy(x: 0, y: crop.height)
         context.scaleBy(x: 1, y: -1)
         await markup.draw(in: context, frame: CGRect(origin: .zero, size: crop.size))
         return context.makeImage().map { UIImage(cgImage: $0, scale: scale, orientation: .up) }
+    }
+
+    /// The page overview has gone: the PDF read for its thumbnails goes too.
+    func thumbnailsDone() {
+        renderer.forget()
     }
 
     // MARK: - Pictures
@@ -463,6 +480,7 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
         saveTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.save() }
         }
+        updateWriting()
     }
 
     /// The PDF as it was read, from the file, before any save.
@@ -472,12 +490,19 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
             let data = FileLoading.read(url) { try? Data(contentsOf: $0) }
             let date = Self.modificationDate(url)
             DispatchQueue.main.async {
-                MainActor.assumeIsolated {
-                    self?.base = data
-                    self?.written = date
-                }
+                MainActor.assumeIsolated { self?.read(data, at: date) }
             }
         }
+    }
+
+    private func read(_ data: Data?, at date: Date?) {
+        base = data
+        baseIsUnreadable = data == nil
+        baseVersion += 1
+        written = date
+        let waiting = whenBaseRead
+        whenBaseRead = []
+        waiting.forEach { $0() }
     }
 
     /// Asked of the disk each time: a URL keeps what it was told.
@@ -488,10 +513,16 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
     /// Writes what changed into the PDF, in the background. One save at a time; changes made meanwhile come after.
     func save() {
         saveTimer?.invalidate()
-        guard hasUnsavedChanges, !isSaving, let document = view?.document else { return }
+        defer { updateWriting() }
+        guard hasUnsavedChanges, !isSaving, let document else { return }
         guard let base else {
             // Still being read: the save comes once it is.
-            scheduleSave(after: 0.3)
+            if !baseIsUnreadable {
+                scheduleSave(after: 0.3)
+            } else if !toldUnreadable {
+                toldUnreadable = true
+                report("Your drawing couldn’t be saved in “\(url.lastPathComponent)”.", "The PDF couldn’t be read.")
+            }
             return
         }
         isSaving = true
@@ -500,16 +531,16 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
         for index in 0..<document.pageCount {
             if let page = document.page(at: index) { pages.append(page) }
         }
-        let slots = pages.map { self.slots[ObjectIdentifier($0)] ?? Slot(origin: .new, paper: .blank, size: $0.bounds(for: .cropBox).size) }
+        let slots = pages.map { origins.slot(of: HeldPage($0)) ?? PDFPlan.Slot(origin: .new, paper: .blank, size: $0.bounds(for: .cropBox).size) }
+        // The pages as last saved, for when the file changed elsewhere since and is what changes go into.
+        let savedOrigins = pages.map { origins.savedOrigin(of: HeldPage($0)) }
         let edited = pages.map { page in editors[ObjectIdentifier(page)].flatMap { $0.isEdited ? $0 : nil } }
         let url = url, written = written
         Task { @MainActor in
-            var plan = PDFPlan(slots: [])
-            for (slot, editor) in zip(slots, edited) {
-                plan.slots.append(PDFPlan.Slot(origin: slot.origin, paper: slot.paper, size: slot.size, content: await editor?.content()))
+            var plan = PDFPlan(slots: slots)
+            for (index, editor) in edited.enumerated() {
+                plan.slots[index].content = await editor?.content()
             }
-            // The pages as last saved, for when the file changed elsewhere since and is what changes go into.
-            let savedOrigins = pages.map { self.savedPlaces[ObjectIdentifier($0)].map(PDFPlan.Origin.base) ?? .new }
             let finalPlan = plan
             PDFInk.queue.async { [weak self] in
                 var plan = finalPlan
@@ -540,24 +571,18 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
 
     private func saved(_ pages: [PDFPage], counted: Int, date: Date?, base newBase: Data?, failure: Error?) {
         isSaving = false
+        defer { updateWriting() }
         if let failure {
             report("Your drawing couldn’t be saved in “\(url.lastPathComponent)”.", failure.localizedDescription)
             return
         }
         written = date
-        savedPlaces = Dictionary(uniqueKeysWithValues: pages.enumerated().map { (ObjectIdentifier($1), $0) })
+        // Changed elsewhere, the file as it was then is what pages come from now, from where they were in it.
         if let newBase {
-            // The file as saved is what pages come from now: a page put back since that it doesn't have is new paper.
             base = newBase
-            for (key, slot) in slots {
-                if let place = savedPlaces[key] {
-                    slots[key]?.origin = .base(place)
-                } else if case .base = slot.origin {
-                    slots[key]?.origin = .new
-                    if slot.paper == nil { slots[key]?.paper = .blank }
-                }
-            }
+            baseVersion += 1
         }
+        origins.saved(pages.map(HeldPage.init), rebased: newBase != nil)
         savedChanges = max(savedChanges, counted)
         if hasUnsavedChanges {
             if isActive { scheduleSave() } else { save() }
@@ -565,6 +590,38 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
             // Done drawing: the PDF is read again, and its pages draw what was drawn.
             FileLoading.didWrite(url)
         }
+    }
+
+    // MARK: - Saves under way
+
+    /// The sessions with something to write, ended ones too: kept until it is written, so what was drawn last in a PDF
+    /// left during a save still goes in, and the Trash and Undo can wait for it (`save(atOrInside:)`).
+    private static var writing: [PDFDrawingSession] = []
+    private var whenWritten: [() -> Void] = []
+
+    /// A save under way, or one to come in a moment.
+    private var isWriting: Bool { isSaving || saveTimer?.isValid == true }
+
+    private func updateWriting() {
+        if isWriting {
+            if !Self.writing.contains(where: { $0 === self }) { Self.writing.append(self) }
+        } else {
+            Self.writing.removeAll { $0 === self }
+            let waiting = whenWritten
+            whenWritten = []
+            waiting.forEach { $0() }
+        }
+    }
+
+    /// What was drawn in the PDFs at `url` or in it is written, a save under way too: before the file goes to the Trash
+    /// or is deleted, and before Undo looks at whether a new handwritten note is still as it was made.
+    static func save(atOrInside url: URL) async {
+        let sessions = writing.filter { FileNode.isSameOrInside($0.url, url) }
+        for session in sessions { session.save() }
+        for session in sessions where session.isWriting {
+            await withCheckedContinuation { done in session.whenWritten.append { done.resume() } }
+        }
+        await PDFInk.written()
     }
 
     // MARK: - Canvases
@@ -718,6 +775,89 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
         let editor = editor(for: page)
         editor.controller.isEditable = isActive
         return editor.host
+    }
+}
+
+/// A page as a key, told apart by itself rather than by what it shows, and kept: no other page takes its key once it
+/// has gone.
+private struct HeldPage: Hashable {
+    let page: PDFPage
+
+    init(_ page: PDFPage) { self.page = page }
+
+    static func == (a: HeldPage, b: HeldPage) -> Bool { a.page === b.page }
+    func hash(into hasher: inout Hasher) { hasher.combine(ObjectIdentifier(page)) }
+}
+
+/// Draws pages for the page overview's thumbnails in the background, one after the other: a page of the PDF that saves
+/// start from, read once for all of them, or a page of paper.
+private final class PageRenderer: @unchecked Sendable {
+    enum Under {
+        /// Page `page` of `base` (read for the `version`th time), with Notebook's strokes and pictures (`marks`) or
+        /// without them, for a page whose canvas has them.
+        case file(Data, version: Int, page: Int, marks: Bool)
+        case paper(PaperStyle)
+    }
+
+    private let queue = DispatchQueue(label: "Notebook.PageThumbnails", qos: .userInitiated)
+    /// On `queue` only: `base` read, and the annotations of Notebook's strokes and pictures on its pages.
+    private var document: (version: Int, document: PDFDocument)?
+    private var marksByPage: [Int: [PDFAnnotation]] = [:]
+
+    /// The page drawn on white, `pixels` large, from its crop box of `size` points.
+    func image(of under: Under, size: CGSize, pixels: CGSize) async -> CGImage? {
+        await withCheckedContinuation { done in
+            queue.async { done.resume(returning: self.draw(under, size: size, pixels: pixels)) }
+        }
+    }
+
+    func forget() {
+        queue.async {
+            self.document = nil
+            self.marksByPage = [:]
+        }
+    }
+
+    static func context(_ pixels: CGSize) -> CGContext? {
+        CGContext(data: nil, width: Int(pixels.width), height: Int(pixels.height), bitsPerComponent: 8, bytesPerRow: 0,
+                  space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
+    }
+
+    private func draw(_ under: Under, size: CGSize, pixels: CGSize) -> CGImage? {
+        guard let context = Self.context(pixels) else { return nil }
+        context.setFillColor(CGColor(gray: 1, alpha: 1))
+        context.fill(CGRect(origin: .zero, size: pixels))
+        context.interpolationQuality = .high
+        switch under {
+        case .paper(let paper):
+            context.scaleBy(x: pixels.width / size.width, y: pixels.height / size.height)
+            // Measured from the top left.
+            context.translateBy(x: 0, y: size.height)
+            context.scaleBy(x: 1, y: -1)
+            NotebookPaper.draw(paper, size: size, in: context)
+        case .file(let base, let version, let index, let withMarks):
+            if document?.version != version {
+                document = PDFDocument(data: base).map { (version, $0) }
+                marksByPage = [:]
+            }
+            guard let page = document?.document.page(at: index) else { break }
+            let crop = page.bounds(for: .cropBox)
+            guard crop.width > 0, crop.height > 0 else { break }
+            context.scaleBy(x: pixels.width / crop.width, y: pixels.height / crop.height)
+            let hidden = withMarks ? [] : marks(on: page, at: index).filter(\.shouldDisplay)
+            hidden.forEach { $0.shouldDisplay = false }
+            page.draw(with: .cropBox, to: context)
+            hidden.forEach { $0.shouldDisplay = true }
+        }
+        return context.makeImage()
+    }
+
+    /// The strokes a canvas takes over from the page, and its pictures.
+    private func marks(on page: PDFPage, at index: Int) -> [PDFAnnotation] {
+        if let found = marksByPage[index] { return found }
+        let found = page.annotations.filter { MarkupDrawings.strokes(in: $0, on: page) != nil || $0.value(forAnnotationKey: PDFPictures.key) != nil }
+        marksByPage[index] = found
+        return found
     }
 }
 
@@ -1016,6 +1156,7 @@ final class PDFEditing {
     func overviewClosed() {
         showsOverview = false
         session?.cover(false)
+        session?.thumbnailsDone()
     }
 
     func movePage(at index: Int, to destination: Int) { session?.movePage(at: index, to: destination) }
