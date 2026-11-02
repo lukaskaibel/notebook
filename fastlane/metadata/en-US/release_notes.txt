@@ -1,15 +1,9 @@
-Notebook 1.1 brings widgets, version history and a lot of polish.
+Notebook 1.2 brings handwritten notes.
 
-• Widgets: New Note on the Home Screen, the Lock Screen and the Mac's desktop, and as a control in Control Center and on the Action button. A Today widget with your to-dos for today and the overdue ones, ticked right in the widget, and a Note widget that shows a note of your choice.
-• Share to Notebook: text, links, pictures and PDFs from any app's share sheet become a new note, or go at the end of the note you opened last.
-• Version history: Notebook keeps earlier versions of your notes as you write. Show Changes marks what's new and what went, and Restore puts a version back. File › Revert To on the Mac, Version History in the ⋯ menu on iPhone and iPad.
-• Import from Apple Notes: export notes from Notes as Markdown, then import them with their pictures, links and folders.
-• Draw and write on PDFs right on the page on iPhone and iPad, with Apple Pencil or a finger, saved into the PDF itself. Markup for pictures, and a file is renamed by tapping its name, as in Files.
-• Files are no longer greyed out: every file's icon is in the accent colour, and Settings gives each kind a colour of its own if you like.
-• To-dos that repeat every week, weekday, month or year, to-dos that aren't in a note, and swipe to delete in To-dos.
-• Sort a folder by date edited or date created.
-• Search and ⌘K find names loosely, as Spotlight does: "kytr" finds Kyoto trip, and a typo or two is fine.
-• On the Mac: Edit › Find in a note, Spelling and Grammar, Attach File, and File › Duplicate, as in Notes. Closing the window no longer quits Notebook.
-• On iPhone and iPad: a note's text follows the system's text size, the bar above the keyboard has the size of Notes', and notes fade softly under the bars as you scroll.
-• Notes are saved in the background, so a slow disk or iCloud never makes you wait.
-• Many fixes, among them a hang on the Mac with the same note open in two windows, and deleting on iPhone and iPad.
+• Handwritten notes on iPhone and iPad: write with Apple Pencil or a finger on blank, lined, squared, dotted or Cornell paper. A handwritten note is a PDF in your folder, right next to your typed notes, and every PDF app shows what you wrote. On the iPad, New Note asks whether to type or write by hand.
+• Pages as you need them: pull past the last page for a new one, give a page other paper, and see every page at once in All Pages, where you drag pages into a new order, duplicate and delete them.
+• Pictures on the page: photos, the camera, scans and pictures from Files, moved, turned and resized with the lasso, and as sharp as the handwriting however far you zoom in.
+• All of it works on any PDF, so you can write next to lecture slides and after the last one.
+• On the Mac: draw on PDFs with the mouse, the trackpad or a tablet, highlight their text with ⌃⌘H, and hold Shift for a straight line.
+• VoiceOver reads a note as you see it, line by line, and a double-tap ticks a to-do.
+• Nothing you write is lost: a note that can't be saved is tried again and kept in Unsaved Notes, and where there is no Recently Deleted, Undo asks before deleting a note you have written in.
