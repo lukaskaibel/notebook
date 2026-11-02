@@ -5,5 +5,6 @@ Notebook 1.2 brings handwritten notes.
 • Pictures on the page: photos, the camera, scans and pictures from Files, moved, turned and resized with the lasso, and as sharp as the handwriting however far you zoom in.
 • All of it works on any PDF, so you can write next to lecture slides and after the last one.
 • On the Mac: draw on PDFs with the mouse, the trackpad or a tablet, highlight their text with ⌃⌘H, and hold Shift for a straight line.
+• Copy File: ⇧⌘C or a file's menu copies the whole file, as the Finder does, to paste into Mail, Messages or the Finder. Pasted into a note, a file from your folders becomes a link to it, and one from elsewhere is copied in.
 • VoiceOver reads a note as you see it, line by line, and a double-tap ticks a to-do.
 • Nothing you write is lost: a note that can't be saved is tried again and kept in Unsaved Notes, and where there is no Recently Deleted, Undo asks before deleting a note you have written in.
