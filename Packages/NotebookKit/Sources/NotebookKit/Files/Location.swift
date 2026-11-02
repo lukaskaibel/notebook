@@ -147,7 +147,7 @@ public struct Location: Identifiable, Codable, Equatable, Sendable {
     }
 
     func isLinkedFolder(_ url: URL) -> Bool {
-        linked.contains { $0.url.path == url.standardizedFileURL.path }
+        linked.contains { FileNode.samePath($0.url, url.standardizedFileURL) }
     }
 
     /// Looks up the linked folders again: iCloud Drive's, for now.

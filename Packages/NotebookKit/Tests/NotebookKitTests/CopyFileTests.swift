@@ -21,6 +21,7 @@ final class CopyFileTests: XCTestCase {
     private var oddName: URL { trips.appendingPathComponent("Plan #2.pdf") }
     private var index: URL { notes.appendingPathComponent("Index.md") }
     private var window: NSWindow?
+    private var workspace: Workspace?
 
     override func setUp() async throws {
         library = FileManager.default.temporaryDirectory.appendingPathComponent("notebook-copy-\(UUID().uuidString)").standardizedFileURL
@@ -39,6 +40,8 @@ final class CopyFileTests: XCTestCase {
         try "Index\n".write(to: index, atomically: true, encoding: .utf8)
         UserDefaults.standard.set(library.path, forKey: "NotebookLibrary")
         UserDefaults.standard.set("Notes", forKey: "NotebookLibraryName")
+        // A note that couldn't be written is kept here, never among another test's.
+        UnsavedNotes.keep(in: outside.appendingPathComponent("Unsaved Notes"))
         // Copying in the app goes to a pasteboard of the test's own, never the clipboard of whoever runs the tests.
         UserDefaults.standard.set("notebook-copy-test-\(UUID().uuidString)", forKey: "NotebookPasteboard")
         UserDefaults.standard.removeObject(forKey: "expandedFolders")
@@ -46,6 +49,12 @@ final class CopyFileTests: XCTestCase {
     }
 
     override func tearDown() async throws {
+        // The note pasted in is written while its folder is still there: not later, kept as unsaved where another test
+        // looks for its own.
+        workspace?.saveAll()
+        workspace?.note?.close()
+        await NoteDocument.allWritten()
+        workspace = nil
         for key in ["NotebookLibrary", "NotebookLibraryName", "NotebookPasteboard", "expandedFolders", "collapsedSections"] {
             UserDefaults.standard.removeObject(forKey: key)
         }
@@ -69,6 +78,7 @@ final class CopyFileTests: XCTestCase {
     /// The library read and its index built, with the sidebar and `Index` open in one window, as in the app.
     private func makeWindow() async throws -> (Workspace, SidebarController) {
         let workspace = Workspace()
+        self.workspace = workspace
         let sidebar = SidebarController(workspace: workspace)
         workspace.start()
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
@@ -247,6 +257,53 @@ final class CopyFileTests: XCTestCase {
         XCTAssertEqual(workspace.editor.text, before)
     }
 
+    /// A file iCloud hasn't brought down yet, only ".name.icloud" on disk as on iPhone and iPad, is still linked by
+    /// its name, as the sidebar and search know it.
+    func testAFileStillInICloudIsLinked() async throws {
+        let placeholder = trips.appendingPathComponent(".Temple.jpg.icloud")
+        try Data().write(to: placeholder)
+        let (workspace, _) = try await makeWindow()
+        let temple = trips.appendingPathComponent("Temple.jpg")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: temple.path))
+        XCTAssertEqual(workspace.libraryLink(to: temple, from: index)?.markdown, "![[Temple.jpg]]")
+        XCTAssertTrue(workspace.editor.pasteFiles([temple], at: workspace.editor.selection))
+        XCTAssertTrue(workspace.editor.text.contains("![[Temple.jpg]]"), workspace.editor.text)
+    }
+
+    /// A package from elsewhere (an app, an .rtfd), which can be large, is copied off the main thread and goes in once
+    /// it is there; one the note is in, as a note in a .textbundle, is never copied, which would copy it into itself.
+    func testPackagesAreCopiedInTheBackgroundAndNeverIntoThemselves() throws {
+        let tool = outside.appendingPathComponent("Tool.app")
+        try FileManager.default.createDirectory(at: tool.appendingPathComponent("Contents"), withIntermediateDirectories: true)
+        try Data("binary".utf8).write(to: tool.appendingPathComponent("Contents/Tool"))
+        let h = EditorHarness("Text")
+        h.editor.setSelection(NSRange(location: 4, length: 0))
+        XCTAssertTrue(h.editor.pasteFiles([tool], at: h.editor.selection))
+        XCTAssertEqual(h.text, "Text", "not yet: it is being copied")
+        let end = Date().addingTimeInterval(TestRun.patience)
+        while !h.text.contains("![Tool.app](.assets/Tool.app)"), Date() < end { h.settle(0.05) }
+        XCTAssertTrue(h.text.contains("![Tool.app](.assets/Tool.app)"), h.text)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: h.folder.appendingPathComponent(".assets/Tool.app/Contents/Tool").path))
+
+        let inside = tool.appendingPathComponent("Contents")
+        h.editor.load(text: "In a package", folder: inside, title: "Read me", meta: "")
+        XCTAssertTrue(h.editor.pasteFiles([tool], at: NSRange(location: 0, length: 0)), "taken care of")
+        h.settle(0.3)
+        XCTAssertEqual(h.text, "In a package")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: inside.appendingPathComponent(".assets").path), "never copied into itself")
+    }
+
+    /// A note an app writes only as it is dropped (Mail), in a folder that goes again, is copied, never linked.
+    func testANoteWrittenForADropIsCopied() throws {
+        let written = outside.appendingPathComponent("Minutes.md")
+        try "# Minutes\n".write(to: written, atomically: true, encoding: .utf8)
+        let h = EditorHarness("Text")
+        h.editor.setSelection(NSRange(location: 4, length: 0))
+        XCTAssertTrue(h.editor.pasteFiles([written], at: h.editor.selection, temporary: true))
+        XCTAssertTrue(h.text.contains("![Minutes.md](.assets/Minutes.md)"), h.text)
+        XCTAssertFalse(h.text.contains("[[Minutes]]"))
+    }
+
     /// A location finds what is in it by either address the system gives a file ("/private/var/…" and "/var/…").
     func testLocationsFindFilesByEitherAddress() async throws {
         let (workspace, _) = try await makeWindow()
@@ -255,6 +312,7 @@ final class CopyFileTests: XCTestCase {
         XCTAssertNotNil(location.folder(containing: path))
         XCTAssertNotNil(location.folder(containing: "/private" + path))
         XCTAssertNil(location.folder(containing: "/private" + HiddenFolders.withoutPrivate(outside.path)))
+        XCTAssertEqual(workspace.folderName(URL(fileURLWithPath: "/private" + HiddenFolders.withoutPrivate(library.path))), "Notes")
     }
 
     // MARK: - Where it is asked for

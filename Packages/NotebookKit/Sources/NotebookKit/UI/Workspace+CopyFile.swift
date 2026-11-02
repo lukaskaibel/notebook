@@ -78,9 +78,10 @@ extension Workspace {
     /// as another note's `.assets`, which links don't find.
     func libraryLink(to url: URL, from note: URL?) -> FileLink? {
         let url = url.standardizedFileURL
-        // Gone since it was copied, moved or thrown away: no link to nothing.
-        guard FileManager.default.fileExists(atPath: url.path),
-              let location = location(containing: url), let base = location.folder(containing: url.path) else { return nil }
+        // Gone since it was copied, moved or thrown away: no link to nothing. One not brought down from iCloud yet is there.
+        guard FileOperations.exists(url), let location = location(containing: url), let base = location.folder(containing: url.path) else {
+            return nil
+        }
         // A location's folder, or a linked one such as iCloud Drive's Desktop, is in the library too, and only what the
         // index reads: links don't find anything else.
         let isRoot = FileNode.samePath(url, base.url)
