@@ -2,7 +2,7 @@ Notebook is a notes app for the Markdown files in folders the user chooses. It h
 
 To review without notes of your own, choose "Try Sample Notes" on the first screen ("Try Sample Notes…" on the Mac). On the Mac it asks where to put them (Documents, say) and makes a folder Sample Notes there; on iPhone and iPad it makes it in the app's own folder, which the Files app shows under On My iPhone › Notebook. The folder then shows in the sidebar, with notes, pictures, a drawing, PDFs and to-dos. Every feature works there. To use your own files instead, choose "Open iCloud Drive" or "Choose another folder…".
 
-The Mac app runs in the App Sandbox and reaches only the folders the user chose, through security-scoped bookmarks.
+The Mac app runs in the App Sandbox and reaches only the folders the user chose (security-scoped bookmarks).
 
 Network: Notebook connects to nothing of its own. Searching for a place for a reminder or a to-do uses Apple Maps (MapKit), with the words typed, and Current Location asks MapKit for the address.
 
@@ -20,7 +20,7 @@ Widgets and controls: New Note is a widget (Home Screen, Lock Screen, the Mac's 
 
 Share extension: "Notebook" in the share sheet of other apps takes text, links, pictures and PDFs into a new note in the default folder or at the end of the note opened last. The extension leaves them in the app's App Group, and the app writes them into the user's folder the next time it is open.
 
-New in 1.2: handwritten notes are PDFs in the user's folder, written in with PencilKit (iPad: New Note asks; iPhone: a folder's menu). Try Lecture 4.pdf in the sample notes: the pen writes, Add puts a photo or scan on the page, the grid shows All Pages. Copy File (⇧⌘C) puts a whole file on the pasteboard. A note that can't be saved is kept in Notebook's folder Unsaved Notes.
+New in 1.2: handwritten notes are PDFs in the user's folder, written in with PencilKit (iPad: New Note asks; iPhone: a folder's menu). Try Lecture 4.pdf in the sample notes: the pen writes, Add puts a photo or scan on the page, the grid shows All Pages. Copy File (⇧⌘C) copies a whole file. A note that can't be saved is kept in Notebook's folder Unsaved Notes.
 
 Spotlight: the notes in the user's folders are indexed on the device with Core Spotlight, so system search finds them; notes in hidden folders are left out.
 
