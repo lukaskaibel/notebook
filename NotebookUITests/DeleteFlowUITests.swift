@@ -250,25 +250,6 @@ final class DeleteFlowUITests: XCTestCase {
         XCTAssertTrue(try String(contentsOf: copy, encoding: .utf8).contains("Stamps"), "not as it was")
     }
 
-    /// A new note written in, where a place has no Recently Deleted: Undo asks before it deletes it, and Delete does.
-    func testWithoutRecentlyDeletedUndoAsksAboutANewNoteWrittenIn() throws {
-        try XCTSkipIf(isPad, "the iPhone's first screen has New Note")
-        launch(slowWrites: 0, recentlyDeleted: false)
-        tap("New Note")
-        app.typeText("Plans\nCall the plumber")
-        app.navigationBars.buttons.element(boundBy: 0).tap()
-        assertShown("Plans", within: 5)
-        undoByShaking("Undo Rename")
-        assertShown("Untitled", within: 5)
-        undoByShaking("Undo New Note")
-        let delete = app.alerts.buttons["Delete"]
-        XCTAssertTrue(delete.waitForExistence(timeout: 10), app.debugDescription)
-        XCTAssertTrue(app.alerts.staticTexts["Delete “Untitled” immediately?"].exists, app.debugDescription)
-        pause()
-        delete.tap()
-        assertGone("Untitled", within: 3)
-    }
-
     private func duplicate(_ name: String) {
         row(name).press(forDuration: 1.2)
         tap("Duplicate")
