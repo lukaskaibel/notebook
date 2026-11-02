@@ -47,14 +47,29 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- On iPhone and iPad, VoiceOver reads a note as it shows, line by line, rather than as one text with its Markdown
+  ("dash, left bracket, space, right bracket, Buy milk"). Headings are headings, a to-do says whether it is completed
+  and a double-tap ticks it, as a tap on its circle does, links are links, pictures and drawings are read by their
+  names, a table row by row, and a to-do's date or place is a button that changes it. A double-tap on a line starts
+  writing at its end; while you write, the note is one text field as before, and the to-do the caret is in can be
+  ticked from VoiceOver's actions (#214).
 - Putting the pen away on a PDF, or taking it up, no longer makes the pages flash empty for a moment.
 - A PDF you draw in on iPhone or iPad no longer grows a little with every save: it is written anew with only what its
   pages use (#244).
+- On iPhone and iPad, where a place has no Recently Deleted, Undo of a new note, a new folder, a copy or an import from
+  Apple Notes no longer deletes it for good once you have written in it or changed it since: it asks first, as Delete
+  does there. One left as Notebook made it still goes without a question (#169).
+- A note that can't be saved as you leave it (a full disk, a read-only disk, a folder Notebook may no longer write to)
+  no longer takes what you typed with it. Notebook tries again a few seconds later; if it still can't, it keeps what
+  you typed as a note in its folder Unsaved Notes (on iPhone and iPad in On My iPhone › Notebook) and says so, with
+  Show in Finder or Open. If even that can't be written, it asks you to copy the text or try again, and quitting waits
+  for your answer (#165).
 
-## [1.1.0] – not released yet
+## [1.1.0] – 2026-10-29
 
 Widgets, Share to Notebook, version history, repeating to-dos, to-dos in no note and import from Apple Notes; on iPhone
-and iPad, drawing on PDFs right on the page.
+and iPad, drawing on PDFs right on the page. It came to the App Store for the Mac on 29 October 2026 and for iPhone and
+iPad on 1 November.
 
 ### Added
 

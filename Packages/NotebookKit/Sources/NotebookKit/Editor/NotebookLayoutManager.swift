@@ -243,7 +243,7 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
         return font.familyName == "Apple Color Emoji" || font.fontName.contains("Emoji") ? EditorStyle.face(font.pointSize, weight: .regular) : font
     }
 
-    private func frontmatterLabel(_ count: Int) -> String {
+    func frontmatterLabel(_ count: Int) -> String {
         count == 1 ? "1 property" : "\(count) properties"
     }
 

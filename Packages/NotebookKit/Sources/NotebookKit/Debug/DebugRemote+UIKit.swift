@@ -245,6 +245,12 @@ enum DebugRemote {
                 picker.dismiss(animated: true)
                 editor.insertPictures([picture])
             }
+        case "unsaved":
+            // unsaved [ok|open|copy|again]: the alerts about notes that couldn't be saved; with an answer, the first is
+            // answered as its button does.
+            for report in workspace.unsavedReports { log("unsaved: \(report.title) | \(report.message)") }
+            let answers: [String: UnsavedReport.Answer] = ["ok": .ok, "open": .show, "copy": .copyText, "again": .tryAgain]
+            if let report = workspace.unsavedReports.first, let answer = answers[argument] { workspace.answer(report, answer) }
         case "locations":
             // locations: each location's name and place, as Settings shows them.
             log("locations: " + workspace.locations.map { "\($0.name) (\($0.place)) \($0.path)" }.joined(separator: " | "))
@@ -562,6 +568,20 @@ enum DebugRemote {
             log("current \(workspace.currentURL?.path ?? "none") editing \(workspace.isEditing) selection \(editor.selection) scroll \(editor.scrollTop) top \(editor.topInset) titleAway \(workspace.isTitleScrolledAway) heading \(String(describing: workspace.currentHeading))")
         case "text":
             log(editor.text)
+        case "reading":
+            // What VoiceOver goes through in the note: label | value | traits | frame | actions, one a line.
+            let elements = (editor.textView.accessibilityElements ?? []).compactMap { $0 as? NSObject }
+            log(elements.map { element in
+                let actions = (element.accessibilityCustomActions ?? []).map(\.name).joined(separator: ",")
+                return "\(element.accessibilityLabel ?? "") | \(element.accessibilityValue ?? "") | \(element.accessibilityTraits.rawValue) | \(element.accessibilityFrame) | \(actions)"
+            }.joined(separator: "\n"))
+        case "axaction":
+            // axaction <label>|<action>: one of the actions VoiceOver offers for what it reads in the note as <label>.
+            let names = argument.components(separatedBy: "|")
+            let elements = (editor.textView.accessibilityElements ?? []).compactMap { $0 as? NSObject }
+            guard let element = elements.first(where: { $0.accessibilityLabel == names[0] }) else { return log("no element \(names[0])") }
+            guard let action = element.accessibilityCustomActions?.first(where: { $0.name == names.last }) else { return log("no action \(names.last ?? "")") }
+            log("performed \(action.actionHandler?(action) ?? false)")
         case "easing":
             // easing <text>: the weight and size of the text's first letter on each of the next 20 frames, to see a
             // change of style ease in (`format bold` right before it).

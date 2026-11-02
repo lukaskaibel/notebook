@@ -151,6 +151,13 @@ final class TableModel {
         outline.stroke()
     }
 
+    /// Where a row is drawn, the header first, in a table drawn in `rect`.
+    func rowRect(_ row: Int, in rect: CGRect) -> CGRect? {
+        let heights = layout(maxWidth: rect.width).rowHeights
+        guard heights.indices.contains(row) else { return nil }
+        return CGRect(x: rect.minX, y: rect.minY + heights[..<row].reduce(0, +), width: rect.width, height: heights[row])
+    }
+
     /// The cell at a point in a table drawn at `rect`: its row (0 is the header) and column.
     func cell(at point: CGPoint, in rect: CGRect) -> (row: Int, column: Int)? {
         let layout = layout(maxWidth: rect.width)

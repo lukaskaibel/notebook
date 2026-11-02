@@ -343,15 +343,20 @@ enum FileOperations {
     /// `Data.write(.atomic)` alone would drop with the old file. Still whole or not at all: the text is written next to
     /// it first and then put in its place.
     static func write(_ data: Data, to url: URL) -> Bool {
+        (try? replace(url, with: data)) != nil
+    }
+
+    /// `write`, throwing why it couldn't: a full disk, a folder that can't be written to.
+    static func replace(_ url: URL, with data: Data) throws {
         let manager = FileManager.default
         if manager.fileExists(atPath: url.path),
            let folder = try? manager.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: url, create: true) {
             defer { try? manager.removeItem(at: folder) }
             let new = folder.appendingPathComponent(url.lastPathComponent)
-            if (try? data.write(to: new)) != nil, (try? manager.replaceItemAt(url, withItemAt: new)) != nil { return true }
+            if (try? data.write(to: new)) != nil, (try? manager.replaceItemAt(url, withItemAt: new)) != nil { return }
         }
         // A new file, or one where the text can't be put in place: written as before, as saving matters more.
-        return (try? data.write(to: url, options: .atomic)) != nil
+        try data.write(to: url, options: .atomic)
     }
 
     /// Reads a note, bringing it down from iCloud first, in a coordinated read `coordinator.cancel()` calls off.
