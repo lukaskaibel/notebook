@@ -42,7 +42,8 @@ enum AttachmentSource: CaseIterable, Identifiable {
 }
 
 /// Brings up the system's photo picker, camera, document scanner or file browser, and puts what comes back into the
-/// note at the caret: pictures saved next to it in `.assets`, other files copied there, notes as links.
+/// note at the caret: pictures saved next to it in `.assets`, other files copied there, notes and files already in
+/// your folders as links.
 @MainActor
 final class AttachmentPicker: NSObject, PHPickerViewControllerDelegate, UIImagePickerControllerDelegate, UINavigationControllerDelegate,
     VNDocumentCameraViewControllerDelegate, UIDocumentPickerDelegate {

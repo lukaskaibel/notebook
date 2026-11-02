@@ -278,6 +278,12 @@ public final class FileNode: NSObject, Observable {
     }
 
     /// "/private/var/…" (what reading a temporary folder names what is in it) and "/var/…" are one place.
+    /// A folder, not a file kept as one (a package, such as a Pages document).
+    nonisolated static func isFolder(_ url: URL) -> Bool {
+        let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
+        return values?.isDirectory == true && values?.isPackage != true
+    }
+
     nonisolated static func samePath(_ a: URL, _ b: URL) -> Bool {
         HiddenFolders.withoutPrivate(a.path) == HiddenFolders.withoutPrivate(b.path)
     }

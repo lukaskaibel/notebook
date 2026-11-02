@@ -152,7 +152,8 @@ extension EditorController {
                 let files = received.files.flatMap { $0 }
                 // By then another note may be open, which they aren't for.
                 guard let self, !files.isEmpty, self.loadCount == note else { return }
-                _ = self.pasteFiles(files, at: NSRange(location: min(target.location, self.storage.length), length: 0))
+                // Written for the drop in a folder of their own that goes again: copied, never linked.
+                _ = self.pasteFiles(files, at: NSRange(location: min(target.location, self.storage.length), length: 0), linking: false)
             }
         }
     }
@@ -175,18 +176,26 @@ extension EditorController {
     /// Files of the locations become links to them where they are (`FileLink`), so a picture copied from the sidebar
     /// isn't stored twice; so do notes from elsewhere. Other files from elsewhere, such as Downloads, which gets
     /// emptied, are copied into `.assets`; pictures and files show on lines of their own. Without `linking` (Option
-    /// held while dropping), files of the locations are copied too.
+    /// held while dropping, files an app writes as they are dropped), files of the locations are copied too. A folder
+    /// is never copied, as the note could be in it: one of the locations goes in as a link, any other not at all.
+    /// Neither does a file gone since it was copied. True when the files were taken care of, with a beep for those that
+    /// couldn't go in, so that nothing else is pasted in their place, such as their names.
     func pasteFiles(_ urls: [URL], at target: NSRange, linking: Bool = true) -> Bool {
         var blocks: [String] = []
         var inline: [String] = []
+        var refused = false
         for url in urls {
-            if linking, let link = delegate?.editor(self, linkTo: url) {
+            if !FileManager.default.fileExists(atPath: url.path) {
+                refused = true
+            } else if linking || FileNode.isFolder(url), let link = delegate?.editor(self, linkTo: url) {
                 if link.isBlock { blocks.append(link.markdown) } else { inline.append(link.markdown) }
             } else if url.pathExtension.lowercased() == "md", let link = noteLink(for: url) {
                 inline.append(link)
             } else if let stored = storeAsset(copying: url) {
                 let name = url.lastPathComponent
                 blocks.append(MarkdownStyler.isImageFile(url) ? "![](\(stored))" : "![\(name)](\(stored))")
+            } else {
+                refused = true
             }
         }
         if !inline.isEmpty {
@@ -199,7 +208,8 @@ extension EditorController {
             }
         }
         if !blocks.isEmpty { insertOnOwnLines(blocks.joined(separator: "\n"), at: inline.isEmpty ? target : selection) }
-        return !inline.isEmpty || !blocks.isEmpty
+        if refused { beep() }
+        return !inline.isEmpty || !blocks.isEmpty || refused
     }
 
     /// Plain text, with its line breaks made Unix ones.
@@ -269,8 +279,10 @@ extension EditorController {
         return FileOperations.uniqueAssetURL(named: name, in: assets)
     }
 
-    /// Copies a file into `.assets` and returns its Markdown path.
+    /// Copies a file into `.assets` and returns its Markdown path. Never a folder, which could hold the note and so
+    /// `.assets` itself.
     func storeAsset(copying url: URL) -> String? {
+        guard !FileNode.isFolder(url) else { return nil }
         if let assets = assetsFolder, url.deletingLastPathComponent().standardizedFileURL == assets.standardizedFileURL {
             return Self.markdownPath(url.lastPathComponent)
         }

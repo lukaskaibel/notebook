@@ -105,17 +105,17 @@ final class CopyFileTests: XCTestCase {
 
     // MARK: - What is copied
 
-    /// As the Finder copies a file: its address, which the Finder, Mail and Messages take, and its name as text. A
-    /// picture comes as the picture too, as it is in its file and as TIFF, for apps that only take pictures.
+    /// As the Finder copies a file: one item with its address, which the Finder, Mail and Messages take, and its name
+    /// as text. A picture comes as the picture too, as it is in its file, for apps that only take pictures.
     func testCopiedPictureIsTheFileAndThePicture() throws {
         let pasteboard = pasteboard()
         Workspace.writeFile(kyoto, to: pasteboard)
+        XCTAssertEqual(pasteboard.pasteboardItems?.count, 1)
         let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]
         XCTAssertEqual(urls?.map(\.standardizedFileURL), [kyoto])
         XCTAssertEqual(pasteboard.string(forType: .string), "Kyoto.jpg")
         XCTAssertEqual(pasteboard.data(forType: NSPasteboard.PasteboardType(UTType.jpeg.identifier)), try Data(contentsOf: kyoto),
                        "the picture as it is in its file")
-        XCTAssertNotNil(pasteboard.data(forType: .tiff).flatMap(NSImage.init(data:)), "and as a picture every Mac app takes")
     }
 
     /// Any other file, a video as well as a folder, is its address only: nothing of it is read to copy it.
@@ -195,6 +195,66 @@ final class CopyFileTests: XCTestCase {
         try Self.pictureData().write(to: assets.appendingPathComponent("Torii.png"))
         XCTAssertNil(workspace.libraryLink(to: assets.appendingPathComponent("Torii.png"), from: index))
         XCTAssertTrue(paste(assets.appendingPathComponent("Torii.png"), in: workspace).contains("![](.assets/Torii.png)"), workspace.editor.text)
+    }
+
+    /// A location's own folder goes in as a link to it, as any folder of the locations, by the name the sidebar gives
+    /// it: copying it into a note inside it would copy it into itself without end. Option doesn't copy a folder either.
+    func testALocationsFolderGoesInAsALink() async throws {
+        let (workspace, _) = try await makeWindow()
+        XCTAssertTrue(paste(library, in: workspace).contains("[Notes](../)"), workspace.editor.text)
+        XCTAssertTrue(workspace.editor.pasteFiles([trips], at: workspace.editor.selection, linking: false))
+        XCTAssertTrue(workspace.editor.text.contains("[Trips](../Trips/)"), workspace.editor.text)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: notes.appendingPathComponent(".assets").path), "nothing copied")
+    }
+
+    /// A folder from elsewhere isn't copied into the note, and nothing else goes in in its place, such as its name.
+    func testAFolderFromElsewhereStaysOut() async throws {
+        let (workspace, _) = try await makeWindow()
+        let before = workspace.editor.text
+        XCTAssertEqual(paste(outside, in: workspace), before, "taken care of, with nothing in its place")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: notes.appendingPathComponent(".assets").path))
+    }
+
+    /// Only what the index reads is linked, as links find nothing else: files in folders it leaves out, in a package or
+    /// hidden by the system are copied in, as files from elsewhere are.
+    func testFilesTheIndexDoesntReadAreCopied() async throws {
+        let modules = trips.appendingPathComponent("node_modules/pic.png")
+        let package = trips.appendingPathComponent("Tool.app/Contents/pic.png")
+        let hidden = trips.appendingPathComponent("Hidden.png")
+        for file in [modules, package] {
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Self.pictureData().write(to: file)
+        }
+        try Self.pictureData().write(to: hidden)
+        XCTAssertEqual(chflags(hidden.path, UInt32(UF_HIDDEN)), 0)
+        let (workspace, _) = try await makeWindow()
+        for file in [modules, package, hidden] {
+            XCTAssertFalse(SearchIndex.reads(file, in: library), file.path)
+            XCTAssertNil(workspace.libraryLink(to: file, from: index), file.path)
+        }
+        XCTAssertTrue(SearchIndex.reads(kyoto, in: library))
+        XCTAssertTrue(paste(modules, in: workspace).contains("![](.assets/pic.png)"), workspace.editor.text)
+    }
+
+    /// A file moved or thrown away since it was copied isn't pasted: no link to nothing, and not its name either.
+    func testAFileGoneSinceItWasCopiedIsntPasted() async throws {
+        let (workspace, _) = try await makeWindow()
+        let pasteboard = pasteboard()
+        Workspace.writeFile(railPass, to: pasteboard)
+        try FileManager.default.moveItem(at: railPass, to: outside.appendingPathComponent("Rail pass.pdf"))
+        let before = workspace.editor.text
+        XCTAssertTrue(workspace.editor.paste(from: pasteboard, at: nil))
+        XCTAssertEqual(workspace.editor.text, before)
+    }
+
+    /// A location finds what is in it by either address the system gives a file ("/private/var/…" and "/var/…").
+    func testLocationsFindFilesByEitherAddress() async throws {
+        let (workspace, _) = try await makeWindow()
+        let location = try XCTUnwrap(workspace.locations.first)
+        let path = HiddenFolders.withoutPrivate(kyoto.path)
+        XCTAssertNotNil(location.folder(containing: path))
+        XCTAssertNotNil(location.folder(containing: "/private" + path))
+        XCTAssertNil(location.folder(containing: "/private" + HiddenFolders.withoutPrivate(outside.path)))
     }
 
     // MARK: - Where it is asked for

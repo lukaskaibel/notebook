@@ -40,19 +40,22 @@ extension Workspace {
         return fileInFront
     }
 
-    /// As the Finder copies a file: its address, and its name as text. A picture comes as the picture too, for apps
-    /// that take only pictures, read only when one of them asks for it.
+    /// As the Finder copies a file: its address, written as AppKit writes a file's, so that a sandboxed app such as
+    /// Mail may read the file, and its name as text. A picture on this Mac comes as the picture too, as it is in its
+    /// file, for apps that take only pictures: read only when one of them asks for it. One only in iCloud doesn't,
+    /// which would have to come down first.
     static func writeFile(_ url: URL, to pasteboard: NSPasteboard) {
-        let item = NSPasteboardItem()
-        item.setString(url.absoluteString, forType: .fileURL)
-        item.setString(url.lastPathComponent, forType: .string)
-        if MarkdownStyler.isImageFile(url), let type = UTType(filenameExtension: url.pathExtension) {
-            let picture = CopiedPicture(url: url)
-            CopiedPicture.current = picture
-            item.setDataProvider(picture, forTypes: [NSPasteboard.PasteboardType(type.identifier), .tiff])
-        }
         pasteboard.clearContents()
-        pasteboard.writeObjects([item])
+        pasteboard.writeObjects([url as NSURL])
+        var types: [NSPasteboard.PasteboardType] = [.string]
+        if MarkdownStyler.isImageFile(url), let type = UTType(filenameExtension: url.pathExtension),
+           (try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]).ubiquitousItemDownloadingStatus).map({ $0 == .current }) ?? true {
+            types.append(NSPasteboard.PasteboardType(type.identifier))
+        }
+        let picture = CopiedPicture(url: url)
+        CopiedPicture.current = picture
+        pasteboard.addTypes(types, owner: picture)
+        pasteboard.setString(url.lastPathComponent, forType: .string)
     }
     #else
     /// As Files copies a file: the file, for other apps, and its address in Notebook's own type, for a note.
@@ -75,11 +78,14 @@ extension Workspace {
     /// as another note's `.assets`, which links don't find.
     func libraryLink(to url: URL, from note: URL?) -> FileLink? {
         let url = url.standardizedFileURL
-        guard let location = location(containing: url), let base = location.folder(containing: url.path) else { return nil }
-        let inside = url.path.dropFirst(base.url.path.count).split(separator: "/")
-        guard !inside.isEmpty, !inside.contains(where: { $0.hasPrefix(".") }) else { return nil }
-        let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
-        let isFolder = values?.isDirectory == true && values?.isPackage != true
+        // Gone since it was copied, moved or thrown away: no link to nothing.
+        guard FileManager.default.fileExists(atPath: url.path),
+              let location = location(containing: url), let base = location.folder(containing: url.path) else { return nil }
+        // A location's folder, or a linked one such as iCloud Drive's Desktop, is in the library too, and only what the
+        // index reads: links don't find anything else.
+        let isRoot = FileNode.samePath(url, base.url)
+        guard isRoot || index.entry(for: url) != nil || SearchIndex.reads(url, in: base.url) else { return nil }
+        let isFolder = isRoot || FileNode.isFolder(url)
         let isNote = !isFolder && FileKind(url: url, isDirectory: false) == .note
         let address = isFolder ? nil : index.linkAddress(for: url, from: note)
         // A name `[[` would read otherwise ("Plan #2", "[Draft]"), and a folder: the way from the note to it.
@@ -89,7 +95,7 @@ extension Workspace {
         guard let note else { return nil }
         let relative = LinkUpdate.relativePath(from: note.deletingLastPathComponent(), to: url)
         let path = LinkUpdate.encoded(relative.isEmpty ? "." : relative) + (isFolder ? "/" : "")
-        let name = Self.shownName(url).replacingOccurrences(of: "]", with: "")
+        let name = (isFolder ? folderName(url) : Self.shownName(url)).replacingOccurrences(of: "]", with: "")
         if isFolder || isNote { return FileLink(markdown: "[\(name)](\(path))", isBlock: false) }
         return FileLink(markdown: MarkdownStyler.isImageFile(url) ? "![](\(path))" : "![\(name)](\(path))", isBlock: true)
     }
@@ -109,9 +115,9 @@ final class CopiedNotice {
 }
 
 #if os(macOS)
-/// A picture copied as a file, read when an app asks for it as a picture: as it is in its file, or as TIFF, which
-/// every Mac app takes.
-final class CopiedPicture: NSObject, NSPasteboardItemDataProvider {
+/// A picture copied as a file, given to an app that asks for it as a picture as it is in its file: read then, not
+/// decoded or converted.
+final class CopiedPicture: NSObject, NSPasteboardTypeOwner {
     /// The last one, kept while the pasteboard may ask it.
     nonisolated(unsafe) static var current: CopiedPicture?
     let url: URL
@@ -120,15 +126,11 @@ final class CopiedPicture: NSObject, NSPasteboardItemDataProvider {
         self.url = url
     }
 
-    func pasteboard(_ pasteboard: NSPasteboard?, item: NSPasteboardItem, provideDataForType type: NSPasteboard.PasteboardType) {
-        if type == .tiff {
-            if let tiff = NSImage(contentsOf: url)?.tiffRepresentation { item.setData(tiff, forType: .tiff) }
-        } else if let data = try? Data(contentsOf: url) {
-            item.setData(data, forType: type)
-        }
+    func pasteboard(_ sender: NSPasteboard, provideDataForType type: NSPasteboard.PasteboardType) {
+        if let data = try? Data(contentsOf: url, options: .mappedIfSafe) { sender.setData(data, forType: type) }
     }
 
-    func pasteboardFinishedWithDataProvider(_ pasteboard: NSPasteboard) {
+    func pasteboardChangedOwner(_ sender: NSPasteboard) {
         if Self.current === self { Self.current = nil }
     }
 }
