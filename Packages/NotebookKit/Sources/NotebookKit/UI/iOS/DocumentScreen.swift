@@ -222,6 +222,7 @@ struct DocumentScreen: View {
                     Button { workspace.duplicate(url) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
                 }
                 Section {
+                    Button { workspace.copyFile(url) } label: { Label("Copy", systemImage: "doc.on.doc") }
                     Button { workspace.copyLink(url) } label: { Label("Copy Link", systemImage: "link") }
                     Button { export() } label: { Label("Export as PDF", systemImage: "doc.richtext") }
                         .disabled(!isLoaded)

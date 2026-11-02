@@ -19,6 +19,7 @@ public struct RootView: View {
             }
         }
         .frame(minWidth: 760, minHeight: 480)
+        .copiedCapsule(workspace)
         .onAppear {
             // Opening a folder from a file window, or with this one closed, brings this window back.
             workspace.showWindow = { [openWindow] in openWindow(id: "main") }
@@ -231,6 +232,7 @@ struct MoreMenu: View {
             MoveToMenu(workspace: workspace, url: url)
             Button { workspace.duplicate(url) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
             Divider()
+            Button { workspace.copyFile(url) } label: { Label("Copy File", systemImage: "doc.on.doc") }
             Button { workspace.copyLink(url) } label: { Label("Copy Link", systemImage: "link") }
             Button { workspace.revealInFinder(url) } label: { Label("Show in Finder", systemImage: "finder") }
             if let note = workspace.note {

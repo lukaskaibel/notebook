@@ -222,6 +222,9 @@ public final class Workspace: NSObject {
     /// True while the keyboard is up for the note or its title.
     private(set) var isEditing = false
     #endif
+    /// The file Copy File copied a moment ago, which a capsule over the window says: observed on its own, as the
+    /// capsule is all that shows it.
+    @ObservationIgnored let copied = CopiedNotice()
     /// The last file or folder renamed or moved, so screens showing it follow it to its new place.
     private(set) var relocation: (from: URL, to: URL, id: UUID)?
     @ObservationIgnored private var watcher: FileWatcher?
@@ -2602,6 +2605,10 @@ extension Workspace: EditorControllerDelegate {
 
     public func editor(_ editor: EditorController, resolve target: String) -> URL? {
         index.resolve(target, from: currentURL)
+    }
+
+    public func editor(_ editor: EditorController, linkTo url: URL) -> FileLink? {
+        libraryLink(to: url, from: currentURL)
     }
 
     public func editorNoteName(_ editor: EditorController) -> String {
