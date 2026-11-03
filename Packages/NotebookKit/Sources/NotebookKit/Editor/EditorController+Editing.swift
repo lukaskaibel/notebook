@@ -186,6 +186,11 @@ extension EditorController {
             }
         }
 
+        if [.tableHeader, .tableDelimiter, .tableRow].contains(line.kind), selection.length == 0, let block = line.block,
+           case .table(let alignments) = document.blocks[block].kind, insertTableRow(at: index, in: document.blocks[block], columns: alignments.count) {
+            return true
+        }
+
         switch line.kind {
         case .code:
             let leading = text.substring(with: line.range).prefix { $0 == " " || $0 == "\t" }
@@ -241,6 +246,53 @@ extension EditorController {
         default:
             return false
         }
+    }
+
+    /// Return in a table makes a new empty row under the caret's row (under the delimiter row, from the header), with
+    /// the caret in its first cell, instead of a line break that would end the table there. At the start of a row the
+    /// new one goes above it, as a line goes above a heading, and the caret stays; at the start of the header the line
+    /// break goes in above the table. An empty last row ends the table, as an empty item ends a list, with a blank
+    /// line under it, which other apps would otherwise take the next line into.
+    private func insertTableRow(at index: Int, in block: MarkdownBlock, columns: Int) -> Bool {
+        let text = nsText
+        let line = document.lines[index]
+        let caret = selection.location
+        let cells = { (line: MarkdownLine) -> (units: [UInt16], cells: [NSRange]) in
+            let units = Array(text.substring(with: line.range).utf16)
+            return (units, MarkdownParser.tableCells(units, NSRange(location: 0, length: units.count)))
+        }
+        let row = cells(line)
+
+        if line.kind == .tableHeader, caret == line.range.location { return false }
+        if line.kind == .tableRow, index == block.lines.upperBound, row.cells.allSatisfy({ $0.length == 0 }) {
+            replace(line.range, with: "\n", select: NSRange(location: line.range.location + 1, length: 0))
+            return true
+        }
+
+        // The new row has the cells of the one it comes from, empty, so the pipes stay lined up; a row with more or
+        // fewer cells than the table takes the delimiter row's.
+        let template = row.cells.count == columns ? row : cells(document.lines[block.lines.lowerBound + 1])
+        var blank = template.units
+        for cell in template.cells {
+            blank.replaceSubrange(cell.location..<cell.upperBound, with: repeatElement(32, count: cell.length))
+        }
+        // The first cell starts after the row's opening pipe and a space.
+        let units = template.units
+        var start = units.prefix { $0 == 32 || $0 == 9 }.count
+        if start < units.count, units[start] == 124 {
+            start += 1
+            if start < units.count, units[start] == 32 { start += 1 }
+        }
+        let newRow = String(utf16CodeUnits: blank, count: blank.count)
+
+        if line.kind == .tableRow, caret == line.range.location {
+            replace(NSRange(location: caret, length: 0), with: newRow + "\n", select: NSRange(location: caret + blank.count + 1, length: 0))
+            return true
+        }
+        let after = line.kind == .tableRow ? line : document.lines[block.lines.lowerBound + 1]
+        replace(NSRange(location: after.range.upperBound, length: 0), with: "\n" + newRow,
+                select: NSRange(location: after.range.upperBound + 1 + start, length: 0))
+        return true
     }
 
     private func isClosed(_ block: Int) -> Bool {
@@ -538,6 +590,15 @@ extension EditorController {
                 let indent = before.prefix { $0 == " " || $0 == "\t" }
                 let task = indent + "- [ ] "
                 replace(NSRange(location: lineStart, length: range.location - lineStart), with: String(task), select: NSRange(location: lineStart + (String(task) as NSString).length, length: 0))
+                return false
+            }
+        }
+        // A pipe typed in an empty table row, as when writing the row by hand after Return made it: the row is written
+        // from there, without the empty cells Return laid out.
+        if replacement == "|", range.length == 0, selection == range, !document.lines.isEmpty {
+            let line = document.lines[document.lineIndex(containing: range.location)]
+            if line.kind == .tableRow, text.substring(with: line.range).allSatisfy({ $0 == " " || $0 == "\t" || $0 == "|" }) {
+                replace(line.range, with: "|", select: NSRange(location: line.range.location + 1, length: 0))
                 return false
             }
         }

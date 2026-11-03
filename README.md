@@ -173,7 +173,8 @@ any PDF does, its writing as sharp as the page, and the pencil writes on it ther
 
 Tables are drawn as tables, Mermaid diagrams as diagrams (natively, without a web view), code with highlighting for
 about forty languages, and LaTeX maths as typeset formulas. Click into one and its source appears, with a live
-preview for diagrams and formulas. Point at a code block and a button in its corner copies the code. Callouts in
+preview for diagrams and formulas. In a table, Return makes a new row under the one you're in, and Return in an empty
+last row leaves the table. Point at a code block and a button in its corner copies the code. Callouts in
 GitHub's and Obsidian's `> [!note]` style get their colour and symbol.
 
 <picture>
@@ -773,6 +774,7 @@ While writing:
 | `##` and then text, or `##` in front of a line | The space a heading needs goes in for you |
 | `**` (also `~~`, `==`) | The closing pair comes along, the caret between; a space next makes them plain stars |
 | Return on a heading | At its start: a line above it; on one without text: back to body text |
+| Return in a table | A new empty row under the caret's, the caret in its first cell; at the start of a row: one above it; in an empty last row: out of the table |
 | `[[` | Suggestions for a link; ↑↓ and Return or Tab to pick |
 | Space on a selected picture | Quick Look |
 | Drag a picture or file in a note | Move it to another line; ⌥ drops a copy. Into another note, the sidebar, the Finder or another app: a copy |
