@@ -3,6 +3,15 @@
 Everything users would notice, newest first. The format follows [Keep a Changelog](https://keepachangelog.com), and
 versions follow [semantic versioning](https://semver.org).
 
+## [Unreleased]
+
+### Changed
+
+- Return in a table makes a new empty row under the one you're in, its cells lined up with the others and the caret in
+  the first, instead of a line break that cut the table in two. From the header it makes the first row; at the start
+  of a row, a row above it. Return in an empty last row leaves the table, as an empty item leaves a list, and a row
+  typed by hand from its first `|` replaces the empty one.
+
 ## [1.2.0] – not released yet
 
 Handwritten notes on iPhone and iPad, with All Pages and pictures on the page; drawing and highlighting PDFs on the Mac;
