@@ -246,9 +246,9 @@ extension EditorController: NSTextViewDelegate, NSTextFieldDelegate {
         case #selector(NSResponder.deleteForward(_:)):
             return deleteForward()
         case #selector(NSResponder.insertTab(_:)):
-            return indent(by: 1)
+            return moveToTableCell(by: 1) || indent(by: 1)
         case #selector(NSResponder.insertBacktab(_:)):
-            return indent(by: -1)
+            return moveToTableCell(by: -1) || indent(by: -1)
         case #selector(NSResponder.moveUp(_:)):
             return moveUpIntoTitle()
         case #selector(NSResponder.moveLeft(_:)):

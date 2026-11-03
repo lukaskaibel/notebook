@@ -1420,7 +1420,9 @@ enum DebugRemote {
         let codes: [String: UInt16] = ["[": 33, "]": 30, ",": 43, "7": 26, "9": 25, "'": 39, "a": 0, "s": 1, "f": 3, "b": 11, "i": 34, "k": 40, "n": 45, "z": 6, "x": 7, "c": 8, "v": 9, "e": 14, "l": 37, "u": 32, "t": 17]
         if let (characters, code) = table[name] {
             if [123, 124, 125, 126].contains(code) { modifiers.insert(.function) }
-            sendKey(characters, code: code, modifiers: modifiers)
+            // ⇧Tab types a backtab, as the keyboard does, which AppKit takes for insertBacktab.
+            let typed = code == 48 && modifiers.contains(.shift) ? String(UnicodeScalar(NSBackTabCharacter)!) : characters
+            sendKey(typed, code: code, modifiers: modifiers)
         } else {
             sendKey(name, code: codes[name] ?? 0, modifiers: modifiers)
         }
