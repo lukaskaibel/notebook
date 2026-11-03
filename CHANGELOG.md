@@ -5,6 +5,13 @@ versions follow [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- Tables grow as you type them. Type a first row like `| Day | Area |` and press Return: the `| --- | --- |` row goes
+  in under it, with an empty row and the caret in its first cell. Tab goes to the next cell with its text selected,
+  ⇧Tab to the one before, and Tab in the last cell makes a new row. A `| --- |` row you type yourself, with its `:` for
+  alignment, takes the place of the one Notebook put in.
+
 ### Changed
 
 - Return in a table makes a new empty row under the one you're in, its cells lined up with the others and the caret in

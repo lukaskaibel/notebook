@@ -336,7 +336,8 @@ final class MarkdownTextView: UITextView {
             command("\t", [], #selector(acceptSuggestion))
             command(UIKeyCommand.inputEscape, [], #selector(closeSuggestions))
         } else {
-            // Tab arrives as text and nests list items there; Shift-Tab needs a command of its own.
+            // Tab arrives as text and nests list items there (or goes to the next cell of a table); Shift-Tab needs a
+            // command of its own.
             command("\t", .shift, #selector(outdentLines))
             if controller?.isCaretOnFirstLine == true { command(UIKeyCommand.inputUpArrow, [], #selector(moveUpIntoTitle)) }
             if selectedRange == NSRange(location: 0, length: 0) { command(UIKeyCommand.inputLeftArrow, [], #selector(moveBackIntoTitle)) }
@@ -357,7 +358,10 @@ final class MarkdownTextView: UITextView {
     @objc private func suggestionDown() { controller?.suggestions.move(by: 1) }
     @objc private func acceptSuggestion() { controller?.acceptSelectedSuggestion() }
     @objc private func closeSuggestions() { controller?.closeSuggestions() }
-    @objc private func outdentLines() { controller?.indent(by: -1) }
+    @objc private func outdentLines() {
+        guard let controller, !controller.moveToTableCell(by: -1) else { return }
+        controller.indent(by: -1)
+    }
     /// ↑ on the first line goes into the title.
     @objc private func moveUpIntoTitle() { _ = controller?.moveUpIntoTitle() }
     /// ← at the start of the note goes into the title.

@@ -288,7 +288,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
             return !deleteBackward()
         }
         if text == "\t", range == selection {
-            return !indent(by: 1)
+            return !(moveToTableCell(by: 1) || indent(by: 1))
         }
         return shouldInsert(text, in: range)
     }
