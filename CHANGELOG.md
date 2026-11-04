@@ -37,6 +37,9 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Changed
 
+- Quick Look and thumbnails take next to no room: they show notes with the editor the app carries, instead of each
+  bringing a copy of it, so with them the app is about 15 MB to download on the Mac and 20 MB on iPhone and iPad, not
+  35 and 40 MB.
 - Return in a table makes a new empty row under the one you're in, its cells lined up with the others and the caret in
   the first, instead of a line break that cut the table in two. From the header it makes the first row; at the start
   of a row, a row above it. Return in an empty last row leaves the table, as an empty item leaves a list, and a row
