@@ -5,6 +5,16 @@ versions follow [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- Paste a whole Markdown file into a new note and its `# Heading` becomes the note's title, with the rest as its text,
+  instead of the title showing twice. A note you've already named keeps its name, and the pasted heading is left out.
+  Paste it into the title and the first line goes in the title, without its #s, and the rest into the note, where the
+  caret goes on to.
+- Paste in the sidebar on the Mac (⌘V), as in the Finder: what you copied goes into the selected folder, or the folder
+  of the selected file. Copied files are copied there; copied text becomes a new note, named after a Markdown file's
+  `# Heading`, or with its title ready to type. Pictures in text copied from a note in another folder come along.
+
 ### Changed
 
 - Return in a table makes a new empty row under the one you're in, its cells lined up with the others and the caret in

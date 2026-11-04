@@ -5,7 +5,8 @@ import XCTest
 
 /// Copy File (⇧⌘C, the sidebar's menu, ⌘C in the sidebar): the file itself goes on the pasteboard as the Finder puts it
 /// there. Pasted or dropped in a note, a file of the locations goes in as a link to it where it is; a file from
-/// elsewhere is copied next to the note, as before.
+/// elsewhere is copied next to the note, as before. Pasted in the sidebar (⌘V), files are copied into the folder and
+/// text becomes a note there.
 @MainActor
 final class CopyFileTests: XCTestCase {
     private var library: URL!
@@ -347,5 +348,68 @@ final class CopyFileTests: XCTestCase {
         let urls = appPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]
         XCTAssertEqual(urls?.map(\.standardizedFileURL), [railPass])
         XCTAssertEqual(workspace.copied.file?.name, "Rail pass.pdf", "the capsule says so")
+    }
+
+    // MARK: - Paste in the sidebar
+
+    /// ⌘V in the sidebar, as in the Finder: copied files go in the folder of the file selected, as copies.
+    func testPasteInTheSidebarCopiesFilesIntoTheSelectedFolder() async throws {
+        let (workspace, sidebar) = try await makeWindow()
+        workspace.reveal(index, select: true)
+        try await until("selected") { sidebar.selectedURL?.standardizedFileURL == index }
+        XCTAssertEqual(sidebar.pasteFolder?.standardizedFileURL, notes, "the folder of the note selected")
+        Workspace.writeFile(railPass, to: appPasteboard)
+        window?.makeFirstResponder(sidebar.outline)
+        XCTAssertTrue(sidebar.outline.validateUserInterfaceItem(NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")))
+        sidebar.outline.paste(nil)
+        let copy = notes.appendingPathComponent("Rail pass.pdf")
+        try await until("copied") { FileManager.default.fileExists(atPath: copy.path) }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: railPass.path), "the file copied stays where it was")
+
+        // A folder never goes into itself.
+        workspace.reveal(trips, select: true)
+        try await until("folder selected") { sidebar.selectedURL?.standardizedFileURL == trips }
+        Workspace.writeFile(trips, to: appPasteboard)
+        sidebar.outline.paste(nil)
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: trips.appendingPathComponent("Trips").path))
+    }
+
+    /// A Markdown file's contents pasted in the sidebar become a note in the folder selected, named by its heading and
+    /// opened. Copied from a note in another folder, its pictures come along.
+    func testMarkdownPastedInTheSidebarIsANoteNamedByItsHeading() async throws {
+        let (workspace, sidebar) = try await makeWindow()
+        try FileManager.default.createDirectory(at: trips.appendingPathComponent(".assets"), withIntermediateDirectories: true)
+        try Self.pictureData().write(to: trips.appendingPathComponent(".assets/Map.png"))
+        workspace.reveal(work, select: true)
+        try await until("selected") { sidebar.selectedURL?.standardizedFileURL == work }
+        XCTAssertEqual(sidebar.pasteFolder?.standardizedFileURL, work, "the folder selected")
+        let markdown = "# Osaka\n\nFlights booked.\n![](.assets/Map.png)\n"
+        appPasteboard.clearContents()
+        appPasteboard.setString(markdown, forType: .string)
+        appPasteboard.setData(try JSONSerialization.data(withJSONObject: ["markdown": markdown, "folder": trips.path]), forType: EditorController.fragmentType)
+        sidebar.outline.paste(nil)
+        let note = work.appendingPathComponent("Osaka.md")
+        try await until("made") { FileManager.default.fileExists(atPath: note.path) }
+        XCTAssertEqual(try String(contentsOf: note, encoding: .utf8), "Flights booked.\n![](.assets/Map.png)\n")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: work.appendingPathComponent(".assets/Map.png").path), "the picture came along")
+        try await until("opened") { workspace.currentURL?.standardizedFileURL == note && workspace.note?.isLoaded == true }
+        XCTAssertEqual(workspace.editor.titleText, "Osaka")
+        XCTAssertEqual(workspace.editor.text, "Flights booked.\n![](.assets/Map.png)\n")
+    }
+
+    /// Other text pasted in the sidebar is a note to name, as New Note's: all of it in the text, the title to type.
+    func testOtherTextPastedInTheSidebarIsANoteToName() async throws {
+        let (workspace, sidebar) = try await makeWindow()
+        workspace.reveal(trips, select: true)
+        try await until("selected") { sidebar.selectedURL?.standardizedFileURL == trips }
+        appPasteboard.clearContents()
+        appPasteboard.setString("Flights\nHotel", forType: .string)
+        sidebar.outline.paste(nil)
+        let note = trips.appendingPathComponent("Untitled.md")
+        try await until("made") { FileManager.default.fileExists(atPath: note.path) }
+        XCTAssertEqual(try String(contentsOf: note, encoding: .utf8), "Flights\nHotel")
+        try await until("opened") { workspace.currentURL?.standardizedFileURL == note && workspace.note?.isLoaded == true }
+        XCTAssertEqual(workspace.editor.titleText, "", "to type")
     }
 }
