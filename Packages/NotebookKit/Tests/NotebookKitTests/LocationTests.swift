@@ -204,6 +204,33 @@ final class LocationTests: XCTestCase {
         try await settle(workspace)
     }
 
+    /// Nextcloud on iPhone and iPad hands other apps a file for each of its folders. Chosen in the folder picker, such a
+    /// folder isn't added (an alert says why), nor is one that isn't there; a location that became one is noticed.
+    func testAFolderThatIsAFileIsNotAdded() async throws {
+        #if os(macOS)
+        _ = NSApplication.shared
+        #endif
+        let workspace = try await makeWorkspace()
+        let file = base.appendingPathComponent("MyData")
+        try Data().write(to: file)
+        let missing = base.appendingPathComponent("Gone")
+        let elsewhere = base.appendingPathComponent("Elsewhere")
+        try make(elsewhere)
+        XCTAssertEqual([file, missing, elsewhere].map(Location.found), [.file, .nothing, .folder])
+
+        var added: [Bool] = []
+        for url in [file, missing, elsewhere] {
+            added.append(await withCheckedContinuation { done in workspace.addChosenFolder(url) { done.resume(returning: $0) } })
+        }
+        XCTAssertEqual(added, [false, false, true])
+        XCTAssertEqual(workspace.locations.map(\.name), ["Library", "iCloud Drive", "Elsewhere"])
+        try await settle(workspace)
+
+        let job = { (url: URL) in LocationSurvey.Job(id: UUID(), url: url, linked: [], isRead: false, folders: []) }
+        XCTAssertEqual([file, missing, elsewhere].map { LocationSurvey.run(job($0)).isFile }, [true, false, false],
+                       "only a file is told about: a folder that's gone may come back")
+    }
+
     func testSidebarAddsAFolderDroppedBetweenItsSections() async throws {
         let workspace = try await makeWorkspace()
         let sidebar = SidebarController(workspace: workspace)

@@ -422,11 +422,11 @@ struct FolderScreen: View {
 }
 
 extension View {
-    /// The Files app's folder picker, adding the folder you choose as a location.
+    /// The Files app's folder picker, adding the folder you choose as a location when it is one (`addChosenFolder`).
     func folderImporter(isPresented: Binding<Bool>, workspace: Workspace) -> some View {
         fileImporter(isPresented: isPresented, allowedContentTypes: [.folder]) { result in
             guard case .success(let url) = result else { return }
-            workspace.addLocation(url)
+            workspace.addChosenFolder(url)
         }
     }
 }

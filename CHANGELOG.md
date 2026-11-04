@@ -42,6 +42,12 @@ versions follow [semantic versioning](https://semver.org).
   of a row, a row above it. Return in an empty last row leaves the table, as an empty item leaves a list, and a row
   typed by hand from its first `|` replaces the empty one.
 
+### Fixed
+
+- On iPhone and iPad, a Nextcloud folder chosen with Add Location showed in the sidebar but stayed empty. Nextcloud
+  gives other apps only single files, not its folders, so Notebook can't show what's in them; it now says so instead of
+  adding the folder. A folder like this added before is pointed out once, with how to remove it.
+
 ## [1.2.0] – not released yet
 
 Handwritten notes on iPhone and iPad, with All Pages and pictures on the page; drawing and highlighting PDFs on the Mac;
