@@ -63,8 +63,8 @@ versions follow [semantic versioning](https://semver.org).
   instead of putting the mark back, so a few Undos could leave marks strewn through the line.
 - Emoji, Chinese and Japanese characters and signs the typeface hasn't, such as `⋯` and `⇄`, showed as nothing when a
   note was opened, until you typed next to them.
-- A code block or callout no longer comes apart into separate boxes when one of its lines is styled again, as when the
-  caret moves onto a line with bold text in it.
+- A code block or callout could come apart into separate boxes after some edits inside it, when only part of it was
+  styled again.
 - Notes with long tables open several times faster: each table was set up again for every one of its rows. A note of
   20 tables of 30 rows opens about seven times as fast.
 
