@@ -7,6 +7,10 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- Tables grow as you type them. Type a first row like `| Day | Area |` and press Return: the `| --- | --- |` row goes
+  in under it, with an empty row and the caret in its first cell. Tab goes to the next cell with its text selected,
+  ⇧Tab to the one before, and Tab in the last cell makes a new row. A `| --- |` row you type yourself, with its `:` for
+  alignment, takes the place of the one Notebook put in.
 - Paste a whole Markdown file into a new note and its `# Heading` becomes the note's title, with the rest as its text,
   instead of the title showing twice. A note you've already named keeps its name, and the pasted heading is left out.
   Paste it into the title and the first line goes in the title, without its #s, and the rest into the note, where the
