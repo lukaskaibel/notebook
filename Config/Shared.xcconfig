@@ -18,6 +18,16 @@ NOTEBOOK_APP_GROUP =
 NOTEBOOK_APP_GROUP[config=AppStore] = group.com.lukaskbl.Notebook
 NOTEBOOK_APP_GROUP[sdk=iphonesimulator*] = group.com.lukaskbl.Notebook
 
+// The app and its Quick Look and thumbnail extensions share one NotebookKit, a framework in the app's Frameworks folder
+// (Packages/NotebookKit/Package.swift). Its resources go into it once, by a build phase that moves and removes the
+// copies Xcode makes in each of them (Config/notebookkit-resources.sh), which a build script in Xcode's sandbox may not
+// do: it may only write the files it says it makes.
+ENABLE_USER_SCRIPT_SANDBOXING = NO
+// A Mac build without a team is signed to run on this Mac only, and the hardened runtime then won't load the framework
+// into the app or an extension ("different Team IDs"). Debug builds turn the hardened runtime off for that; Release
+// builds, such as Xcode's Profile, may load it anyway. The App Store build is signed with the team.
+RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION[config=Release][sdk=macosx*] = YES
+
 // Notebook uses no encryption of its own (iCloud and HTTPS are Apple's), so App Store Connect doesn't ask about export
 // compliance for every build.
 INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO

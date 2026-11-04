@@ -6,8 +6,13 @@ let package = Package(
     defaultLocalization: "en",
     platforms: [.macOS("27.0"), .iOS("27.0")],
     products: [
-        .library(name: "NotebookKit", targets: ["NotebookKit"]),
-        // What the widgets' extension shares with the app, without the rest of NotebookKit: the New Note intent.
+        // A framework the app carries once, in its Frameworks folder, for itself and the Quick Look and thumbnail
+        // extensions, which find it there; linked statically, each would carry a copy of its own. NotebookCapture is
+        // inside it, so the app takes it from here and has it only once. The resources of NotebookKit and SwiftMath go
+        // into it too (Config/notebookkit-resources.sh).
+        .library(name: "NotebookKit", type: .dynamic, targets: ["NotebookKit", "NotebookCapture"]),
+        // What the widgets' and the share extension share with the app, without the rest of NotebookKit: the New Note
+        // intent. They link it statically, so they stay small.
         .library(name: "NotebookCapture", targets: ["NotebookCapture"]),
     ],
     dependencies: [

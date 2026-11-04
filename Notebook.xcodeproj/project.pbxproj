@@ -8,8 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		F10000000000000000000001 /* NotebookKit in Frameworks */ = {isa = PBXBuildFile; productRef = F10000000000000000000010 /* NotebookKit */; };
+		F10000000000000000000113 /* NotebookKit in Embed Frameworks */ = {isa = PBXBuildFile; productRef = F10000000000000000000010 /* NotebookKit */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		F1000000000000000000006B /* NotebookCapture in Frameworks */ = {isa = PBXBuildFile; productRef = F1000000000000000000006A /* NotebookCapture */; };
-		F1000000000000000000006D /* NotebookCapture in Frameworks */ = {isa = PBXBuildFile; productRef = F1000000000000000000006C /* NotebookCapture */; };
 		F1000000000000000000006E /* NotebookWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F10000000000000000000060 /* NotebookWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F1000000000000000000008B /* NotebookCapture in Frameworks */ = {isa = PBXBuildFile; productRef = F1000000000000000000008A /* NotebookCapture */; };
 		F1000000000000000000008E /* NotebookShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F10000000000000000000080 /* NotebookShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -72,6 +72,17 @@
 				F10000000000000000000103 /* NotebookThumbnail.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F10000000000000000000114 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				F10000000000000000000113 /* NotebookKit in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -142,7 +153,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				F10000000000000000000001 /* NotebookKit in Frameworks */,
-				F1000000000000000000006D /* NotebookCapture in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -251,6 +261,8 @@
 				F10000000000000000000005 /* Frameworks */,
 				F1000000000000000000000A /* Resources */,
 				F1000000000000000000006F /* Embed Foundation Extensions */,
+				F10000000000000000000115 /* NotebookKit's resources */,
+				F10000000000000000000114 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -266,7 +278,6 @@
 			name = Notebook;
 			packageProductDependencies = (
 				F10000000000000000000010 /* NotebookKit */,
-				F1000000000000000000006C /* NotebookCapture */,
 			);
 			productName = Notebook;
 			productReference = F10000000000000000000002 /* Notebook.app */;
@@ -346,6 +357,7 @@
 				F100000000000000000000A9 /* Sources */,
 				F100000000000000000000A8 /* Frameworks */,
 				F100000000000000000000AB /* Resources */,
+				F10000000000000000000116 /* NotebookKit's resources */,
 			);
 			buildRules = (
 			);
@@ -369,6 +381,7 @@
 				F1000000000000000000010D /* Sources */,
 				F1000000000000000000010A /* Frameworks */,
 				F1000000000000000000010E /* Resources */,
+				F10000000000000000000117 /* NotebookKit's resources */,
 			);
 			buildRules = (
 			);
@@ -489,6 +502,76 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		F10000000000000000000115 /* NotebookKit's resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/Config/notebookkit-resources.sh",
+				"$(SRCROOT)/Packages/NotebookKit/PrivacyInfo.xcprivacy",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/NotebookKit_NotebookKit.bundle",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/SwiftMath_SwiftMath.bundle",
+			);
+			name = "NotebookKit's resources";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/notebookkit-resources.stamp",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"$SRCROOT/Config/notebookkit-resources.sh\"\n";
+		};
+		F10000000000000000000116 /* NotebookKit's resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/Config/notebookkit-resources.sh",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/NotebookKit_NotebookKit.bundle",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/SwiftMath_SwiftMath.bundle",
+			);
+			name = "NotebookKit's resources";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/notebookkit-resources.stamp",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"$SRCROOT/Config/notebookkit-resources.sh\"\n";
+		};
+		F10000000000000000000117 /* NotebookKit's resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/Config/notebookkit-resources.sh",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/NotebookKit_NotebookKit.bundle",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/SwiftMath_SwiftMath.bundle",
+			);
+			name = "NotebookKit's resources";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/notebookkit-resources.stamp",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"$SRCROOT/Config/notebookkit-resources.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		F10000000000000000000009 /* Sources */ = {
@@ -1314,10 +1397,6 @@
 			productName = NotebookKit;
 		};
 		F1000000000000000000006A /* NotebookCapture */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = NotebookCapture;
-		};
-		F1000000000000000000006C /* NotebookCapture */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = NotebookCapture;
 		};
