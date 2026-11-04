@@ -14,6 +14,24 @@ versions follow [semantic versioning](https://semver.org).
   such as Documents or Downloads, the Mac first asks whether Notebook may read it; the note shows meanwhile and its
   pictures follow once you allow it. A tip at the bottom of the sidebar shows the way, with a button to Quick Look's
   settings, where another app that previews Markdown can be turned off.
+- Tables grow as you type them. Type a first row like `| Day | Area |` and press Return: the `| --- | --- |` row goes
+  in under it, with an empty row and the caret in its first cell. Tab goes to the next cell with its text selected,
+  ⇧Tab to the one before, and Tab in the last cell makes a new row. A `| --- |` row you type yourself, with its `:` for
+  alignment, takes the place of the one Notebook put in.
+- Paste a whole Markdown file into a new note and its `# Heading` becomes the note's title, with the rest as its text,
+  instead of the title showing twice. A note you've already named keeps its name, and the pasted heading is left out.
+  Paste it into the title and the first line goes in the title, without its #s, and the rest into the note, where the
+  caret goes on to.
+- Paste in the sidebar on the Mac (⌘V), as in the Finder: what you copied goes into the selected folder, or the folder
+  of the selected file. Copied files are copied there; copied text becomes a new note, named after a Markdown file's
+  `# Heading`, or with its title ready to type. Pictures in text copied from a note in another folder come along.
+
+### Changed
+
+- Return in a table makes a new empty row under the one you're in, its cells lined up with the others and the caret in
+  the first, instead of a line break that cut the table in two. From the header it makes the first row; at the start
+  of a row, a row above it. Return in an empty last row leaves the table, as an empty item leaves a list, and a row
+  typed by hand from its first `|` replaces the empty one.
 
 ## [1.2.0] – not released yet
 

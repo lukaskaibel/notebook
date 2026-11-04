@@ -397,7 +397,18 @@ public enum MarkdownParser {
 
     /// The cells of a table row: the ranges between pipes, without the outer pipes and the spaces around the text.
     public static func tableCells(_ u: [UInt16], _ range: NSRange) -> [NSRange] {
-        var cells: [NSRange] = []
+        tableSlots(u, range).map { slot in
+            var a = slot.location, b = slot.upperBound
+            while a < b, u[a] == 32 || u[a] == 9 { a += 1 }
+            while b > a, u[b - 1] == 32 || u[b - 1] == 9 { b -= 1 }
+            return NSRange(location: a, length: b - a)
+        }
+    }
+
+    /// The room of each cell of a table row: from one pipe to the next, the spaces around the text included, without
+    /// the outer pipes.
+    static func tableSlots(_ u: [UInt16], _ range: NSRange) -> [NSRange] {
+        var slots: [NSRange] = []
         var start = range.location
         var end = range.upperBound
         while start < end, u[start] == 32 || u[start] == 9 { start += 1 }
@@ -409,10 +420,7 @@ public enum MarkdownParser {
         var inCode = false
         while i <= end {
             if i == end || (u[i] == 124 && !inCode) {
-                var a = cellStart, b = i
-                while a < b, u[a] == 32 || u[a] == 9 { a += 1 }
-                while b > a, u[b - 1] == 32 || u[b - 1] == 9 { b -= 1 }
-                cells.append(NSRange(location: a, length: b - a))
+                slots.append(NSRange(location: cellStart, length: i - cellStart))
                 cellStart = i + 1
             } else if u[i] == 92 {
                 i += 1
@@ -421,7 +429,7 @@ public enum MarkdownParser {
             }
             i += 1
         }
-        return cells
+        return slots
     }
 
     static func delimiterRow(_ u: [UInt16], _ range: NSRange) -> [TableAlignment]? {

@@ -186,6 +186,12 @@ extension EditorController {
             }
         }
 
+        if [.tableHeader, .tableDelimiter, .tableRow].contains(line.kind), selection.length == 0, let block = line.block,
+           case .table(let alignments) = document.blocks[block].kind, insertTableRow(at: index, in: document.blocks[block], columns: alignments.count) {
+            return true
+        }
+        if startTable(on: index) { return true }
+
         switch line.kind {
         case .code:
             let leading = text.substring(with: line.range).prefix { $0 == " " || $0 == "\t" }
@@ -241,6 +247,156 @@ extension EditorController {
         default:
             return false
         }
+    }
+
+    /// Return in a table makes a new empty row under the caret's row (under the delimiter row, from the header), with
+    /// the caret in its first cell, instead of a line break that would end the table there. At the start of a row the
+    /// new one goes above it, as a line goes above a heading, and the caret stays; at the start of the header the line
+    /// break goes in above the table. An empty last row ends the table, as an empty item ends a list, with a blank
+    /// line under it, which other apps would otherwise take the next line into.
+    ///
+    /// A delimiter row typed by hand as the first row, under the one Return put in after the header, takes its place.
+    /// Tab past the last cell makes a row this way too (`endsOnEmptyRow` false), and an empty row doesn't end the table
+    /// then.
+    private func insertTableRow(at index: Int, in block: MarkdownBlock, columns: Int, endsOnEmptyRow: Bool = true) -> Bool {
+        let text = nsText
+        let line = document.lines[index]
+        let caret = selection.location
+        let units = { (line: MarkdownLine) in Array(text.substring(with: line.range).utf16) }
+        let row = units(line)
+        let cells = MarkdownParser.tableCells(row, NSRange(location: 0, length: row.count))
+        let delimiter = document.lines[block.lines.lowerBound + 1]
+
+        if line.kind == .tableHeader, caret == line.range.location { return false }
+        if endsOnEmptyRow, line.kind == .tableRow, index == block.lines.upperBound, cells.allSatisfy({ $0.length == 0 }) {
+            replace(line.range, with: "\n", select: NSRange(location: line.range.location + 1, length: 0))
+            return true
+        }
+        if line.kind == .tableRow, index == block.lines.lowerBound + 2, cells.count == columns,
+           MarkdownParser.delimiterRow(row, NSRange(location: 0, length: row.count)) != nil {
+            let typed = text.substring(with: line.range)
+            let empty = Self.emptyTableRow(like: row)
+            replace(NSRange(location: delimiter.range.location, length: line.range.upperBound - delimiter.range.location), with: typed + "\n" + empty.row,
+                    select: NSRange(location: delimiter.range.location + (typed as NSString).length + 1 + empty.start, length: 0))
+            return true
+        }
+
+        // The new row is the delimiter row with its cells emptied, so its pipes line up with the table's. (A copy of the
+        // row before would grow with every row typed in.)
+        let empty = Self.emptyTableRow(like: units(delimiter))
+        if line.kind == .tableRow, caret == line.range.location {
+            replace(NSRange(location: caret, length: 0), with: empty.row + "\n", select: NSRange(location: caret + (empty.row as NSString).length + 1, length: 0))
+            return true
+        }
+        let after = line.kind == .tableRow ? line : delimiter
+        replace(NSRange(location: after.range.upperBound, length: 0), with: "\n" + empty.row,
+                select: NSRange(location: after.range.upperBound + 1 + empty.start, length: 0))
+        return true
+    }
+
+    /// A row like the one given with its cells emptied, so its pipes stay where they are, and where its first cell
+    /// starts: after the opening pipe and a space.
+    private static func emptyTableRow(like units: [UInt16]) -> (row: String, start: Int) {
+        var blank = units
+        for cell in MarkdownParser.tableCells(units, NSRange(location: 0, length: units.count)) {
+            blank.replaceSubrange(cell.location..<cell.upperBound, with: repeatElement(32, count: cell.length))
+        }
+        var start = units.prefix { $0 == 32 || $0 == 9 }.count
+        if start < units.count, units[start] == 124 {
+            start += 1
+            if start < units.count, units[start] == 32 { start += 1 }
+        }
+        return (String(utf16CodeUnits: blank, count: blank.count), start)
+    }
+
+    /// Return at the end of a line of cells, `| Day | Area |`, typed as a table's first row: the delimiter row under it,
+    /// its dashes as wide as the cells, and an empty row with the caret in its first cell. Only for a line of two cells
+    /// or more, between pipes, with nothing right under it.
+    private func startTable(on index: Int) -> Bool {
+        let text = nsText
+        let line = document.lines[index]
+        let caret = selection.location
+        guard line.kind == .paragraph, line.block == nil, selection.length == 0, caret >= line.range.location,
+              text.substring(with: NSRange(location: caret, length: line.range.upperBound - caret)).allSatisfy(\.isWhitespace),
+              index + 1 == document.lines.count || document.lines[index + 1].kind == .blank else { return false }
+        let row = Array(text.substring(with: line.range).utf16)
+        let trimmed = text.substring(with: line.range).trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix("|"), trimmed.hasSuffix("|"), !trimmed.hasSuffix("\\|"), trimmed.count > 2 else { return false }
+        let slots = MarkdownParser.tableSlots(row, NSRange(location: 0, length: row.count))
+        let cells = MarkdownParser.tableCells(row, NSRange(location: 0, length: row.count))
+        guard slots.count >= 2, let first = slots.first else { return false }
+
+        var delimiter = String(utf16CodeUnits: row, count: first.location)
+        for (slot, cell) in zip(slots, cells) {
+            if cell.length == 0 {
+                delimiter += " --- |"
+            } else {
+                let dashes = String(repeating: "-", count: max(3, cell.length))
+                delimiter += String(repeating: " ", count: cell.location - slot.location) + dashes + String(repeating: " ", count: slot.upperBound - cell.upperBound) + "|"
+            }
+        }
+        let empty = Self.emptyTableRow(like: row)
+        let end = line.range.upperBound
+        replace(NSRange(location: end, length: 0), with: "\n" + delimiter + "\n" + empty.row,
+                select: NSRange(location: end + 1 + (delimiter as NSString).length + 1 + empty.start, length: 0))
+        return true
+    }
+
+    /// Tab and ⇧Tab in a table go to the next or the previous cell, its text selected, as in Numbers and Notes; from a
+    /// row's last cell Tab goes on to the next row, and past the last row it makes a new one. The delimiter row is passed
+    /// over. False outside a table, where Tab nests list items.
+    func moveToTableCell(by direction: Int) -> Bool {
+        let selection = self.selection
+        guard !document.lines.isEmpty else { return false }
+        let index = document.lineIndex(containing: selection.location)
+        let line = document.lines[index]
+        guard [.tableHeader, .tableDelimiter, .tableRow].contains(line.kind), selection.upperBound <= line.range.upperBound,
+              let block = line.block, case .table(let alignments) = document.blocks[block].kind else { return false }
+        let text = nsText
+        let rows = document.blocks[block].lines.filter { document.lines[$0].kind != .tableDelimiter }
+        func slots(_ row: Int) -> [NSRange] {
+            let range = document.lines[rows[row]].range
+            let units = Array(text.substring(with: range).utf16)
+            return MarkdownParser.tableSlots(units, NSRange(location: 0, length: units.count)).map {
+                NSRange(location: $0.location + range.location, length: $0.length)
+            }
+        }
+
+        // Where the caret is: before the first cell is -1, and the delimiter row is after the header's last cell.
+        var row: Int
+        var cell: Int
+        if line.kind == .tableDelimiter {
+            row = 0
+            cell = slots(0).count
+        } else {
+            row = rows.firstIndex(of: index) ?? 0
+            let own = slots(row)
+            cell = selection.location < (own.first?.location ?? 0) ? -1 : own.firstIndex { selection.location <= $0.upperBound } ?? own.count - 1
+        }
+        cell += direction
+        if cell < 0 {
+            guard row > 0 else { return true }
+            row -= 1
+            cell = slots(row).count - 1
+        } else if cell >= slots(row).count {
+            guard row + 1 < rows.count else {
+                guard direction > 0 else { return true }
+                setSelection(NSRange(location: document.lines[rows[row]].range.upperBound, length: 0))
+                return insertTableRow(at: rows[row], in: document.blocks[block], columns: alignments.count, endsOnEmptyRow: false)
+            }
+            row += 1
+            cell = 0
+        }
+        guard let slot = slots(row)[safe: cell] else { return true }
+        // The cell's text selected, so what you type takes its place; in an empty cell, the caret after the space.
+        var content = slot
+        while content.length > 0, [32, 9].contains(text.character(at: content.location)) { content = NSRange(location: content.location + 1, length: content.length - 1) }
+        while content.length > 0, [32, 9].contains(text.character(at: content.upperBound - 1)) { content.length -= 1 }
+        if content.length == 0 {
+            content = NSRange(location: slot.length > 0 && text.character(at: slot.location) == 32 ? slot.location + 1 : slot.location, length: 0)
+        }
+        setSelection(content)
+        return true
     }
 
     private func isClosed(_ block: Int) -> Bool {
@@ -538,6 +694,15 @@ extension EditorController {
                 let indent = before.prefix { $0 == " " || $0 == "\t" }
                 let task = indent + "- [ ] "
                 replace(NSRange(location: lineStart, length: range.location - lineStart), with: String(task), select: NSRange(location: lineStart + (String(task) as NSString).length, length: 0))
+                return false
+            }
+        }
+        // A pipe typed in an empty table row, as when writing the row by hand after Return made it: the row is written
+        // from there, without the empty cells Return laid out.
+        if replacement == "|", range.length == 0, selection == range, !document.lines.isEmpty {
+            let line = document.lines[document.lineIndex(containing: range.location)]
+            if line.kind == .tableRow, text.substring(with: line.range).allSatisfy({ $0 == " " || $0 == "\t" || $0 == "|" }) {
+                replace(line.range, with: "|", select: NSRange(location: line.range.location + 1, length: 0))
                 return false
             }
         }

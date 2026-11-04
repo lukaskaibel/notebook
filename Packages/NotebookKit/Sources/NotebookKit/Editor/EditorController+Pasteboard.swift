@@ -169,8 +169,15 @@ extension EditorController {
             insertOnOwnLines(adjusted, at: target)
             return true
         }
+        if pasteDocument(adjusted, at: target) { return true }
         replace(target, with: adjusted, select: NSRange(location: target.location + (adjusted as NSString).length, length: 0), actionName: "Paste")
         return true
+    }
+
+    /// The folder of the note text copied in Notebook came from, whose `.assets` its pictures are in.
+    static func fragmentFolder(_ data: Data) -> URL? {
+        guard let fragment = try? JSONSerialization.jsonObject(with: data) as? [String: String], let path = fragment["folder"], !path.isEmpty else { return nil }
+        return URL(fileURLWithPath: path)
     }
 
     /// Files of the locations become links to them where they are (`FileLink`), so a picture copied from the sidebar
@@ -248,6 +255,7 @@ extension EditorController {
     /// Plain text, with its line breaks made Unix ones.
     func pasteText(_ string: String, at target: NSRange) {
         let normalized = string.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+        if pasteDocument(normalized, at: target) { return }
         // A link pasted over selected text links that text.
         let trimmed = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
         if target.length > 0, !trimmed.contains(" "), let url = URL(string: trimmed), let scheme = url.scheme, ["http", "https", "mailto"].contains(scheme),
@@ -295,6 +303,59 @@ extension EditorController {
         case .bullet, .checkbox, .quoteBar, .callout: return true
         default: return false
         }
+    }
+
+    // MARK: - Whole notes
+
+    /// Pasted in the title, which holds one line: the first line goes there, as it reads without a heading's #s, and
+    /// the rest at the start of the text, where the caret goes on to. Copied from a note in another folder (`source`),
+    /// its pictures come along as they do into the text. False for a line as it is, which the title takes itself.
+    func pasteInTitle(_ string: String, assetsFrom source: URL?) -> Bool {
+        let pasted = PastedNote(forTitle: string)
+        guard pasted.title != string || !pasted.text.isEmpty else { return false }
+        insertInTitle(pasted.title)
+        guard !pasted.text.isEmpty else { return true }
+        let text = copyAssets(in: pasted.text, from: source)
+        leaveTitle()
+        if isBlank(outside: NSRange(location: 0, length: 0)) {
+            replace(NSRange(location: 0, length: storage.length), with: text, select: NSRange(location: (text as NSString).length, length: 0), actionName: "Paste")
+            return true
+        }
+        // Before what the note had, on lines of its own, after its front matter, which has to stay at the top.
+        let frontMatter = document.lines.last { $0.kind == .frontmatterDelimiter }
+        let start = frontMatter?.fullRange.upperBound ?? 0
+        let lines = (frontMatter?.breakLength == 0 ? "\n" : "") + (text.hasSuffix("\n") ? String(text.dropLast()) : text)
+        replace(NSRange(location: start, length: 0), with: lines + "\n", select: NSRange(location: start + (lines as NSString).length, length: 0), actionName: "Paste")
+        return true
+    }
+
+    /// A whole document pasted in a note with nothing else in it, as a new one is: the `# Heading` it starts with is
+    /// the note's title, given to a note without a name and left out under one it has, and the rest its text.
+    private func pasteDocument(_ markdown: String, at target: NSRange) -> Bool {
+        guard isBlank(outside: target), let pasted = PastedNote(document: markdown) else { return false }
+        if !hasTitle {
+            titleText = pasted.title
+            commitTitle()
+        }
+        replace(NSRange(location: 0, length: storage.length), with: pasted.text, select: NSRange(location: (pasted.text as NSString).length, length: 0),
+                actionName: "Paste")
+        return true
+    }
+
+    /// Whether the note has a name: one given to it, not New Note's "Untitled", which the title of a new note shows
+    /// as its placeholder.
+    private var hasTitle: Bool {
+        let title = titleText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !title.isEmpty && title.range(of: "^Untitled( [0-9]+)?$", options: .regularExpression) == nil
+    }
+
+    /// Whether the text has nothing but spaces and empty lines around `range`.
+    private func isBlank(outside range: NSRange) -> Bool {
+        let shown = CharacterSet.whitespacesAndNewlines.inverted
+        let before = NSRange(location: 0, length: min(range.location, storage.length))
+        let after = NSRange(location: min(range.upperBound, storage.length), length: storage.length - min(range.upperBound, storage.length))
+        return nsText.rangeOfCharacter(from: shown, options: [], range: before).location == NSNotFound
+            && nsText.rangeOfCharacter(from: shown, options: [], range: after).location == NSNotFound
     }
 
     // MARK: - Assets
@@ -367,17 +428,7 @@ extension EditorController {
     /// here and point at the copies.
     private func copyAssets(in markdown: String, from source: URL?) -> String {
         guard let source, let folder, source.standardizedFileURL != folder.standardizedFileURL else { return markdown }
-        guard let expression = try? NSRegularExpression(pattern: "\\]\\((\\.assets/[^)\\s]+)\\)") else { return markdown }
-        var result = markdown
-        let matches = expression.matches(in: markdown, range: NSRange(location: 0, length: (markdown as NSString).length)).reversed()
-        for match in matches {
-            let path = (markdown as NSString).substring(with: match.range(at: 1))
-            let decoded = path.removingPercentEncoding ?? path
-            let file = source.appendingPathComponent(decoded)
-            guard FileManager.default.fileExists(atPath: file.path), let stored = storeAsset(copying: file) else { continue }
-            result = (result as NSString).replacingCharacters(in: match.range(at: 1), with: stored)
-        }
-        return result
+        return FileOperations.copyingAssets(in: markdown, from: source) { storeAsset(copying: $0) }
     }
 
     /// `[[Name]]` for a note dropped in from the sidebar or the Finder.

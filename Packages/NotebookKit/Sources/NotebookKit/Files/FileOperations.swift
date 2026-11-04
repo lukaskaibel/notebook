@@ -77,6 +77,22 @@ enum FileOperations {
         return copied ? destination : nil
     }
 
+    /// Markdown copied from a note in `source` points at that folder's `.assets`: `store` copies each file it points at
+    /// and gives the copy's Markdown path, which it then points at instead. Files gone since stay as they were.
+    static func copyingAssets(in markdown: String, from source: URL, store: (URL) -> String?) -> String {
+        guard let expression = try? NSRegularExpression(pattern: "\\]\\((\\.assets/[^)\\s]+)\\)") else { return markdown }
+        var result = markdown
+        let matches = expression.matches(in: markdown, range: NSRange(location: 0, length: (markdown as NSString).length)).reversed()
+        for match in matches {
+            let path = (markdown as NSString).substring(with: match.range(at: 1))
+            let decoded = path.removingPercentEncoding ?? path
+            let file = source.appendingPathComponent(decoded)
+            guard FileManager.default.fileExists(atPath: file.path), let stored = store(file) else { continue }
+            result = (result as NSString).replacingCharacters(in: match.range(at: 1), with: stored)
+        }
+        return result
+    }
+
     /// Takes back copies made a moment ago that nothing uses, in coordinated deletes, and the `.assets` folder they
     /// were the first files in. Only for files Notebook itself just put there: anything else goes to the Trash.
     static func removeStoredAssets(_ urls: [URL]) {

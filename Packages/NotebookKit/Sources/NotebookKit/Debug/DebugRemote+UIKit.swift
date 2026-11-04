@@ -575,6 +575,16 @@ enum DebugRemote {
         case "paste":
             // paste: what Paste in the note's menu does, at the caret.
             log("paste: \(editor.paste(from: .general))")
+        case "pastetext":
+            // pastetext <text>: text pasted where the keyboard is, in the title or the note, without the pasteboard,
+            // which the Simulator shares with the Mac's; \n for a line break.
+            let text = argument.replacingOccurrences(of: "\\n", with: "\n")
+            if editor.isEditingTitle {
+                log("pastetext title: \(editor.pasteInTitle(text, assetsFrom: nil))")
+            } else {
+                editor.pasteText(text, at: editor.selection)
+                log("pastetext")
+            }
         case "exists":
             log("exists \(argument): \(url(argument).map { FileManager.default.fileExists(atPath: $0.path) } ?? false)")
         case "ls":

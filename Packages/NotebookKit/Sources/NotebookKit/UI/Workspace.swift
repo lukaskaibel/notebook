@@ -1642,13 +1642,15 @@ public final class Workspace: NSObject {
     }
 
     /// A new note, opened with its title ready to type over, or with a title already chosen (search's New Note, a link
-    /// to a note that isn't there yet). `text` is what it starts with, from Shortcuts. The task gives where it was made.
+    /// to a note that isn't there yet). `text` is what it starts with, from Shortcuts or pasted; pasted from a note in
+    /// another folder (`source`), the pictures it shows are copied along. The task gives where it was made.
     @discardableResult
-    public func newNote(in folder: URL? = nil, title: String? = nil, text: String = "") -> Task<URL?, Never> {
+    public func newNote(in folder: URL? = nil, title: String? = nil, text: String = "", assetsFrom source: URL? = nil,
+                        actionName: String = "New Note") -> Task<URL?, Never> {
         let folder = folder ?? folderForNewNote
         // The default folder gone from the disk, thrown away in the Finder, say: the note goes to the Inbox instead.
         let inbox = folder.flatMap { folder in chosenDefaultFolder.map { FileNode.samePath(URL(fileURLWithPath: $0), folder) } == true ? inboxFolder : nil }
-        let change = keepForUndo(FileChange(.make, "New Note"))
+        let change = keepForUndo(FileChange(.make, actionName))
         return changeFiles { [self] follow in
             guard let chosen = folder.map(follow) else {
                 dropFromUndo(change)
@@ -1657,6 +1659,12 @@ public final class Workspace: NSObject {
             let inbox = inbox.map(follow)
             let made = await Task.detached(priority: .userInitiated) { () -> (url: URL, folder: URL, listing: FileNode.Listing?, folderListing: FileNode.Listing?, snapshot: FileSnapshot?)? in
                 let folder = inbox.flatMap { FileManager.default.fileExists(atPath: chosen.path) ? nil : $0 } ?? chosen
+                var text = text
+                if let source, !FileNode.samePath(source, folder) {
+                    text = FileOperations.copyingAssets(in: text, from: source) { file in
+                        FileOperations.storeAsset(copying: file, in: folder).map { FileOperations.markdownPath($0.lastPathComponent) }
+                    }
+                }
                 guard let made = FileOperations.createNote(in: folder, title: title ?? "Untitled", text: text) else { return nil }
                 return (made.url, folder, FileNode.listing(of: made.url), made.madeFolder ? FileNode.listing(of: folder) ?? FileNode.Listing(url: folder, kind: .folder) : nil,
                         FileSnapshot(of: made.url))

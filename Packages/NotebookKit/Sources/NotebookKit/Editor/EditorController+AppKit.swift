@@ -136,6 +136,12 @@ extension EditorController: NSTextViewDelegate, NSTextFieldDelegate {
         editor.selectedRange = NSRange(location: (editor.string as NSString).length, length: 0)
     }
 
+    /// Puts text in the title over its selection, as typing does, so it can be undone.
+    func insertInTitle(_ string: String) {
+        guard let editor = textView.titleField.currentEditor() as? NSTextView else { return titleText = string }
+        editor.insertText(string, replacementRange: editor.selectedRange())
+    }
+
     var isDarkAppearance: Bool {
         textView.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
     }
@@ -246,9 +252,9 @@ extension EditorController: NSTextViewDelegate, NSTextFieldDelegate {
         case #selector(NSResponder.deleteForward(_:)):
             return deleteForward()
         case #selector(NSResponder.insertTab(_:)):
-            return indent(by: 1)
+            return moveToTableCell(by: 1) || indent(by: 1)
         case #selector(NSResponder.insertBacktab(_:)):
-            return indent(by: -1)
+            return moveToTableCell(by: -1) || indent(by: -1)
         case #selector(NSResponder.moveUp(_:)):
             return moveUpIntoTitle()
         case #selector(NSResponder.moveLeft(_:)):

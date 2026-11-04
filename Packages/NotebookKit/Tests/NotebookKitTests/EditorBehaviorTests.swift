@@ -291,14 +291,177 @@ final class EditorBehaviorTests: XCTestCase {
         h.caret(h.text.utf16.count)
         h.type("\n\n| Key | Does |\n|---|---|\n| Up | Moves |")
         XCTAssertNotNil(h.editor.activeBlock, "the table being typed is open")
+        XCTAssertEqual(h.text, "Steps\n\n| Key | Does |\n|---|---|\n| Up | Moves |", "a row typed by hand replaces the empty one Return made")
         XCTAssertEqual(h.visibleText(in: h.range(of: "| Up | Moves |")), "| Up | Moves |")
-        h.type("\nmore")
+        // Return makes an empty row, and Return in it leaves the table.
+        h.type("\n\nmore")
         XCTAssertNil(h.editor.activeBlock)
         XCTAssertFalse(h.isVisible(h.range(of: "| Up").location + 2), "left, it is drawn")
-        for _ in 0..<5 { h.command(#selector(NSResponder.deleteBackward(_:))) }
+        for _ in 0..<6 { h.command(#selector(NSResponder.deleteBackward(_:))) }
         XCTAssertNotNil(h.editor.activeBlock, "back in it, it is open again")
         XCTAssertEqual(h.visibleText(in: h.range(of: "| Up | Moves |")), "| Up | Moves |", "and its source shows")
         XCTAssertEqual(h.visibleText(in: h.range(of: "| Key | Does |")), "| Key | Does |")
+    }
+
+    func testReturnInATableAddsARowInsteadOfBreakingIt() {
+        let header = "| Week | Date   | Topic  |\n| ---- | ------ | ------ |\n"
+        let empty = "|      |        |        |"
+        let tables = { (h: EditorHarness) in h.editor.document.blocks.filter { if case .table = $0.kind { true } else { false } } }
+
+        // At the end of a row in the middle of the table, as a tester did: an empty row under it, its pipes lined up
+        // with the row's, the caret in its first cell, and still one table.
+        var h = EditorHarness(header + "| 1    | 12.10. | Graphs |\n|      | 13.10. | Trees  |\n\nAfter")
+        h.caret(h.range(of: "Graphs |").upperBound)
+        h.command(#selector(NSResponder.insertNewline(_:)))
+        XCTAssertEqual(h.text, header + "| 1    | 12.10. | Graphs |\n\(empty)\n|      | 13.10. | Trees  |\n\nAfter")
+        XCTAssertEqual(h.selection.location, h.range(of: "Graphs |\n").upperBound + 2)
+        h.type("2")
+        XCTAssertEqual(tables(h).count, 1)
+        XCTAssertEqual(tables(h).first?.lines, 0...4, "the typed row is one of its rows")
+        XCTAssertNotNil(h.editor.activeBlock, "and the table stays open")
+
+        // In the middle of a cell, the same; from the header or the delimiter row, the new row goes first.
+        h = EditorHarness(header + "| 1    | 12.10. | Graphs |")
+        h.caret(h.range(of: "Graphs").location + 3)
+        h.command(#selector(NSResponder.insertNewline(_:)))
+        XCTAssertEqual(h.text, header + "| 1    | 12.10. | Graphs |\n" + empty)
+        h = EditorHarness(header + "| 1    | 12.10. | Graphs |")
+        h.caret(h.range(of: "Week").upperBound)
+        h.command(#selector(NSResponder.insertNewline(_:)))
+        XCTAssertEqual(h.text, header + empty + "\n| 1    | 12.10. | Graphs |")
+        XCTAssertEqual(h.selection.location, (header as NSString).length + 2)
+
+        // At the start of a row, the new one goes above it and the caret stays with the row; at the start of the
+        // header, a line goes in above the table.
+        h = EditorHarness(header + "| 1    | 12.10. | Graphs |")
+        h.caret((header as NSString).length)
+        h.command(#selector(NSResponder.insertNewline(_:)))
+        XCTAssertEqual(h.text, header + empty + "\n| 1    | 12.10. | Graphs |")
+        XCTAssertEqual(h.selection.location, h.range(of: "| 1 ").location)
+        h.caret(0)
+        h.command(#selector(NSResponder.insertNewline(_:)))
+        XCTAssertEqual(h.text, "\n" + header + empty + "\n| 1    | 12.10. | Graphs |")
+        XCTAssertEqual(tables(h).count, 1)
+    }
+
+    func testReturnInAnEmptyLastRowEndsTheTable() {
+        let h = EditorHarness("| A | B |\n| --- | --- |\n| one | two |\n\nAfter")
+        h.caret(h.range(of: "two |").upperBound)
+        h.command(#selector(NSResponder.insertNewline(_:)))
+        XCTAssertEqual(h.text, "| A | B |\n| --- | --- |\n| one | two |\n|     |     |\n\nAfter")
+        h.command(#selector(NSResponder.insertNewline(_:)))
+        XCTAssertEqual(h.text, "| A | B |\n| --- | --- |\n| one | two |\n\n\n\nAfter", "a blank line under the table, so other apps end it there too")
+        XCTAssertEqual(h.selection.location, h.range(of: "two |").upperBound + 2)
+        XCTAssertNil(h.editor.activeBlock)
+        h.type("Next")
+        XCTAssertEqual(h.text, "| A | B |\n| --- | --- |\n| one | two |\n\nNext\n\nAfter")
+    }
+
+    func testUndoAfterReturnInATable() {
+        let h = EditorHarness("| A | B |\n| --- | --- |\n| one | two |")
+        h.caret(h.text.utf16.count)
+        h.type("\n")
+        XCTAssertEqual(h.text, "| A | B |\n| --- | --- |\n| one | two |\n|     |     |")
+        h.textView.undoManager?.undo()
+        XCTAssertEqual(h.text, "| A | B |\n| --- | --- |\n| one | two |")
+    }
+
+    func testTabGoesFromCellToCell() {
+        let tab = #selector(NSResponder.insertTab(_:)), backtab = #selector(NSResponder.insertBacktab(_:))
+        let h = EditorHarness("| A | B |\n| --- | --- |\n| one | two |\n\nAfter")
+        h.caret(h.range(of: "A").location)
+        h.command(tab)
+        XCTAssertEqual(h.selection, h.range(of: "B"), "the next cell's text is selected")
+        h.command(tab)
+        XCTAssertEqual(h.selection, h.range(of: "one"), "past the delimiter row, into the next row")
+        h.command(tab)
+        XCTAssertEqual(h.selection, h.range(of: "two"))
+        h.command(tab)
+        XCTAssertEqual(h.text, "| A | B |\n| --- | --- |\n| one | two |\n|     |     |\n\nAfter", "past the last cell, a new row")
+        XCTAssertEqual(h.selection, NSRange(location: h.range(of: "two |\n").upperBound + 2, length: 0), "the caret in its first cell")
+        h.command(tab)
+        XCTAssertEqual(h.selection, NSRange(location: h.range(of: "two |\n").upperBound + 8, length: 0), "an empty cell gets the caret after its space")
+        h.command(tab)
+        XCTAssertEqual(h.text, "| A | B |\n| --- | --- |\n| one | two |\n|     |     |\n|     |     |\n\nAfter", "an empty row doesn't end the table")
+
+        h.command(backtab)
+        h.command(backtab)
+        h.command(backtab)
+        XCTAssertEqual(h.selection, h.range(of: "two"), "⇧Tab goes back, row by row")
+        for _ in 0..<3 { h.command(backtab) }
+        XCTAssertEqual(h.selection, h.range(of: "A"))
+        h.command(backtab)
+        XCTAssertEqual(h.selection, h.range(of: "A"), "and stays in the first cell")
+        XCTAssertFalse(h.text.contains("\t"), "no tab typed")
+
+        // From the delimiter row: on into the first row, or back to the header's last cell.
+        h.caret(h.range(of: "| --- |").location + 3)
+        h.command(tab)
+        XCTAssertEqual(h.selection, h.range(of: "one"))
+        h.caret(h.range(of: "| --- |").location + 3)
+        h.command(backtab)
+        XCTAssertEqual(h.selection, h.range(of: "B"))
+
+        // Outside a table, Tab still nests list items.
+        let list = EditorHarness("- One\n- Two")
+        list.caret(list.range(of: "Two").location)
+        list.command(tab)
+        XCTAssertEqual(list.text, "- One\n  - Two")
+    }
+
+    func testReturnAfterATypedHeaderStartsTheTable() {
+        let h = EditorHarness("Rooms\n\n| Day | Area |")
+        h.caret(h.text.utf16.count)
+        h.command(#selector(NSResponder.insertNewline(_:)))
+        XCTAssertEqual(h.text, "Rooms\n\n| Day | Area |\n| --- | ---- |\n|     |      |", "the delimiter row as wide as the cells, and an empty row")
+        XCTAssertEqual(h.selection.location, h.range(of: "|     |").location + 2)
+        XCTAssertNotNil(h.editor.activeBlock, "a table, open")
+        h.type("Mon")
+        h.command(#selector(NSResponder.insertTab(_:)))
+        h.type("Kitchen")
+        XCTAssertEqual(h.text, "Rooms\n\n| Day | Area |\n| --- | ---- |\n| Mon    | Kitchen     |")
+        h.command(#selector(NSResponder.insertTab(_:)))
+        XCTAssertEqual(h.text, "Rooms\n\n| Day | Area |\n| --- | ---- |\n| Mon    | Kitchen     |\n|     |      |",
+                       "a new row lines up with the delimiter row, not with the row typed in above it")
+
+        // Compact cells get three dashes, an empty one too.
+        let compact = EditorHarness("|a|b||")
+        compact.caret(compact.text.utf16.count)
+        compact.command(#selector(NSResponder.insertNewline(_:)))
+        XCTAssertEqual(compact.text, "|a|b||\n|---|---| --- |\n| | ||")
+
+        // Not for a single cell, a line that doesn't end in a pipe, or with a line right under it.
+        for (text, caret) in [("| Name |", 8), ("a | b", 5), ("| a | b |\nmore", 9), ("| a | b \\|", 10)] {
+            let other = EditorHarness(text)
+            other.caret(caret)
+            other.command(#selector(NSResponder.insertNewline(_:)))
+            XCTAssertFalse(other.text.contains("---"), text)
+        }
+    }
+
+    func testADelimiterRowTypedByHandTakesThePlaceOfTheOneReturnMade() {
+        let h = EditorHarness("| Key | Does |")
+        h.caret(h.text.utf16.count)
+        h.type("\n|:--|--:|\n| Up | Moves |")
+        XCTAssertEqual(h.text, "| Key | Does |\n|:--|--:|\n| Up | Moves |", "as typed, alignment kept")
+        guard case .table(let alignments) = h.editor.document.blocks.first?.kind else { return XCTFail("no table") }
+        XCTAssertEqual(alignments, [.leading, .trailing])
+    }
+
+    func testReturnInATableRowWithOtherCellsOrNoOuterPipes() {
+        // A row with fewer cells than the table makes a row with all of them, from the delimiter row.
+        var h = EditorHarness("| A | B | C |\n|---|:-:|---|\n| one |")
+        h.caret(h.text.utf16.count)
+        h.command(#selector(NSResponder.insertNewline(_:)))
+        XCTAssertEqual(h.text, "| A | B | C |\n|---|:-:|---|\n| one |\n|   |   |   |")
+        XCTAssertEqual(h.selection.location, h.text.utf16.count - 12, "after the opening pipe")
+
+        // Without pipes at the ends, the caret goes to the start of the new row.
+        h = EditorHarness("A | B\n--|--\n1 | 2")
+        h.caret(h.text.utf16.count)
+        h.command(#selector(NSResponder.insertNewline(_:)))
+        XCTAssertEqual(h.text, "A | B\n--|--\n1 | 2\n  |  ")
+        XCTAssertEqual(h.selection.location, h.text.utf16.count - 5)
     }
 
     func testABlockAtTheEndKeepsItsBoxAndRoom() {

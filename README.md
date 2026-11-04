@@ -172,9 +172,11 @@ any PDF does, its writing as sharp as the page, and the pencil writes on it ther
 ### Tables, diagrams, code and maths
 
 Tables are drawn as tables, Mermaid diagrams as diagrams (natively, without a web view), code with highlighting for
-about forty languages, and LaTeX maths as typeset formulas. Click into one and its source appears, with a live
-preview for diagrams and formulas. Point at a code block and a button in its corner copies the code. Callouts in
-GitHub's and Obsidian's `> [!note]` style get their colour and symbol.
+about forty languages, and LaTeX maths as typeset formulas. Click into one and its source appears, with a live preview
+for diagrams and formulas. Tables grow as you type them: Return after a first row like `| Day | Area |` puts the
+`| --- |` row under it, Tab goes from cell to cell and makes a new row after the last, Return makes a new row under
+the one you're in, and Return in an empty last row leaves the table. Point at a code block and a button in its corner
+copies the code. Callouts in GitHub's and Obsidian's `> [!note]` style get their colour and symbol.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/blocks-dark.webp">
@@ -523,6 +525,10 @@ screens.
   to them where they are; from anywhere else, as copies next to the note.
 - **Copy a whole file,** as ⌘C does in the Finder: Copy in the sidebar's menu, or ⇧⌘C for the file that's open, any
   kind of file. Paste it in the Finder, Mail, Messages or a note.
+- **Paste a whole note.** Paste a Markdown file's contents into a new note and its `# Heading` becomes the title, the
+  rest the text; a note you've named keeps its name, and the heading is left out. Pasted into the title, the first line
+  is the title and the rest goes into the note. On the Mac, ⌘V in the sidebar makes the text a new note in the selected
+  folder, named the same way, and copies copied files there, as the Finder does.
 - **Drawings in notes,** with PencilKit: Apple Pencil, a finger, the mouse, the trackpad or a tablet. Each is a PNG
   that other apps show, with its strokes kept next to it so it stays a drawing in Notebook.
 - **Handwritten notes** on iPhone and iPad: PDFs of blank, lined, squared, dotted or Cornell paper to write in with
@@ -738,6 +744,7 @@ exported it rather than when you wrote it.
 | ⇧⌘N | New folder in the current folder, named in place |
 | ⌘D | Duplicate the note |
 | ⇧⌘C | Copy the file itself, to paste in the Finder, Mail or a note: the open one, or in the sidebar the one selected (⌘C there too) |
+| ⌘V in the sidebar | Paste in the selected folder, or the selected file's: copied files as copies, copied text as a new note named by its `# Heading` |
 | ⌘Z, ⇧⌘Z | Undo and redo: typing, and changes to files (the Trash, a rename, a move, a new note or folder), newest first |
 | ⌘F, ⇧⌘F | Find in the note, find and replace; ⌘G and ⇧⌘G for the next and previous |
 | ⌥⌘F | Search every note, as Notes searches its list |
@@ -778,6 +785,9 @@ While writing:
 | `##` and then text, or `##` in front of a line | The space a heading needs goes in for you |
 | `**` (also `~~`, `==`) | The closing pair comes along, the caret between; a space next makes them plain stars |
 | Return on a heading | At its start: a line above it; on one without text: back to body text |
+| Return in a table | A new empty row under the caret's, the caret in its first cell; at the start of a row: one above it; in an empty last row: out of the table |
+| Return after `\| Day \| Area \|` | A table: the `\| --- \|` row under it and an empty row |
+| Tab, ⇧Tab in a table | The next or previous cell, its text selected; Tab in the last cell: a new row |
 | `[[` | Suggestions for a link; ↑↓ and Return or Tab to pick |
 | Space on a selected picture | Quick Look |
 | Drag a picture or file in a note | Move it to another line; ⌥ drops a copy. Into another note, the sidebar, the Finder or another app: a copy |
@@ -864,8 +874,9 @@ Planned, and not built yet:
 - **Versions of a note renamed or moved outside Notebook,** in the Finder or another app, don't follow it: they go to
   the History's Trash, and come back only if it gets its old name again (#148).
 - On iPhone and iPad there is no Settings › App Icon (iOS only switches between icons built into the app), no PNG
-  export and no window of its own for a single file. Quick Look in the Files app still shows a note's Markdown: iOS 27
-  shows Markdown files as plain text without asking other apps, so Notebook's Quick Look is on the Mac for now.
+  export, no window of its own for a single file and no Paste into a folder in the list (#298). Quick Look in the Files
+  app still shows a note's Markdown: iOS 27 shows Markdown files as plain text without asking other apps, so
+  Notebook's Quick Look is on the Mac for now.
 - **Sketches** as files of their own, next to your notes rather than in one.
 - **Handwritten notes on the Mac:** you write on their pages there as on any PDF, but new handwritten notes, new pages,
   pictures on pages and All Pages are on iPhone and iPad only. Text boxes and shapes aren't offered: the PDF couldn't

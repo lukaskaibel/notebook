@@ -12,6 +12,8 @@ final class EditorHarness: NSObject, EditorControllerDelegate {
     /// The lines of the to-dos whose Remind Me was asked for.
     var todoReminders: [Int] = []
     var notes: [String: URL] = [:]
+    /// The names the title gave the note, as it was left or set.
+    var committedTitles: [String] = []
 
     init(_ text: String, width: CGFloat = 900, height: CGFloat = 900, dark: Bool = false) {
         _ = NSApplication.shared
@@ -159,7 +161,7 @@ final class EditorHarness: NSObject, EditorControllerDelegate {
     func editorTextDidChange(_ editor: EditorController) {}
     func editor(_ editor: EditorController, open target: LinkTarget.Kind) { opened.append(target) }
     func editor(_ editor: EditorController, quickLook url: URL) {}
-    func editor(_ editor: EditorController, commitTitle title: String) {}
+    func editor(_ editor: EditorController, commitTitle title: String) { committedTitles.append(title) }
     func editor(_ editor: EditorController, suggestionsFor query: String) -> [LinkSuggestion] {
         let names = ["Budget", "Kyoto trip", "Recipes"]
         var items = names.filter { query.isEmpty || $0.localizedCaseInsensitiveContains(query) }.map { LinkSuggestion(kind: .note, title: $0, detail: "Travel", insert: $0) }

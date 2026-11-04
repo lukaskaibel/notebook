@@ -154,6 +154,13 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         field.selectedTextRange = field.textRange(from: field.endOfDocument, to: field.endOfDocument)
     }
 
+    /// Puts text in the title over its selection, as typing does, so it can be undone.
+    func insertInTitle(_ string: String) {
+        let field = textView.titleField
+        guard let range = field.selectedTextRange else { return titleText = string }
+        field.replace(range, withText: string)
+    }
+
     /// The editor is about to move to another screen: leaving the window takes the keyboard away, and with it
     /// comes back on the new screen.
     func beginMove() {
@@ -288,7 +295,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
             return !deleteBackward()
         }
         if text == "\t", range == selection {
-            return !indent(by: 1)
+            return !(moveToTableCell(by: 1) || indent(by: 1))
         }
         return shouldInsert(text, in: range)
     }
