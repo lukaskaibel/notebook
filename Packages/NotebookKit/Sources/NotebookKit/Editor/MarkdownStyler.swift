@@ -10,6 +10,9 @@ struct StyleEnvironment {
     var folder: URL?
     /// The file a `[[link]]` goes to, if there is one.
     var resolve: (String) -> URL? = { _ in nil }
+    /// For Quick Look while it can't read the note's folder, as on iPhone and iPad: a `[[link]]` it can't find there may
+    /// well be there, and shows as a link rather than as a note still to be made.
+    var linksOutOfReach = false
     /// The block the caret is in: tables, math, diagrams and frontmatter show their Markdown then.
     var activeBlock: Int?
     /// Where a link being typed starts (after its `[[`): it shows as text until it is finished.
@@ -607,11 +610,11 @@ enum MarkdownStyler {
                     markers(s, span)
                     continue
                 }
-                let resolved = env.resolve(target) != nil
+                let resolved = env.linksOutOfReach || env.resolve(target) != nil
                 chip(s, span: span, icon: resolved ? .note : .missing, resolved: resolved)
                 s.addAttribute(.notebookLink, value: LinkTarget(.note(target)), range: span.range)
             case .embed(let target):
-                let resolved = env.resolve(target) != nil
+                let resolved = env.linksOutOfReach || env.resolve(target) != nil
                 chip(s, span: span, icon: resolved ? .embed : .missing, resolved: resolved)
                 s.addAttribute(.notebookLink, value: LinkTarget(.note(target)), range: span.range)
             case .math(let tex):

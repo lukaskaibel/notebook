@@ -50,14 +50,7 @@ public enum NoteExporter {
     private static func draw(_ copy: Copy, title: String, width: CGFloat) -> Data? {
         let layoutManager = copy.editor.layoutManager
         let container = copy.editor.container
-        // A picture or diagram that came in while the copy waited set its lines again, at the screen's size.
-        copy.editor.restyle(lines: Array(copy.editor.document.lines.indices))
-        layoutManager.invalidateLayout(forCharacterRange: NSRange(location: 0, length: copy.editor.storage.length), actualCharacterRange: nil)
-        layoutManager.ensureLayout(for: container)
-
-        let titleFont = EditorStyle.face(26, weight: .bold)
-        let titleText = NSAttributedString(string: title.isEmpty ? "Untitled" : title, attributes: [.font: titleFont, .foregroundColor: Theme.text])
-        let titleHeight = ceil(titleText.boundingRect(with: CGSize(width: width, height: 400), options: [.usesLineFragmentOrigin], context: nil).height) + 18
+        let heading = settle(copy, title: title, width: width)
 
         // Pages end between lines: never in the middle of one, of a picture or of a table.
         var pages: [(top: CGFloat, bottom: CGFloat)] = []
@@ -65,7 +58,7 @@ public enum NoteExporter {
         var bottom: CGFloat = 0
         let glyphs = layoutManager.glyphRange(for: container)
         layoutManager.enumerateLineFragments(forGlyphRange: glyphs) { rect, _, _, _, _ in
-            let available = paper.height - margin * 2 - (pages.isEmpty ? titleHeight : 0)
+            let available = paper.height - margin * 2 - (pages.isEmpty ? heading.height : 0)
             if rect.maxY - top > available, rect.minY > top {
                 pages.append((top, bottom))
                 top = rect.minY
@@ -84,24 +77,64 @@ public enum NoteExporter {
             data = renderer.pdfData { context in
                 for (index, page) in pages.enumerated() {
                     context.beginPage()
-                    var y = margin
-                    if index == 0 {
-                        titleText.draw(with: CGRect(x: margin, y: y, width: width, height: titleHeight), options: [.usesLineFragmentOrigin], context: nil)
-                        y += titleHeight
-                    }
-                    let height = page.bottom - page.top
-                    let cg = context.cgContext
-                    cg.saveGState()
-                    cg.clip(to: CGRect(x: margin - 4, y: y, width: width + 8, height: height))
-                    let origin = CGPoint(x: margin, y: y - page.top)
-                    let range = layoutManager.glyphRange(forBoundingRect: CGRect(x: 0, y: page.top, width: width, height: height), in: container)
-                    layoutManager.drawBackground(forGlyphRange: range, at: origin)
-                    layoutManager.drawGlyphs(forGlyphRange: range, at: origin)
-                    cg.restoreGState()
+                    drawPage(copy, title: index == 0 ? heading : nil, lines: page.top..<page.bottom, width: width, in: context.cgContext)
                 }
             }
         }
         return data
+    }
+
+    /// The top of the note on a page `size` points big, `scale` pixels to the point: its PDF's first page, cut off where
+    /// the page ends, on white. For thumbnails (NoteThumbnail).
+    static func top(of editor: EditorController, title: String, size: CGSize, scale: CGFloat) async -> (image: CGImage, copy: Copy)? {
+        let width = paper.width - margin * 2
+        let copy = await layOut(editor, width: width)
+        let page = CGSize(width: paper.width, height: (paper.width * size.height / size.width).rounded())
+        let format = UIGraphicsImageRendererFormat()
+        // The page's points on the picture's pixels: the page drawn smaller.
+        format.scale = size.width * scale / page.width
+        format.opaque = true
+        var image: CGImage?
+        EditorStyle.unscaled {
+            let heading = settle(copy, title: title, width: width)
+            UITraitCollection(userInterfaceStyle: .light).performAsCurrent {
+                image = UIGraphicsImageRenderer(size: page, format: format).image { context in
+                    Theme.panel.setFill()
+                    context.fill(CGRect(origin: .zero, size: page))
+                    drawPage(copy, title: heading, lines: 0..<page.height, width: width, in: context.cgContext)
+                }.cgImage
+            }
+        }
+        return image.map { ($0, copy) }
+    }
+
+    /// The copy laid out again at the size Settings › Text gives, and its title as it goes on top of the first page.
+    private static func settle(_ copy: Copy, title: String, width: CGFloat) -> (text: NSAttributedString, height: CGFloat) {
+        // A picture or diagram that came in while the copy waited set its lines again, at the screen's size.
+        copy.editor.restyle(lines: Array(copy.editor.document.lines.indices))
+        copy.editor.layoutManager.invalidateLayout(forCharacterRange: NSRange(location: 0, length: copy.editor.storage.length), actualCharacterRange: nil)
+        copy.editor.layoutManager.ensureLayout(for: copy.editor.container)
+        let titleFont = EditorStyle.face(26, weight: .bold)
+        let text = NSAttributedString(string: title.isEmpty ? "Untitled" : title, attributes: [.font: titleFont, .foregroundColor: Theme.text])
+        return (text, ceil(text.boundingRect(with: CGSize(width: width, height: 400), options: [.usesLineFragmentOrigin], context: nil).height) + 18)
+    }
+
+    /// A page: the title on the first, then the copy's `lines` (from the top of its text), inside the margins.
+    private static func drawPage(_ copy: Copy, title: (text: NSAttributedString, height: CGFloat)?, lines: Range<CGFloat>, width: CGFloat, in cg: CGContext) {
+        var y = margin
+        if let title {
+            title.text.draw(with: CGRect(x: margin, y: y, width: width, height: title.height), options: [.usesLineFragmentOrigin], context: nil)
+            y += title.height
+        }
+        let height = lines.upperBound - lines.lowerBound
+        let layoutManager = copy.editor.layoutManager
+        cg.saveGState()
+        cg.clip(to: CGRect(x: margin - 4, y: y, width: width + 8, height: height))
+        let origin = CGPoint(x: margin, y: y - lines.lowerBound)
+        let range = layoutManager.glyphRange(forBoundingRect: CGRect(x: 0, y: lines.lowerBound, width: width, height: height), in: copy.editor.container)
+        layoutManager.drawBackground(forGlyphRange: range, at: origin)
+        layoutManager.drawGlyphs(forGlyphRange: range, at: origin)
+        cg.restoreGState()
     }
 
     /// Links resolve as in the note; nothing else the copy does reaches the app.
@@ -131,6 +164,7 @@ public enum NoteExporter {
     static func layOut(_ editor: EditorController, width: CGFloat) async -> Copy {
         let copy = EditorController()
         copy.layoutManager.hidesEditingControls = true
+        copy.layoutManager.picturesOutOfReach = editor.layoutManager.picturesOutOfReach
         let delegate = ResolvingDelegate(source: editor)
         copy.delegate = delegate
         copy.textView.overrideUserInterfaceStyle = .light

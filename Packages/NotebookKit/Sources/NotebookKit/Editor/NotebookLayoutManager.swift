@@ -15,6 +15,8 @@ protocol EditorLayoutSource: AnyObject {
     /// Something changed size (a diagram finished drawing): lay it out again.
     func objectNeedsLayout(_ range: NSRange)
     func noteText(for url: URL) -> String?
+    /// Quick Look without the note's folder: nothing next to the note is read, and it shows by its name.
+    var isFolderOutOfReach: Bool { get }
     /// A drawing is open in a canvas over the text, which draws it.
     func showsCanvas(for picture: URL) -> Bool
 }
@@ -32,6 +34,9 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
     /// For Quick Look, which may read the note but not the pictures next to it: a picture it can't read is out of
     /// reach rather than missing, and shows by its name.
     var picturesOutOfReach = false
+    /// Quick Look without the note's folder (`EditorLayoutSource.isFolderOutOfReach`): the pictures, files and notes the
+    /// note shows are drawn by their names and kinds, without reading them.
+    private var filesOutOfReach: Bool { source?.isFolderOutOfReach ?? false }
     /// Where the code block with the copy button over it starts: its language label makes way for the button.
     var copyButtonBlock: Int?
     /// Show Changes in Version History: what was added since an earlier version and what was taken out, marked in it.
@@ -188,7 +193,7 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
         case .chipTrail:
             return NSRect(x: 0, y: 0, width: 6, height: 4)
         case .image(let url, _, let inline):
-            let size = url.flatMap { ImageStore.shared.size(of: $0) }
+            let size = filesOutOfReach ? nil : url.flatMap { ImageStore.shared.size(of: $0) }
             if inline {
                 guard let size else { return NSRect(x: 0, y: font.descender, width: font.pointSize * 1.4, height: font.pointSize * 1.4) }
                 let height = min(size.height, font.pointSize * 1.4)
@@ -201,7 +206,7 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
             return NSRect(x: 0, y: 0, width: floor(display.width), height: floor(display.height))
         case .drawing(let url):
             // As wide as the text, wherever it was drawn; as tall as that makes it.
-            let known = DrawingStore.shared.size(of: url) ?? ImageStore.shared.size(of: url)
+            let known = filesOutOfReach ? nil : DrawingStore.shared.size(of: url) ?? ImageStore.shared.size(of: url)
             if known == nil, picturesOutOfReach { return NSRect(x: 0, y: 0, width: min(width, 420), height: 64) }
             let size = known ?? CGSize(width: width, height: width / 2)
             return NSRect(x: 0, y: 0, width: floor(width), height: max(24, (size.height * floor(width) / max(1, size.width)).rounded()))
@@ -479,7 +484,7 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
             drawImage(url: url, source: source, range: objectRange, in: rect, radius: inline ? 3 : 8)
 
         case .drawing(let url):
-            if picturesOutOfReach, DrawingStore.shared.size(of: url) == nil, ImageStore.shared.size(of: url) == nil {
+            if filesOutOfReach || picturesOutOfReach && DrawingStore.shared.size(of: url) == nil && ImageStore.shared.size(of: url) == nil {
                 drawPlaceholder(url.lastPathComponent, symbol: "pencil.tip.crop.circle", in: rect)
                 break
             }
@@ -573,8 +578,8 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
     }
 
     private func drawImage(url: URL?, source: String, range: NSRange, in rect: NSRect, radius: CGFloat) {
-        guard let url, ImageStore.shared.size(of: url) != nil else {
-            let name = (source as NSString).lastPathComponent
+        guard let url, !filesOutOfReach, ImageStore.shared.size(of: url) != nil else {
+            let name = ((source.removingPercentEncoding ?? source) as NSString).lastPathComponent
             drawPlaceholder(url == nil && source.hasPrefix("http") ? source : picturesOutOfReach ? name : "Picture not found: \(name)", symbol: "photo", in: rect)
             return
         }
@@ -598,7 +603,7 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
         card.lineWidth = 1
         card.stroke()
         let thumbRect = NSRect(x: rect.minX + 10, y: rect.minY + 8, width: 40, height: rect.height - 16)
-        if let url, let thumb = ThumbnailStore.shared.thumbnail(for: url, size: CGSize(width: 80, height: 104), ready: { [weak self] in self?.source?.objectNeedsDisplay(range) }) {
+        if let url, !filesOutOfReach, let thumb = ThumbnailStore.shared.thumbnail(for: url, size: CGSize(width: 80, height: 104), ready: { [weak self] in self?.source?.objectNeedsDisplay(range) }) {
             var size = thumb.size
             let scale = min(thumbRect.width / size.width, thumbRect.height / size.height)
             size = CGSize(width: size.width * scale, height: size.height * scale)
@@ -624,7 +629,7 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
         Theme.control.setFill()
         NSBezierPath(roundedRect: badge, xRadius: 5, yRadius: 5).fill()
         badgeText.draw(at: CGPoint(x: badge.minX + 6, y: badge.midY - badgeSize.height / 2))
-        let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+        let values = filesOutOfReach ? nil : try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
         var details: [String] = []
         if let size = values?.fileSize { details.append(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)) }
         if let date = values?.contentModificationDate { details.append(date.formatted(date: .abbreviated, time: .omitted)) }
@@ -639,15 +644,17 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
         Theme.cardBorder.setStroke()
         card.lineWidth = 1
         card.stroke()
-        drawSymbol(url == nil ? "doc.badge.plus" : "doc.text", size: 13, color: url == nil ? Theme.textTertiary : Theme.accent, center: CGPoint(x: rect.minX + 22, y: rect.minY + 22))
-        NSAttributedString(string: url?.deletingPathExtension().lastPathComponent ?? target, attributes: [.font: NSFont.systemFont(ofSize: 14, weight: .semibold), .foregroundColor: url == nil ? Theme.textTertiary : Theme.text])
+        // Out of reach, what it embeds may well be there, as its link would show: by its name.
+        let missing = url == nil && !filesOutOfReach
+        drawSymbol(missing ? "doc.badge.plus" : "doc.text", size: 13, color: missing ? Theme.textTertiary : Theme.accent, center: CGPoint(x: rect.minX + 22, y: rect.minY + 22))
+        NSAttributedString(string: url?.deletingPathExtension().lastPathComponent ?? target, attributes: [.font: NSFont.systemFont(ofSize: 14, weight: .semibold), .foregroundColor: missing ? Theme.textTertiary : Theme.text])
             .draw(with: NSRect(x: rect.minX + 36, y: rect.minY + 13, width: rect.width - 52, height: 20), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], context: nil)
-        var excerpt = url == nil ? "This note doesn't exist yet. Click to create it." : ""
-        if let url, let text = source?.noteText(for: url), NoteSyntax(url: url) == .asciidoc {
+        var excerpt = missing ? "This note doesn't exist yet. Click to create it." : ""
+        if let url, !filesOutOfReach, let text = source?.noteText(for: url), NoteSyntax(url: url) == .asciidoc {
             // AsciiDoc's markup would read badly, as the Markdown left in below doesn't: its first lines as plain text.
             excerpt = NotePoints.beginning(of: text, title: url.deletingPathExtension().lastPathComponent, maximumLength: 240, syntax: .asciidoc)
                 .replacingOccurrences(of: "\n", with: "  ")
-        } else if let url, let text = source?.noteText(for: url) {
+        } else if let url, !filesOutOfReach, let text = source?.noteText(for: url) {
             let lines = text.split(separator: "\n", omittingEmptySubsequences: true).prefix(4).map { line -> String in
                 var line = String(line)
                 while line.hasPrefix("#") || line.hasPrefix(">") || line.hasPrefix("- ") { line = String(line.drop(while: { "#>- ".contains($0) })) }

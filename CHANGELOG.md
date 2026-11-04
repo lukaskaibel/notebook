@@ -24,6 +24,15 @@ versions follow [semantic versioning](https://semver.org).
   such as Documents or Downloads, the Mac first asks whether Notebook may read it; the note shows meanwhile and its
   pictures follow once you allow it. A tip at the bottom of the sidebar shows the way, with a button to Quick Look's
   settings, where another app that previews Markdown can be turned off.
+- Quick Look on iPhone and iPad shows a note as Notebook does too: tap a note in the Files app, or one attached in
+  another app that shows files with Quick Look, and you see its headings, to-dos, tables and maths in your typeface
+  and size instead of its Markdown. iOS lets Quick Look read only the note itself, so its pictures show by their
+  names, and links show as links. Seen working on iOS 27.2; earlier versions of iOS 27 may still show the Markdown.
+- Notes have thumbnails as Notebook shows them: the Finder's icon and gallery views, Open panels and the Files app on
+  iPhone and iPad show the top of a note with its title, headings, to-dos, tables and maths, on a white page like other
+  documents, instead of a page of Markdown. They are set in the typeface and size chosen in Settings › Text. Only the
+  note itself is read, so browsing Documents or Downloads never makes the Mac ask whether Notebook may read them;
+  pictures and attached files show by their names.
 - Tables grow as you type them. Type a first row like `| Day | Area |` and press Return: the `| --- | --- |` row goes
   in under it, with an empty row and the caret in its first cell. Tab goes to the next cell with its text selected,
   ⇧Tab to the one before, and Tab in the last cell makes a new row. A `| --- |` row you type yourself, with its `:` for
@@ -45,6 +54,9 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- On iPhone and iPad, a Nextcloud folder chosen with Add Location showed in the sidebar but stayed empty. Nextcloud
+  gives other apps only single files, not its folders, so Notebook can't show what's in them; it now says so instead of
+  adding the folder. A folder like this added before is pointed out once, with how to remove it.
 - Pictures that only a note with the `.markdown` extension shows are no longer taken for unused and put in the Trash
   when another note in its folder lets go of them.
 

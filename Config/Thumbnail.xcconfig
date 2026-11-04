@@ -1,0 +1,19 @@
+// The thumbnail extension: the top of a note as Notebook shows it, for the Finder's icon and gallery views, Open panels
+// and the Files app on iPhone and iPad (which asks it for Markdown even in the iOS 27.0 Simulator). It is built with the
+// app and goes inside it, on the Mac, iPhone and iPad, and carries its own copy of the editor, about 30 MB.
+// It draws notes with the app's editor (NoteThumbnail in NotebookKit) and the app's accent colour (its Assets.xcassets).
+#include "Shared.xcconfig"
+
+PRODUCT_BUNDLE_IDENTIFIER = $(NOTEBOOK_BUNDLE_IDENTIFIER).Thumbnail
+
+// On the Mac every extension runs in the sandbox, in every build. Quick Look lets it read the note it draws, and
+// nothing else: unlike the Quick Look extension it has no exception for the home folder, as the Finder asks for
+// thumbnails as you browse, and reading next to a note in Documents or Downloads would make the Mac ask whether Notebook
+// may. The App Group, wherever the app has it (Shared.xcconfig), brings the typeface and heading marks set in the app.
+NOTEBOOK_THUMBNAIL_MAC_ENTITLEMENTS = Config/Extension-macOS.entitlements
+NOTEBOOK_THUMBNAIL_MAC_ENTITLEMENTS[config=AppStore] = Config/AppGroup-macOS.entitlements
+CODE_SIGN_ENTITLEMENTS[sdk=macosx*] = $(NOTEBOOK_THUMBNAIL_MAC_ENTITLEMENTS)
+NOTEBOOK_THUMBNAIL_IOS_ENTITLEMENTS =
+NOTEBOOK_THUMBNAIL_IOS_ENTITLEMENTS[sdk=iphonesimulator*] = Config/AppGroup.entitlements
+NOTEBOOK_THUMBNAIL_IOS_ENTITLEMENTS[config=AppStore] = Config/AppGroup.entitlements
+CODE_SIGN_ENTITLEMENTS[sdk=iphone*] = $(NOTEBOOK_THUMBNAIL_IOS_ENTITLEMENTS)

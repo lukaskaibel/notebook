@@ -444,8 +444,9 @@ each shown in itself), the size, the line spacing and the line width; on iPhone 
 notes larger or smaller on top of that, as it does the text of other apps (not in a PDF or printout). The icon is a leather notebook, and Settings › App Icon makes it yours:
 pick the leather, the elastic band, the ribbon and the background, and the Dock shows your notebook while the app is
 open. Links, the caret, folders and the icons of files are in ink blue to go with it, or in the accent colour you chose
-in System Settings. Press Space on a note in the Finder and Quick Look shows it in the same look, with its title on
-top.
+in System Settings. Press Space on a note in the Finder, or tap one in the Files app on an iPhone or iPad, and Quick
+Look shows it in the same look, with its title on top. The icons of notes in the Finder and the Files app show the top
+of each note that way too.
 
 ### On iPhone and iPad
 
@@ -571,7 +572,13 @@ screens.
 - **Quick Look** shows a note as Notebook does, not its Markdown, in the typeface and size you chose: press Space on it
   in the Finder, or look at it in the Finder's column view or Get Info. Its pictures and drawings come too; in a folder
   the Mac guards, such as Documents or Downloads, the Mac first asks whether Notebook may read it. If another app's
-  preview comes up, turn it off in System Settings › General › Login Items & Extensions › Quick Look.
+  preview comes up, turn it off in System Settings › General › Login Items & Extensions › Quick Look. On iPhone and
+  iPad, tap a note in the Files app, or one attached in another app that shows files with Quick Look. iOS lets Quick
+  Look read only the note itself, so its pictures show by their names there.
+- **Thumbnails** of notes in the Finder's icon and gallery views, in Open panels and in the Files app on iPhone and
+  iPad: the top of the note as Notebook shows it, on a white page. Only the note is read for them, never what is next to
+  it, so browsing a folder never makes the Mac ask; pictures show by their names. The Mac picks up a new thumbnail
+  extension when you next log in.
 - **Saves as you type,** and never overwrites a change made somewhere else (see below).
 - **Version history.** Earlier versions of every note, kept as you write and for a year, with what changed since each
   one marked: File › Revert To on the Mac, Version History in the ⋯ menu on iPhone and iPad. Restore is one change
@@ -723,7 +730,8 @@ there are.
 On iPhone and iPad, **Choose a Folder** opens the Files app's picker: pick iCloud Drive itself to have everything you
 write on the Mac, or any folder in it or on the device. **Keep Notes on This iPhone** (or iPad) uses Notebook's own
 folder, which the Files app shows under On My iPhone › Notebook and Notebook calls On My iPhone. Add more in Settings,
-from the ⋯ menu.
+from the ⋯ menu. Folders of other apps in the picker work when the app gives other apps its folders; some, such as
+Nextcloud, give only single files, and Notebook says so instead of adding a folder that would stay empty.
 
 To look around without your own notes, choose **Try Sample Notes…** on the first screen. It writes made-up notes, a
 drawing, pictures and PDFs to a new folder Sample Notes, in the folder you pick on the Mac and in Notebook's own folder
@@ -904,9 +912,9 @@ Planned, and not built yet:
 - **Versions of a note renamed or moved outside Notebook,** in the Finder or another app, don't follow it: they go to
   the History's Trash, and come back only if it gets its old name again (#148).
 - On iPhone and iPad there is no Settings › App Icon (iOS only switches between icons built into the app), no PNG
-  export, no window of its own for a single file and no Paste into a folder in the list (#298). Quick Look in the Files
-  app still shows a note's Markdown: iOS 27 shows Markdown files as plain text without asking other apps, so
-  Notebook's Quick Look is on the Mac for now.
+  export, no window of its own for a single file and no Paste into a folder in the list (#298). Quick Look there shows
+  a note's pictures by their names, as iOS lets it read only the note, and before iOS 27.2 it may show the note's
+  Markdown instead.
 - **Sketches** as files of their own, next to your notes rather than in one.
 - **Handwritten notes on the Mac:** you write on their pages there as on any PDF, but new handwritten notes, new pages,
   pictures on pages and All Pages are on iPhone and iPad only. Text boxes and shapes aren't offered: the PDF couldn't
@@ -924,6 +932,7 @@ Notebook/                    The app target (Mac, iPhone and iPad): the entry po
 NotebookWidgets/             The widgets' extension: New Note (widget and control), Today and Note
 NotebookShare/               The share extension: the sheet, and what it leaves for the app to write
 NotebookQuickLook/           The Quick Look extension: a note as Notebook shows it (UI/NotePreview.swift), read only
+NotebookThumbnail/           The thumbnail extension: the top of a note for the Finder's icons (UI/NoteThumbnail.swift)
 NotebookUITests/             UI tests on iPhone and iPad simulators, for what only a real keyboard or touch reaches
 Packages/NotebookKit/
   Sources/NotebookCapture/   What the extensions share with the app: the New Note intent, the notes shared to it, and

@@ -17,6 +17,7 @@ on:
       - NotebookWidgets/**
       - NotebookShare/**
       - NotebookQuickLook/**
+      - NotebookThumbnail/**
       - Notebook.xcodeproj/**
       - Packages/**
       - Config/**

@@ -62,6 +62,8 @@ public final class Workspace: NSObject {
     @ObservationIgnored var reportsWaiting: [() -> Void] = []
     @ObservationIgnored var reportsObservers: [NSObjectProtocol] = []
     #endif
+    /// Locations found to be files, told about once a launch (`LocationSurvey.isFile`).
+    @ObservationIgnored private var reportedFiles: Set<UUID> = []
     /// The last change to a to-do's file, which the next waits for, and what to-dos' lines became (`current(_:)`).
     @ObservationIgnored var lastTodoWrite: Task<Void, Never>?
     @ObservationIgnored var todoWritesPending = 0
@@ -521,6 +523,7 @@ public final class Workspace: NSObject {
                 reloadsAll = true
             }
             locations[index].linked = survey.linked
+            if survey.isFile, reportedFiles.insert(survey.id).inserted { reportNoFolder(locations[index].name, isLocation: true) }
             guard let root = roots[survey.id] else { continue }
             root.linked = survey.linked
             if let top = survey.top, root.apply(top) { changed.append(root) }
@@ -586,6 +589,41 @@ public final class Workspace: NSObject {
         // At the end of a long sidebar it would be out of sight: once its files show, it scrolls into view.
         reveal(url, select: false)
         #endif
+    }
+
+    /// A folder chosen in the Files app's folder picker, added once it is known to be a folder on disk. One from an app
+    /// that gives other apps no folders (`Location.found`) would show as a folder that stays empty: it isn't added, and
+    /// an alert says why. Looked at off the main thread, as a file provider can take a moment; `done` says whether it
+    /// was added, for tests.
+    func addChosenFolder(_ url: URL, then done: ((Bool) -> Void)? = nil) {
+        Task {
+            let found = await Task.detached(priority: .userInitiated) {
+                let accessing = url.startAccessingSecurityScopedResource()
+                defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+                return Location.found(at: url)
+            }.value
+            if found == .folder { addLocation(url) } else { reportNoFolder(url.lastPathComponent, isLocation: false) }
+            done?(found == .folder)
+        }
+    }
+
+    /// Says why a folder from another app can't be shown: that app gave Notebook no folder for it. `isLocation` when it
+    /// is in the sidebar already, from before Notebook looked.
+    private func reportNoFolder(_ name: String, isLocation: Bool) {
+        let why = "The app it comes from gives other apps only single files, not folders, so Notebook can’t see what’s in it. "
+            + "Nextcloud is one of these apps."
+        #if os(macOS)
+        let device = "on this Mac"
+        let remove = "right-click it in the sidebar and choose Remove from Sidebar"
+        #else
+        let device = Location.onDeviceName
+        let remove = "touch and hold it and choose Remove from Notebook"
+        #endif
+        if isLocation {
+            reportInFront("Notebook can’t read “\(name)”.", why + " To take it out of the sidebar, \(remove).")
+        } else {
+            reportInFront("“\(name)” can’t be added.", why + " Choose a folder in iCloud Drive or \(device) instead.")
+        }
     }
 
     /// Of folders dragged onto the sidebar, the ones it could add: folders it doesn't show yet. Nil when the drag
