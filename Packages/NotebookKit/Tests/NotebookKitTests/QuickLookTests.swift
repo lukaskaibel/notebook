@@ -91,6 +91,30 @@ final class QuickLookTests: XCTestCase {
         XCTAssertEqual(picture(in: preview)?.lastPathComponent, "torii.png")
     }
 
+    /// Where Quick Look can't read the note's folder, as on iPhone and iPad, a `[[link]]` shows as a link: what it names
+    /// may well be there. Once the folder could be read, a link to nothing in it shows as a note still to be made, as in
+    /// the app.
+    func testLinksShowAsLinksWhileTheFolderIsOutOfReach() async throws {
+        let url = folder.appendingPathComponent("Kyoto trip.md")
+        try "Costs are in [[Budget]].\n".write(to: url, atomically: true, encoding: .utf8)
+        NotePreview.readingDelay = 1.5
+        defer { NotePreview.readingDelay = 0 }
+
+        let preview = NotePreview()
+        try await preview.show(url)
+        XCTAssertEqual(link(in: preview), .chip(resolved: true), "a link while the folder can't be read")
+
+        try await TestRun.wait(while: { link(in: preview) == .chip(resolved: true) })
+        XCTAssertEqual(link(in: preview), .chip(resolved: false), "no Budget next to the note")
+    }
+
+    /// How the note's `[[Budget]]` shows.
+    private func link(in preview: NotePreview) -> Decoration.Kind? {
+        let storage = preview.editor.storage
+        let at = (storage.string as NSString).range(of: "[[Budget]]").location + 3
+        return (storage.attribute(.notebookDecoration, at: at, effectiveRange: nil) as? Decoration)?.kind
+    }
+
     /// The URL of the first picture in the note, once it is found.
     private func picture(in preview: NotePreview) -> URL? {
         var found: URL?

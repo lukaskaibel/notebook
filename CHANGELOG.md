@@ -14,6 +14,10 @@ versions follow [semantic versioning](https://semver.org).
   such as Documents or Downloads, the Mac first asks whether Notebook may read it; the note shows meanwhile and its
   pictures follow once you allow it. A tip at the bottom of the sidebar shows the way, with a button to Quick Look's
   settings, where another app that previews Markdown can be turned off.
+- Quick Look on iPhone and iPad shows a note as Notebook does too: tap a note in the Files app, or one attached in
+  another app that shows files with Quick Look, and you see its headings, to-dos, tables and maths in your typeface
+  and size instead of its Markdown. iOS lets Quick Look read only the note itself, so its pictures show by their
+  names, and links show as links. Seen working on iOS 27.2; earlier versions of iOS 27 may still show the Markdown.
 - Tables grow as you type them. Type a first row like `| Day | Area |` and press Return: the `| --- | --- |` row goes
   in under it, with an empty row and the caret in its first cell. Tab goes to the next cell with its text selected,
   ⇧Tab to the one before, and Tab in the last cell makes a new row. A `| --- |` row you type yourself, with its `:` for
