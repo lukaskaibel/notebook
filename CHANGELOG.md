@@ -7,6 +7,16 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- AsciiDoc notes. A `.adoc` file is a note like a Markdown one, on the Mac, iPhone and iPad: shown as it reads while
+  you type, its marks next to the caret. Section titles, lists and checklists, terms and their descriptions, `NOTE:`
+  and `[WARNING]` blocks as callouts, examples and sidebars as boxes, tables with their column widths and cells over
+  several lines, source blocks with highlighting, pictures, and `include::` as a card of the file. The header's
+  attributes fold into one line, a block's `[source,python]` until the caret comes to it, lines wrapped by hand run on
+  as one paragraph, and ` -- ` reads as a dash. Typing writes AsciiDoc: ⌘B makes `*bold*`, Return goes on with `*` and
+  `.` lists and starts a new paragraph with a blank line, Tab nests as `**`, ⇧Return breaks the line with ` +`, and
+  Return and Tab work in `|===` tables. Its to-dos are in To-dos, its headings in search and the outline, its `xref:`
+  and `include::` links follow files that move, and `<<id>>` scrolls to its section. Quick Look and thumbnails show it
+  as Notebook does. A new note in a folder of AsciiDoc files is AsciiDoc too.
 - Quick Look shows a note as Notebook does: press Space on a note in the Finder, or look at it in the Finder's column
   view or Get Info, and you see its headings, to-dos, tables, maths, diagrams, pictures and drawings, with its title
   and when it was last edited on top, instead of its Markdown. It is set in the typeface, size, line spacing and width
@@ -50,6 +60,16 @@ versions follow [semantic versioning](https://semver.org).
 - On iPhone and iPad, a Nextcloud folder chosen with Add Location showed in the sidebar but stayed empty. Nextcloud
   gives other apps only single files, not its folders, so Notebook can't show what's in them; it now says so instead of
   adding the folder. A folder like this added before is pointed out once, with how to remove it.
+- Pictures that only a note with the `.markdown` extension shows are no longer taken for unused and put in the Trash
+  when another note in its folder lets go of them.
+- On the Mac, Undo after typing over a selected `*`, `_`, `` ` ``, `~` or `=` wrapped what you had typed in that mark
+  instead of putting the mark back, so a few Undos could leave marks strewn through the line.
+- Emoji, Chinese and Japanese characters and signs the typeface hasn't, such as `⋯` and `⇄`, showed as nothing when a
+  note was opened, until you typed next to them.
+- A code block or callout could come apart into separate boxes after some edits inside it, when only part of it was
+  styled again.
+- Notes with long tables open several times faster: each table was set up again for every one of its rows. A note of
+  20 tables of 30 rows opens about seven times as fast.
 
 ## [1.2.0] – not released yet
 

@@ -4,17 +4,25 @@ import Foundation
 /// Obsidian's `[[links]]`, `![[embeds]]`, callouts and `$math$`. It reads line by line, so every character keeps
 /// its place, which is what the live preview needs; it does not try to be a complete CommonMark parser.
 public enum MarkdownParser {
-    public static func parse(_ string: String, typing: Bool = false) -> MarkdownDocument {
-        parse(units: Array(string.utf16), typing: typing)
+    /// `syntax`: AsciiDoc is read by `AsciiDocParser`, into the same lines and blocks.
+    public static func parse(_ string: String, typing: Bool = false, syntax: NoteSyntax = .markdown) -> MarkdownDocument {
+        parse(units: Array(string.utf16), typing: typing, syntax: syntax)
     }
 
     /// The same, reading the text out of an `NSString` in one copy rather than one character at a time.
-    public static func parse(_ string: NSString, typing: Bool = false) -> MarkdownDocument {
+    public static func parse(_ string: NSString, typing: Bool = false, syntax: NoteSyntax = .markdown) -> MarkdownDocument {
         var units = [UInt16](repeating: 0, count: string.length)
         units.withUnsafeMutableBufferPointer { buffer in
             if let base = buffer.baseAddress { string.getCharacters(base, range: NSRange(location: 0, length: string.length)) }
         }
-        return parse(units: units, typing: typing)
+        return parse(units: units, typing: typing, syntax: syntax)
+    }
+
+    static func parse(units u: [UInt16], typing: Bool = false, syntax: NoteSyntax) -> MarkdownDocument {
+        switch syntax {
+        case .markdown: parse(units: u, typing: typing)
+        case .asciidoc: AsciiDocParser.parse(units: u, typing: typing)
+        }
     }
 
     /// `typing`: the note is being typed in (see `InlineParser.spans`).
@@ -146,15 +154,7 @@ public enum MarkdownParser {
             index += 1
         }
 
-        // A cheap fingerprint of every line, for telling which lines changed.
-        for line in lines.indices {
-            var hash: UInt64 = 0xcbf29ce484222325
-            let range = lines[line].fullRange
-            for i in range.location..<min(range.upperBound, u.count) {
-                hash = (hash ^ UInt64(u[i])) &* 0x100000001b3
-            }
-            lines[line].textHash = Int(truncatingIfNeeded: hash)
-        }
+        fingerprint(&lines, u)
 
         // Inline Markdown in every line that holds text.
         for line in lines.indices {
@@ -177,6 +177,18 @@ public enum MarkdownParser {
     }
 
     // MARK: - Lines
+
+    /// A cheap fingerprint of every line, for telling which lines changed.
+    static func fingerprint(_ lines: inout [MarkdownLine], _ u: [UInt16]) {
+        for line in lines.indices {
+            var hash: UInt64 = 0xcbf29ce484222325
+            let range = lines[line].fullRange
+            for i in range.location..<min(range.upperBound, u.count) {
+                hash = (hash ^ UInt64(u[i])) &* 0x100000001b3
+            }
+            lines[line].textHash = Int(truncatingIfNeeded: hash)
+        }
+    }
 
     static func splitLines(_ u: [UInt16]) -> [MarkdownLine] {
         var result: [MarkdownLine] = []

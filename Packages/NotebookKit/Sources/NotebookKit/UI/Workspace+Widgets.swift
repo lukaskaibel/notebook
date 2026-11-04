@@ -139,7 +139,7 @@ extension Workspace {
         return await Task.detached(priority: .utility) {
             guard let text = shown ?? NoteDocument.read(url) else { return false }
             let string = text as NSString
-            return MarkdownParser.parse(string).lines.contains { Self.isTicked($0, from: row.source, in: string) }
+            return MarkdownParser.parse(string, syntax: NoteSyntax(url: url)).lines.contains { Self.isTicked($0, from: row.source, in: string) }
         }.value
     }
 
@@ -317,7 +317,7 @@ extension Workspace {
     nonisolated static func widgetNote(_ markdown: String, url: URL, place: String) -> WidgetData.Note {
         let title = url.deletingPathExtension().lastPathComponent
         let start = String(markdown.prefix(widgetNoteLength))
-        let document = MarkdownParser.parse(start)
+        let document = MarkdownParser.parse(start, syntax: NoteSyntax(url: url))
         let string = start as NSString
         var blocks: [WidgetData.Block] = []
         var cut = start.count < markdown.count
@@ -336,7 +336,7 @@ extension Workspace {
                     kind = .bullet
                 }
             case .quote: kind = .quote
-            case .paragraph: kind = .text
+            case .paragraph, .continuation, .definition, .admonition: kind = .text
             default: continue
             }
             var runs = widgetRuns(line, in: string)
@@ -361,6 +361,8 @@ extension Workspace {
             switch span.kind {
             case .image, .embed, .footnoteReference, .todoMark:
                 dropped.insert(integersIn: span.range.location..<span.range.upperBound)
+            case .replacement:
+                break
             default:
                 for marker in span.markers { dropped.insert(integersIn: marker.location..<marker.upperBound) }
             }

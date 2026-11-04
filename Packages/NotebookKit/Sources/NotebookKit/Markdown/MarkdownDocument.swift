@@ -1,11 +1,14 @@
 import Foundation
 
 /// A Markdown file read line by line, the way the editor needs it: every line knows what it is, which characters
-/// are Markdown punctuation and which are the text you read. Ranges count UTF-16 code units, as `NSString` does.
+/// are Markdown punctuation and which are the text you read. Ranges count UTF-16 code units, as `NSString` does. An
+/// AsciiDoc note is read into the same lines and blocks (`AsciiDocParser`), so the editor draws both alike.
 public struct MarkdownDocument {
     public var lines: [MarkdownLine]
     public var blocks: [MarkdownBlock]
     public var length: Int
+    /// What it was read as.
+    public var syntax: NoteSyntax = .markdown
 
     /// The line that holds a character (or the caret at that index).
     public func lineIndex(containing location: Int) -> Int {
@@ -62,6 +65,21 @@ public enum LineKind: Hashable {
     case frontmatterDelimiter
     case frontmatter
     case footnoteDefinition(label: NSRange)
+    /// AsciiDoc: a line that is only markup, which folds away until the caret comes to it: a block's attributes
+    /// (`[source,python]`, `[[id]]`, `[.lead]`), the delimiters of a block that holds others (`====`, `****`, `--`), a
+    /// list continuation (`+`).
+    case markup
+    /// AsciiDoc: a comment, `// …`, or a line of a `////` block.
+    case comment
+    /// AsciiDoc: a block's title, `.Title`; `marker` is the dot.
+    case blockTitle(marker: NSRange)
+    /// AsciiDoc: a paragraph that starts with its admonition, `NOTE: `, which is `marker`.
+    case admonition(marker: NSRange)
+    /// AsciiDoc: a description list's term and its `::`, and the description after them on the same line, if any.
+    case definition(term: NSRange, marker: NSRange)
+    /// AsciiDoc: more text of a list item or a term, on a line of its own: wrapped by hand, or attached with `+`.
+    /// `item` is the line of the item or term; `indent` the spaces the line starts with.
+    case continuation(item: Int, indent: NSRange)
 
     public var isListItem: Bool { if case .listItem = self { true } else { false } }
 }
@@ -72,7 +90,7 @@ public struct ListItem: Hashable {
         case ordered(Int, Character)
     }
 
-    /// Spaces before the marker; a tab counts as four.
+    /// Spaces before the marker; a tab counts as four. In AsciiDoc, which nests by marker, twice the level.
     public var indent: Int
     /// How deep the item sits in its list, from 0.
     public var level: Int
@@ -87,6 +105,8 @@ public struct ListItem: Hashable {
     public var checked: Bool
     /// What a task's brackets hold.
     public var mark: TaskMark = .open
+    /// AsciiDoc's `. Item`: its number isn't written, it is counted. The marker shows as this number.
+    public var counted = false
 
     public var isTask: Bool { checkbox != nil }
     public var isOrdered: Bool { if case .ordered = marker { true } else { false } }
@@ -187,6 +207,8 @@ public struct MarkdownBlock: Equatable {
         case frontmatter
         case quote
         case callout(type: String)
+        /// AsciiDoc: lines of markup on their own (`[[id]]`, `[.lead]`), folded away until the caret comes to them.
+        case markup
     }
 
     public var kind: Kind
@@ -194,11 +216,17 @@ public struct MarkdownBlock: Equatable {
     public var lines: ClosedRange<Int>
     /// From the start of its first line to the end of its last, without the last line break.
     public var range: NSRange
+    /// AsciiDoc: it has lines of markup (its attributes, its delimiters) that fold away until the caret goes in.
+    public var opens = false
 
     /// Blocks whose look changes as a whole when the caret goes in: they show their Markdown then.
-    public var isSwappable: Bool {
+    public var isSwappable: Bool { isWhole || opens }
+
+    /// Blocks drawn as one thing until the caret goes in (a table, a formula, a diagram, properties), and AsciiDoc's
+    /// folded markup: a selection takes them whole, and Delete under one selects it first.
+    public var isWhole: Bool {
         switch kind {
-        case .table, .math, .frontmatter, .mermaid: true
+        case .table, .math, .frontmatter, .mermaid, .markup: true
         default: false
         }
     }
@@ -226,6 +254,11 @@ public struct InlineSpan: Equatable {
         case escape
         /// A to-do's due date or place (`TodoMarks`).
         case todoMark(TodoMark.Kind)
+        /// AsciiDoc's `^super^` and `~sub~`.
+        case superscript
+        case `subscript`
+        /// AsciiDoc's typographic replacements: ` -- ` reads as an em dash, `->` as an arrow, `(C)` as ©.
+        case replacement(String)
 
         var isStyle: Bool {
             switch self {

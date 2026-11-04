@@ -41,7 +41,7 @@ enum DebugReminders {
         case "reminders":
             let lines = workspace.reminders.all.map { reminder in
                 let found = workspace.url(for: reminder)
-                let text = found.flatMap { NoteDocument.read($0) }.map(NotePoints.text(of:)) ?? ""
+                let text = found.flatMap { url in NoteDocument.read(url).map { NotePoints.text(of: $0, syntax: NoteSyntax(url: url)) } } ?? ""
                 return "\(reminder.id) \(reminder.text) \(reminder.note) -> \(found?.path ?? "not found")\n  " + text.replacingOccurrences(of: "\n", with: "\n  ")
             }
             log("reminders (\(workspace.reminders.all.count), iCloud \(workspace.reminders.isInICloud)):\n" + lines.joined(separator: "\n"))

@@ -9,6 +9,7 @@
 			<key>QLSupportedContentTypes</key>
 			<array>
 				<string>net.daringfireball.markdown</string>
+				<string>org.asciidoc</string>
 			</array>
 			<key>QLThumbnailMinimumDimension</key>
 			<integer>33</integer>

@@ -56,14 +56,17 @@ extension EditorController {
     private func plainText(of line: MarkdownLine) -> String {
         let text = nsText
         var hidden = IndexSet()
+        // AsciiDoc's ` -- ` reads as the dash it shows.
+        var signs: [Int: String] = [:]
         for span in line.spans {
+            if case .replacement(let shown) = span.kind { signs[span.range.location] = shown }
             for marker in span.markers { hidden.insert(integersIn: marker.location..<marker.upperBound) }
         }
         var result = ""
         var index = line.content.location
         while index < line.content.upperBound {
             if let next = hidden.integerGreaterThanOrEqualTo(index), next < line.content.upperBound {
-                result += text.substring(with: NSRange(location: index, length: next - index))
+                result += text.substring(with: NSRange(location: index, length: next - index)) + (signs[next] ?? "")
                 index = hidden.rangeView.first(where: { $0.contains(next) }).map(\.upperBound) ?? next + 1
             } else {
                 result += text.substring(with: NSRange(location: index, length: line.content.upperBound - index))

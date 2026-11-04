@@ -30,7 +30,7 @@ struct MarkdownUnmarked {
 /// ones, which go in as one undoable edit, with the characters that stay easing from their old look.
 extension EditorController {
     var markdownState: MarkdownEditing.State {
-        MarkdownEditing.State(text, selection: selection)
+        MarkdownEditing.State(text, selection: selection, syntax: syntax)
     }
 
     /// Puts the new text in as one undoable edit and selects what the rule selected.
@@ -93,7 +93,7 @@ extension EditorController {
         let end = document.lineIndex(containing: max(selection.location, selection.upperBound - (selection.length > 0 ? 1 : 0)))
         return document.lines[start...end].allSatisfy { line in
             switch line.kind {
-            case .fence, .code, .mathDelimiter, .math, .tableHeader, .tableDelimiter, .tableRow, .frontmatterDelimiter, .frontmatter: false
+            case .fence, .code, .mathDelimiter, .math, .tableHeader, .tableDelimiter, .tableRow, .frontmatterDelimiter, .frontmatter, .markup, .comment: false
             default: true
             }
         }

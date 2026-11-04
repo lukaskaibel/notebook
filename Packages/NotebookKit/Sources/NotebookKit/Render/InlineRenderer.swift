@@ -8,12 +8,18 @@ import UIKit
 /// excerpts, where nothing is edited.
 @MainActor
 enum InlineRenderer {
-    static func render(_ text: String, font: NSFont, color: NSColor) -> NSAttributedString {
+    static func render(_ text: String, font: NSFont, color: NSColor, syntax: NoteSyntax = .markdown) -> NSAttributedString {
         let units = Array(text.utf16)
         let result = NSMutableAttributedString(string: text, attributes: [.font: font, .foregroundColor: color])
-        let spans = InlineParser.spans(in: units, range: NSRange(location: 0, length: units.count))
+        let range = NSRange(location: 0, length: units.count)
+        let spans = syntax == .asciidoc ? AsciiDocInlineParser.spans(in: units, range: range) : InlineParser.spans(in: units, range: range)
         var markers: [NSRange] = []
+        var signs: [(NSRange, String)] = []
         for span in spans {
+            if case .replacement(let shown) = span.kind {
+                signs.append((span.range, shown))
+                continue
+            }
             markers.append(contentsOf: span.markers)
             switch span.kind {
             case .strong:
@@ -34,12 +40,17 @@ enum InlineRenderer {
                 result.replaceCharacters(in: span.content, with: tex)
             case .footnoteReference:
                 result.addAttributes([.foregroundColor: Theme.accent, .baselineOffset: 4, .font: NSFont.systemFont(ofSize: font.pointSize * 0.75)], range: span.content)
+            case .replacement:
+                break
+            case .superscript, .subscript:
+                result.addAttributes([.baselineOffset: span.kind == .superscript ? 4 : -2, .font: font.resized(font.pointSize * 0.75)], range: span.content)
             case .escape, .todoMark:
                 break
             }
         }
-        for marker in markers.sorted(by: { $0.location > $1.location }) where marker.upperBound <= result.length {
-            result.deleteCharacters(in: marker)
+        let edits = markers.map { ($0, "") } + signs
+        for (range, text) in edits.sorted(by: { $0.0.location > $1.0.location }) where range.upperBound <= result.length {
+            result.replaceCharacters(in: range, with: text)
         }
         return result
     }

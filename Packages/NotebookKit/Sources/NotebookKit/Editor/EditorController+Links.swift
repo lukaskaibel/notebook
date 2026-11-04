@@ -12,7 +12,7 @@ extension EditorController {
     /// `range` is the whole link, `[text](address)`, as it is now.
     func editLink(at range: NSRange, isNew: Bool = false) {
         guard let link = linkSpan(at: range.location) else { return }
-        let address = nsText.substring(with: destinationRange(of: link))
+        let address = isNew ? "" : nsText.substring(with: destinationRange(of: link))
         let model = LinkEditorModel(address: address.removingPercentEncoding ?? address)
         let popover = NSPopover()
         popover.behavior = .transient
@@ -43,6 +43,37 @@ extension EditorController {
     }
     #endif
 
+    /// A link clicked or tapped. One to a place in this note (`#goals`, AsciiDoc's `<<goals>>`) scrolls there; the app
+    /// opens anything else.
+    func follow(_ kind: LinkTarget.Kind) {
+        if case .url(let address) = kind, address.hasPrefix("#"), let location = anchorLocation(String(address.dropFirst())) {
+            scroll(to: OutlineHeading(id: -1, level: 0, title: "", location: location))
+            return
+        }
+        delegate?.editor(self, open: kind)
+    }
+
+    /// Where an id points in the note: an anchor (`[[goals]]`, `[#goals]`), or a heading it is the id of, as
+    /// Asciidoctor makes one (`_goals_and_scope`) or GitHub (`goals-and-scope`).
+    func anchorLocation(_ id: String) -> Int? {
+        let text = nsText
+        func folded(_ string: String) -> String { String(string.lowercased().unicodeScalars.filter(CharacterSet.alphanumerics.contains)) }
+        let wanted = folded(id)
+        guard !wanted.isEmpty else { return nil }
+        for (index, line) in document.lines.enumerated() {
+            let source = text.substring(with: line.range)
+            let trimmed = source.trimmingCharacters(in: .whitespaces)
+            let isAnchor = source.contains("[[\(id)]]") || source.contains("[[\(id),") || ["]", ".", ","].contains { trimmed.hasPrefix("[#\(id)" + $0) }
+            if isAnchor {
+                // An anchor on a line of its own points at the line under it.
+                guard line.kind == .markup else { return line.range.location }
+                return document.lines[(index + 1)...].first { $0.kind != .markup }?.range.location ?? line.range.location
+            }
+            if case .heading = line.kind, folded(text.substring(with: line.content)) == wanted { return line.range.location }
+        }
+        return nil
+    }
+
     func linkSpan(at location: Int) -> InlineSpan? {
         guard !document.lines.isEmpty, location < storage.length else { return nil }
         return document.lines[document.lineIndex(containing: location)].spans.first {
@@ -51,8 +82,18 @@ extension EditorController {
         }
     }
 
-    /// Between `](` and `)`.
+    /// Between `](` and `)`; in AsciiDoc the address before `[` (after `link:` or `xref:`), or in `<<` before `,`.
     func destinationRange(of link: InlineSpan) -> NSRange {
+        if syntax == .asciidoc, let open = link.markers.first {
+            let written = nsText.substring(with: open)
+            if written.hasPrefix("<<") {
+                let comma = (written as NSString).range(of: ",")
+                return NSRange(location: open.location + 2, length: (comma.location == NSNotFound ? open.length : comma.location) - 2)
+            }
+            let prefix = ["link:", "xref:"].first { written.hasPrefix($0) }?.utf16.count ?? 0
+            let end = written.hasSuffix("[") ? open.length - 1 : open.length
+            return NSRange(location: open.location + prefix, length: max(0, end - prefix))
+        }
         let close = link.markers.last ?? NSRange(location: link.range.upperBound, length: 0)
         return NSRange(location: close.location + 2, length: max(0, close.length - 3))
     }

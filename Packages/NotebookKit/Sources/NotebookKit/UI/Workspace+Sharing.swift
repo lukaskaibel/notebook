@@ -94,10 +94,11 @@ extension Workspace {
         let written = await changeFiles { [self] follow -> Bool in
             let url = follow(url)
             let folder = url.deletingLastPathComponent()
-            guard let stored = await Task.detached(priority: .userInitiated, operation: { Self.storeShared(note.files, from: files, in: folder) }).value else {
+            let syntax = NoteSyntax(url: url)
+            guard let stored = await Task.detached(priority: .userInitiated, operation: { Self.storeShared(note.files, from: files, in: folder, syntax: syntax) }).value else {
                 return false
             }
-            let addition = Self.sharedMarkdown(note.text, stored.markdown)
+            let addition = Self.sharedMarkdown(Self.sharedText(note.text, syntax: syntax), stored.markdown)
             if let editor = editorShowing(url) {
                 if editor.appendAtEnd(addition, actionName: "Add Shared") {
                     saveNote(showing: url)
@@ -128,6 +129,15 @@ extension Workspace {
         return blocks.joined(separator: "\n\n")
     }
 
+    /// Shared text as an AsciiDoc note writes it: the share extension writes the link to a page as Markdown,
+    /// `[Title](https://…)` or `<https://…>`, which becomes `https://…[Title]`.
+    nonisolated static func sharedText(_ text: String, syntax: NoteSyntax) -> String {
+        guard syntax == .asciidoc else { return text }
+        return text
+            .replacingOccurrences(of: #"\[([^\]\n]*)\]\(([^)\s]+)\)"#, with: "$2[$1]", options: .regularExpression)
+            .replacingOccurrences(of: #"<((?:https?|mailto):[^>\s]+)>"#, with: "$1", options: .regularExpression)
+    }
+
     /// Where shared text goes in a note: after its last line and a blank one. How much of the note stays as it is,
     /// up to its last character that isn't a line break, and what comes after it.
     nonisolated static func sharedEnd(_ addition: String, after text: NSString) -> (kept: Int, tail: String) {
@@ -139,7 +149,7 @@ extension Workspace {
     /// Copies the files shared into the folder's `.assets` under names not taken there, and gives each one's
     /// Markdown (a picture shows, any other file is its card) and where it went. Every one or none: when one can't be
     /// copied, those copied already are taken back.
-    nonisolated static func storeShared(_ names: [String], from source: URL, in folder: URL) -> (markdown: [String], urls: [URL])? {
+    nonisolated static func storeShared(_ names: [String], from source: URL, in folder: URL, syntax: NoteSyntax = .markdown) -> (markdown: [String], urls: [URL])? {
         var markdown: [String] = []
         var urls: [URL] = []
         for name in names {
@@ -149,7 +159,7 @@ extension Workspace {
                 return nil
             }
             let path = FileOperations.markdownPath(stored.lastPathComponent)
-            markdown.append(MarkdownStyler.isImageFile(file) ? "![](\(path))" : "![\(name)](\(path))")
+            markdown.append(MarkdownStyler.isImageFile(file) ? NoteMarkup.picture(path, syntax: syntax) : NoteMarkup.file(path, name: name, syntax: syntax))
             urls.append(stored)
         }
         return (markdown, urls)

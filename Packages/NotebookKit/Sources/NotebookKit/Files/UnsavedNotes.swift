@@ -45,7 +45,7 @@ enum UnsavedNotes {
         if let earlier, let url = keep(text, over: earlier) { return url }
         let folder = folder
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        return FileOperations.createNoteWithoutOverwriting(in: folder, title: note.deletingPathExtension().lastPathComponent, text: text)
+        return FileOperations.createNoteWithoutOverwriting(in: folder, title: note.deletingPathExtension().lastPathComponent, text: text, syntax: NoteSyntax(url: note))
     }
 
     private static func keep(_ text: String, over earlier: Copy) -> URL? {

@@ -201,6 +201,21 @@ final class QuickLookTests: XCTestCase {
         XCTAssertTrue(title.contains { pixels.colorAt(x: $0.0, y: $0.1).map { $0.usingColorSpace(.sRGB)!.brightnessComponent < 0.4 } ?? false })
     }
 
+    /// An AsciiDoc note is read as AsciiDoc in its preview and its thumbnail, as the app reads it.
+    func testAnAsciiDocNoteIsSetAsTheAppSetsIt() async throws {
+        let text = "A plain first line, where the app's caret is.\n\n== Sync\n\nNOTE: Nothing is -- ever -- lost.\n\n* one\n** two\n\n[cols=\"1,2\"]\n|===\n| A | B\n|===\n"
+        let url = folder.appendingPathComponent("Sync.adoc")
+        try text.write(to: url, atomically: true, encoding: .utf8)
+        let app = EditorHarness(text, syntax: .asciidoc)
+        let preview = NotePreview()
+        try await preview.show(url)
+        XCTAssertEqual(preview.editor.syntax, .asciidoc)
+        assertSameLook(preview.editor.storage, app.editor.storage)
+        let (_, editor) = try await NoteThumbnail.page(of: url, size: NoteThumbnail.size(fitting: CGSize(width: 256, height: 256)), scale: 2)
+        XCTAssertEqual(editor.syntax, .asciidoc)
+        assertSameLook(editor.storage, app.editor.storage)
+    }
+
     /// The Finder asks for thumbnails as you scroll by, so a thumbnail reads the note and nothing next to it, and a
     /// note in a folder the Mac guards never makes it ask whether Notebook may: its pictures show by their names, and
     /// the notes and files it links to by theirs, still as links.

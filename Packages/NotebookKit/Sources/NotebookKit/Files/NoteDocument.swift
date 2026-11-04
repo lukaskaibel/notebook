@@ -780,7 +780,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     @discardableResult
     nonisolated private static func writeCopy(of url: URL, from source: String, text: String) -> Bool {
         let name = "\(url.deletingPathExtension().lastPathComponent) (\(source))"
-        return FileOperations.createNoteWithoutOverwriting(in: url.deletingLastPathComponent(), title: name, text: text) != nil
+        return FileOperations.createNoteWithoutOverwriting(in: url.deletingLastPathComponent(), title: name, text: text, syntax: NoteSyntax(url: url)) != nil
     }
 
     /// This Mac's or device's name, as the Finder and the Files app say it.

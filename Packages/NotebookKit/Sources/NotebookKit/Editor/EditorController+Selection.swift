@@ -128,7 +128,7 @@ extension EditorController {
                         if end < span.range.upperBound { end = span.range.upperBound }
                     }
                 }
-                if let block = line.block, document.blocks[block].isSwappable, block != activeBlock {
+                if let block = line.block, document.blocks[block].isWhole, block != activeBlock {
                     let range = document.blocks[block].range
                     if range.strictlyContains(start) { start = range.location }
                     if range.strictlyContains(end) { end = range.upperBound }

@@ -424,7 +424,7 @@ public final class SearchIndex {
                           isInCloud: inCloud, text: text, folded: text.map(fold), foldedName: fold(name),
                           foldedFileName: fold(fileName), path: path, folder: folder)
         if let text {
-            entry.headings = headings(in: text)
+            entry.headings = headings(in: text, syntax: NoteSyntax(url: url))
             entry.assets = FileOperations.assetNames(in: text).sorted()
         }
         return entry
@@ -432,7 +432,8 @@ public final class SearchIndex {
 
     /// A note's headings, as the outline shows them: without their Markdown, leaving out lines in code blocks and in
     /// front matter. Goes through the bytes, as it runs on every note in the locations.
-    nonisolated static func headings(in text: String) -> [Heading] {
+    nonisolated static func headings(in text: String, syntax: NoteSyntax = .markdown) -> [Heading] {
+        if syntax == .asciidoc { return asciidocHeadings(in: text) }
         var headings: [Heading] = []
         var fence: UInt8?
         var inFrontMatter = false
@@ -470,6 +471,49 @@ public final class SearchIndex {
             if !title.isEmpty { headings.append(Heading(level: level, title: title)) }
         }
         return headings
+    }
+
+    /// An AsciiDoc note's section titles (`== Goals`, and Markdown's `## Goals`, which Asciidoctor reads too), leaving out
+    /// lines in listing, literal, passthrough, comment and fenced blocks.
+    nonisolated static func asciidocHeadings(in text: String) -> [Heading] {
+        var headings: [Heading] = []
+        var delimiter: [UInt8]?
+        for whole in text.utf8.split(separator: 10, omittingEmptySubsequences: false) {
+            let line = whole.last == 13 ? whole.dropLast() : whole
+            if let open = delimiter {
+                if line.elementsEqual(open) { delimiter = nil }
+                continue
+            }
+            if let first = line.first, line.count >= 4, [45, 46, 47, 43].contains(first), line.allSatisfy({ $0 == first }) {
+                delimiter = Array(line)
+                continue
+            }
+            if line.starts(with: "```".utf8) {
+                delimiter = Array("```".utf8)
+                continue
+            }
+            guard let first = line.first, first == 61 || first == 35 else { continue }
+            let level = line.prefix { $0 == first }.count
+            let after = line.dropFirst(level)
+            guard level <= 6, after.first == 32 || after.first == 9 else { continue }
+            let title = plainAsciiDoc(String(decoding: after, as: UTF8.self).trimmingCharacters(in: .whitespaces))
+            if !title.isEmpty { headings.append(Heading(level: level, title: title)) }
+        }
+        return headings
+    }
+
+    /// Words without the AsciiDoc in them, as they read in the note: `*Plan* for xref:kyoto.adoc[Kyoto]` reads "Plan
+    /// for Kyoto".
+    nonisolated static func plainAsciiDoc(_ text: String) -> String {
+        let units = Array(text.utf16)
+        var kept = IndexSet(integersIn: 0..<units.count)
+        for span in AsciiDocInlineParser.spans(in: units, range: NSRange(location: 0, length: units.count)) {
+            if case .replacement = span.kind { continue }
+            for marker in span.markers { kept.remove(integersIn: marker.location..<marker.upperBound) }
+        }
+        let string = text as NSString
+        return kept.rangeView.map { string.substring(with: NSRange(location: $0.lowerBound, length: $0.count)) }.joined()
+            .trimmingCharacters(in: .whitespaces)
     }
 
     /// Words without the Markdown in them, as they read in the note: `**Plan** for [[Kyoto]]` reads "Plan for Kyoto",

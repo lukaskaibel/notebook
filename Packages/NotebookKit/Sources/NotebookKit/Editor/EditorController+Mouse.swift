@@ -110,7 +110,7 @@ extension EditorController {
             return true
         case .link(let kind):
             closeSuggestions()
-            delegate?.editor(self, open: kind)
+            follow(kind)
             return true
         case .picture(let range, let url):
             // Pressed in text selected around it: the text view drags the selection, as it drags any selected text.
@@ -155,6 +155,12 @@ extension EditorController {
     }
 
     func handleKeyDown(_ event: NSEvent) -> Bool {
+        // ⇧Return breaks an AsciiDoc line with ` +`, as ⌃Return does: macOS has no command of its own for it and would
+        // send Return.
+        if syntax == .asciidoc, [36, 76].contains(event.keyCode), event.modifierFlags.intersection([.shift, .control, .option, .command]) == .shift,
+           !textView.hasMarkedText(), insertAsciiDocLineBreak() {
+            return true
+        }
         // Space on a selected picture opens Quick Look, as in the Finder.
         if event.charactersIgnoringModifiers == " ", event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty {
             let selection = self.selection

@@ -217,6 +217,9 @@ extension EditorController: NSTextViewDelegate, NSTextFieldDelegate {
 
     public func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange, replacementString: String?) -> Bool {
         guard !isLoading, let replacement = replacementString else { return true }
+        // Undo and Redo put back what was there, through here too: a typing rule would make something else of it (a
+        // `*` put back over a selection wrapped it).
+        if let manager = textView.undoManager, manager.isUndoing || manager.isRedoing { return true }
         return shouldInsert(replacement, in: affectedCharRange)
     }
 
@@ -244,6 +247,7 @@ extension EditorController: NSTextViewDelegate, NSTextFieldDelegate {
         case #selector(NSResponder.insertNewline(_:)):
             return insertNewline()
         case #selector(NSResponder.insertLineBreak(_:)), #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
+            if insertAsciiDocLineBreak() { return true }
             insert("\n")
             return true
         case #selector(NSResponder.deleteBackward(_:)):

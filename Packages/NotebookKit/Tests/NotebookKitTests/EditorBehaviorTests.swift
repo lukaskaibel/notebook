@@ -545,6 +545,42 @@ final class EditorBehaviorTests: XCTestCase {
         XCTAssertEqual(h.text, "- One")
     }
 
+    func testCharactersTheTypefaceHasntShowWhenANoteOpens() {
+        // Styled after the text's own fixing, they had the typeface's font, which has no glyph for them.
+        for syntax in [NoteSyntax.markdown, .asciidoc] {
+            let h = EditorHarness("Menu ⋯ check ✅ arrow ⇄ CJK 日本", syntax: syntax)
+            let layout = h.editor.layoutManager
+            for character in ["⋯", "✅", "⇄", "日"] {
+                let index = h.range(of: character).location
+                XCTAssertNotEqual(layout.cgGlyph(at: layout.glyphIndexForCharacter(at: index)), 0, "\(character) in \(syntax)")
+            }
+        }
+    }
+
+    func testUndoOfAWrappedMarkPutsItBack() {
+        // Undo put the selected `*` back through the typing rules, which wrapped it again: `=*=*=*=*`.
+        for syntax in [NoteSyntax.markdown, .asciidoc] {
+            let h = EditorHarness("Read **this** first", syntax: syntax)
+            h.select(NSRange(location: 5, length: 1))
+            h.type("==")
+            XCTAssertEqual(h.text, "Read ==*==*this** first")
+            h.settle(0.05)
+            while h.textView.undoManager?.canUndo == true { h.textView.undoManager?.undo() }
+            XCTAssertEqual(h.text, "Read **this** first", "\(syntax)")
+            while h.textView.undoManager?.canRedo == true { h.textView.undoManager?.redo() }
+            XCTAssertEqual(h.text, "Read ==*==*this** first", "\(syntax)")
+
+            // A letter typed over a selected `*`: Undo wrapped the letter in it.
+            let letter = EditorHarness("Read **this** first", syntax: syntax)
+            letter.select(NSRange(location: 5, length: 1))
+            letter.type("x")
+            XCTAssertEqual(letter.text, "Read x*this** first")
+            letter.settle(0.05)
+            letter.textView.undoManager?.undo()
+            XCTAssertEqual(letter.text, "Read **this** first", "\(syntax)")
+        }
+    }
+
     // MARK: - Pasting pictures
 
     func testPastingPictureStoresItInAssets() {

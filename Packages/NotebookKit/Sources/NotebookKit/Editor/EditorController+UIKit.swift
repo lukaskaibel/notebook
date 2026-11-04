@@ -410,7 +410,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
             toggleCheckbox(line: line)
         case .link(let kind):
             closeSuggestions()
-            delegate?.editor(self, open: kind)
+            follow(kind)
         case .picture(let range, let url):
             // A tap opens a drawing for drawing, as in Notes, and any other picture in Quick Look.
             if let drawing = drawing(at: range) {
@@ -555,7 +555,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         if pasteboard.hasImages, !pasteboard.hasStrings, let image = pasteboard.image {
             guard mayStoreAssets(orRetry: { [weak self] in self?.insertPictures([image]) }) else { return true }
             if let stored = storeAsset(image: image) {
-                insertOnOwnLines("![](\(stored))", at: target)
+                insertOnOwnLines(NoteMarkup.picture(stored, syntax: syntax), at: target)
                 return true
             }
         }
@@ -719,10 +719,10 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     private func store(_ dropped: Dropped) -> String? {
         switch dropped {
         case .picture(let image):
-            return storeAsset(image: image).map { "![](\($0))" }
+            return storeAsset(image: image).map { NoteMarkup.picture($0, syntax: syntax) }
         case .file(let url):
             guard let stored = storeAsset(copying: url) else { return nil }
-            return MarkdownStyler.isImageFile(url) ? "![](\(stored))" : "![\(url.lastPathComponent)](\(stored))"
+            return NoteMarkup.attachment(stored, name: url.lastPathComponent, syntax: syntax)
         case .link(let link):
             return link.markdown
         }
@@ -734,7 +734,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         guard mayStoreAssets(orRetry: { [weak self] in self?.insertPictures(images) }) else { return }
         let stored = images.compactMap { storeAsset(image: $0) }
         guard !stored.isEmpty else { return }
-        insertOnOwnLines(stored.map { "![](\($0))" }.joined(separator: "\n"), at: selection)
+        insertOnOwnLines(stored.map { NoteMarkup.picture($0, syntax: syntax) }.joined(separator: "\n"), at: selection)
     }
 
     /// Files picked in the Files app: copied next to the note, or linked when they are notes.
@@ -766,7 +766,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     /// The same for files to put in: notes and files of the locations become links, which need no folder; anything
     /// else is copied into `.assets`.
     private func mayStore(_ files: [URL], orRetry retry: @escaping () -> Void) -> Bool {
-        files.allSatisfy { $0.pathExtension.lowercased() == "md" || delegate?.editor(self, linkTo: $0) != nil } || mayStoreAssets(orRetry: retry)
+        files.allSatisfy { NoteSyntax.isNote(pathExtension: $0.pathExtension) || delegate?.editor(self, linkTo: $0) != nil } || mayStoreAssets(orRetry: retry)
     }
 
     /// Whether pasting text copied in Notebook copies pictures and files into `.assets`: those of a note elsewhere.
@@ -774,7 +774,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         guard let fields = try? JSONSerialization.jsonObject(with: fragment) as? [String: String], let markdown = fields["markdown"],
               let source = fields["folder"], !source.isEmpty, let folder,
               URL(fileURLWithPath: source).standardizedFileURL != folder.standardizedFileURL else { return false }
-        return markdown.contains("](.assets/")
+        return NoteMarkup.pointsIntoAssets(markdown)
     }
 }
 

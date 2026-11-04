@@ -10,6 +10,31 @@ final class CodeBlockTests: XCTestCase {
 
     // MARK: - The box
 
+    func testABlockStyledAgainInPartKeepsOneBox() {
+        // Each styling made a box of its own for the lines it styled, and the block was drawn in pieces.
+        for (syntax, text) in [(NoteSyntax.markdown, code), (.asciidoc, "Intro\n\n[source,swift]\n----\nlet a = 1\n\nprint(a)\n----\n\nAfter")] {
+            let h = EditorHarness(text, syntax: syntax)
+            h.caret(0)
+            let middle = h.editor.document.lineIndex(containing: h.range(of: "print").location)
+            h.editor.restyle(lines: [middle])
+            var boxes: [NSRange] = []
+            h.editor.storage.enumerateAttribute(.notebookBlockDecoration, in: NSRange(location: 0, length: h.editor.storage.length)) { value, range, _ in
+                if value != nil { boxes.append(range) }
+            }
+            XCTAssertEqual(boxes.count, 1, "\(syntax): \(boxes)")
+        }
+    }
+
+    func testTwoBlocksNextToEachOtherKeepTheirOwnBoxes() {
+        let h = EditorHarness("```\none\n```\n```\ntwo\n```")
+        h.caret(0)
+        h.editor.restyle(lines: Array(h.editor.document.lines.indices))
+        let first = h.editor.storage.attribute(.notebookBlockDecoration, at: h.range(of: "one").location, effectiveRange: nil) as? Decoration
+        let second = h.editor.storage.attribute(.notebookBlockDecoration, at: h.range(of: "two").location, effectiveRange: nil) as? Decoration
+        XCTAssertNotNil(first)
+        XCTAssertFalse(first === second, "a box each")
+    }
+
     func testBoxGoesRoundTheClosingFenceOfADiagramBeingEdited() throws {
         let h = EditorHarness(diagram)
         h.caret(h.range(of: "A --> B").location)
@@ -22,7 +47,7 @@ final class CodeBlockTests: XCTestCase {
         XCTAssertEqual(layout.blockBox(at: closing, origin: origin), box, "the closing fence is in the same box")
         XCTAssertTrue(box.contains(h.point(of: closing)), "the box goes round the closing fence")
         XCTAssertTrue(box.contains(h.point(of: h.range(of: "```mermaid").location)), "and the opening one")
-        let decoration = h.editor.storage.attribute(.notebookDecoration, at: closing, effectiveRange: nil) as? Decoration
+        let decoration = h.editor.storage.attribute(.notebookBlockDecoration, at: closing, effectiveRange: nil) as? Decoration
         XCTAssertEqual(decoration?.kind, .codeBlock(language: "mermaid", active: true, preview: .diagram(source: "graph LR\n  A --> B")),
                        "the preview under the box draws the diagram's source")
         h.snapshot("diagram-being-edited")
@@ -37,7 +62,7 @@ final class CodeBlockTests: XCTestCase {
         let closing = h.range(of: "$$\n\nAfter").location
         let box = try XCTUnwrap(layout.blockBox(at: h.range(of: "x^2").location, origin: origin))
         XCTAssertTrue(box.contains(h.point(of: closing)), "the box goes round the closing $$")
-        let decoration = h.editor.storage.attribute(.notebookDecoration, at: closing, effectiveRange: nil) as? Decoration
+        let decoration = h.editor.storage.attribute(.notebookBlockDecoration, at: closing, effectiveRange: nil) as? Decoration
         XCTAssertEqual(decoration?.kind, .codeBlock(language: "tex", active: true, preview: .math(tex: "x^2")))
     }
 

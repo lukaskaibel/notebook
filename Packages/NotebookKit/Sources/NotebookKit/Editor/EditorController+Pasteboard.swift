@@ -98,7 +98,7 @@ extension EditorController {
         if pasteboard.availableType(from: [.png, .tiff, NSPasteboard.PasteboardType("public.jpeg"), NSPasteboard.PasteboardType("public.heic")]) != nil,
            pasteboard.availableType(from: [.string]) == nil || pasteboard.availableType(from: [.png, .tiff]) != nil,
            let image = NSImage(pasteboard: pasteboard), let stored = storeAsset(image: image) {
-            insertOnOwnLines("![](\(stored))", at: target)
+            insertOnOwnLines(NoteMarkup.picture(stored, syntax: syntax), at: target)
             return true
         }
 
@@ -204,11 +204,10 @@ extension EditorController {
                 if link.isBlock { blocks.append(link.markdown) } else { inline.append(link.markdown) }
             } else if isDirectory {
                 if FileNode.isFolder(url) || folder.map({ FileNode.isSameOrInside($0, url) }) ?? true { refused = true } else { packages.append(url) }
-            } else if !temporary, url.pathExtension.lowercased() == "md", let link = noteLink(for: url) {
+            } else if !temporary, NoteSyntax.isNote(pathExtension: url.pathExtension), let link = noteLink(for: url) {
                 inline.append(link)
             } else if let stored = storeAsset(copying: url) {
-                let name = url.lastPathComponent
-                blocks.append(MarkdownStyler.isImageFile(url) ? "![](\(stored))" : "![\(name)](\(stored))")
+                blocks.append(NoteMarkup.attachment(stored, name: url.lastPathComponent, syntax: syntax))
             } else {
                 refused = true
             }
@@ -247,7 +246,7 @@ extension EditorController {
             }
             if stored.count < packages.count { beep() }
             guard !stored.isEmpty else { return }
-            let markdown = stored.map { "![\($0.lastPathComponent)](\(Self.markdownPath($0.lastPathComponent)))" }.joined(separator: "\n")
+            let markdown = stored.map { NoteMarkup.file(Self.markdownPath($0.lastPathComponent), name: $0.lastPathComponent, syntax: self.syntax) }.joined(separator: "\n")
             self.insertOnOwnLines(markdown, at: NSRange(location: min(location, self.storage.length), length: 0))
         }
     }
@@ -261,7 +260,7 @@ extension EditorController {
         if target.length > 0, !trimmed.contains(" "), let url = URL(string: trimmed), let scheme = url.scheme, ["http", "https", "mailto"].contains(scheme),
            !nsText.substring(with: target).contains("\n") {
             let label = nsText.substring(with: target)
-            let link = "[\(label)](\(trimmed))"
+            let link = NoteMarkup.link(trimmed, text: label, syntax: syntax)
             replace(target, with: link, select: NSRange(location: target.location + (link as NSString).length, length: 0), actionName: "Add Link")
             return
         }
@@ -431,10 +430,11 @@ extension EditorController {
         return FileOperations.copyingAssets(in: markdown, from: source) { storeAsset(copying: $0) }
     }
 
-    /// `[[Name]]` for a note dropped in from the sidebar or the Finder.
+    /// `[[Name]]` for a note dropped in from the sidebar or the Finder; in AsciiDoc an `xref:` to it.
     private func noteLink(for url: URL) -> String? {
         let name = url.deletingPathExtension().lastPathComponent
-        return "[[\(name)]]"
+        let path = folder.map { LinkUpdate.relativePath(from: $0, to: url) } ?? url.lastPathComponent
+        return NoteMarkup.noteLink(name: name, path: path, syntax: syntax)
     }
 }
 

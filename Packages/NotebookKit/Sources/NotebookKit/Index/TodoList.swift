@@ -239,7 +239,7 @@ final class TodoList {
             if let kept = cache[path], kept.modified == entry.modified, kept.size == entry.size {
                 todos = kept.todos
             } else {
-                todos = Todos.open(in: text)
+                todos = Todos.open(in: text, syntax: NoteSyntax(url: entry.url))
             }
             fresh[path] = Cached(modified: entry.modified, size: entry.size, todos: todos)
             if !todos.isEmpty { notes.append((entry, todos)) }

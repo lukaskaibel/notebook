@@ -1028,7 +1028,8 @@ public final class Workspace: NSObject {
     private func show(_ document: NoteDocument, focusTitle: Bool, place: EditorController.Place?) {
         assetsInUse = FileOperations.assetNames(in: document.text)
         editor.load(text: document.isLoaded ? document.text : nil, folder: document.url.deletingLastPathComponent(),
-                    title: focusTitle ? "" : document.url.deletingPathExtension().lastPathComponent, meta: meta(for: document), focusTitle: focusTitle)
+                    title: focusTitle ? "" : document.url.deletingPathExtension().lastPathComponent, meta: meta(for: document), focusTitle: focusTitle,
+                    syntax: NoteSyntax(url: document.url))
         updateReminderLine()
         if document.isLoaded, let place { restore(place) }
         if document.isLoaded, let pending = pendingPlace {
@@ -1703,7 +1704,9 @@ public final class Workspace: NSObject {
                         FileOperations.storeAsset(copying: file, in: folder).map { FileOperations.markdownPath($0.lastPathComponent) }
                     }
                 }
-                guard let made = FileOperations.createNote(in: folder, title: title ?? "Untitled", text: text) else { return nil }
+                // An empty note is written in what the folder's notes are; text from elsewhere is Markdown.
+                let syntax = text.isEmpty ? FileOperations.syntaxForNewNote(in: folder) : .markdown
+                guard let made = FileOperations.createNote(in: folder, title: title ?? "Untitled", text: text, syntax: syntax) else { return nil }
                 return (made.url, folder, FileNode.listing(of: made.url), made.madeFolder ? FileNode.listing(of: folder) ?? FileNode.Listing(url: folder, kind: .folder) : nil,
                         FileSnapshot(of: made.url))
             }.value

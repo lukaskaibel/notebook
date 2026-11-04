@@ -200,7 +200,7 @@ struct LinkUpdate: Sendable {
                 if (entry.size ?? 0) < SearchIndex.largestNote { unread.append(note) }
                 continue
             }
-            guard isMoved(entry.path) || !Self.linkedNames(in: folded).isDisjoint(with: names) else { continue }
+            guard isMoved(entry.path) || !Self.linkedNames(in: folded, syntax: NoteSyntax(url: entry.url)).isDisjoint(with: names) else { continue }
             if rewrite(text, of: note) != nil { changing.append(note) }
         }
         return (changing, unread)
@@ -208,7 +208,8 @@ struct LinkUpdate: Sendable {
 
     /// The names a text's links go by, folded as the index folds the text: the last part of each `[[link]]`'s
     /// address and of each Markdown link's. Read in a hurry, without the Markdown: it only says where to look closer.
-    static func linkedNames(in folded: String) -> Set<String> {
+    static func linkedNames(in folded: String, syntax: NoteSyntax = .markdown) -> Set<String> {
+        if syntax == .asciidoc { return asciidocLinkedNames(in: folded) }
         var names = Set<String>()
         var text = folded
         text.withUTF8 { bytes in
@@ -244,6 +245,24 @@ struct LinkUpdate: Sendable {
         return names
     }
 
+    /// The same for AsciiDoc: the last part of each address of `xref:`, `link:`, `image:`, `include::` and `<<…>>`.
+    private static func asciidocLinkedNames(in folded: String) -> Set<String> {
+        guard folded.contains(":") || folded.contains("<<"), let expression = asciidocAddresses else { return [] }
+        var names = Set<String>()
+        let string = folded as NSString
+        for match in expression.matches(in: folded, range: NSRange(location: 0, length: string.length)) {
+            let range = match.range(at: 1).location != NSNotFound ? match.range(at: 1) : match.range(at: 2)
+            guard range.location != NSNotFound else { continue }
+            var address = string.substring(with: range)
+            while address.hasSuffix("/") { address.removeLast() }
+            let name = address.split(separator: "/").last.map(String.init) ?? address
+            names.insert(SearchIndex.fold(name.removingPercentEncoding ?? name))
+        }
+        return names
+    }
+
+    private static let asciidocAddresses = try? NSRegularExpression(pattern: #"(?:xref|link|image|include|video|audio)::?([^\s\[#]+)[#\[]|<<([^,>#\s]+\.(?:adoc|asciidoc))[#,>]"#)
+
     // MARK: - Rewriting
 
     /// A note's text with its links pointing where they pointed before the files moved, and what changed; nil when
@@ -261,7 +280,7 @@ struct LinkUpdate: Sendable {
         let note = after.entry(for: note)?.url ?? note
         let noteBefore = original(note)
         var changes: [LinkChange] = []
-        for link in Self.links(in: string) {
+        for link in Self.links(in: string, syntax: NoteSyntax(url: note)) {
             let old = string.substring(with: link.address)
             let new: String? = switch link.kind {
             case .wiki: newWikiAddress(old, from: noteBefore, to: note)
@@ -363,18 +382,18 @@ struct LinkUpdate: Sendable {
     /// Puts the addresses a rewrite changed back (`undoing`), or changes them again: each link that says what the
     /// rewrite made it say, once for every link it changed. Links that say the same find the same file, so it doesn't
     /// matter which of them is which. Nil when no link says that any more.
-    static func replay(_ edits: [LinkEdit], in text: String, undoing: Bool) -> (text: String, edits: [LinkEdit])? {
+    static func replay(_ edits: [LinkEdit], in text: String, undoing: Bool, syntax: NoteSyntax = .markdown) -> (text: String, edits: [LinkEdit])? {
         let string = text as NSString
-        let changes = replayChanges(edits, in: string, undoing: undoing)
+        let changes = replayChanges(edits, in: string, undoing: undoing, syntax: syntax)
         guard !changes.isEmpty else { return nil }
         return (applying(changes, to: string), changes.map(\.edit))
     }
 
     /// The same, where the links are in the text. Each edit says what its link said before and says after.
-    static func replayChanges(_ edits: [LinkEdit], in string: NSString, undoing: Bool) -> [LinkChange] {
+    static func replayChanges(_ edits: [LinkEdit], in string: NSString, undoing: Bool, syntax: NoteSyntax = .markdown) -> [LinkChange] {
         var waiting = edits
         var changes: [LinkChange] = []
-        for link in links(in: string) where !waiting.isEmpty {
+        for link in links(in: string, syntax: syntax) where !waiting.isEmpty {
             let address = string.substring(with: link.address)
             guard let index = waiting.firstIndex(where: { $0.kind == link.kind && (undoing ? $0.new : $0.old) == address }) else { continue }
             let edit = waiting.remove(at: index)
@@ -395,7 +414,8 @@ struct LinkUpdate: Sendable {
 
     /// The links in a note as the editor shows them, and the `[[links]]` in its front matter, where Obsidian keeps
     /// properties such as `up: "[[Plan]]"`. Not those in code.
-    static func links(in string: NSString) -> [Link] {
+    static func links(in string: NSString, syntax: NoteSyntax = .markdown) -> [Link] {
+        if syntax == .asciidoc { return asciidocLinks(in: string) }
         let document = MarkdownParser.parse(string)
         var links: [Link] = []
         for line in document.lines {
@@ -414,6 +434,36 @@ struct LinkUpdate: Sendable {
                 default:
                     break
                 }
+            }
+        }
+        return links
+    }
+
+    /// An AsciiDoc note's paths to files: of `xref:`, `link:`, `<<file.adoc#…>>`, `image:` and `include::`. They are
+    /// rewritten as a Markdown link's address is, by the way from the note's folder. Pictures under `imagesdir` and
+    /// web addresses stay as they are.
+    private static func asciidocLinks(in string: NSString) -> [Link] {
+        let document = MarkdownParser.parse(string, syntax: .asciidoc)
+        let picturesElsewhere = AsciiDocParser.attributes(in: Array((string as String).utf16), lines: document.lines)["imagesdir"].map { !$0.isEmpty } ?? false
+        var links: [Link] = []
+        for line in document.lines {
+            for span in line.spans {
+                let address: String
+                switch span.kind {
+                case .link(let destination): address = destination
+                case .image(let source, _):
+                    guard !picturesElsewhere else { continue }
+                    address = source
+                case .embed(let target): address = target
+                default: continue
+                }
+                guard !address.hasPrefix("#") else { continue }
+                // The path is the first thing written after the macro's name: `xref:` path `[`, `<<` path `,`.
+                let written = string.substring(with: span.range)
+                let path = address.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? address
+                let found = (written as NSString).range(of: path)
+                guard !path.isEmpty, found.location != NSNotFound else { continue }
+                links.append(Link(kind: .markdown, address: NSRange(location: span.range.location + found.location, length: found.length + (address.count > path.count ? address.utf16.count - path.utf16.count : 0))))
             }
         }
         return links

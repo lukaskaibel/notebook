@@ -158,7 +158,7 @@ extension Workspace {
             }
             let written = await Task.detached(priority: .userInitiated) {
                 inFiles.compactMap { note -> (url: URL, text: String)? in
-                    FileOperations.rewriteLinks(in: note.note) { LinkUpdate.replay(note.edits, in: $0, undoing: true) }.map { (note.note, $0.text) }
+                    FileOperations.rewriteLinks(in: note.note) { LinkUpdate.replay(note.edits, in: $0, undoing: true, syntax: NoteSyntax(url: note.note)) }.map { (note.note, $0.text) }
                 }
             }.value
             notesRewritten(written)
@@ -189,7 +189,7 @@ extension Workspace {
     @discardableResult
     private func changeLinksInEditor(showing url: URL, _ edits: [LinkEdit], undoing: Bool) -> [LinkEdit]? {
         guard let editor = editorShowing(url) else { return nil }
-        let changes = LinkUpdate.replayChanges(edits, in: editor.nsText, undoing: undoing)
+        let changes = LinkUpdate.replayChanges(edits, in: editor.nsText, undoing: undoing, syntax: editor.syntax)
         guard !changes.isEmpty, editor.changeLinks(changes.map { ($0.range, $0.edit.new) }, actionName: "Update Links") else { return nil }
         saveNote(showing: url)
         recentLinkTexts[HiddenFolders.withoutPrivate(url.standardizedFileURL.path)] = (editor.text, Date())
@@ -202,7 +202,7 @@ extension Workspace {
         guard let url = currentURL, note?.isLoaded == true else { return "no note" }
         let root = location(containing: url)?.url.path ?? ""
         let string = editor.nsText
-        return LinkUpdate.links(in: string).map { link -> String in
+        return LinkUpdate.links(in: string, syntax: editor.syntax).map { link -> String in
             let address = string.substring(with: link.address)
             let target: URL? = switch link.kind {
             case .wiki: index.resolve(address, from: url)

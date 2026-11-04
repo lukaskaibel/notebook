@@ -10,8 +10,12 @@ extension NSAttributedString.Key {
     static let notebookHidden = NSAttributedString.Key("notebook.hidden")
     /// An `EditorObject` drawn in place of its character, on the first character of what it stands for.
     static let notebookObject = NSAttributedString.Key("notebook.object")
-    /// A box drawn behind a run of text (code blocks, callouts, inline code, links to notes).
+    /// A box drawn behind a run of text (inline code, highlights, links to notes).
     static let notebookDecoration = NSAttributedString.Key("notebook.decoration")
+    /// A line break laid out as a space: in an AsciiDoc paragraph, where it only wraps the text.
+    static let notebookSoftBreak = NSAttributedString.Key("notebook.softBreak")
+    /// A box drawn behind whole lines (code blocks, callouts), under the boxes of the text in them.
+    static let notebookBlockDecoration = NSAttributedString.Key("notebook.blockDecoration")
     /// Where a click goes: a URL or a note.
     static let notebookLink = NSAttributedString.Key("notebook.link")
     /// A web address shown as it is written (`https://…`, `<…>`): text you see, but the link's own, which Transformations

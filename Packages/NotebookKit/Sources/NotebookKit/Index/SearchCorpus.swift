@@ -528,15 +528,15 @@ final class SearchCorpus: Sendable {
 
     /// The line of a document the words are in.
     private func hit(_ document: Document, _ query: Query) -> TextHit {
-        let snippet = Self.snippet(of: document.text, query)
         let item = items[document.item]
+        let snippet = Self.snippet(of: document.text, query, syntax: item.kind == .note ? NoteSyntax(url: item.url) : .markdown)
         return TextHit(item: item, source: document.source, snippet: snippet.text, matches: snippet.matches,
                        page: item.kind == .pdf ? snippet.page : nil)
     }
 
     /// The line around the first place the words are, with at most a few words on each side, without the Markdown at
     /// its start; and where the words are in it, and the page (counted by form feeds).
-    static func snippet(of text: String, _ query: Query) -> (text: String, matches: [Range<String.Index>], page: Int?) {
+    static func snippet(of text: String, _ query: Query, syntax: NoteSyntax = .markdown) -> (text: String, matches: [Range<String.Index>], page: Int?) {
         let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive, .widthInsensitive]
         let range = (query.isOneWord ? nil : text.range(of: query.text, options: options))
             ?? query.words.lazy.compactMap { text.range(of: $0, options: options) }.first
@@ -548,8 +548,8 @@ final class SearchCorpus: Sendable {
         let start = text.index(range.lowerBound, offsetBy: -48, limitedBy: lineStart) ?? lineStart
         let end = text.index(range.upperBound, offsetBy: 90, limitedBy: lineEnd) ?? lineEnd
         var snippet = String(text[start..<end]).trimmingCharacters(in: .whitespaces)
-        if start == lineStart { snippet = plainLine(snippet) }
-        snippet = SearchIndex.plainMarkdown(snippet)
+        if start == lineStart { snippet = syntax == .asciidoc ? plainAsciiDocLine(snippet) : plainLine(snippet) }
+        snippet = syntax == .asciidoc ? SearchIndex.plainAsciiDoc(snippet) : SearchIndex.plainMarkdown(snippet)
         if start > lineStart { snippet = "…" + snippet }
         if end < lineEnd { snippet += "…" }
         var matches: [Range<String.Index>] = []
@@ -576,6 +576,27 @@ final class SearchCorpus: Sendable {
             }
             return pages
         }
+    }
+
+    /// A line without the AsciiDoc at its start: "== ", "** ", ". ", "* [x] ", "NOTE: ", a term's "::", a table's
+    /// cells.
+    static func plainAsciiDocLine(_ line: String) -> String {
+        if line.hasPrefix("|") {
+            return line.split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.joined(separator: " · ")
+        }
+        var result = Substring(line)
+        for marks in ["=", "#", "*", ".", "-"] where result.hasPrefix(marks) {
+            let run = result.prefix { String($0) == marks }
+            let rest = result.dropFirst(run.count)
+            if rest.hasPrefix(" ") { result = rest.drop(while: { $0 == " " }) }
+            break
+        }
+        if let box = Todos.checkboxLength(result) { result = result.dropFirst(box) }
+        for admonition in AsciiDocParser.admonitions where result.hasPrefix(admonition + ": ") {
+            result = result.dropFirst(admonition.count + 2)
+        }
+        if let marker = result.range(of: ":: ") { result.replaceSubrange(marker, with: ": ") }
+        return String(result)
     }
 
     /// A line without the Markdown at its start: "> ", "- [ ] ", "## ", "1. ", a callout's "[!tip]".

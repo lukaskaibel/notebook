@@ -14,18 +14,21 @@ enum MarkdownEditing {
         var text: String
         /// UTF-16, as the text views count.
         var selection: NSRange
+        /// What the note is written in: the rules type AsciiDoc's marks in an `.adoc` note.
+        var syntax: NoteSyntax = .markdown
 
-        init(_ text: String, selection: NSRange) {
+        init(_ text: String, selection: NSRange, syntax: NoteSyntax = .markdown) {
             self.text = text
             self.selection = selection
+            self.syntax = syntax
         }
 
-        init(_ text: String, caret: Int) {
-            self.init(text, selection: NSRange(location: caret, length: 0))
+        init(_ text: String, caret: Int, syntax: NoteSyntax = .markdown) {
+            self.init(text, selection: NSRange(location: caret, length: 0), syntax: syntax)
         }
 
         func moving(to caret: Int) -> State {
-            State(text, caret: caret)
+            State(text, caret: caret, syntax: syntax)
         }
     }
 
@@ -60,7 +63,7 @@ enum MarkdownEditing {
     /// pair of marks to type into. `restoring` is the text a previous press unwrapped, which a second press styles
     /// again; the result says what this press unwrapped.
     static func toggle(_ style: Style, in state: State, restoring: NSRange? = nil) -> (state: State, unwrapped: NSRange?) {
-        let document = Document(state.text)
+        let document = Document(state.text, syntax: state.syntax)
         if state.selection.length == 0 {
             return toggle(style, at: state.selection.location, in: document, restoring: restoring)
         }
@@ -84,7 +87,7 @@ enum MarkdownEditing {
             return (unwrap(span, in: document, caret: caret), unwrapped)
         }
         if let span = mine.last(where: { NSMaxRange($0.range) == caret && $0.content.length > 0 }) {
-            return (State(text as String, caret: NSMaxRange(span.content)), nil)
+            return (State(text as String, caret: NSMaxRange(span.content), syntax: document.syntax), nil)
         }
         if let restoring, NSMaxRange(restoring) <= text.length, restoring.location <= caret, caret <= NSMaxRange(restoring) {
             return (wrap(restoring, in: style, document: document, caret: caret), nil)
@@ -92,8 +95,8 @@ enum MarkdownEditing {
         if let word = document.word(around: caret) {
             return (wrap(word, in: style, document: document, caret: caret), nil)
         }
-        let mark = self.mark(for: style, before: document.character(caret - 1), after: document.character(caret))
-        return (document.replacing(NSRange(location: caret, length: 0), with: mark + mark, caret: caret + mark.utf16.count), nil)
+        let marks = self.marks(for: style, before: document.character(caret - 1), after: document.character(caret), syntax: document.syntax)
+        return (document.replacing(NSRange(location: caret, length: 0), with: marks.open + marks.close, caret: caret + marks.open.utf16.count), nil)
     }
 
     private static func toggle(_ style: Style, selection: NSRange, in document: Document) -> State {
@@ -128,7 +131,7 @@ enum MarkdownEditing {
             selections.insert(NSRange(location: edit.range.location + edit.selected.location, length: edit.selected.length), at: 0)
         }
         let start = selections.first!.location
-        return State(result as String, selection: NSRange(location: start, length: NSMaxRange(selections.last!) - start))
+        return State(result as String, selection: NSRange(location: start, length: NSMaxRange(selections.last!) - start), syntax: document.syntax)
     }
 
     /// The edit that takes a style off a selected part of a line, splitting the span if the part is inside it.
@@ -171,29 +174,44 @@ enum MarkdownEditing {
         for mark in marks {
             inner.deleteCharacters(in: NSRange(location: mark.location - union.location, length: mark.length))
         }
-        let mark = self.mark(for: style, before: document.character(union.location - 1), after: document.character(NSMaxRange(union)))
-        return (union, mark + (inner as String) + mark, NSRange(location: mark.utf16.count, length: inner.length))
+        let new = self.marks(for: style, before: document.character(union.location - 1), after: document.character(NSMaxRange(union)), syntax: document.syntax)
+        return (union, new.open + (inner as String) + new.close, NSRange(location: new.open.utf16.count, length: inner.length))
     }
 
-    /// The marks a new span of a style gets. Italics take `_`, or `*` next to a letter, where `_` wouldn't work.
-    private static func mark(for style: Style, before: unichar?, after: unichar?) -> String {
-        switch style {
-        case .bold: "**"
-        case .italic: isWordCharacter(before) || isWordCharacter(after) ? "*" : "_"
-        case .strikethrough: "~~"
-        case .highlight: "=="
-        case .code: "`"
+    /// The marks a new span of a style gets. Italics take `_`, or `*` next to a letter, where `_` wouldn't work. In
+    /// AsciiDoc a mark is single at a word's edges and doubled inside a word (`*bold*`, `un**bold**ed`), and
+    /// strikethrough is a role: `[.line-through]#struck#`.
+    private static func marks(for style: Style, before: unichar?, after: unichar?, syntax: NoteSyntax) -> (open: String, close: String) {
+        guard syntax == .asciidoc else {
+            let mark = switch style {
+            case .bold: "**"
+            case .italic: isWordCharacter(before) || isWordCharacter(after) ? "*" : "_"
+            case .strikethrough: "~~"
+            case .highlight: "=="
+            case .code: "`"
+            }
+            return (mark, mark)
+        }
+        let inWord = isWordCharacter(before) || isWordCharacter(after)
+        func doubled(_ mark: String) -> (String, String) { inWord ? (mark + mark, mark + mark) : (mark, mark) }
+        return switch style {
+        case .bold: doubled("*")
+        case .italic: doubled("_")
+        case .highlight: doubled("#")
+        case .code: doubled("`")
+        case .strikethrough: ("[.line-through]" + (inWord ? "##" : "#"), inWord ? "##" : "#")
         }
     }
 
     private static func wrap(_ range: NSRange, in style: Style, document: Document, caret: Int) -> State {
-        let mark = self.mark(for: style, before: document.character(range.location - 1), after: document.character(NSMaxRange(range)))
-        let length = mark.utf16.count
+        let marks = self.marks(for: style, before: document.character(range.location - 1), after: document.character(NSMaxRange(range)), syntax: document.syntax)
+        let open = marks.open.utf16.count
+        let close = marks.close.utf16.count
         let result = NSMutableString(string: document.text)
-        result.insert(mark, at: NSMaxRange(range))
-        result.insert(mark, at: range.location)
-        let moved = caret < range.location ? caret : caret <= NSMaxRange(range) ? caret + length : caret + 2 * length
-        return State(result as String, caret: moved)
+        result.insert(marks.close, at: NSMaxRange(range))
+        result.insert(marks.open, at: range.location)
+        let moved = caret < range.location ? caret : caret <= NSMaxRange(range) ? caret + open : caret + open + close
+        return State(result as String, caret: moved, syntax: document.syntax)
     }
 
     /// The span without its marks, the caret staying with the character it was next to.
@@ -213,7 +231,7 @@ enum MarkdownEditing {
         } else {
             moved = caret - span.opening.length - span.closing.length
         }
-        return State(result as String, caret: moved)
+        return State(result as String, caret: moved, syntax: document.syntax)
     }
 
     /// Out of a style from the end of its text, where typing on would still be in it. Spaces typed last go out with
@@ -222,12 +240,12 @@ enum MarkdownEditing {
         let content = document.string(span.content)
         let core = content.replacingOccurrences(of: #"\s+$"#, with: "", options: .regularExpression)
         let spaces = content.utf16.count - core.utf16.count
-        guard spaces > 0, !core.isEmpty else { return State(document.text as String, caret: NSMaxRange(span.range)) }
+        guard spaces > 0, !core.isEmpty else { return State(document.text as String, caret: NSMaxRange(span.range), syntax: document.syntax) }
         let trailing = NSRange(location: NSMaxRange(span.content) - spaces, length: spaces)
         let result = NSMutableString(string: document.text)
         result.insert(document.string(trailing), at: NSMaxRange(span.range))
         result.deleteCharacters(in: trailing)
-        return State(result as String, caret: NSMaxRange(span.range))
+        return State(result as String, caret: NSMaxRange(span.range), syntax: document.syntax)
     }
 
     /// Past the closing marks that start at `position`, innermost first: from `**_bold|_**` to the end.
@@ -243,7 +261,7 @@ enum MarkdownEditing {
 
     /// Bullets, a checklist or numbers for the lines of the selection, or off again where they all have them.
     static func toggle(_ block: Block, in state: State) -> State {
-        let document = Document(state.text)
+        let document = Document(state.text, syntax: state.syntax)
         var lines = document.lines(in: state.selection)
         if lines.count > 1 { lines = lines.filter { $0.range.length > 0 } }
         guard !lines.isEmpty else { return state }
@@ -255,6 +273,7 @@ enum MarkdownEditing {
             }
         }
         let removing = lines.allSatisfy(has)
+        let asciidoc = document.syntax == .asciidoc
         var number = 1
         if case .ordered(let previous) = document.line(before: lines[0])?.kind { number = previous + 1 }
         var edits: [(range: NSRange, text: String)] = []
@@ -264,15 +283,18 @@ enum MarkdownEditing {
                 edits.append((prefix, ""))
                 continue
             }
-            let bullet = line.kind == .bullet ? document.string(NSRange(location: line.marker.location, length: 1)) : "-"
+            let bullet = line.kind == .bullet ? document.string(NSRange(location: line.marker.location, length: 1)) : asciidoc ? "*" : "-"
             let marker: String
             switch block {
             case .bullet:
                 marker = bullet + " "
             case .checklist:
-                marker = (line.isList ? document.string(line.marker).trimmingCharacters(in: .whitespaces) : bullet) + " [ ] "
+                // AsciiDoc's checklists are bulleted only.
+                let own = document.string(line.marker).trimmingCharacters(in: .whitespaces)
+                marker = (line.isList && !(asciidoc && own.hasPrefix(".")) ? own : bullet) + " [ ] "
             case .ordered:
-                marker = "\(number). "
+                // AsciiDoc counts its own: `. Item`.
+                marker = asciidoc ? ". " : "\(number). "
                 number += 1
             }
             edits.append((prefix, marker))
@@ -282,7 +304,7 @@ enum MarkdownEditing {
 
     /// Ticks or unticks the checkbox of the caret's line.
     static func toggleCheckbox(in state: State) -> State? {
-        let document = Document(state.text)
+        let document = Document(state.text, syntax: state.syntax)
         let line = document.line(at: state.selection.location)
         guard let box = line.checkbox else { return nil }
         return document.applying([(NSRange(location: box.location + 1, length: 1), line.isChecked ? " " : "x")], to: state.selection)
@@ -299,9 +321,10 @@ enum MarkdownEditing {
     }
 
     private static func shift(in state: State, inwards: Bool) -> State? {
-        let document = Document(state.text)
+        let document = Document(state.text, syntax: state.syntax)
         let lines = document.lines(in: state.selection)
         guard let first = lines.first(where: \.isList) else { return nil }
+        if document.syntax == .asciidoc { return shiftByMarker(lines, inwards: inwards, in: state, document: document) }
         let amount: Int
         if inwards {
             // To where the text of the item above starts, which makes it that item's child.
@@ -324,24 +347,43 @@ enum MarkdownEditing {
         return document.applying(edits, to: state.selection)
     }
 
+    /// AsciiDoc nests an item by its marker, not by spaces: `*` in is `**`, `**` out is `*`. A `-` item goes in as `**`.
+    /// Numbered items (`1.`) don't nest that way and stay.
+    private static func shiftByMarker(_ lines: [Line], inwards: Bool, in state: State, document: Document) -> State? {
+        var edits: [(range: NSRange, text: String)] = []
+        for line in lines where line.isList {
+            let marker = document.string(line.marker).trimmingCharacters(in: .whitespaces)
+            guard let character = marker.first, character == "*" || character == "." || character == "-" else { continue }
+            let at = NSRange(location: line.marker.location, length: 0)
+            if inwards {
+                guard marker.count < 5 else { continue }
+                edits.append(character == "-" ? (NSRange(location: line.marker.location, length: 1), "**") : (at, String(character)))
+            } else if line.depth > 0 {
+                edits.append((NSRange(location: line.marker.location, length: 1), ""))
+            }
+        }
+        guard !edits.isEmpty else { return nil }
+        return document.applying(edits, to: state.selection)
+    }
+
     // MARK: - Typing
 
     /// Return: leaves the styles the caret is at the end of, splits those it is in the middle of, continues a list
     /// or a quote with the next marker, and ends one on an empty item.
     static func insertNewline(in state: State) -> State? {
-        guard state.selection.length == 0, !Document(state.text).isInFence(state.selection.location) else { return nil }
+        guard state.selection.length == 0, !Document(state.text, syntax: state.syntax).isInFence(state.selection.location) else { return nil }
         var text = state.text
         var caret = state.selection.location
         var changed = false
         // A pair of marks with nothing in it goes, as if the style had never been turned on.
         while true {
-            let document = Document(text)
+            let document = Document(text, syntax: state.syntax)
             guard let pair = document.emptyPair(around: caret, spans: document.spans(on: document.line(at: caret).range)) else { break }
             text = document.replacing(pair.range, with: "", caret: pair.range.location).text
             caret = pair.range.location
             changed = true
         }
-        let document = Document(text)
+        let document = Document(text, syntax: state.syntax)
         let line = document.line(at: caret)
         let spans = document.spans(on: line.range)
 
@@ -359,7 +401,8 @@ enum MarkdownEditing {
         var left = document.string(NSRange(location: line.range.location, length: split - line.range.location))
         if split > caret {
             // Leaving styles at the end of the line: spaces typed last before their marks would undo them in Markdown.
-            left = left.replacingOccurrences(of: #"[ \t]+((?:\*\*|__|~~|==|[*_~`])+)$"#, with: "$1", options: .regularExpression)
+            let marks = state.syntax == .asciidoc ? #"[ \t]+((?:\*\*|__|##|[*_#`])+)$"# : #"[ \t]+((?:\*\*|__|~~|==|[*_~`])+)$"#
+            left = left.replacingOccurrences(of: marks, with: "$1", options: .regularExpression)
         }
         var right = document.string(NSRange(location: split, length: NSMaxRange(line.range) - split))
         var reopened = ""
@@ -375,9 +418,12 @@ enum MarkdownEditing {
         if line.isList || line.kind == .quote, split >= line.contentStart {
             let content = document.string(NSRange(location: line.contentStart, length: NSMaxRange(line.range) - line.contentStart))
             if content.trimmingCharacters(in: .whitespaces).isEmpty {
-                if line.isList, line.indent > 0, let out = outdent(in: State(text, caret: caret)) { return out }
+                let nested = state.syntax == .asciidoc ? line.depth > 0 : line.indent > 0
+                if line.isList, nested, let out = outdent(in: State(text, caret: caret, syntax: state.syntax)) { return out }
                 let prefix = NSRange(location: line.marker.location, length: line.contentStart - line.marker.location)
-                return document.applying([(prefix, "")], to: NSRange(location: caret, length: 0))
+                // In AsciiDoc a line right under an item is its text: a blank line ends the list.
+                let ending = state.syntax == .asciidoc && line.isList ? "\n" : ""
+                return document.applying([(prefix, ending)], to: NSRange(location: caret, length: 0))
             }
             continuation = document.string(NSRange(location: line.range.location, length: line.indent)) + nextMarker(after: line, in: document)
         }
@@ -396,7 +442,8 @@ enum MarkdownEditing {
         switch line.kind {
         case .ordered(let number):
             let digits = marker.prefix { $0.isNumber }
-            next = "\(number + 1)" + marker.dropFirst(digits.count)
+            // AsciiDoc's `. ` counts itself.
+            next = digits.isEmpty ? marker : "\(number + 1)" + marker.dropFirst(digits.count)
         case .quote:
             next = marker.hasSuffix(" ") ? marker : marker + " "
         default:
@@ -426,7 +473,7 @@ enum MarkdownEditing {
     }
 
     static func deleting(_ state: State, forward: Bool) -> Deletion? {
-        let document = Document(state.text)
+        let document = Document(state.text, syntax: state.syntax)
         if state.selection.length > 0 { return deleteSelection(in: state, document: document).map { Deletion(state: $0) } }
         let caret = state.selection.location
         guard forward ? caret < document.text.length : caret > 0, !document.isInFence(caret) else { return nil }
@@ -453,7 +500,7 @@ enum MarkdownEditing {
     /// single mark, or marks that can't be halved (`~~`, `==`), loses them both at once, and its text is what a mark
     /// typed next to it styles again.
     private static func unmarking(_ span: Span, at index: Int, caret: Int, in document: Document) -> Deletion {
-        let halves = span.style == .bold
+        let halves = span.style == .bold && span.opening.length == 2 && span.closing.length == 2
         // The mark deleted, and the outer one of the other side.
         let opening = !halves ? span.opening : NSRange(location: NSLocationInRange(index, span.opening) ? index : span.opening.location, length: 1)
         let closing = !halves ? span.closing : NSRange(location: NSLocationInRange(index, span.closing) ? index : NSMaxRange(span.closing) - 1, length: 1)
@@ -463,7 +510,7 @@ enum MarkdownEditing {
         // The caret moves back by what went in front of it.
         let moved = caret - [opening, closing].reduce(0) { $0 + max(0, min(NSMaxRange($1), caret) - $1.location) }
         let unmarked = halves ? nil : NSRange(location: span.range.location, length: span.content.length)
-        return Deletion(state: State(result as String, caret: moved), unmarked: unmarked)
+        return Deletion(state: State(result as String, caret: moved, syntax: document.syntax), unmarked: unmarked)
     }
 
     /// Deleting the character at `index`, inside a line's marker: the marker goes as a whole. One `#` of several
@@ -507,7 +554,7 @@ enum MarkdownEditing {
             result.deleteCharacters(in: range)
             caret -= max(0, min(NSMaxRange(range), selection.location) - range.location)
         }
-        return State(result as String, caret: caret)
+        return State(result as String, caret: caret, syntax: document.syntax)
     }
 
     /// The small things typing does: "-" at the start of a line becomes a bullet with its space, text typed right
@@ -518,12 +565,14 @@ enum MarkdownEditing {
     /// a time.
     static func insert(_ typed: String, in state: State, unmarked: NSRange? = nil) -> State? {
         guard state.selection.length == 0, !typed.isEmpty else { return nil }
-        let document = Document(state.text)
+        let document = Document(state.text, syntax: state.syntax)
         let caret = state.selection.location
         guard !document.isInFence(caret) else { return nil }
         let line = document.line(at: caret)
         let before = document.string(NSRange(location: line.range.location, length: caret - line.range.location))
         let after = document.string(NSRange(location: caret, length: NSMaxRange(line.range) - caret))
+        let asciidoc = document.syntax == .asciidoc
+        if asciidoc { return insertAsciiDoc(typed, in: state, document: document, line: line, before: before, after: after, unmarked: unmarked) }
         // Two or more #s at the start of a line only ever start a heading (a tag has one): text typed right after them
         // gets the space in front of it that makes them one.
         if let first = typed.unicodeScalars.first, first != "#", !CharacterSet.whitespacesAndNewlines.contains(first),
@@ -557,7 +606,7 @@ enum MarkdownEditing {
             }
             // Right in front of a heading's own space, a space steps over it.
             if after.hasPrefix(" "), before.range(of: #"^ {0,3}#{1,6}$"#, options: .regularExpression) != nil {
-                return State(state.text, caret: caret + 1)
+                return state.moving(to: caret + 1)
             }
             // A space right after marks that were just paired makes them plain stars (`a ** b`): the closing pair goes.
             if let pair = document.emptyPair(around: caret, spans: document.spans(on: line.range)), pair.range.length == 4 {
@@ -575,7 +624,7 @@ enum MarkdownEditing {
             let spans = document.spans(on: line.range)
             let closes = spans.contains { $0.content.length > 0 && caret >= NSMaxRange($0.content) && caret < NSMaxRange($0.range) }
             if closes, after.hasPrefix(typed) {
-                return State(state.text, caret: caret + 1)
+                return state.moving(to: caret + 1)
             }
             // A star in an empty pair of bold makes it bold italics: `***|***`.
             if typed == "*", let pair = document.emptyPair(around: caret, spans: spans), document.string(pair.range) == "****" {
@@ -604,6 +653,60 @@ enum MarkdownEditing {
         return nil
     }
 
+    /// The small things typing does in AsciiDoc, as `insert` does them in Markdown: text typed right after `==` gets the
+    /// space a heading needs, a space after a marker's own is left out, `* [` and `]` make a checkbox, a closing mark
+    /// typed where it already is steps over it, `**` and `##` bring their closing pair, and a mark typed next to the text
+    /// Delete just took marks off styles it again.
+    private static func insertAsciiDoc(_ typed: String, in state: State, document: Document, line: Line, before: String, after: String, unmarked: NSRange?) -> State? {
+        let caret = state.selection.location
+        // Two or more `=` start a heading, or with four alone, a block: text right after them gets the heading's space.
+        if let first = typed.unicodeScalars.first, first != "=", !CharacterSet.whitespacesAndNewlines.contains(first),
+           before.range(of: #"^={2,6}$"#, options: .regularExpression) != nil {
+            return document.replacing(NSRange(location: caret, length: 0), with: " " + typed, caret: caret + 1 + typed.utf16.count)
+        }
+        guard typed.utf16.count == 1 else { return nil }
+        switch typed {
+        case " ":
+            let isMarked = line.isList || { if case .heading = line.kind { true } else { false } }()
+            if isMarked, caret == line.contentStart, before.hasSuffix(" ") { return state }
+            if after.hasPrefix(" "), before.range(of: #"^={1,6}$"#, options: .regularExpression) != nil { return state.moving(to: caret + 1) }
+            if let pair = document.emptyPair(around: caret, spans: document.spans(on: line.range)), pair.range.length == 4 {
+                return document.replacing(NSRange(location: caret, length: 2), with: " ", caret: caret + 1)
+            }
+        case "]":
+            let pattern = #"^([ \t]*(?:\*{1,5}|-))[ \t]+\[([ xX*]?)$"#
+            guard let match = try? NSRegularExpression(pattern: pattern).firstMatch(in: before, range: NSRange(location: 0, length: before.utf16.count)) else { break }
+            let marker = (before as NSString).substring(with: match.range(at: 1))
+            let mark = (before as NSString).substring(with: match.range(at: 2))
+            let box = marker + " [" + (mark.isEmpty ? " " : mark) + "] "
+            let replaced = NSRange(location: line.range.location, length: before.utf16.count + (after.hasPrefix(" ") ? 1 : 0))
+            return document.replacing(replaced, with: box, caret: line.range.location + box.utf16.count)
+        case "*", "_", "`", "#":
+            let spans = document.spans(on: line.range)
+            let closes = spans.contains { $0.content.length > 0 && caret >= NSMaxRange($0.content) && caret < NSMaxRange($0.range) }
+            if closes, after.hasPrefix(typed) { return state.moving(to: caret + 1) }
+            // `**` and `##` where a style can start bring their closing pair: `**|**`.
+            if typed == "*" || typed == "#", before.hasSuffix(typed), !before.hasSuffix(typed + typed), after.first.map(\.isWhitespace) ?? true,
+               !spans.contains(where: { $0.style == .code && NSLocationInRange(caret - 1, $0.range) }) {
+                let opening = before.dropLast()
+                // Not a list's or a heading's marker, nor inside a word.
+                let startsItem = opening.allSatisfy { $0 == " " || $0 == "\t" }
+                if !startsItem, let previous = opening.last, previous.isWhitespace || "([{\"'“‘".contains(previous),
+                   (opening.components(separatedBy: typed + typed).count - 1) % 2 == 0 {
+                    return document.replacing(NSRange(location: caret, length: 0), with: typed + typed + typed, caret: caret + 1)
+                }
+            }
+            if let unmarked, NSMaxRange(unmarked) <= document.text.length, caret == NSMaxRange(unmarked) || caret == unmarked.location {
+                let wrapped = typed + document.string(unmarked) + typed
+                return document.replacing(unmarked, with: wrapped, caret: caret == unmarked.location ? caret + 1 : caret + 2)
+            }
+        default:
+            break
+        }
+        return nil
+    }
+
+
     /// The second mark of a style that takes two (`**`, `~~`, `==`), typed where a style can start (at the start of
     /// a line, after a space or an opening bracket) with nothing after it yet, brings the closing pair along and puts
     /// the caret between them, `**|**`; typing on fills them, and the closing marks are stepped over. Not where the
@@ -625,12 +728,16 @@ enum MarkdownEditing {
 
     /// The styles around the caret or selection, and what its line is.
     static func context(in state: State) -> Context {
-        let document = Document(state.text)
+        let document = Document(state.text, syntax: state.syntax)
         let selection = state.selection
         let line = document.line(at: selection.location)
-        var context = Context(line: line.kind, isChecklist: line.checkbox != nil, isChecked: line.isChecked, canOutdent: line.isList && line.indent > 0)
+        let asciidoc = document.syntax == .asciidoc
+        var context = Context(line: line.kind, isChecklist: line.checkbox != nil, isChecked: line.isChecked,
+                              canOutdent: line.isList && (asciidoc ? line.depth > 0 : line.indent > 0))
         // In only where it would put the item under the one above.
-        context.canIndent = line.isList && document.listItem(before: line) { $0.indent <= line.indent && $0.childIndent > line.indent } != nil
+        context.canIndent = line.isList && (asciidoc
+            ? document.listItem(before: line) { $0.depth >= line.depth } != nil
+            : document.listItem(before: line) { $0.indent <= line.indent && $0.childIndent > line.indent } != nil)
         guard !document.isInFence(selection.location) else { return context }
         let spans = document.spans(on: line.range)
         for span in spans where span.content.location <= selection.location && NSMaxRange(selection) <= NSMaxRange(span.content) {
@@ -640,6 +747,12 @@ enum MarkdownEditing {
             context.styles.insert(pair.style)
         }
         let string = document.text as String
+        if asciidoc {
+            for match in MarkdownSyntax.asciidocURL.matches(in: string, range: line.range) where match.range.location <= selection.location && selection.location <= NSMaxRange(match.range) {
+                context.link = URL(string: document.string(match.range))
+            }
+            return context
+        }
         for match in MarkdownSyntax.link.matches(in: string, range: line.range) where match.range(at: 1).length == 0 {
             if NSLocationInRange(selection.location, match.range) {
                 context.link = URL(string: document.string(match.range(at: 3)))
@@ -683,18 +796,20 @@ enum MarkdownEditing {
     private struct Document {
         let text: NSString
         let fences: [NSRange]
+        let syntax: NoteSyntax
 
-        init(_ string: String) {
+        init(_ string: String, syntax: NoteSyntax = .markdown) {
             text = string as NSString
-            fences = MarkdownSyntax.fences(in: text)
+            self.syntax = syntax
+            fences = MarkdownSyntax.fences(in: text, syntax: syntax)
         }
 
         func line(at location: Int) -> Line {
-            MarkdownSyntax.line(at: location, in: text)
+            MarkdownSyntax.line(at: location, in: text, syntax: syntax)
         }
 
         func spans(on line: NSRange) -> [Span] {
-            MarkdownSyntax.spans(in: text, line, fences: fences)
+            MarkdownSyntax.spans(in: text, line, fences: fences, syntax: syntax)
         }
 
         func string(_ range: NSRange) -> String {
@@ -746,7 +861,7 @@ enum MarkdownEditing {
                 // A fence that isn't closed runs to the end of the text.
                 guard location == NSMaxRange(fence), location == text.length else { return false }
                 let last = MarkdownSyntax.lineRange(at: location, in: text)
-                return last.location == fence.location || !(string(last).hasPrefix("```") || string(last).hasPrefix("~~~"))
+                return last.location == fence.location || !(string(last).hasPrefix("```") || string(last).hasPrefix("~~~") || (syntax == .asciidoc && string(last).count >= 4 && Set(string(last)).count == 1 && "-.+/".contains(string(last).first!)))
             }
         }
 
@@ -775,7 +890,9 @@ enum MarkdownEditing {
 
         /// The marks of a style with nothing in it around the caret, as a press of Bold leaves them: `**|**`.
         func emptyPair(around caret: Int, spans: [Span]) -> (style: Style, range: NSRange)? {
-            let candidates: [(Style, String)] = [(.bold, "**"), (.bold, "__"), (.strikethrough, "~~"), (.highlight, "=="), (.italic, "*"), (.italic, "_"), (.code, "`")]
+            let candidates: [(Style, String)] = syntax == .asciidoc
+                ? [(.bold, "**"), (.italic, "__"), (.highlight, "##"), (.bold, "*"), (.italic, "_"), (.highlight, "#"), (.code, "`")]
+                : [(.bold, "**"), (.bold, "__"), (.strikethrough, "~~"), (.highlight, "=="), (.italic, "*"), (.italic, "_"), (.code, "`")]
             for (style, mark) in candidates {
                 let length = mark.utf16.count
                 guard caret >= length, caret + length <= text.length else { continue }
@@ -789,7 +906,7 @@ enum MarkdownEditing {
         }
 
         func replacing(_ range: NSRange, with replacement: String, caret: Int) -> State {
-            State(text.replacingCharacters(in: range, with: replacement), caret: caret)
+            State(text.replacingCharacters(in: range, with: replacement), caret: caret, syntax: syntax)
         }
 
         /// Several replacements, none overlapping, with the selection moved along.
@@ -811,7 +928,7 @@ enum MarkdownEditing {
                 start = move(start)
                 end = move(end)
             }
-            return State(result as String, selection: NSRange(location: start, length: max(0, end - start)))
+            return State(result as String, selection: NSRange(location: start, length: max(0, end - start)), syntax: syntax)
         }
     }
 }
