@@ -38,7 +38,7 @@ struct MainView: View {
         NavigationSplitView(columnVisibility: $workspace.columnVisibility) {
             VStack(spacing: 0) {
                 SidebarOutline(workspace: workspace)
-                AppIconTipView()
+                SidebarTips()
                 AddLocationButton(workspace: workspace)
             }
             .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 400)

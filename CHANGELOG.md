@@ -3,6 +3,18 @@
 Everything users would notice, newest first. The format follows [Keep a Changelog](https://keepachangelog.com), and
 versions follow [semantic versioning](https://semver.org).
 
+## [Unreleased]
+
+### Added
+
+- Quick Look shows a note as Notebook does: press Space on a note in the Finder, or look at it in the Finder's column
+  view or Get Info, and you see its headings, to-dos, tables, maths, diagrams, pictures and drawings, with its title
+  and when it was last edited on top, instead of its Markdown. It is set in the typeface, size, line spacing and width
+  chosen in Settings › Text, in Notebook's ink blue. Its text can be selected and copied. In a folder the Mac guards,
+  such as Documents or Downloads, the Mac first asks whether Notebook may read it; the note shows meanwhile and its
+  pictures follow once you allow it. A tip at the bottom of the sidebar shows the way, with a button to Quick Look's
+  settings, where another app that previews Markdown can be turned off.
+
 ## [1.2.0] – not released yet
 
 Handwritten notes on iPhone and iPad, with All Pages and pictures on the page; drawing and highlighting PDFs on the Mac;

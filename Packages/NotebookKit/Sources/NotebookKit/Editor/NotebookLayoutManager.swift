@@ -29,6 +29,9 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
     var selectedRanges: [NSRange] = []
     /// For a copy that is printed or exported: controls for editing (a link's pencil) take no room and aren't drawn.
     var hidesEditingControls = false
+    /// For Quick Look, which may read the note but not the pictures next to it: a picture it can't read is out of
+    /// reach rather than missing, and shows by its name.
+    var picturesOutOfReach = false
     /// Where the code block with the copy button over it starts: its language label makes way for the button.
     var copyButtonBlock: Int?
     /// Show Changes in Version History: what was added since an earlier version and what was taken out, marked in it.
@@ -187,7 +190,9 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
             return NSRect(x: 0, y: 0, width: floor(display.width), height: floor(display.height))
         case .drawing(let url):
             // As wide as the text, wherever it was drawn; as tall as that makes it.
-            let size = DrawingStore.shared.size(of: url) ?? ImageStore.shared.size(of: url) ?? CGSize(width: width, height: width / 2)
+            let known = DrawingStore.shared.size(of: url) ?? ImageStore.shared.size(of: url)
+            if known == nil, picturesOutOfReach { return NSRect(x: 0, y: 0, width: min(width, 420), height: 64) }
+            let size = known ?? CGSize(width: width, height: width / 2)
             return NSRect(x: 0, y: 0, width: floor(width), height: max(24, (size.height * floor(width) / max(1, size.width)).rounded()))
         case .fileCard:
             return NSRect(x: 0, y: 0, width: min(width, 440), height: 68)
@@ -451,6 +456,10 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
             drawImage(url: url, source: source, range: objectRange, in: rect, radius: inline ? 3 : 8)
 
         case .drawing(let url):
+            if picturesOutOfReach, DrawingStore.shared.size(of: url) == nil, ImageStore.shared.size(of: url) == nil {
+                drawPlaceholder(url.lastPathComponent, symbol: "pencil.tip.crop.circle", in: rect)
+                break
+            }
             guard source?.showsCanvas(for: url) != true,
                   let image = DrawingStore.shared.image(for: url, width: rect.width, dark: source?.isDarkAppearance ?? false, ready: { [weak self] in self?.source?.objectNeedsDisplay(objectRange) })
             else { break }
@@ -533,7 +542,8 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
 
     private func drawImage(url: URL?, source: String, range: NSRange, in rect: NSRect, radius: CGFloat) {
         guard let url, ImageStore.shared.size(of: url) != nil else {
-            drawPlaceholder(url == nil && source.hasPrefix("http") ? source : "Picture not found: \((source as NSString).lastPathComponent)", symbol: "photo", in: rect)
+            let name = (source as NSString).lastPathComponent
+            drawPlaceholder(url == nil && source.hasPrefix("http") ? source : picturesOutOfReach ? name : "Picture not found: \(name)", symbol: "photo", in: rect)
             return
         }
         let image = ImageStore.shared.image(for: url, width: rect.width) { [weak self] in self?.source?.objectNeedsDisplay(range) }

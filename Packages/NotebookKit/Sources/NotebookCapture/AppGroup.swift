@@ -17,5 +17,5 @@ public enum AppGroup {
     }
 
     /// The group's settings.
-    static var defaults: UserDefaults? { identifier.flatMap { UserDefaults(suiteName: $0) } }
+    public static var defaults: UserDefaults? { identifier.flatMap { UserDefaults(suiteName: $0) } }
 }
