@@ -1,8 +1,8 @@
 // The Quick Look extension: a note as Notebook shows it, when you press Space on it in the Finder, or tap it in the
 // Files app or in a message in Mail or Messages. It is built with the app and goes inside it, on the Mac, iPhone and
 // iPad. iOS asks it on an iPhone with iOS 27.2; the iOS 26.4, 27.0 and 27.1 Simulators show Markdown as plain text
-// without asking any app, though they ask it for a type of its own. It carries its own copy of the editor, about
-// 30 MB. It shows notes with the app's editor (NotePreview in NotebookKit) and the app's accent colour (its
+// without asking any app, though they ask it for a type of its own. It shows notes with the app's editor (NotePreview
+// in NotebookKit), from the NotebookKit framework in the app's Frameworks folder, and the app's accent colour (its
 // Assets.xcassets).
 #include "Shared.xcconfig"
 

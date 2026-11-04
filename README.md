@@ -904,7 +904,8 @@ NotebookShare/               The share extension: the sheet, and what it leaves 
 NotebookQuickLook/           The Quick Look extension: a note as Notebook shows it (UI/NotePreview.swift), read only
 NotebookThumbnail/           The thumbnail extension: the top of a note for the Finder's icons (UI/NoteThumbnail.swift)
 NotebookUITests/             UI tests on iPhone and iPad simulators, for what only a real keyboard or touch reaches
-Packages/NotebookKit/
+Packages/NotebookKit/        Everything else, as one framework in the app's Frameworks folder, which the Quick Look
+                             and thumbnail extensions use too (Package.swift)
   Sources/NotebookCapture/   What the extensions share with the app: the New Note intent, the notes shared to it, and
                              what the widgets show, kept by the app in the App Group
   Sources/NotebookKit/
@@ -929,7 +930,8 @@ Packages/NotebookKit/
     Debug/                   The debug remotes (Debug builds only)
   Tests/                     Parser, editor, merge, smoothness, search index, Spotlight, link, drawing, handwritten
                              note, reminder, to-do, folder look, version history, app icon and Apple Notes import tests
-Config/                      Build settings, Info.plist and entitlements
+Config/                      Build settings, Info.plist and entitlements, and the build step that puts NotebookKit's
+                             resources into its framework once (notebookkit-resources.sh)
 Design/                      The icon, the README pictures, the social preview, the App Store screenshots, header
                              and search-result pictures, and what is set in App Store Connect (app-store.md)
 Website/                     The website, published to GitHub Pages by .github/workflows/website.yml
