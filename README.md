@@ -524,6 +524,10 @@ screens.
   to them where they are; from anywhere else, as copies next to the note.
 - **Copy a whole file,** as ⌘C does in the Finder: Copy in the sidebar's menu, or ⇧⌘C for the file that's open, any
   kind of file. Paste it in the Finder, Mail, Messages or a note.
+- **Paste a whole note.** Paste a Markdown file's contents into a new note and its `# Heading` becomes the title, the
+  rest the text; a note you've named keeps its name, and the heading is left out. Pasted into the title, the first line
+  is the title and the rest goes into the note. On the Mac, ⌘V in the sidebar makes the text a new note in the selected
+  folder, named the same way, and copies copied files there, as the Finder does.
 - **Drawings in notes,** with PencilKit: Apple Pencil, a finger, the mouse, the trackpad or a tablet. Each is a PNG
   that other apps show, with its strokes kept next to it so it stays a drawing in Notebook.
 - **Handwritten notes** on iPhone and iPad: PDFs of blank, lined, squared, dotted or Cornell paper to write in with
@@ -735,6 +739,7 @@ exported it rather than when you wrote it.
 | ⇧⌘N | New folder in the current folder, named in place |
 | ⌘D | Duplicate the note |
 | ⇧⌘C | Copy the file itself, to paste in the Finder, Mail or a note: the open one, or in the sidebar the one selected (⌘C there too) |
+| ⌘V in the sidebar | Paste in the selected folder, or the selected file's: copied files as copies, copied text as a new note named by its `# Heading` |
 | ⌘Z, ⇧⌘Z | Undo and redo: typing, and changes to files (the Trash, a rename, a move, a new note or folder), newest first |
 | ⌘F, ⇧⌘F | Find in the note, find and replace; ⌘G and ⇧⌘G for the next and previous |
 | ⌥⌘F | Search every note, as Notes searches its list |
@@ -864,7 +869,7 @@ Planned, and not built yet:
 - **Versions of a note renamed or moved outside Notebook,** in the Finder or another app, don't follow it: they go to
   the History's Trash, and come back only if it gets its old name again (#148).
 - On iPhone and iPad there is no Settings › App Icon (iOS only switches between icons built into the app), no PNG
-  export and no window of its own for a single file.
+  export, no window of its own for a single file and no Paste into a folder in the list (#298).
 - **Sketches** as files of their own, next to your notes rather than in one.
 - **Handwritten notes on the Mac:** you write on their pages there as on any PDF, but new handwritten notes, new pages,
   pictures on pages and All Pages are on iPhone and iPad only. Text boxes and shapes aren't offered: the PDF couldn't

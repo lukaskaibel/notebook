@@ -421,6 +421,17 @@ final class TitleField: UITextField {
         (superview as? MarkdownTextView)?.controller?.leaveTitle()
     }
 
+    /// Pasted Markdown with more than a line goes in the title and the note below it (`EditorController.pasteInTitle`).
+    override func paste(_ sender: Any?) {
+        let pasteboard = UIPasteboard.general
+        let source = pasteboard.data(forPasteboardType: EditorController.fragmentIdentifier).flatMap(EditorController.fragmentFolder)
+        if let string = pasteboard.string, let controller = (superview as? MarkdownTextView)?.controller,
+           controller.pasteInTitle(string, assetsFrom: source) {
+            return
+        }
+        super.paste(sender)
+    }
+
     /// UIKit gives the focus a text field lets go of to the text view it is in, which would bring the keyboard
     /// back for the text when you leave the title or the note.
     override func resignFirstResponder() -> Bool {

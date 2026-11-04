@@ -11,6 +11,13 @@ versions follow [semantic versioning](https://semver.org).
   in under it, with an empty row and the caret in its first cell. Tab goes to the next cell with its text selected,
   ⇧Tab to the one before, and Tab in the last cell makes a new row. A `| --- |` row you type yourself, with its `:` for
   alignment, takes the place of the one Notebook put in.
+- Paste a whole Markdown file into a new note and its `# Heading` becomes the note's title, with the rest as its text,
+  instead of the title showing twice. A note you've already named keeps its name, and the pasted heading is left out.
+  Paste it into the title and the first line goes in the title, without its #s, and the rest into the note, where the
+  caret goes on to.
+- Paste in the sidebar on the Mac (⌘V), as in the Finder: what you copied goes into the selected folder, or the folder
+  of the selected file. Copied files are copied there; copied text becomes a new note, named after a Markdown file's
+  `# Heading`, or with its title ready to type. Pictures in text copied from a note in another folder come along.
 
 ### Changed
 

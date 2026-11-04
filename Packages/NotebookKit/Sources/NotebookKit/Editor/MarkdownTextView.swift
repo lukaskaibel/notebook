@@ -319,6 +319,45 @@ final class MarkdownTextView: NSTextView {
 final class TitleField: NSTextField {
     var onCommandBy: ((Selector) -> Bool)?
 
+    override class var cellClass: AnyClass? {
+        get { TitleFieldCell.self }
+        set {}
+    }
+
     override var acceptsFirstResponder: Bool { true }
+}
+
+/// Gives the title a field editor of its own, which passes what is pasted to the editor.
+private final class TitleFieldCell: NSTextFieldCell {
+    private lazy var titleEditor: TitleFieldEditor = {
+        let editor = TitleFieldEditor()
+        editor.isFieldEditor = true
+        editor.isRichText = false
+        editor.importsGraphics = false
+        return editor
+    }()
+
+    override func fieldEditor(for controlView: NSView) -> NSTextView? { titleEditor }
+}
+
+/// What the title is typed in. Pasted Markdown with more than a line goes in the title and the note below it
+/// (`EditorController.pasteInTitle`).
+final class TitleFieldEditor: NSTextView {
+    private var controller: EditorController? { ((delegate as? NSView)?.superview as? MarkdownTextView)?.controller }
+
+    override func paste(_ sender: Any?) {
+        if !pasteInTitle() { super.paste(sender) }
+    }
+
+    override func pasteAsPlainText(_ sender: Any?) {
+        if !pasteInTitle() { super.pasteAsPlainText(sender) }
+    }
+
+    private func pasteInTitle() -> Bool {
+        let pasteboard = appPasteboard
+        guard let controller, let string = pasteboard.string(forType: .string) else { return false }
+        let source = pasteboard.data(forType: EditorController.fragmentType).flatMap(EditorController.fragmentFolder)
+        return controller.pasteInTitle(string, assetsFrom: source)
+    }
 }
 #endif

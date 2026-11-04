@@ -855,6 +855,17 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         return node.isFolder ? node : node.parent
     }
 
+    /// Where Paste puts what was copied, as in the Finder: the folder selected, the folder of the file selected, or the
+    /// top of the location whose header is.
+    var pasteFolder: URL? {
+        let row = outline.selectedRow
+        guard row >= 0 else { return nil }
+        let item = outline.item(atRow: row)
+        if let folder = dropFolder(for: item) { return folder }
+        guard let url = (item as? SidebarEntry)?.url else { return nil }
+        return FileNode.isFolder(url) ? url : url.deletingLastPathComponent()
+    }
+
     private func dropFolder(for item: Any?) -> URL? {
         if let entry = item as? SidebarEntry, case .header(_, let id?) = entry.kind {
             return workspace.locations.first { $0.id == id }?.url
@@ -866,9 +877,8 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     }
 }
 
-/// Keys the Finder has: Return renames, ⌘⌫ moves to the Trash, Space shows Quick Look, ⌘C copies the file. Tab goes on
-/// into the note, as it
-/// goes from the list to the note in Notes and Mail.
+/// Keys the Finder has: Return renames, ⌘⌫ moves to the Trash, Space shows Quick Look, ⌘C copies the file and ⌘V
+/// pastes in its folder. Tab goes on into the note, as it goes from the list to the note in Notes and Mail.
 final class SidebarOutlineView: NSOutlineView {
     weak var controller: SidebarController?
 
@@ -937,8 +947,16 @@ final class SidebarOutlineView: NSOutlineView {
         controller.workspace.copyFile(url)
     }
 
+    /// Edit › Paste (⌘V) puts what was copied in the selected folder, as in the Finder: files as copies, and text as a
+    /// note of its own (`Workspace.paste(from:into:)`).
+    @objc func paste(_ sender: Any?) {
+        guard let controller, let folder = controller.pasteFolder else { return beep() }
+        controller.workspace.paste(from: appPasteboard, into: folder)
+    }
+
     override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
         if item.action == #selector(copy(_:)) { return controller?.selectedURL != nil }
+        if item.action == #selector(paste(_:)) { return controller?.pasteFolder != nil && Workspace.canPaste(from: appPasteboard) }
         return super.validateUserInterfaceItem(item)
     }
 }
