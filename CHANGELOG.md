@@ -7,6 +7,13 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- Quick Look shows a note as Notebook does: press Space on a note in the Finder, or look at it in the Finder's column
+  view or Get Info, and you see its headings, to-dos, tables, maths, diagrams, pictures and drawings, with its title
+  and when it was last edited on top, instead of its Markdown. It is set in the typeface, size, line spacing and width
+  chosen in Settings › Text, in Notebook's ink blue. Its text can be selected and copied. In a folder the Mac guards,
+  such as Documents or Downloads, the Mac first asks whether Notebook may read it; the note shows meanwhile and its
+  pictures follow once you allow it. A tip at the bottom of the sidebar shows the way, with a button to Quick Look's
+  settings, where another app that previews Markdown can be turned off.
 - Tables grow as you type them. Type a first row like `| Day | Area |` and press Return: the `| --- | --- |` row goes
   in under it, with an empty row and the caret in its first cell. Tab goes to the next cell with its text selected,
   ⇧Tab to the one before, and Tab in the last cell makes a new row. A `| --- |` row you type yourself, with its `:` for

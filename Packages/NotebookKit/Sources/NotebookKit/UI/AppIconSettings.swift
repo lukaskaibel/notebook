@@ -129,20 +129,4 @@ struct AppIconTip: Tip {
         try? Tips.configure()
     }
 }
-
-/// The App Icon tip, with its button opening Settings at the App Icon tab.
-struct AppIconTipView: View {
-    @Environment(\.openSettings) private var openSettings
-    private let tip = AppIconTip()
-
-    var body: some View {
-        TipView(tip, arrowEdge: nil) { _ in
-            UserDefaults.standard.set("icon", forKey: "settingsTab")
-            openSettings()
-        }
-        // Measured narrower than the sidebar ever gets, its text would wrap word by word and make the window tall.
-        .frame(minWidth: 180)
-        .padding(10)
-    }
-}
 #endif

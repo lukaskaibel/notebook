@@ -421,7 +421,8 @@ each shown in itself), the size, the line spacing and the line width; on iPhone 
 notes larger or smaller on top of that, as it does the text of other apps (not in a PDF or printout). The icon is a leather notebook, and Settings › App Icon makes it yours:
 pick the leather, the elastic band, the ribbon and the background, and the Dock shows your notebook while the app is
 open. Links, the caret, folders and the icons of files are in ink blue to go with it, or in the accent colour you chose
-in System Settings.
+in System Settings. Press Space on a note in the Finder and Quick Look shows it in the same look, with its title on
+top.
 
 ### On iPhone and iPad
 
@@ -541,6 +542,10 @@ screens.
   scans and handwriting, in the background as you type. ⌘K finds the same and runs commands.
 - **Spotlight** finds your notes by their names and words too, on the Mac, iPhone and iPad, and opens them in
   Notebook. It gets what search has already read, in the background, and after a launch only what changed.
+- **Quick Look** shows a note as Notebook does, not its Markdown, in the typeface and size you chose: press Space on it
+  in the Finder, or look at it in the Finder's column view or Get Info. Its pictures and drawings come too; in a folder
+  the Mac guards, such as Documents or Downloads, the Mac first asks whether Notebook may read it. If another app's
+  preview comes up, turn it off in System Settings › General › Login Items & Extensions › Quick Look.
 - **Saves as you type,** and never overwrites a change made somewhere else (see below).
 - **Version history.** Earlier versions of every note, kept as you write and for a year, with what changed since each
   one marked: File › Revert To on the Mac, Version History in the ⋯ menu on iPhone and iPad. Restore is one change
@@ -869,7 +874,9 @@ Planned, and not built yet:
 - **Versions of a note renamed or moved outside Notebook,** in the Finder or another app, don't follow it: they go to
   the History's Trash, and come back only if it gets its old name again (#148).
 - On iPhone and iPad there is no Settings › App Icon (iOS only switches between icons built into the app), no PNG
-  export, no window of its own for a single file and no Paste into a folder in the list (#298).
+  export, no window of its own for a single file and no Paste into a folder in the list (#298). Quick Look in the Files
+  app still shows a note's Markdown: iOS 27 shows Markdown files as plain text without asking other apps, so
+  Notebook's Quick Look is on the Mac for now.
 - **Sketches** as files of their own, next to your notes rather than in one.
 - **Handwritten notes on the Mac:** you write on their pages there as on any PDF, but new handwritten notes, new pages,
   pictures on pages and All Pages are on iPhone and iPad only. Text boxes and shapes aren't offered: the PDF couldn't
@@ -886,6 +893,7 @@ apart. The full plan, with what is deliberately left out (tags, backlinks, a dat
 Notebook/                    The app target (Mac, iPhone and iPad): the entry point, the icon and the App Shortcuts
 NotebookWidgets/             The widgets' extension: New Note (widget and control), Today and Note
 NotebookShare/               The share extension: the sheet, and what it leaves for the app to write
+NotebookQuickLook/           The Quick Look extension: a note as Notebook shows it (UI/NotePreview.swift), read only
 NotebookUITests/             UI tests on iPhone and iPad simulators, for what only a real keyboard or touch reaches
 Packages/NotebookKit/
   Sources/NotebookCapture/   What the extensions share with the app: the New Note intent, the notes shared to it, and

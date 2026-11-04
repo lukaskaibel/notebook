@@ -3,6 +3,7 @@ import AppKit
 #else
 import UIKit
 #endif
+import NotebookCapture
 import Observation
 
 /// How notes are set: the typeface, its size, the room between lines and how wide the text runs.
@@ -91,6 +92,7 @@ public final class NotebookSettings {
         didSet {
             guard typography != oldValue else { return }
             save(typography, "typography")
+            shareLook()
             EditorStyle.apply(typography)
             NotificationCenter.default.post(name: .notebookTypographyChanged, object: nil)
         }
@@ -130,7 +132,9 @@ public final class NotebookSettings {
     public enum HeadingMarks: String { case margin, inline }
     public var headingMarks: HeadingMarks {
         didSet {
+            guard headingMarks != oldValue else { return }
             UserDefaults.standard.set(headingMarks.rawValue, forKey: "headingMarks")
+            shareLook()
             NotificationCenter.default.post(name: .notebookTypographyChanged, object: nil)
         }
     }
@@ -224,14 +228,15 @@ public final class NotebookSettings {
 
     private init() {
         let defaults = UserDefaults.standard
-        typography = (defaults.data(forKey: "typography")).flatMap { try? JSONDecoder().decode(Typography.self, from: $0) } ?? Typography()
+        if Self.isExtension { Self.copyLook(from: Self.groupDefaults, to: defaults) }
+        typography = Self.typography(in: defaults)
         showsOnlyNotes = defaults.bool(forKey: "showsOnlyNotes")
         dimsOtherFiles = defaults.bool(forKey: "dimsOtherFiles")
         foldersFirst = defaults.object(forKey: "foldersFirst") as? Bool ?? true
         fileColors = (defaults.dictionary(forKey: "fileColors") as? [String: Int] ?? [:]).reduce(into: [:]) { colors, saved in
             if let kind = FileKind(rawValue: saved.key), kind != .folder, let color = FolderColor(rawValue: saved.value) { colors[kind] = color }
         }
-        headingMarks = HeadingMarks(rawValue: defaults.string(forKey: "headingMarks") ?? "") ?? .margin
+        headingMarks = Self.headingMarks(in: defaults)
         readsTextInPictures = defaults.object(forKey: "readsTextInPictures") as? Bool ?? true
         deletesEmptyNewNotes = defaults.object(forKey: "deletesEmptyNewNotes") as? Bool ?? true
         newNoteKind = NewNoteKind(rawValue: defaults.string(forKey: "newNoteKind") ?? "") ?? .standard
@@ -254,6 +259,51 @@ public final class NotebookSettings {
         }
         #endif
         EditorStyle.apply(typography)
+        shareLook()
+    }
+
+    private static func typography(in defaults: UserDefaults) -> Typography {
+        defaults.data(forKey: "typography").flatMap { try? JSONDecoder().decode(Typography.self, from: $0) } ?? Typography()
+    }
+
+    private static func headingMarks(in defaults: UserDefaults) -> HeadingMarks {
+        HeadingMarks(rawValue: defaults.string(forKey: "headingMarks") ?? "") ?? .margin
+    }
+
+    // MARK: - The look Quick Look shows notes in
+
+    /// The settings that make how a note looks. Quick Look shows notes as Notebook does, but its extension has settings
+    /// of its own, so the app keeps these in the App Group as well and the extension takes them from there. A setting
+    /// that changes how notes look goes in here too.
+    nonisolated static let lookKeys = ["typography", "headingMarks"]
+
+    /// The App Group's settings; nil in a build without the group, where Quick Look shows notes as they are set at
+    /// first. Tests set their own.
+    nonisolated(unsafe) static var groupDefaults: UserDefaults? = AppGroup.defaults
+
+    /// Running as an extension (Quick Look), which takes the look from the app rather than keeping its own.
+    nonisolated static var isExtension: Bool { Bundle.main.bundleURL.pathExtension == "appex" }
+
+    /// The look as set in `source`, put in `destination`; a setting at its default there is taken out.
+    nonisolated static func copyLook(from source: UserDefaults?, to destination: UserDefaults?) {
+        guard let source, let destination else { return }
+        for key in lookKeys { destination.set(source.object(forKey: key), forKey: key) }
+    }
+
+    /// The app keeps its look in the App Group, for Quick Look.
+    private func shareLook() {
+        guard !Self.isExtension else { return }
+        Self.copyLook(from: .standard, to: Self.groupDefaults)
+    }
+
+    /// Takes the look the app has now: Quick Look keeps its extension running from one note to the next, and the look
+    /// may have changed in Notebook's settings in between.
+    public func followAppLook() {
+        guard let group = Self.groupDefaults else { return }
+        let defaults = UserDefaults.standard
+        Self.copyLook(from: group, to: defaults)
+        typography = Self.typography(in: defaults)
+        headingMarks = Self.headingMarks(in: defaults)
     }
 
     private func save(_ value: some Encodable, _ key: String) {

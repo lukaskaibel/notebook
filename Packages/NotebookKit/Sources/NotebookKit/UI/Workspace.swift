@@ -1334,9 +1334,12 @@ public final class Workspace: NSObject {
     }
     #endif
 
-    func meta(for document: NoteDocument) -> String {
-        guard let date = document.modified else { return "" }
-        return "Edited " + Self.relative(date)
+    func meta(for document: NoteDocument) -> String { Self.meta(modified: document.modified) }
+
+    /// The line under a note's title, here and in Quick Look (NotePreview).
+    static func meta(modified: Date?) -> String {
+        guard let modified else { return "" }
+        return "Edited " + relative(modified)
     }
 
     static func relative(_ date: Date) -> String {

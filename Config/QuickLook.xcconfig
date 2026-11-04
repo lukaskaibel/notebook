@@ -1,0 +1,21 @@
+// The Quick Look extension: a note as Notebook shows it, when you press Space on it in the Finder or tap it in the
+// Files app. It is built with the app and goes inside it, on the Mac only for now: iOS 27 shows Markdown files as
+// plain text without asking it, and it carries the editor, about 30 MB. The app's "Embed Foundation Extensions"
+// phase and its dependency on this target are filtered to macOS; take the filters off to bring it to iPhone and iPad.
+// It shows notes with the app's editor (NotePreview in NotebookKit) and the app's accent colour (its Assets.xcassets).
+#include "Shared.xcconfig"
+
+PRODUCT_BUNDLE_IDENTIFIER = $(NOTEBOOK_BUNDLE_IDENTIFIER).QuickLook
+
+// On the Mac every extension runs in the sandbox, in every build. Quick Look lets it read the note it shows, and it may
+// read the rest of the home folder too, read only, for the pictures and drawings in the note's .assets: a temporary
+// exception to the sandbox, as Quick Look has no way to hand an extension the files next to a note. The App Group,
+// wherever the app has it (Shared.xcconfig), brings the typeface and heading marks set in the app
+// (NotebookSettings.lookKeys); without it notes show as Notebook sets them at first.
+NOTEBOOK_QUICKLOOK_MAC_ENTITLEMENTS = Config/QuickLook-macOS.entitlements
+NOTEBOOK_QUICKLOOK_MAC_ENTITLEMENTS[config=AppStore] = Config/QuickLook-AppGroup-macOS.entitlements
+CODE_SIGN_ENTITLEMENTS[sdk=macosx*] = $(NOTEBOOK_QUICKLOOK_MAC_ENTITLEMENTS)
+NOTEBOOK_QUICKLOOK_IOS_ENTITLEMENTS =
+NOTEBOOK_QUICKLOOK_IOS_ENTITLEMENTS[sdk=iphonesimulator*] = Config/AppGroup.entitlements
+NOTEBOOK_QUICKLOOK_IOS_ENTITLEMENTS[config=AppStore] = Config/AppGroup.entitlements
+CODE_SIGN_ENTITLEMENTS[sdk=iphone*] = $(NOTEBOOK_QUICKLOOK_IOS_ENTITLEMENTS)
