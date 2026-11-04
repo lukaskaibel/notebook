@@ -25,6 +25,8 @@ struct LocationSurvey: Sendable {
     var bookmark: Data?
     /// The name the Finder gives a new location's folder.
     var name: String?
+    /// The location is a file, not a folder: one chosen from an app that gives other apps no folders (`Location.found`).
+    var isFile = false
     var linked: [LinkedFolder]
     /// The location's top, when it had to be read (again).
     var top: [FileNode.Listing]?
@@ -44,6 +46,7 @@ struct LocationSurvey: Sendable {
             survey.bookmark = made.bookmark
             survey.name = made.name
         }
+        survey.isFile = Location.found(at: url) == .file
         let isICloudDrive = Location(id: job.id, name: "", path: url.path, bookmark: nil).isICloudDrive
         survey.linked = isICloudDrive ? Location.iCloudDriveLinks(in: url) : []
         let moved = url.path != job.url.path

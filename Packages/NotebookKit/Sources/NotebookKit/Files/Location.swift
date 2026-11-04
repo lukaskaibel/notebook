@@ -96,6 +96,17 @@ public struct Location: Identifiable, Codable, Equatable, Sendable {
         HiddenFolders.withoutPrivate(url.standardizedFileURL.path) == HiddenFolders.withoutPrivate(other.standardizedFileURL.path)
     }
 
+    /// What is at a folder's address, looked at without reading the folder. A folder chosen from some apps is a `file`:
+    /// Nextcloud on iPhone and iPad keeps each of your files and folders apart from the others and hands other apps a
+    /// file for each of its folders, so in the sidebar it would be a folder that stays empty.
+    enum Found: Sendable { case folder, file, nothing }
+
+    static func found(at url: URL) -> Found {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else { return .nothing }
+        return isDirectory.boolValue ? .folder : .file
+    }
+
     /// Where iCloud Drive is, worked out from the real home folder (the sandbox gives the app another one).
     public static var iCloudDrivePath: String {
         #if DEBUG
