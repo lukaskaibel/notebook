@@ -339,6 +339,8 @@ final class MarkdownTextView: UITextView {
             // Tab arrives as text and nests list items there (or goes to the next cell of a table); Shift-Tab needs a
             // command of its own.
             command("\t", .shift, #selector(outdentLines))
+            // ⇧Return breaks an AsciiDoc line with ` +`; it would arrive as Return.
+            if controller?.syntax == .asciidoc { command("\r", .shift, #selector(breakAsciiDocLine)) }
             if controller?.isCaretOnFirstLine == true { command(UIKeyCommand.inputUpArrow, [], #selector(moveUpIntoTitle)) }
             if selectedRange == NSRange(location: 0, length: 0) { command(UIKeyCommand.inputLeftArrow, [], #selector(moveBackIntoTitle)) }
         }
@@ -361,6 +363,10 @@ final class MarkdownTextView: UITextView {
     @objc private func outdentLines() {
         guard let controller, !controller.moveToTableCell(by: -1) else { return }
         controller.indent(by: -1)
+    }
+    /// Where it can't break the line (a heading, a table, a listing), Return.
+    @objc private func breakAsciiDocLine() {
+        if controller?.insertAsciiDocLineBreak() != true { insertText("\n") }
     }
     /// ↑ on the first line goes into the title.
     @objc private func moveUpIntoTitle() { _ = controller?.moveUpIntoTitle() }

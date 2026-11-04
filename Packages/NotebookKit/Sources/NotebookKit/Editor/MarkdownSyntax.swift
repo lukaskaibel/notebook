@@ -137,7 +137,11 @@ enum MarkdownSyntax {
     private static func asciidocSpans(in text: NSString, _ range: NSRange, fences: [NSRange]) -> [Span] {
         let string = text as String
         func find(_ expression: NSRegularExpression, _ style: Style) -> [Span] {
-            expression.matches(in: string, range: range).map { Span(style: style, range: $0.range, content: $0.range(at: 1)) }
+            expression.matches(in: string, range: range).map { match in
+                // Code's pattern has no group: what it holds is between its backticks.
+                let content = match.numberOfRanges > 1 ? match.range(at: 1) : NSRange(location: match.range.location + 1, length: match.range.length - 2)
+                return Span(style: style, range: match.range, content: content)
+            }
         }
         let code = find(inlineCode, .code)
         let found = [

@@ -89,9 +89,11 @@ enum MarkdownStyler {
                 if active {
                     styleTableSource(s, text: text, line: line, index: index, block: block)
                 } else {
-                    let lines = Array(doc.lines[block.lines])
-                    let model = doc.syntax == .asciidoc ? TableModel(asciidoc: text, lines: lines, alignments: alignments) : TableModel(text: text, lines: lines, alignments: alignments)
-                    styleSwapped(s, line: line, index: index, block: block, object: .table(model))
+                    func model() -> TableModel {
+                        let lines = Array(doc.lines[block.lines])
+                        return doc.syntax == .asciidoc ? TableModel(asciidoc: text, lines: lines, alignments: alignments) : TableModel(text: text, lines: lines, alignments: alignments)
+                    }
+                    styleSwapped(s, line: line, index: index, block: block, object: .table(model()))
                 }
                 return
             case .math:
@@ -229,7 +231,9 @@ enum MarkdownStyler {
         switch item.marker {
         case .bullet:
             if item.checkbox == nil {
-                s.addAttribute(.notebookObject, value: EditorObject(.bullet(level: item.level), range: item.prefix, at: item.markerRange.location), range: item.markerRange)
+                // One bullet for AsciiDoc's `**` as for Markdown's `-`: on the first star, the others hidden.
+                s.addAttribute(.notebookObject, value: EditorObject(.bullet(level: item.level), range: item.prefix, at: item.markerRange.location), range: NSRange(location: item.markerRange.location, length: 1))
+                hide(s, NSRange(location: item.markerRange.location + 1, length: item.markerRange.length - 1), .always)
             } else {
                 hide(s, item.markerRange, .always)
             }
@@ -371,11 +375,13 @@ enum MarkdownStyler {
 
     /// A block drawn as a whole: the object on its first character, everything else hidden and its other lines
     /// folded away.
-    private static func styleSwapped(_ s: NSTextStorage, line: MarkdownLine, index: Int, block: MarkdownBlock, object kind: EditorObject.Kind) {
+    /// `kind` is made for the first line only, which shows it: a table's model is all of its cells, and a long table
+    /// made it again for each of its lines.
+    private static func styleSwapped(_ s: NSTextStorage, line: MarkdownLine, index: Int, block: MarkdownBlock, object kind: @autoclosure () -> EditorObject.Kind) {
         if index == block.lines.lowerBound {
             s.addAttribute(.paragraphStyle, value: EditorStyle.objectParagraph(), range: line.fullRange)
             if line.range.length > 0 {
-                s.addAttribute(.notebookObject, value: EditorObject(kind, range: block.range), range: NSRange(location: line.range.location, length: 1))
+                s.addAttribute(.notebookObject, value: EditorObject(kind(), range: block.range), range: NSRange(location: line.range.location, length: 1))
                 hide(s, NSRange(location: line.range.location + 1, length: line.range.length - 1), .always)
             }
         } else {

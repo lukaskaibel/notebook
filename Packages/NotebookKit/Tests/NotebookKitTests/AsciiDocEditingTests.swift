@@ -76,6 +76,15 @@ final class AsciiDocEditorTests: XCTestCase {
         XCTAssertEqual(h.text, "* one\n* two\n\nafter", "a blank line ends the list, as AsciiDoc needs")
     }
 
+    func testTypingAfterCodeOnTheLine() {
+        // Code's pattern has no group of its own: reading one threw, and every key after code on its line was lost.
+        let h = EditorHarness("", syntax: .asciidoc)
+        h.type("Run `make` and *watch* it.")
+        XCTAssertEqual(h.text, "Run `make` and *watch* it.")
+        h.caret(6)
+        XCTAssertTrue(MarkdownEditing.context(in: MarkdownEditing.State(h.text, selection: h.selection, syntax: .asciidoc)).styles.contains(.code))
+    }
+
     func testReturnAfterAListingDelimiterClosesTheBlock() {
         let h = EditorHarness("[source,swift]\n----", syntax: .asciidoc)
         h.caret((h.text as NSString).length)
@@ -118,6 +127,20 @@ final class AsciiDocEditorTests: XCTestCase {
         let object = h.editor.storage.attribute(.notebookObject, at: second, effectiveRange: nil) as? EditorObject
         guard case .listNumber(let label) = object?.kind else { return XCTFail("no number") }
         XCTAssertEqual(label, "2.")
+    }
+
+    func testNestedItemsShowOneBulletEach() {
+        // The bullet went on every star of `**`, and each star drew one.
+        let h = EditorHarness("* one\n** two\n*** three", syntax: .asciidoc)
+        h.caret(0)
+        for (marker, level) in [("** ", 1), ("*** ", 2)] {
+            var bullets: [Int] = []
+            let range = h.range(of: marker)
+            for index in range.location..<range.upperBound {
+                if case .bullet(let found)? = (h.editor.storage.attribute(.notebookObject, at: index, effectiveRange: nil) as? EditorObject)?.kind { bullets.append(found) }
+            }
+            XCTAssertEqual(bullets, [level], marker)
+        }
     }
 
     func testReturnAndTabInATable() {
@@ -167,6 +190,12 @@ final class AsciiDocEditorTests: XCTestCase {
         h.caret(h.range(of: "second line").upperBound)
         h.command(#selector(NSResponder.insertLineBreak(_:)))
         XCTAssertEqual(h.text, "First line\n\nsecond line +\n")
+        // ⇧Return, which macOS sends as Return.
+        h.type("third")
+        let shiftReturn = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .shift, timestamp: 0, windowNumber: h.window.windowNumber, context: nil,
+                                           characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36)!
+        h.textView.keyDown(with: shiftReturn)
+        XCTAssertEqual(h.text, "First line\n\nsecond line +\nthird +\n")
     }
 
     func testPastedLinkAndPictureAreAsciiDoc() {

@@ -314,11 +314,14 @@ enum DebugRemote {
             // tapcaret <index>: the caret put there by a tap, which the editor may move (unlike `select`).
             if let index = numbers.first.map(Int.init) { editor.textView.selectedRange = NSRange(location: index, length: 0) }
         case "presskey":
-            // presskey <input>: a key of a hardware keyboard (tab, down, right, left, up) in the title or the text,
-            // through their key commands.
-            let inputs = ["tab": "\t", "down": UIKeyCommand.inputDownArrow, "up": UIKeyCommand.inputUpArrow, "left": UIKeyCommand.inputLeftArrow, "right": UIKeyCommand.inputRightArrow]
+            // presskey [shift-]<input>: a key of a hardware keyboard (tab, return, down, right, left, up) in the title or
+            // the text, through their key commands.
+            let inputs = ["tab": "\t", "return": "\r", "down": UIKeyCommand.inputDownArrow, "up": UIKeyCommand.inputUpArrow, "left": UIKeyCommand.inputLeftArrow, "right": UIKeyCommand.inputRightArrow]
+            let shifted = argument.hasPrefix("shift-")
+            let modifiers: UIKeyModifierFlags = shifted ? .shift : []
             let responder: UIResponder = editor.isEditingTitle ? editor.textView.titleField : editor.textView
-            if let input = inputs[argument], let command = responder.keyCommands?.first(where: { $0.input == input && $0.modifierFlags.isEmpty }), let action = command.action {
+            if let input = inputs[shifted ? String(argument.dropFirst(6)) : argument],
+               let command = responder.keyCommands?.first(where: { $0.input == input && $0.modifierFlags == modifiers }), let action = command.action {
                 responder.perform(action, with: command)
                 log("presskey \(argument): \(action)")
             } else {

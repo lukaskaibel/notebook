@@ -15,8 +15,8 @@ versions follow [semantic versioning](https://semver.org).
   as one paragraph, and ` -- ` reads as a dash. Typing writes AsciiDoc: ⌘B makes `*bold*`, Return goes on with `*` and
   `.` lists and starts a new paragraph with a blank line, Tab nests as `**`, ⇧Return breaks the line with ` +`, and
   Return and Tab work in `|===` tables. Its to-dos are in To-dos, its headings in search and the outline, its `xref:`
-  and `include::` links follow files that move, and `<<id>>` scrolls to its section. A new note in a folder of
-  AsciiDoc files is AsciiDoc too.
+  and `include::` links follow files that move, and `<<id>>` scrolls to its section. Quick Look and thumbnails show it
+  as Notebook does. A new note in a folder of AsciiDoc files is AsciiDoc too.
 - Quick Look shows a note as Notebook does: press Space on a note in the Finder, or look at it in the Finder's column
   view or Get Info, and you see its headings, to-dos, tables, maths, diagrams, pictures and drawings, with its title
   and when it was last edited on top, instead of its Markdown. It is set in the typeface, size, line spacing and width
@@ -59,6 +59,8 @@ versions follow [semantic versioning](https://semver.org).
   adding the folder. A folder like this added before is pointed out once, with how to remove it.
 - Pictures that only a note with the `.markdown` extension shows are no longer taken for unused and put in the Trash
   when another note in its folder lets go of them.
+- Notes with long tables open several times faster: each table was set up again for every one of its rows. A note of
+  20 tables of 30 rows opens about seven times as fast.
 
 ## [1.2.0] – not released yet
 

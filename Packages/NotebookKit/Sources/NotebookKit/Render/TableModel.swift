@@ -23,7 +23,7 @@ final class TableModel {
     static var headerFont: NSFont { EditorStyle.face((EditorStyle.bodySize * 0.93).rounded(), weight: .semibold) }
 
     init(text: NSString, lines: [MarkdownLine], alignments: [TableAlignment]) {
-        let units = Array((text as String).utf16)
+        let units = text.units(of: lines)
         var rows: [[NSAttributedString]] = []
         var ranges: [[NSRange]] = []
         var signature = ""
@@ -54,7 +54,7 @@ final class TableModel {
     /// An AsciiDoc table (`|===`), its lines from its attributes to its closing delimiter: cells may run over lines
     /// and span columns, and `cols` sets how wide the columns are.
     init(asciidoc text: NSString, lines: [MarkdownLine], alignments: [TableAlignment]) {
-        let units = Array((text as String).utf16)
+        let units = text.units(of: lines)
         let attributes = lines.filter { $0.kind == .markup }.compactMap { line -> String? in
             let trimmed = text.substring(with: line.range).trimmingCharacters(in: .whitespaces)
             return trimmed.hasPrefix("[") && trimmed.hasSuffix("]") ? String(trimmed.dropFirst().dropLast()) : nil
@@ -241,5 +241,19 @@ final class TableModel {
             y += height
         }
         return nil
+    }
+}
+
+extension NSString {
+    /// The UTF-16 units of these lines (a table's), at their places in the text, the rest left 0: one copy of the
+    /// part, where the whole note read a character at a time for every table took seconds in a note of many tables.
+    func units(of lines: [MarkdownLine]) -> [UInt16] {
+        let start = min(length, lines.first?.range.location ?? 0)
+        let end = min(length, max(start, lines.last?.fullRange.upperBound ?? 0))
+        var units = [UInt16](repeating: 0, count: end)
+        units.withUnsafeMutableBufferPointer { buffer in
+            if let base = buffer.baseAddress, end > start { getCharacters(base + start, range: NSRange(location: start, length: end - start)) }
+        }
+        return units
     }
 }

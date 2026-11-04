@@ -515,8 +515,7 @@ extension EditorController {
 
     /// Tab and ⇧Tab in an AsciiDoc table: the next or the previous cell, its text selected; past the last one, a new row.
     private func moveToAsciiDocCell(by direction: Int, in block: MarkdownBlock) -> Bool {
-        let text = nsText
-        let units = Array((text as String).utf16)
+        let units = nsText.units(of: block.lines.map { document.lines[$0] })
         let delimiters = block.lines.filter { document.lines[$0].kind == .tableDelimiter }
         guard let open = delimiters.first else { return false }
         let close = delimiters.count > 1 ? delimiters[delimiters.count - 1] : block.lines.upperBound + 1
