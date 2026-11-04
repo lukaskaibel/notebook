@@ -416,6 +416,8 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         StyleEnvironment(
             folder: folder,
             resolve: { [weak self] target in self.flatMap { $0.delegate?.editor($0, resolve: target) } },
+            // Quick Look without the note's folder: what is next to the note is out of reach, pictures and links alike.
+            linksOutOfReach: layoutManager.picturesOutOfReach && folder == nil,
             activeBlock: activeBlock,
             composing: suggestionAnchor,
             previewHeight: { [weak self] block in self?.previewHeight(for: block) ?? 0 }

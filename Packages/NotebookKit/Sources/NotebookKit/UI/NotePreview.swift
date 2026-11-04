@@ -32,6 +32,12 @@ public final class NotePreview: EditorControllerDelegate {
         editor.isReadOnly = true
         editor.layoutManager.hidesEditingControls = true
         editor.layoutManager.picturesOutOfReach = true
+        #if os(iOS)
+        // Quick Look puts the note below its bar, yet tells it how much room the bar takes: the text view would blur
+        // as much of the note's top, title and all, as if the bar were over it.
+        editor.textView.topEdgeEffect.isHidden = true
+        editor.textView.bottomEdgeEffect.isHidden = true
+        #endif
     }
 
     #if os(macOS)
