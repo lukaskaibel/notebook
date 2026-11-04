@@ -110,7 +110,7 @@ extension EditorController {
             return true
         case .link(let kind):
             closeSuggestions()
-            delegate?.editor(self, open: kind)
+            follow(kind)
             return true
         case .picture(let range, let url):
             // Pressed in text selected around it: the text view drags the selection, as it drags any selected text.

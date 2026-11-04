@@ -179,6 +179,15 @@ extension EditorController {
             words += " \(tex) "
             name += " \(tex) "
             return nil
+        case .replacement(let shown):
+            words += shown
+            name += shown
+            return nil
+        case .listNumber(let label):
+            // A number AsciiDoc counts: read as the number written in Markdown is.
+            words += label + " "
+            name += label + " "
+            return nil
         case .callout(let type, let label):
             // An icon for its type, and its name when it has no title.
             words += label ?? "\(CalloutStyle.title(type)): "
@@ -225,8 +234,8 @@ extension EditorController {
             return blockItem("Diagram", value: nil, at: range, line: line)
         case .mathBlock(let tex):
             return blockItem("Formula", value: tex, at: range, line: line)
-        case .frontmatter(let count):
-            return blockItem("Properties", value: layoutManager.frontmatterLabel(count), at: range, line: line)
+        case .frontmatter(let count, let attributes):
+            return blockItem(attributes ? "Attributes" : "Properties", value: layoutManager.frontmatterLabel(count, attributes: attributes), at: range, line: line)
         }
     }
 

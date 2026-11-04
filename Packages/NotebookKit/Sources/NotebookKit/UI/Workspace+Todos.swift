@@ -640,12 +640,13 @@ extension Workspace {
             guard FileManager.default.fileExists(atPath: url.path) else { return result.outcome = .notThere }
             guard let data = try? Data(contentsOf: url), let text = NoteDocument.decode(data) else { return }
             let string = text as NSString
-            let document = MarkdownParser.parse(string)
+            let syntax = NoteSyntax(url: url)
+            let document = MarkdownParser.parse(string, syntax: syntax)
             guard let index = Todos.find(todo.source, near: todo.line, in: document, string: string),
                   let change = edit(string, document, index) else { return result.outcome = .notThere }
             let changed = string.replacingCharacters(in: change.range, with: change.replacement)
             guard FileOperations.write(Data(changed.utf8), to: url) else { return }
-            let line = MarkdownParser.parse(changed).lines[index].range
+            let line = MarkdownParser.parse(changed, syntax: syntax).lines[index].range
             result = ((index, (changed as NSString).substring(with: line)), .written)
         }
         return result
@@ -659,7 +660,7 @@ extension Workspace {
             guard FileManager.default.fileExists(atPath: url.path) else { return outcome = .notThere }
             guard let data = try? Data(contentsOf: url), let text = NoteDocument.decode(data) else { return }
             let string = text as NSString
-            guard let change = edit(string, MarkdownParser.parse(string)) else { return outcome = .notThere }
+            guard let change = edit(string, MarkdownParser.parse(string, syntax: NoteSyntax(url: url))) else { return outcome = .notThere }
             if FileOperations.write(Data(string.replacingCharacters(in: change.range, with: change.replacement).utf8), to: url) { outcome = .written }
         }
         return outcome

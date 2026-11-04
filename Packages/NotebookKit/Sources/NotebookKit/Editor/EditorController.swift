@@ -118,6 +118,8 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     var loadCount = 0
 
     private(set) var document = MarkdownParser.parse("")
+    /// What the note is written in: Markdown, or AsciiDoc for an `.adoc` file. It is read, drawn and typed in that.
+    public private(set) var syntax: NoteSyntax = .markdown
     private var lineSignatures: [Int] = []
     /// Character ranges whose hidden punctuation is shown, because the caret is in or next to them.
     private(set) var revealed: [NSRange] = []
@@ -266,8 +268,9 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     /// Shows a note. `title` is its name; `focusTitle` puts the caret in the title (for a new note). Without its
     /// `text`, which is still on its way, only the title shows, and nothing can be changed; the text fades in when the
     /// note is loaded again with it.
-    public func load(text: String?, folder: URL?, title: String, meta: String, focusTitle: Bool = false) {
+    public func load(text: String?, folder: URL?, title: String, meta: String, focusTitle: Bool = false, syntax: NoteSyntax = .markdown) {
         endDrawing()
+        self.syntax = syntax
         if isWaitingForText, text != nil, isInWindow { fadeInNextChange() }
         let waiting = text == nil
         let text = text ?? ""
@@ -439,7 +442,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         if !isLoading { scheduleOutlineUpdate() }
         let oldDocument = document
         let oldSignatures = lineSignatures
-        document = MarkdownParser.parse(storage.mutableString, typing: isTypingIn)
+        document = MarkdownParser.parse(storage.mutableString, typing: isTypingIn, syntax: syntax)
         // Keep the revealed punctuation where it was until the caret settles, moved along with the edit.
         let oldEnd = editedRange.location + editedRange.length - delta
         let oldRevealed = revealed
@@ -560,11 +563,16 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
             var hasher = Hasher()
             hasher.combine(line.textHash)
             Self.combineShape(of: line, into: &hasher)
+            // Text that goes on with a list item is indented as that item is.
+            if case .continuation(let item, _) = line.kind, item < document.lines.count {
+                Self.combineShape(of: document.lines[item], into: &hasher)
+            }
             if let block = line.block {
                 hasher.combine(blockHashes[block])
                 hasher.combine(index - document.blocks[block].lines.lowerBound)
             }
             hasher.combine(index == 0)
+            if document.syntax == .asciidoc { hasher.combine(document.isSoftBreak(after: index, in: nsText)) }
             return hasher.finalize()
         }
     }
@@ -596,6 +604,16 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         case .tableRow: hasher.combine(19)
         case .frontmatterDelimiter: hasher.combine(20)
         case .frontmatter: hasher.combine(21)
+        case .markup: hasher.combine(22)
+        case .comment: hasher.combine(23)
+        case .blockTitle(let marker):
+            hasher.combine(5); hasher.combine(relative(marker))
+        case .admonition(let marker):
+            hasher.combine(6); hasher.combine(relative(marker))
+        case .definition(let term, let marker):
+            hasher.combine(7); hasher.combine(relative(term)); hasher.combine(relative(marker))
+        case .continuation(_, let indent):
+            hasher.combine(8); hasher.combine(relative(indent))
         }
     }
 
@@ -864,11 +882,11 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
 
     /// Puts other text in where you are: the line at the top of what shows, found in the new text by `map`, stays where
     /// it was, rather than the text starting again at its top. Show Changes, turned on and off.
-    func load(text: String, folder: URL?, title: String, meta: String, keepingPlace map: (Int) -> Int) {
-        guard isInWindow, storage.length > 0 else { return load(text: text, folder: folder, title: title, meta: meta) }
+    func load(text: String, folder: URL?, title: String, meta: String, syntax: NoteSyntax = .markdown, keepingPlace map: (Int) -> Int) {
+        guard isInWindow, storage.length > 0 else { return load(text: text, folder: folder, title: title, meta: meta, syntax: syntax) }
         let index = firstVisibleCharacter()
         let offset = yPosition(of: index) - visibleRect.minY
-        load(text: text, folder: folder, title: title, meta: meta)
+        load(text: text, folder: folder, title: title, meta: meta, syntax: syntax)
         let mapped = min(max(0, map(index)), storage.length)
         layoutManager.ensureLayout(forCharacterRange: NSRange(location: 0, length: min(storage.length, mapped + 1)))
         setScrollTop(max(-topInset, yPosition(of: mapped) - offset))
@@ -953,7 +971,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         isTypingIn = typing
         guard !isLoading else { return }
         let old = document
-        document = MarkdownParser.parse(storage.mutableString, typing: typing)
+        document = MarkdownParser.parse(storage.mutableString, typing: typing, syntax: syntax)
         let changed = document.lines.indices.filter { $0 >= old.lines.count || old.lines[$0].spans != document.lines[$0].spans }
         if !changed.isEmpty { restyle(lines: changed) }
     }

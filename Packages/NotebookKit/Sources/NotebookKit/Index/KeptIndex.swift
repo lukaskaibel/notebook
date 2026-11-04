@@ -23,7 +23,7 @@ enum KeptIndex {
     static let mark: UInt32 = 0x5849_424E
     /// Goes up whenever what is kept changes, or what an entry is made of (how headings are found, which text is read):
     /// a file of another version is ignored, and every file read again.
-    static let version: UInt32 = 1
+    static let version: UInt32 = 2
 
     /// About how much a block of files holds before it is compressed: small enough for every core to have a few.
     private static let blockSize = 2_000_000

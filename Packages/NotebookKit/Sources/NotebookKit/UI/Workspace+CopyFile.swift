@@ -89,16 +89,19 @@ extension Workspace {
         let isFolder = isRoot || FileNode.isFolder(url)
         let isNote = !isFolder && FileKind(url: url, isDirectory: false) == .note
         let address = isFolder ? nil : index.linkAddress(for: url, from: note)
+        // AsciiDoc has no `[[links]]`: its links go by the way from the note to the file.
+        let syntax = NoteSyntax(url: note)
         // A name `[[` would read otherwise ("Plan #2", "[Draft]"), and a folder: the way from the note to it.
-        if let address, !address.contains(where: { "#|[]".contains($0) }) {
+        if syntax == .markdown, let address, !address.contains(where: { "#|[]".contains($0) }) {
             return FileLink(markdown: isNote ? "[[\(address)]]" : "![[\(address)]]", isBlock: !isNote)
         }
         guard let note else { return nil }
         let relative = LinkUpdate.relativePath(from: note.deletingLastPathComponent(), to: url)
         let path = LinkUpdate.encoded(relative.isEmpty ? "." : relative) + (isFolder ? "/" : "")
         let name = (isFolder ? folderName(url) : Self.shownName(url)).replacingOccurrences(of: "]", with: "")
-        if isFolder || isNote { return FileLink(markdown: "[\(name)](\(path))", isBlock: false) }
-        return FileLink(markdown: MarkdownStyler.isImageFile(url) ? "![](\(path))" : "![\(name)](\(path))", isBlock: true)
+        if isNote, syntax == .asciidoc { return FileLink(markdown: NoteMarkup.noteLink(name: name, path: path, syntax: syntax), isBlock: false) }
+        if isFolder || isNote { return FileLink(markdown: NoteMarkup.link(path, text: name, syntax: syntax), isBlock: false) }
+        return FileLink(markdown: NoteMarkup.attachment(path, name: name, syntax: syntax), isBlock: true)
     }
 }
 

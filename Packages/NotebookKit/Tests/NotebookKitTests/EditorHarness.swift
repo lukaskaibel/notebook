@@ -15,7 +15,7 @@ final class EditorHarness: NSObject, EditorControllerDelegate {
     /// The names the title gave the note, as it was left or set.
     var committedTitles: [String] = []
 
-    init(_ text: String, width: CGFloat = 900, height: CGFloat = 900, dark: Bool = false) {
+    init(_ text: String, width: CGFloat = 900, height: CGFloat = 900, dark: Bool = false, syntax: NoteSyntax = .markdown) {
         _ = NSApplication.shared
         folder = FileManager.default.temporaryDirectory.appendingPathComponent("notebook-tests-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder.appendingPathComponent(".assets"), withIntermediateDirectories: true)
@@ -30,7 +30,7 @@ final class EditorHarness: NSObject, EditorControllerDelegate {
         writeSampleImage(to: folder.appendingPathComponent(".assets/torii.png"))
         editor.scrollView.frame = NSRect(x: 0, y: 0, width: width, height: height)
         window.contentView = editor.scrollView
-        editor.load(text: text, folder: folder, title: "Kyoto trip", meta: "Edited today at 09:41")
+        editor.load(text: text, folder: folder, title: "Kyoto trip", meta: "Edited today at 09:41", syntax: syntax)
         window.makeFirstResponder(editor.textView)
         settle()
     }

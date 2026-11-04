@@ -244,6 +244,7 @@ extension EditorController: NSTextViewDelegate, NSTextFieldDelegate {
         case #selector(NSResponder.insertNewline(_:)):
             return insertNewline()
         case #selector(NSResponder.insertLineBreak(_:)), #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
+            if insertAsciiDocLineBreak() { return true }
             insert("\n")
             return true
         case #selector(NSResponder.deleteBackward(_:)):

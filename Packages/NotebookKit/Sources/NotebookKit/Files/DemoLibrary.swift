@@ -314,6 +314,48 @@ enum DemoLibrary {
         Offer from the agency: [[Offer.pdf]]
 
         """)
+        // An AsciiDoc note, as documentation in a repository is written: it reads and types as the others do.
+        write("Projects/Sync service.adoc", """
+        = How a note gets to your other devices
+        :author: Mia Chen
+        :revdate: 2026-10-30
+        :toc: left
+
+        [.lead]
+        Every save travels through the user's own iCloud Drive -- there is no server of ours in between, and
+        nothing to set up.
+
+        NOTE: Notebook never sees a note. Everything below runs on the devices and in iCloud Drive.
+
+        == How it works
+
+        . A note is saved as a plain file.
+        . iCloud Drive uploads it.
+        . Every other device downloads it and merges what changed.
+
+        [cols="1,3", options="header"]
+        |===
+        | Step | What happens
+
+        | Save
+        | The file is written, coordinated with iCloud, so nothing reads half of it.
+
+        | Merge
+        | Both versions are compared line by line with the one they came from. *Nothing is lost.*
+        |===
+
+        [source,swift]
+        ----
+        // Three versions in, one out: what you typed and what came from iCloud.
+        let merged = Diff3.merge(base: base, mine: mine, theirs: theirs)
+        ----
+
+        == Done so far
+
+        * [x] Keep a copy next to the note when a merge can't decide
+        * [x] Merge on each device, never on a server
+
+        """)
         write("Projects/Design/Meeting notes.md", "# Kick-off\n\n- Keep it **minimal**\n- Notes are plain files\n- ⌥⌘F finds everything\n")
         write("University/Linear algebra/Week 3.md", """
         ## Eigenvalues
@@ -458,7 +500,7 @@ enum DemoLibrary {
         ("Travel/ryokan.jpg", 6, 6), ("Travel/Ryokan confirmation.pdf", 12, 12), ("Travel/Flight tickets.pdf", 30, 30),
         ("Inbox/Shared link.md", 0.1, 0.1), ("Inbox/Errands.md", 0.15, 5), ("Inbox/Gift ideas.md", 4, 40),
         ("Personal/Weekend.md", 0.2, 2), ("Personal/Questions for Dr. Weber.md", 1, 8), ("Personal/Cooking/Recipes.md", 15, 60),
-        ("Projects/Notebook roadmap.md", 0.02, 50), ("Projects/Offer.pdf", 10, 10), ("Projects/Design/Meeting notes.md", 7, 49),
+        ("Projects/Notebook roadmap.md", 0.02, 50), ("Projects/Sync service.adoc", 0.3, 30), ("Projects/Offer.pdf", 10, 10), ("Projects/Design/Meeting notes.md", 7, 49),
         ("University/Linear algebra/Week 3.md", 3, 10), ("University/Linear algebra/Lecture 4.pdf", 1, 3), ("Archive/2025/Old apartment.md", 200, 300),
         ("Travel/Photos", 6, 25), ("Personal/Cooking", 15, 60), ("Projects/Design", 7, 50), ("University/Linear algebra", 3, 40),
         ("Archive/2025", 200, 300), ("Travel", 0.5, 30), ("Inbox", 0.1, 60), ("Personal", 2, 60), ("Projects", 10, 50),

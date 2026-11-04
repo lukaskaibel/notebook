@@ -27,7 +27,12 @@ final class EditorObject: NSObject {
         case mathBlock(tex: String)
         case mathInline(tex: String)
         case callout(type: String, label: String?)
-        case frontmatter(count: Int)
+        /// Properties (Markdown's frontmatter) or, `attributes`, an AsciiDoc header's attribute entries, folded away.
+        case frontmatter(count: Int, attributes: Bool)
+        /// The number of an AsciiDoc list item that is counted rather than written (`. Item`).
+        case listNumber(String)
+        /// What AsciiDoc puts in for characters as they are written: an em dash for ` -- `, an arrow for `->`.
+        case replacement(String)
         /// After a link's text: a pencil that edits where it goes.
         case linkEdit
         /// A to-do's date or place, after its words.
@@ -45,13 +50,17 @@ final class EditorObject: NSObject {
     let length: Int
     /// Shown as its Markdown when the caret is next to it (math, a rule, a callout's type).
     let revealable: Bool
+    /// Takes the rest of its line, so the text after it starts on the next: an AsciiDoc admonition's label (`NOTE: `)
+    /// above its paragraph, as a callout's type is above its text.
+    let fillsLine: Bool
 
     /// `range` is where the Markdown is now; `at` is the character the object goes on.
-    init(_ kind: Kind, range: NSRange, at index: Int? = nil, revealable: Bool = false) {
+    init(_ kind: Kind, range: NSRange, at index: Int? = nil, revealable: Bool = false, fillsLine: Bool = false) {
         self.kind = kind
         self.offset = (index ?? range.location) - range.location
         self.length = range.length
         self.revealable = revealable
+        self.fillsLine = fillsLine
     }
 
     /// The Markdown the object stands for, given the character it is on.
@@ -72,7 +81,7 @@ final class EditorObject: NSObject {
     /// pictures, links to notes.
     var isAtomic: Bool {
         switch kind {
-        case .mathInline, .horizontalRule, .callout: false
+        case .mathInline, .horizontalRule, .callout, .replacement: false
         default: true
         }
     }
@@ -94,7 +103,9 @@ final class EditorObject: NSObject {
         case .mathBlock(let tex): "math\(tex)"
         case .mathInline(let tex): "imath\(tex)"
         case .callout(let type, let label): "callout\(type)\(label ?? "")"
-        case .frontmatter(let count): "front\(count)"
+        case .frontmatter(let count, let attributes): "front\(count)\(attributes)"
+        case .listNumber(let label): "number\(label)"
+        case .replacement(let shown): "replace\(shown)"
         case .linkEdit: "linkEdit"
         case .todoPill(let pill): "pill\(pill.symbol)\(pill.label)\(pill.tone)"
         }
@@ -216,6 +227,7 @@ enum CalloutStyle {
         switch type {
         case "tip", "hint", "success", "check", "done": Theme.positive
         case "important", "abstract", "summary", "tldr", "example": Theme.purple
+        case "sidebar": Theme.textSecondary
         case "warning", "caution", "attention", "question", "help", "faq": Theme.warning
         case "danger", "error", "failure", "fail", "missing", "bug": Theme.red
         default: Theme.accent
@@ -235,6 +247,7 @@ enum CalloutStyle {
         case "bug": "ladybug"
         case "question", "help", "faq": "questionmark.circle"
         case "quote", "cite": "quote.opening"
+        case "sidebar": "sidebar.right"
         default: "info.circle"
         }
     }

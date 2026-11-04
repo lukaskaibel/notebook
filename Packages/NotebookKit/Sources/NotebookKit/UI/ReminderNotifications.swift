@@ -331,7 +331,7 @@ final class ReminderNotifications: NSObject, UNUserNotificationCenterDelegate {
         let content = UNMutableNotificationContent()
         content.title = job.title
         content.subtitle = (place ? job.place?.phrase : job.date?.formatted(date: .omitted, time: .shortened)) ?? ""
-        content.body = text.map(NotePoints.text(of:)) ?? ""
+        content.body = text.map { NotePoints.text(of: $0, syntax: NoteSyntax(url: job.url)) } ?? ""
         content.sound = .default
         content.categoryIdentifier = category
         content.interruptionLevel = .timeSensitive

@@ -31,12 +31,12 @@ final class VersionReader: EditorControllerDelegate {
         if let shown, shown.text == text, shown.marks == marks, shown.meta == meta { return }
         if let shown, shown.meta == meta, shown.text != text {
             let before = shownChanges
-            editor.load(text: text, folder: folder, title: title, meta: meta) { index in
+            editor.load(text: text, folder: folder, title: title, meta: meta, syntax: source?.syntax ?? .markdown) { index in
                 let inVersion = before?.offset(inVersion: index) ?? index
                 return changes?.offset(inChanges: inVersion) ?? inVersion
             }
         } else if shown?.text != text || shown?.meta != meta {
-            editor.load(text: text, folder: folder, title: title, meta: meta)
+            editor.load(text: text, folder: folder, title: title, meta: meta, syntax: source?.syntax ?? .markdown)
         }
         editor.showChanges(marks)
         shown = (text, marks, meta)

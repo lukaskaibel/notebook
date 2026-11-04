@@ -1,6 +1,7 @@
 #if os(macOS)
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// A Markdown file opened on its own (from the Finder, File › Open, dropped on the Dock icon, or double-clicked in the
 /// sidebar): just the note in a plain window, no sidebar, no toolbar, the way Lettera opens a single file. Windows of
@@ -56,10 +57,10 @@ public final class FileWindows {
         controller.showWindow(nil)
     }
 
-    /// File › Open: any Markdown file, anywhere, or a folder such as iCloud Drive to show in the sidebar.
+    /// File › Open: any Markdown or AsciiDoc file, anywhere, or a folder such as iCloud Drive to show in the sidebar.
     public func choose() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.init(filenameExtension: "md")!, .init(filenameExtension: "markdown")!, .plainText, .folder]
+        panel.allowedContentTypes = NoteSyntax.noteExtensions.sorted().compactMap { UTType(filenameExtension: $0) } + [.plainText, .folder]
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = true
         guard panel.runModal() == .OK else { return }
@@ -150,10 +151,10 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
         // A note still in iCloud: its title now, its text once it has come down, and the wait in between.
         note.onLoad = { [weak self] text in
             guard let self else { return }
-            self.editor.load(text: text, folder: self.url.deletingLastPathComponent(), title: self.url.deletingPathExtension().lastPathComponent, meta: "")
+            self.editor.load(text: text, folder: self.url.deletingLastPathComponent(), title: self.url.deletingPathExtension().lastPathComponent, meta: "", syntax: NoteSyntax(url: self.url))
             self.window?.makeFirstResponder(self.editor.textView)
         }
-        editor.load(text: note.isLoaded ? note.text : nil, folder: url.deletingLastPathComponent(), title: window.title, meta: "")
+        editor.load(text: note.isLoaded ? note.text : nil, folder: url.deletingLastPathComponent(), title: window.title, meta: "", syntax: NoteSyntax(url: url))
         let waiting = PassThroughHostingView(rootView: NoteWaitingView(note: note))
         waiting.sizingOptions = []
         waiting.frame = editor.scrollView.bounds
@@ -314,7 +315,7 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
         if let library { return library.index.linkSuggestions(query, from: url) }
         let folder = url.deletingLastPathComponent()
         let names = ((try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? [])
-            .filter { $0.lowercased().hasSuffix(".md") && $0 != url.lastPathComponent }
+            .filter { NoteSyntax.isNote(pathExtension: ($0 as NSString).pathExtension) && $0 != url.lastPathComponent }
             .map { ($0 as NSString).deletingPathExtension }
             .filter { query.isEmpty || $0.localizedCaseInsensitiveContains(query) }
             .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
@@ -326,7 +327,7 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
         if let library { return library.index.resolve(target, from: url) }
         let folder = url.deletingLastPathComponent()
         let name = target.split(separator: "#").first.map(String.init) ?? target
-        for candidate in [name, name + ".md"] {
+        for candidate in [name] + NoteSyntax.noteExtensions.sorted().map({ name + "." + $0 }) {
             let file = folder.appendingPathComponent(candidate)
             if FileManager.default.fileExists(atPath: file.path) { return file }
         }

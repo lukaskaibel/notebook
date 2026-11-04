@@ -13,6 +13,10 @@ final class TableModel {
     /// For each drawn row (the header first), the ranges of its cells in the note.
     let cellRanges: [[NSRange]]
     let signature: String
+    /// How wide the columns are relative to each other, as AsciiDoc's `cols` says; empty to fit them to their text.
+    let weights: [CGFloat]
+    /// The first row is a header, tinted. AsciiDoc tables may have none.
+    let hasHeader: Bool
 
     static let padding = CGSize(width: 12, height: 7)
     static var font: NSFont { EditorStyle.face((EditorStyle.bodySize * 0.93).rounded()) }
@@ -43,6 +47,63 @@ final class TableModel {
         self.alignments = alignments
         self.cellRanges = ranges
         self.signature = signature
+        weights = []
+        hasHeader = true
+    }
+
+    /// An AsciiDoc table (`|===`), its lines from its attributes to its closing delimiter: cells may run over lines
+    /// and span columns, and `cols` sets how wide the columns are.
+    init(asciidoc text: NSString, lines: [MarkdownLine], alignments: [TableAlignment]) {
+        let units = Array((text as String).utf16)
+        let attributes = lines.filter { $0.kind == .markup }.compactMap { line -> String? in
+            let trimmed = text.substring(with: line.range).trimmingCharacters(in: .whitespaces)
+            return trimmed.hasPrefix("[") && trimmed.hasSuffix("]") ? String(trimmed.dropFirst().dropLast()) : nil
+        }
+        let spec = AsciiDocTable.Spec(attributes: attributes)
+        let delimiters = lines.indices.filter { lines[$0].kind == .tableDelimiter }
+        let open = delimiters.first ?? 0
+        let close = delimiters.count > 1 ? delimiters[delimiters.count - 1] : lines.count
+        let separator = lines.indices.contains(open) && lines[open].range.length > 0 ? units[lines[open].range.location] : 124
+        let columns = max(1, alignments.count)
+        let found = AsciiDocTable.rows(units, lines: lines, inner: (open + 1)..<max(open + 1, close), separator: separator, columns: columns)
+        let header = lines.contains { $0.kind == .tableHeader }
+        var rows: [[NSAttributedString]] = []
+        var ranges: [[NSRange]] = []
+        for (index, row) in found.enumerated() {
+            let isHeader = header && index == 0
+            var drawn: [NSAttributedString] = []
+            var cells: [NSRange] = []
+            for cell in row.cells {
+                // Lines of a cell run on as one paragraph; a blank line between them starts another.
+                let source = text.substring(with: cell.range)
+                    .replacingOccurrences(of: #"\n[ \t]*\n"#, with: "\u{2029}", options: .regularExpression)
+                    .replacingOccurrences(of: "\n", with: " ")
+                    .replacingOccurrences(of: "\u{2029}", with: "\n")
+                    .replacingOccurrences(of: "\\" + String(UnicodeScalar(separator)!), with: String(UnicodeScalar(separator)!))
+                drawn.append(InlineRenderer.render(source, font: isHeader ? Self.headerFont : Self.font, color: isHeader ? Theme.text : Theme.textBody, syntax: .asciidoc))
+                cells.append(cell.range)
+                for _ in 1..<max(1, cell.span) {
+                    drawn.append(NSAttributedString())
+                    cells.append(NSRange(location: cell.range.upperBound, length: 0))
+                }
+            }
+            if drawn.count < columns {
+                drawn += Array(repeating: NSAttributedString(), count: columns - drawn.count)
+                cells += Array(repeating: NSRange(location: row.cells.last?.range.upperBound ?? 0, length: 0), count: columns - cells.count)
+            }
+            rows.append(Array(drawn.prefix(columns)))
+            ranges.append(Array(cells.prefix(columns)))
+        }
+        if rows.isEmpty {
+            rows = [Array(repeating: NSAttributedString(), count: columns)]
+            ranges = [Array(repeating: NSRange(location: lines.first?.range.location ?? 0, length: 0), count: columns)]
+        }
+        self.rows = rows
+        self.alignments = Array((alignments + Array(repeating: .leading, count: columns)).prefix(columns))
+        cellRanges = ranges
+        signature = lines.map { text.substring(with: $0.range) }.joined(separator: "\n")
+        weights = spec.weights.count == columns ? spec.weights.map { CGFloat($0) } : []
+        hasHeader = header
     }
 
     struct Layout {
@@ -67,7 +128,13 @@ final class TableModel {
         }
         var widths = natural
         let total = natural.reduce(0, +)
-        if total > maxWidth {
+        if weights.count == columns, columns > 0 {
+            // As wide as the page, the columns sharing it as `cols` says, none narrower than a word or two.
+            let sum = weights.reduce(0, +)
+            widths = weights.map { max(56, floor(maxWidth * $0 / max(1, sum))) }
+            let over = widths.reduce(0, +) - maxWidth
+            if over > 0, let widest = widths.indices.max(by: { widths[$0] < widths[$1] }) { widths[widest] -= over }
+        } else if total > maxWidth {
             let minimum: CGFloat = 72
             var excess = total - maxWidth
             while excess > 0.5 {
@@ -108,10 +175,10 @@ final class TableModel {
         // A tinted header and every other row striped; only the columns are ruled.
         var y = frame.minY
         for (index, height) in layout.rowHeights.enumerated() {
-            if index == 0 {
+            if index == 0, hasHeader {
                 Theme.tableHeader.setFill()
                 CGRect(x: frame.minX, y: y, width: frame.width, height: height).fill()
-            } else if index % 2 == 0 {
+            } else if index % 2 == (hasHeader ? 0 : 1) {
                 Theme.tableStripe.setFill()
                 CGRect(x: frame.minX, y: y, width: frame.width, height: height).fill()
             }

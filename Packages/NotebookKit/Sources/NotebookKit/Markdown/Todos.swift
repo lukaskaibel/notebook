@@ -535,9 +535,9 @@ public struct TodoLine: Hashable, Sendable {
 public enum Todos {
     /// The to-dos not yet done: each open checkbox, except one indented under another to-do, which is part of that
     /// one's notes, unless it has a date or a place of its own.
-    public static func open(in markdown: String) -> [Todo] {
+    public static func open(in markdown: String, syntax: NoteSyntax = .markdown) -> [Todo] {
         guard mayHaveOpen(markdown) else { return [] }
-        let document = MarkdownParser.parse(markdown)
+        let document = MarkdownParser.parse(markdown, syntax: syntax)
         let string = markdown as NSString
         var todos: [Todo] = []
         /// The indent of the to-do whose notes the lines are in, while they are.
@@ -969,11 +969,16 @@ public enum Todos {
         return indent + string.replacingCharacters(in: change.range, with: change.replacement)
     }
 
-    /// A line parsed on its own, without its indent, which on its own would make it code.
+    /// A line parsed on its own, without its indent, which on its own would make it code. A to-do Markdown doesn't
+    /// read as one is AsciiDoc's, nested by its marker: `** [ ] Call`.
     static func alone(_ source: String) -> (indent: String, document: MarkdownDocument, string: NSString) {
         let indent = String(source.prefix { $0 == " " || $0 == "\t" })
         let string = String(source.dropFirst(indent.count)) as NSString
-        return (indent, MarkdownParser.parse(string), string)
+        let document = MarkdownParser.parse(string)
+        if let line = document.lines.first, case .listItem(let item) = line.kind, item.isTask { return (indent, document, string) }
+        let asciidoc = MarkdownParser.parse(string, syntax: .asciidoc)
+        if let line = asciidoc.lines.first, case .listItem(let item) = line.kind, item.isTask { return (indent, asciidoc, string) }
+        return (indent, document, string)
     }
 
     /// The line a to-do is on now, in a note that may have changed since it was found: the same line if it still says

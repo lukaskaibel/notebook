@@ -188,6 +188,29 @@ copies the code. Callouts in GitHub's and Obsidian's `> [!note]` style get their
   <img alt="The note Week 3 with inline maths, the typeset formula A x = lambda x, and an Exam callout" src="Design/screenshots/math-light.webp">
 </picture>
 
+### AsciiDoc too
+
+Notes can be AsciiDoc as well as Markdown: a `.adoc` file, as documentation in many repositories is written, is a note
+like any other, shown as it reads and typed in its own marks. Section titles, lists and checklists, terms with their
+descriptions, `NOTE:` and `[WARNING]` blocks as callouts, examples and sidebars as boxes, tables with the column widths
+their `cols` give and cells over several lines, listing and source blocks with highlighting, pictures, and `include::`
+as a card of the file it brings in. The header's attributes fold into one line, as a Markdown note's properties do, and
+a block's attributes, such as `[source,python]`, fold away until the caret comes to them. Lines wrapped by hand run on
+as one paragraph, as Asciidoctor shows them, ` -- ` reads as a dash and `->` as an arrow; next to the caret you see
+what is written.
+
+Typing writes AsciiDoc: ⌘B makes `*bold*` (`**bold**` inside a word), strikethrough is `[.line-through]#…#`, Return
+continues `*` and `.` lists, Tab nests an item as `**`, `==` gets its space as a heading's `##` does, and Return in a
+paragraph starts the next one with the blank line AsciiDoc needs; ⇧Return breaks the line with ` +`. Return and Tab
+work in `|===` tables, and Return after `----` closes the block. Links to other files (`xref:`, `link:`, `include::`,
+`image::`) follow them when they are renamed or moved, and a click on `<<goals>>` scrolls to its section. A new note in
+a folder of mostly AsciiDoc files is one too; elsewhere new notes are Markdown.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/asciidoc-dark.webp">
+  <img alt="The AsciiDoc note Sync service on the iPad: its title How a note gets to your other devices, its header folded into 3 attributes, a lead paragraph with an em dash, a Note callout, a numbered list, a table of steps and a Swift source block" src="Design/screenshots/asciidoc-light.webp">
+</picture>
+
 ### Find anything
 
 The search field in the toolbar (⌥⌘F) finds notes, files and folders by name, the headings in notes, and words in notes
@@ -460,6 +483,9 @@ screens.
   follow, as they do when you move it or rename or move its folder. New notes go into the folder you're in; made
   anywhere else, they go to the default folder you choose in Settings, an Inbox at the top of your first location
   until you do. One you leave empty goes away again.
+- **Markdown and AsciiDoc.** A `.md` note is Markdown and a `.adoc` note AsciiDoc, each shown and typed in its own
+  marks, with its to-dos in To-dos, its headings in search and the outline, and its links following moves. See
+  [AsciiDoc too](#asciidoc-too).
 - **Moving from Apple Notes.** Export notes from Notes as Markdown, then Import from Apple Notes brings them in,
   each with its pictures and files next to it and its links to the others working, in the folders you exported them
   into. See [Moving from Apple Notes](#moving-from-apple-notes).
@@ -557,7 +583,8 @@ screens.
 
 ## How notes are stored
 
-Everything is plain Markdown, so other apps keep reading your notes. Notebook adds no files of its own besides the
+Everything is plain Markdown, or AsciiDoc in a `.adoc` note, kept character for character as it is written, so other
+apps and Asciidoctor keep reading your notes. Notebook adds no files of its own besides the
 `.assets` folders for pictures and files you add to notes, and in them, next to each drawing's picture, a `.drawing`
 file with its strokes. A folder's symbol and colour are kept on the folder, as the Finder keeps them, not in a file.
 What isn't part of a note or a folder, such as the folders you hide, the reminders of notes you set and your Home and
@@ -871,6 +898,9 @@ Planned, and not built yet:
   A reminder set on another device reaches an iPhone or iPad the next time Notebook runs there or gets time in the
   background. Reminders of notes don't repeat, and a Mac doesn't remind you at places.
 - Footnotes are styled but don't jump to their text.
+- **AsciiDoc:** PlantUML and other diagrams show as their source (only Mermaid is drawn, as in Markdown), `{name}`
+  attribute references show as written, conditionals (`ifdef::`) aren't evaluated, and an included file shows as a
+  card rather than in place. New notes are AsciiDoc only in a folder of mostly AsciiDoc files.
 - **Versions of a note renamed or moved outside Notebook,** in the Finder or another app, don't follow it: they go to
   the History's Trash, and come back only if it gets its old name again (#148).
 - On iPhone and iPad there is no Settings › App Icon (iOS only switches between icons built into the app), no PNG
@@ -901,7 +931,7 @@ Packages/NotebookKit/
   Sources/NotebookKit/
     Editor/                  The live-preview editor on TextKit 1: styling, hidden marks, objects, typing, export;
                              the Mac's text view, and iPhone's and iPad's in the "+UIKit" files
-    Markdown/                Notebook's Markdown parser, which keeps every character's position in the file
+    Markdown/                Notebook's Markdown and AsciiDoc readers, which keep every character's position in the file
     Render/                  Tables, maths, diagrams and code highlighting
     Drawing/                 Drawings: the strokes file and its picture, and drawing them in notes
     Files/                   Locations, the file tree read in the background, file operations, saving, watching, the
@@ -931,7 +961,9 @@ PLAN.md                      The plan: decisions, file format, architecture and 
 
 The editor is the heart of the app. The text view holds the file's Markdown exactly, character for character, and
 everything you see is styling on top: marks are hidden as zero-width glyphs and objects are drawn in place of a
-character, so undo, dictation and spell checking behave as everywhere else on the Mac. Start reading at
+character, so undo, dictation and spell checking behave as everywhere else on the Mac. An AsciiDoc note is read by
+`Markdown/AsciiDocParser.swift` into the same lines and blocks as a Markdown one, so the same styling draws both; the
+typing rules (`Editor/MarkdownEditing.swift`) take the note's syntax with them. Start reading at
 `Editor/EditorController.swift` and `Editor/NotebookLayoutManager.swift`. On iPhone and iPad the same storage, layout
 manager and styling sit under UIKit's text view; only what talks to the text view differs (`Editor/*+AppKit.swift`
 and `Editor/*+UIKit.swift`), plus an undo history of the editor's own, since UIKit's goes wrong when the editor

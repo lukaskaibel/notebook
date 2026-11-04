@@ -7,6 +7,16 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- AsciiDoc notes. A `.adoc` file is a note like a Markdown one, on the Mac, iPhone and iPad: shown as it reads while
+  you type, its marks next to the caret. Section titles, lists and checklists, terms and their descriptions, `NOTE:`
+  and `[WARNING]` blocks as callouts, examples and sidebars as boxes, tables with their column widths and cells over
+  several lines, source blocks with highlighting, pictures, and `include::` as a card of the file. The header's
+  attributes fold into one line, a block's `[source,python]` until the caret comes to it, lines wrapped by hand run on
+  as one paragraph, and ` -- ` reads as a dash. Typing writes AsciiDoc: ⌘B makes `*bold*`, Return goes on with `*` and
+  `.` lists and starts a new paragraph with a blank line, Tab nests as `**`, ⇧Return breaks the line with ` +`, and
+  Return and Tab work in `|===` tables. Its to-dos are in To-dos, its headings in search and the outline, its `xref:`
+  and `include::` links follow files that move, and `<<id>>` scrolls to its section. A new note in a folder of
+  AsciiDoc files is AsciiDoc too.
 - Quick Look shows a note as Notebook does: press Space on a note in the Finder, or look at it in the Finder's column
   view or Get Info, and you see its headings, to-dos, tables, maths, diagrams, pictures and drawings, with its title
   and when it was last edited on top, instead of its Markdown. It is set in the typeface, size, line spacing and width
@@ -32,6 +42,11 @@ versions follow [semantic versioning](https://semver.org).
   the first, instead of a line break that cut the table in two. From the header it makes the first row; at the start
   of a row, a row above it. Return in an empty last row leaves the table, as an empty item leaves a list, and a row
   typed by hand from its first `|` replaces the empty one.
+
+### Fixed
+
+- Pictures that only a note with the `.markdown` extension shows are no longer taken for unused and put in the Trash
+  when another note in its folder lets go of them.
 
 ## [1.2.0] – not released yet
 

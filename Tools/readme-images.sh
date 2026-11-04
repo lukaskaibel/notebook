@@ -212,6 +212,8 @@ ipad=$(simulator "Notebook README iPad" com.apple.CoreSimulator.SimDeviceType.iP
 for theme in dark light; do
   device "$iphone" iphone $theme "wait 2" "open Travel/Kyoto trip.md" "wait 2.5" "done"
   device "$ipad" ipad $theme "wait 2" "open Travel/Kyoto trip.md" "outline" "wait 2.5" "done"
+  # An AsciiDoc note on the iPad: its title, header, admonition, list, table and source block.
+  device "$ipad" ipad-asciidoc $theme "wait 2" "open Projects/Sync service.adoc" "wait 2.5" "done"
   # A handwritten note, the pen on: the lecture notes on Cornell paper with the tool picker under them, and on the
   # iPhone All Pages, the note's pages side by side.
   device "$ipad" ipad-handwriting $theme "wait 2" "open University/Linear algebra/Lecture 4.pdf" "wait 2" "pdfpen" "wait 2.5" "done"

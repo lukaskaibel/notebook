@@ -54,6 +54,15 @@ enum MarkdownStyler {
     // MARK: - Lines
 
     private static func styleLine(_ s: NSTextStorage, text: NSString, doc: MarkdownDocument, index: Int, env: StyleEnvironment) {
+        styleLineContents(s, text: text, doc: doc, index: index, env: env)
+        // AsciiDoc's paragraphs read as one, whatever their lines: the breaks inside them are laid out as spaces.
+        let line = doc.lines[index]
+        if doc.isSoftBreak(after: index, in: text), line.fullRange.upperBound <= s.length {
+            s.addAttribute(.notebookSoftBreak, value: true, range: NSRange(location: line.range.upperBound, length: line.breakLength))
+        }
+    }
+
+    private static func styleLineContents(_ s: NSTextStorage, text: NSString, doc: MarkdownDocument, index: Int, env: StyleEnvironment) {
         let line = doc.lines[index]
         let full = line.fullRange
         guard full.upperBound <= s.length else { return }
@@ -64,11 +73,11 @@ enum MarkdownStyler {
             let active = env.activeBlock == blockIndex
             switch block.kind {
             case .code(let language):
-                styleCode(s, text: text, doc: doc, line: line, index: index, block: block, language: language)
+                styleCode(s, text: text, doc: doc, line: line, index: index, block: block, language: language, active: active)
                 return
             case .mermaid:
                 if active {
-                    styleCode(s, text: text, doc: doc, line: line, index: index, block: block, language: "mermaid", preview: env.previewHeight(block), previewKind: .diagram(source: diagramSource(text, doc, block)))
+                    styleCode(s, text: text, doc: doc, line: line, index: index, block: block, language: "mermaid", active: true, preview: env.previewHeight(block), previewKind: .diagram(source: diagramSource(text, doc, block)))
                 } else {
                     styleSwapped(s, line: line, index: index, block: block, object: .mermaid(source: blockContent(text, doc, block)))
                 }
@@ -78,32 +87,46 @@ enum MarkdownStyler {
                     styleTableSource(s, text: text, line: line, index: index, block: block)
                 } else {
                     let lines = Array(doc.lines[block.lines])
-                    styleSwapped(s, line: line, index: index, block: block, object: .table(TableModel(text: text, lines: lines, alignments: alignments)))
+                    let model = doc.syntax == .asciidoc ? TableModel(asciidoc: text, lines: lines, alignments: alignments) : TableModel(text: text, lines: lines, alignments: alignments)
+                    styleSwapped(s, line: line, index: index, block: block, object: .table(model))
                 }
                 return
             case .math:
                 if active {
-                    styleCode(s, text: text, doc: doc, line: line, index: index, block: block, language: "tex", preview: env.previewHeight(block), previewKind: .math(tex: mathSource(text, doc, block)))
+                    styleCode(s, text: text, doc: doc, line: line, index: index, block: block, language: "tex", active: true, preview: env.previewHeight(block), previewKind: .math(tex: mathSource(text, doc, block)))
                 } else {
                     styleSwapped(s, line: line, index: index, block: block, object: .mathBlock(tex: mathSource(text, doc, block)))
                 }
                 return
             case .frontmatter:
                 if active {
-                    styleCode(s, text: text, doc: doc, line: line, index: index, block: block, language: "yaml")
+                    styleCode(s, text: text, doc: doc, line: line, index: index, block: block, language: doc.syntax == .asciidoc ? "" : "yaml", active: true)
                 } else {
-                    let count = max(0, block.lines.count - 2)
-                    styleSwapped(s, line: line, index: index, block: block, object: .frontmatter(count: count))
+                    let count = doc.lines[block.lines].filter { $0.kind == .frontmatter }.count
+                    styleSwapped(s, line: line, index: index, block: block, object: .frontmatter(count: count, attributes: doc.syntax == .asciidoc))
                 }
                 return
             case .callout(let type):
-                styleCallout(s, text: text, doc: doc, line: line, index: index, block: block, type: type, env: env)
+                if doc.syntax == .asciidoc {
+                    styleAsciiDocCallout(s, text: text, doc: doc, line: line, index: index, block: block, type: type, active: active, env: env)
+                } else {
+                    styleCallout(s, text: text, doc: doc, line: line, index: index, block: block, type: type, env: env)
+                }
+                return
+            case .markup:
+                styleMarkup(s, line: line, shown: active)
                 return
             case .quote:
                 break
             }
         }
 
+        styleContent(s, text: text, doc: doc, line: line, index: index, env: env)
+    }
+
+    /// A line as it looks on its own, outside of a block (or inside an AsciiDoc callout, which takes in any line).
+    private static func styleContent(_ s: NSTextStorage, text: NSString, doc: MarkdownDocument, line: MarkdownLine, index: Int, env: StyleEnvironment) {
+        let full = line.fullRange
         switch line.kind {
         case .blank:
             return
@@ -150,6 +173,37 @@ enum MarkdownStyler {
             let font = NSFont.systemFont(ofSize: 13)
             s.addAttributes([.font: font, .foregroundColor: Theme.textSecondary, .paragraphStyle: EditorStyle.paragraph(lineHeight: 20)], range: full)
             s.addAttributes([.foregroundColor: Theme.faint], range: label)
+        case .markup:
+            styleMarkup(s, line: line, shown: true)
+            return
+        case .comment:
+            restyleFont(s, line.range) { EditorStyle.font($0, italic: true) }
+            s.addAttribute(.foregroundColor, value: Theme.textTertiary, range: line.range)
+            return
+        case .blockTitle(let marker):
+            // `.Title`: the caption of the block under it.
+            let font = EditorStyle.face(EditorStyle.bodySize, weight: .semibold)
+            s.addAttributes([
+                .font: font,
+                .foregroundColor: Theme.textSecondary,
+                .paragraphStyle: EditorStyle.paragraph(before: 6, after: 0),
+            ], range: full)
+            s.addAttribute(.foregroundColor, value: Theme.faint, range: marker)
+            hide(s, marker, .untilRevealed)
+        case .definition(let term, let marker):
+            restyleFont(s, term) { EditorStyle.font($0, bold: true) }
+            s.addAttribute(.foregroundColor, value: Theme.text, range: term)
+            s.addAttribute(.foregroundColor, value: Theme.faint, range: marker)
+            hide(s, marker, .untilRevealed)
+            s.addAttribute(.paragraphStyle, value: EditorStyle.paragraph(after: 2, firstIndent: 0, indent: EditorStyle.listIndent), range: full)
+        case .continuation(let item, let indent):
+            // Lines up with the text of its item, or under its term.
+            hide(s, indent, .always)
+            let start = textIndent(of: item, doc: doc, text: text)
+            s.addAttribute(.paragraphStyle, value: EditorStyle.paragraph(after: 3, firstIndent: start, indent: start), range: full)
+        case .admonition(let marker):
+            s.addAttribute(.foregroundColor, value: Theme.faint, range: marker)
+            hide(s, marker, .untilRevealed)
         default:
             break
         }
@@ -177,9 +231,15 @@ enum MarkdownStyler {
                 hide(s, item.markerRange, .always)
             }
             hide(s, NSRange(location: item.markerRange.upperBound, length: (item.checkbox?.location ?? item.prefix.upperBound) - item.markerRange.upperBound), .always)
+        case .ordered(let number, let delimiter) where item.counted && item.checkbox == nil:
+            // AsciiDoc's `. Item`: the number it counts to shows in place of the dots.
+            let label = "\(number)\(delimiter)"
+            s.addAttribute(.notebookObject, value: EditorObject(.listNumber(label), range: item.prefix, at: item.markerRange.location), range: NSRange(location: item.markerRange.location, length: 1))
+            hide(s, NSRange(location: item.markerRange.location + 1, length: item.prefix.upperBound - item.markerRange.location - 1), .always)
+            prefixWidth = numberWidth(label + " ")
         case .ordered:
             let marker = text.substring(with: NSRange(location: item.markerRange.location, length: item.prefix.upperBound - item.markerRange.location))
-            let numberFont = EditorStyle.typography.face == .system ? NSFont.monospacedDigitSystemFont(ofSize: EditorStyle.bodySize, weight: .regular) : EditorStyle.body
+            let numberFont = Self.numberFont
             s.addAttributes([.foregroundColor: Theme.textTertiary, .font: numberFont], range: item.markerRange)
             if item.checkbox == nil {
                 // The number and the space after it stay text; wrapped lines line up with the text after them.
@@ -207,14 +267,50 @@ enum MarkdownStyler {
         styleInlineSpans(s, text: text, line: line, env: env)
     }
 
+    /// The digits of a numbered list, all as wide.
+    static var numberFont: NSFont {
+        EditorStyle.typography.face == .system ? NSFont.monospacedDigitSystemFont(ofSize: EditorStyle.bodySize, weight: .regular) : EditorStyle.body
+    }
+
+    static func numberWidth(_ label: String) -> CGFloat {
+        ceil((label as NSString).size(withAttributes: [.font: numberFont]).width)
+    }
+
+    /// Where the text of a list item starts, or the description under a term: for the lines that go on with it.
+    private static func textIndent(of item: Int, doc: MarkdownDocument, text: NSString) -> CGFloat {
+        guard let line = doc.lines[safe: item] else { return 0 }
+        switch line.kind {
+        case .listItem(let found):
+            let first = CGFloat(found.level) * EditorStyle.listIndent
+            if found.checkbox != nil { return first + EditorStyle.checkboxWidth }
+            switch found.marker {
+            case .bullet: return first + EditorStyle.listIndent
+            case .ordered(let number, let delimiter) where found.counted: return first + numberWidth("\(number)\(delimiter) ")
+            case .ordered:
+                let marker = text.substring(with: NSRange(location: found.markerRange.location, length: min(found.markerRange.length + 1, found.prefix.upperBound - found.markerRange.location)))
+                return first + numberWidth(marker)
+            }
+        case .definition:
+            return EditorStyle.listIndent
+        default:
+            return 0
+        }
+    }
+
     // MARK: - Blocks
 
     private static func styleCode(
         _ s: NSTextStorage, text: NSString, doc: MarkdownDocument, line: MarkdownLine, index: Int, block: MarkdownBlock,
-        language: String, preview: CGFloat = 0, previewKind: Decoration.Preview? = nil
+        language: String, active: Bool, preview: CGFloat = 0, previewKind: Decoration.Preview? = nil
     ) {
         let full = line.fullRange
-        let isFirst = index == block.lines.lowerBound
+        if line.kind == .markup, !active {
+            // AsciiDoc's `[source,python]` folds away until the caret goes in; the box starts at the fence.
+            styleMarkup(s, line: line, shown: false)
+            return
+        }
+        let firstShown = block.lines.first { active || doc.lines[$0].kind != .markup } ?? block.lines.lowerBound
+        let isFirst = index == firstShown
         let isLast = index == block.lines.upperBound
         let pad = EditorStyle.codePadding
         let style = EditorStyle.paragraph(
@@ -229,13 +325,13 @@ enum MarkdownStyler {
             .paragraphStyle: style,
             .baselineOffset: EditorStyle.baselineOffset(for: EditorStyle.mono, lineHeight: EditorStyle.codeLineHeight),
             // The preview belongs to the box, so the box goes round the closing fence too and the preview hangs below it.
-            .notebookDecoration: decoration(for: block, .codeBlock(language: language, active: previewKind != nil || language == "yaml" || language == "tex", preview: previewKind)),
+            .notebookBlockDecoration: decoration(for: block, .codeBlock(language: language, active: previewKind != nil || language == "yaml" || language == "tex", preview: previewKind)),
         ], range: full)
         switch line.kind {
-        case .fence, .frontmatterDelimiter, .mathDelimiter:
+        case .fence, .frontmatterDelimiter, .mathDelimiter, .markup:
             s.addAttribute(.foregroundColor, value: Theme.faint, range: line.range)
             // Plain code blocks hide their fences until you edit them; the line keeps its height, so nothing moves.
-            if case .code = block.kind { hide(s, line.range, .untilRevealed) }
+            if case .code = block.kind, line.kind != .markup { hide(s, line.range, .untilRevealed) }
         case .code:
             for (range, token) in highlights(text, doc, block, language) {
                 let clipped = NSIntersectionRange(range, line.range)
@@ -258,9 +354,9 @@ enum MarkdownStyler {
             .font: EditorStyle.mono,
             .paragraphStyle: EditorStyle.paragraph(lineHeight: 22, before: isFirst ? 8 : 0, after: isLast ? 10 : 0, firstIndent: pad, indent: pad, tail: -pad),
             .baselineOffset: EditorStyle.baselineOffset(for: EditorStyle.mono, lineHeight: 22),
-            .notebookDecoration: decoration(for: block, .codeBlock(language: "", active: true)),
+            .notebookBlockDecoration: decoration(for: block, .codeBlock(language: "", active: true)),
         ], range: line.fullRange)
-        if line.kind == .tableDelimiter {
+        if line.kind == .tableDelimiter || line.kind == .markup {
             s.addAttribute(.foregroundColor, value: Theme.faint, range: line.range)
             return
         }
@@ -294,7 +390,7 @@ enum MarkdownStyler {
         let pad: CGFloat = 16
         s.addAttributes([
             .paragraphStyle: EditorStyle.paragraph(before: isFirst ? 10 : 0, after: isLast ? 14 : 0, firstIndent: pad, indent: pad, tail: -pad),
-            .notebookDecoration: decoration(for: block, .callout(type: type)),
+            .notebookBlockDecoration: decoration(for: block, .callout(type: type)),
         ], range: line.fullRange)
         guard case .quote(_, let prefix) = line.kind else { return }
         hide(s, prefix, .always)
@@ -320,6 +416,85 @@ enum MarkdownStyler {
             }
         }
         styleInlineSpans(s, text: text, line: line, env: env)
+    }
+
+    /// AsciiDoc's admonitions, examples, sidebars and quotes: a box like a callout's around lines of any kind. The
+    /// first line names it: its `.Title` in bold, or its `[NOTE]`, `NOTE: ` or delimiter drawn as the type's icon and
+    /// name. Its other markup folds away until the caret goes in.
+    private static func styleAsciiDocCallout(
+        _ s: NSTextStorage, text: NSString, doc: MarkdownDocument, line: MarkdownLine, index: Int, block: MarkdownBlock,
+        type: String, active: Bool, env: StyleEnvironment
+    ) {
+        let full = line.fullRange
+        let isFirst = index == block.lines.lowerBound
+        let shown = block.lines.filter { $0 == block.lines.lowerBound || active || doc.lines[$0].kind != .markup }
+        // The last paragraph in the box, all its lines laid out as one.
+        let isLast = doc.endOfParagraph(from: index, in: text) == shown.last
+        let pad: CGFloat = 16
+        if !isFirst, line.kind == .markup {
+            styleMarkup(s, line: line, shown: active)
+            if active { inset(s, full, by: pad, before: 0, after: isLast ? 14 : 0) }
+            s.addAttribute(.notebookBlockDecoration, value: decoration(for: block, .callout(type: type)), range: full)
+            return
+        }
+        if isFirst {
+            s.addAttributes([.paragraphStyle: EditorStyle.paragraph(before: 10, after: isLast ? 14 : 0, firstIndent: pad, indent: pad, tail: -pad)], range: full)
+            var marker: NSRange
+            var label: String? = CalloutStyle.title(type)
+            switch line.kind {
+            case .blockTitle(let dot):
+                marker = dot
+                label = nil
+                s.addAttributes([.font: EditorStyle.face(EditorStyle.bodySize, weight: .semibold), .foregroundColor: CalloutStyle.color(type)], range: line.content)
+            case .admonition(let found):
+                marker = found
+            default:
+                marker = line.range
+            }
+            if marker.length > 0 {
+                // `NOTE: ` before its text takes its line, so the text starts under it, as in the block form.
+                let alone: Bool = if case .admonition = line.kind { true } else { false }
+                s.addAttribute(.notebookObject, value: EditorObject(.callout(type: type, label: label), range: marker, revealable: true, fillsLine: alone),
+                               range: NSRange(location: marker.location, length: 1))
+                s.addAttribute(.foregroundColor, value: Theme.faint, range: marker)
+                hide(s, NSRange(location: marker.location + 1, length: marker.length - 1), .untilRevealed)
+            }
+            if line.kind != .markup { styleInlineSpans(s, text: text, line: line, env: env) }
+        } else {
+            styleContent(s, text: text, doc: doc, line: line, index: index, env: env)
+            inset(s, full, by: pad, before: 0, after: isLast ? 14 : nil)
+        }
+        s.addAttribute(.notebookBlockDecoration, value: decoration(for: block, .callout(type: type)), range: full)
+    }
+
+    /// AsciiDoc markup on a line of its own: faint while it shows, else folded away, which only the caret coming to it
+    /// undoes.
+    private static func styleMarkup(_ s: NSTextStorage, line: MarkdownLine, shown: Bool) {
+        if shown {
+            s.addAttributes([
+                .font: EditorStyle.mono,
+                .foregroundColor: Theme.faint,
+                .paragraphStyle: EditorStyle.paragraph(lineHeight: EditorStyle.codeLineHeight),
+                .baselineOffset: EditorStyle.baselineOffset(for: EditorStyle.mono, lineHeight: EditorStyle.codeLineHeight),
+            ], range: line.fullRange)
+        } else {
+            s.addAttributes([.paragraphStyle: EditorStyle.collapsedParagraph, .font: EditorStyle.tiny], range: line.fullRange)
+            hide(s, line.range, .always)
+        }
+    }
+
+    /// Moves a line's paragraphs in from both sides, into a box; `after` replaces the spacing under them.
+    private static func inset(_ s: NSTextStorage, _ range: NSRange, by pad: CGFloat, before: CGFloat, after: CGFloat?) {
+        s.enumerateAttribute(.paragraphStyle, in: range) { value, run, _ in
+            let style = ((value as? NSParagraphStyle) ?? EditorStyle.paragraph()).mutableCopy() as! NSMutableParagraphStyle
+            guard style.maximumLineHeight != EditorStyle.collapsedParagraph.maximumLineHeight else { return }
+            style.firstLineHeadIndent += pad
+            style.headIndent += pad
+            style.tailIndent = -pad
+            style.paragraphSpacingBefore = max(before, style.paragraphSpacingBefore == 0 ? 0 : min(style.paragraphSpacingBefore, 8))
+            if let after { style.paragraphSpacing = after }
+            s.addAttribute(.paragraphStyle, value: style, range: run)
+        }
     }
 
     // MARK: - Inline
@@ -356,7 +531,7 @@ enum MarkdownStyler {
                 kind = .drawing(url: url)
             } else if let url, isImageFile(url) {
                 kind = .image(url: url, source: target, inline: false)
-            } else if let url, url.pathExtension.lowercased() != "md" {
+            } else if let url, !NoteSyntax.isNote(pathExtension: url.pathExtension) {
                 kind = .fileCard(url: url, name: url.lastPathComponent)
             } else if url == nil, isImageName(target) {
                 kind = .image(url: nil, source: target, inline: false)
@@ -450,6 +625,14 @@ enum MarkdownStyler {
                 markers(s, span)
             case .escape:
                 markers(s, span)
+            case .replacement(let shown):
+                // The sign in place of what is written, which shows next to the caret.
+                s.addAttribute(.notebookObject, value: EditorObject(.replacement(shown), range: span.range, revealable: true), range: NSRange(location: span.range.location, length: 1))
+                hide(s, NSRange(location: span.range.location + 1, length: span.range.length - 1), .untilRevealed)
+            case .superscript, .subscript:
+                restyleFont(s, span.content) { $0.resized(($0.pointSize * 0.75).rounded()) }
+                s.addAttribute(.baselineOffset, value: span.kind == .superscript ? 6 : -2, range: span.content)
+                markers(s, span)
             case .todoMark(let mark):
                 guard case .listItem(let item) = line.kind else { continue }
                 todoPill(s, text: text, span: span, mark: mark, done: item.checked, line: line)
@@ -517,7 +700,9 @@ enum MarkdownStyler {
     private static func linkKind(_ destination: String, env: StyleEnvironment) -> LinkTarget.Kind {
         if let url = URL(string: destination), let scheme = url.scheme, scheme.count > 1 { return .url(destination) }
         if destination.hasPrefix("#") { return .url(destination) }
-        if let url = fileURL(destination, env: env) { return .file(url) }
+        // A place in another file (`other.adoc#goals`) opens the file.
+        let path = destination.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? destination
+        if let url = fileURL(path, env: env) { return .file(url) }
         return .url(destination)
     }
 
@@ -563,6 +748,15 @@ enum MarkdownStyler {
 }
 
 extension NSFont {
+    /// The same font at another size.
+    func resized(_ size: CGFloat) -> NSFont {
+        #if os(macOS)
+        NSFont(descriptor: fontDescriptor, size: size) ?? self
+        #else
+        withSize(size)
+        #endif
+    }
+
     var withItalic: NSFont {
         #if os(macOS)
         NSFont(descriptor: fontDescriptor.withSymbolicTraits(fontDescriptor.symbolicTraits.union(.italic)), size: pointSize) ?? self

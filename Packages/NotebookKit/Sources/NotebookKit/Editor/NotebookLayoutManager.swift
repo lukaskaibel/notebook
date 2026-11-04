@@ -55,6 +55,12 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
         return storage.attribute(.notebookObject, at: index, effectiveRange: nil) as? EditorObject
     }
 
+    /// A line break laid out as a space, which keeps the paragraph going (AsciiDoc's).
+    func isSoftBreak(_ index: Int) -> Bool {
+        guard let storage = textStorage, index >= 0, index < storage.length else { return false }
+        return storage.attribute(.notebookSoftBreak, at: index, effectiveRange: nil) != nil
+    }
+
     func isHidden(_ index: Int) -> Bool {
         guard let storage = textStorage, index >= 0, index < storage.length,
               let mode = storage.attribute(.notebookHidden, at: index, effectiveRange: nil) as? Int else { return false }
@@ -97,6 +103,7 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
     }
 
     func layoutManager(_ layoutManager: NSLayoutManager, shouldUse action: NSLayoutManager.ControlCharacterAction, forControlCharacterAt charIndex: Int) -> NSLayoutManager.ControlCharacterAction {
+        if isSoftBreak(charIndex) { return .whitespace }
         if let object = object(at: charIndex), showsAsObject(object, charIndex) { return .whitespace }
         if isHidden(charIndex) { return .zeroAdvancement }
         return action
@@ -151,6 +158,10 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
         glyphPosition: NSPoint,
         characterIndex charIndex: Int
     ) -> NSRect {
+        if isSoftBreak(charIndex) {
+            let font = (textStorage?.attribute(.font, at: charIndex, effectiveRange: nil) as? NSFont) ?? EditorStyle.body
+            return NSRect(x: 0, y: 0, width: ceil((" " as NSString).size(withAttributes: [.font: font]).width), height: 0)
+        }
         guard let object = object(at: charIndex) else { return .zero }
         let font = (textStorage?.attribute(.font, at: charIndex, effectiveRange: nil) as? NSFont) ?? EditorStyle.body
         if object.isBlock {
@@ -224,6 +235,9 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
                 return NSRect(x: 0, y: 0, width: font.pointSize, height: font.pointSize)
             }
             return NSRect(x: 0, y: -math.descent, width: ceil(math.image.size.width) + 2, height: ceil(math.ascent + math.descent))
+        case .callout(let type, let label) where object.fillsLine:
+            _ = (type, label)
+            return NSRect(x: 0, y: 0, width: width, height: 4)
         case .callout(let type, let label):
             var width: CGFloat = 24
             if let label {
@@ -235,8 +249,13 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
             return NSRect(x: 0, y: 0, width: hidesEditingControls ? 0 : ceil(font.pointSize * 0.85) + 3, height: 4)
         case .todoPill(let pill):
             return NSRect(x: 0, y: 0, width: pill.width(after: bodyFont(at: index)), height: 4)
-        case .frontmatter(let count):
-            let text = frontmatterLabel(count) as NSString
+        case .replacement(let shown):
+            return NSRect(x: 0, y: 0, width: ceil((shown as NSString).size(withAttributes: [.font: bodyFont(at: index)]).width), height: 4)
+        case .listNumber(let label):
+            // With the space after it, which is hidden with the rest of the marker.
+            return NSRect(x: 0, y: 0, width: MarkdownStyler.numberWidth(label + " "), height: 4)
+        case .frontmatter(let count, let attributes):
+            let text = frontmatterLabel(count, attributes: attributes) as NSString
             let textWidth = ceil(text.size(withAttributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium)]).width)
             return NSRect(x: 0, y: 0, width: textWidth + 40, height: 26)
         }
@@ -248,8 +267,9 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
         return font.familyName == "Apple Color Emoji" || font.fontName.contains("Emoji") ? EditorStyle.face(font.pointSize, weight: .regular) : font
     }
 
-    func frontmatterLabel(_ count: Int) -> String {
-        count == 1 ? "1 property" : "\(count) properties"
+    func frontmatterLabel(_ count: Int, attributes: Bool) -> String {
+        if attributes { return count == 1 ? "1 attribute" : "\(count) attributes" }
+        return count == 1 ? "1 property" : "\(count) properties"
     }
 
     // MARK: - Geometry
@@ -292,10 +312,13 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
         if let storage = textStorage, let container = textContainers.first {
             let characters = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
             var drawn = Set<ObjectIdentifier>()
-            storage.enumerateAttribute(.notebookDecoration, in: characters) { value, run, _ in
-                guard let decoration = value as? Decoration, !drawn.contains(ObjectIdentifier(decoration)) else { return }
-                drawn.insert(ObjectIdentifier(decoration))
-                drawDecoration(decoration, range: extent(of: decoration, around: run), container: container, origin: origin)
+            // Blocks first, the boxes of the text in them on top.
+            for key in [NSAttributedString.Key.notebookBlockDecoration, .notebookDecoration] {
+                storage.enumerateAttribute(key, in: characters) { value, run, _ in
+                    guard let decoration = value as? Decoration, !drawn.contains(ObjectIdentifier(decoration)) else { return }
+                    drawn.insert(ObjectIdentifier(decoration))
+                    drawDecoration(decoration, range: extent(of: decoration, around: run, key: key), container: container, origin: origin)
+                }
             }
             #if os(iOS)
             // On the Mac the text view draws them, as they reach into the margin it keeps the text from.
@@ -521,12 +544,21 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
             drawSymbol("pencil.line", size: font.pointSize * 0.72, color: Theme.accent.withAlphaComponent(0.75),
                        center: CGPoint(x: rect.midX + 0.5, y: baseline - font.capHeight / 2 + 0.5))
 
-        case .frontmatter(let count):
+        case .replacement(let shown):
+            let color = (textStorage?.attribute(.foregroundColor, at: objectRange.location, effectiveRange: nil) as? NSColor) ?? Theme.textBody
+            let face = bodyFont(at: objectRange.location)
+            NSAttributedString(string: shown, attributes: [.font: face, .foregroundColor: color]).draw(at: CGPoint(x: rect.minX, y: baseline - face.ascender))
+
+        case .listNumber(let label):
+            let text = NSAttributedString(string: label, attributes: [.font: MarkdownStyler.numberFont, .foregroundColor: Theme.textTertiary])
+            text.draw(at: CGPoint(x: rect.minX, y: baseline - MarkdownStyler.numberFont.ascender))
+
+        case .frontmatter(let count, let attributes):
             let pill = NSRect(x: rect.minX, y: rect.minY, width: rect.width, height: 26)
             Theme.control.setFill()
             NSBezierPath(roundedRect: pill, xRadius: 7, yRadius: 7).fill()
             drawSymbol("list.bullet.rectangle", size: 12, color: Theme.textSecondary, center: CGPoint(x: pill.minX + 15, y: pill.midY))
-            let text = NSAttributedString(string: frontmatterLabel(count), attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: Theme.textSecondary])
+            let text = NSAttributedString(string: frontmatterLabel(count, attributes: attributes), attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: Theme.textSecondary])
             text.draw(at: CGPoint(x: pill.minX + 28, y: pill.midY - 8))
         }
 
@@ -611,7 +643,11 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
         NSAttributedString(string: url?.deletingPathExtension().lastPathComponent ?? target, attributes: [.font: NSFont.systemFont(ofSize: 14, weight: .semibold), .foregroundColor: url == nil ? Theme.textTertiary : Theme.text])
             .draw(with: NSRect(x: rect.minX + 36, y: rect.minY + 13, width: rect.width - 52, height: 20), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], context: nil)
         var excerpt = url == nil ? "This note doesn't exist yet. Click to create it." : ""
-        if let url, let text = source?.noteText(for: url) {
+        if let url, let text = source?.noteText(for: url), NoteSyntax(url: url) == .asciidoc {
+            // AsciiDoc's markup would read badly, as the Markdown left in below doesn't: its first lines as plain text.
+            excerpt = NotePoints.beginning(of: text, title: url.deletingPathExtension().lastPathComponent, maximumLength: 240, syntax: .asciidoc)
+                .replacingOccurrences(of: "\n", with: "  ")
+        } else if let url, let text = source?.noteText(for: url) {
             let lines = text.split(separator: "\n", omittingEmptySubsequences: true).prefix(4).map { line -> String in
                 var line = String(line)
                 while line.hasPrefix("#") || line.hasPrefix(">") || line.hasPrefix("- ") { line = String(line.drop(while: { "#>- ".contains($0) })) }
@@ -753,13 +789,13 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
     // MARK: - Decorations
 
     /// All the characters that carry this decoration: it moves along with the text, so its run is where it is.
-    func extent(of decoration: Decoration, around run: NSRange) -> NSRange {
+    func extent(of decoration: Decoration, around run: NSRange, key: NSAttributedString.Key = .notebookDecoration) -> NSRange {
         guard let storage = textStorage else { return run }
         var range = run
         var start = run.location
-        while start > 0, (storage.attribute(.notebookDecoration, at: start - 1, effectiveRange: &range) as AnyObject?) === decoration { start = range.location }
+        while start > 0, (storage.attribute(key, at: start - 1, effectiveRange: &range) as AnyObject?) === decoration { start = range.location }
         var end = run.upperBound
-        while end < storage.length, (storage.attribute(.notebookDecoration, at: end, effectiveRange: &range) as AnyObject?) === decoration { end = range.upperBound }
+        while end < storage.length, (storage.attribute(key, at: end, effectiveRange: &range) as AnyObject?) === decoration { end = range.upperBound }
         return NSRange(location: start, length: end - start)
     }
 
@@ -825,9 +861,9 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
     func blockBox(at index: Int, origin: NSPoint) -> NSRect? {
         guard let storage = textStorage, let container = textContainers.first, index < storage.length else { return nil }
         var run = NSRange()
-        guard let decoration = storage.attribute(.notebookDecoration, at: index, effectiveRange: &run) as? Decoration,
+        guard let decoration = storage.attribute(.notebookBlockDecoration, at: index, effectiveRange: &run) as? Decoration,
               case .codeBlock = decoration.kind else { return nil }
-        return blockRect(extent(of: decoration, around: run), container: container, origin: origin)
+        return blockRect(extent(of: decoration, around: run, key: .notebookBlockDecoration), container: container, origin: origin)
     }
 
     /// Whether a run of text is the end of the note without a line break after it: TextKit leaves out the spacing after

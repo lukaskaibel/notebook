@@ -80,7 +80,8 @@ enum FileOperations {
     /// Markdown copied from a note in `source` points at that folder's `.assets`: `store` copies each file it points at
     /// and gives the copy's Markdown path, which it then points at instead. Files gone since stay as they were.
     static func copyingAssets(in markdown: String, from source: URL, store: (URL) -> String?) -> String {
-        guard let expression = try? NSRegularExpression(pattern: "\\]\\((\\.assets/[^)\\s]+)\\)") else { return markdown }
+        // Markdown's `](.assets/…)` and AsciiDoc's `image::.assets/…[`.
+        guard let expression = try? NSRegularExpression(pattern: "(?:\\]\\(|image::?)(\\.assets/[^)\\s\\[]+)(?:\\)|\\[)") else { return markdown }
         var result = markdown
         let matches = expression.matches(in: markdown, range: NSRange(location: 0, length: (markdown as NSString).length)).reversed()
         for match in matches {
@@ -126,12 +127,13 @@ enum FileOperations {
         return String(name.prefix(200))
     }
 
-    /// A new note, and whether its folder had to be made for it (the Inbox, the first time).
-    static func createNote(in folder: URL, title: String = "Untitled", text: String = "") -> (url: URL, madeFolder: Bool)? {
+    /// A new note, and whether its folder had to be made for it (the Inbox, the first time). Markdown unless `syntax`
+    /// says AsciiDoc.
+    static func createNote(in folder: URL, title: String = "Untitled", text: String = "", syntax: NoteSyntax = .markdown) -> (url: URL, madeFolder: Bool)? {
         debugWait("made a note in", folder)
         let madeFolder = !FileManager.default.fileExists(atPath: folder.path)
         if madeFolder { try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) }
-        let url = uniqueURL(in: folder, name: fileName(from: title).isEmpty ? "Untitled" : fileName(from: title), extension: "md")
+        let url = uniqueURL(in: folder, name: fileName(from: title).isEmpty ? "Untitled" : fileName(from: title), extension: syntax.pathExtension)
         var written = false
         NSFileCoordinator().coordinate(writingItemAt: url, options: .forReplacing, error: nil) { url in
             written = (try? Data(text.utf8).write(to: url, options: .atomic)) != nil
@@ -139,6 +141,22 @@ enum FileOperations {
         guard written else { return nil }
         NoteHistory.shared.made(url)
         return (url, madeFolder)
+    }
+
+    /// What a new note in a folder is written in: AsciiDoc where most of the notes already there are, so a folder of
+    /// `.adoc` documentation gets another; Markdown otherwise. Off the main thread: it reads the folder.
+    static func syntaxForNewNote(in folder: URL) -> NoteSyntax {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+        var asciidoc = 0
+        var markdown = 0
+        for name in names {
+            switch NoteSyntax(pathExtension: (name as NSString).pathExtension) {
+            case .asciidoc: asciidoc += 1
+            case .markdown: markdown += 1
+            case nil: break
+            }
+        }
+        return asciidoc > markdown ? .asciidoc : .markdown
     }
 
     /// A new handwritten note: a PDF of one page of paper, and whether its folder had to be made for it.
@@ -158,11 +176,11 @@ enum FileOperations {
     /// A new note under a name no other file has, even with another made in the folder at the same moment: the name is
     /// taken by creating the file, and when that finds one there, the next ("Groceries (Anna’s iPhone) 2"). Nil when it
     /// couldn't be written, as when the folder is gone.
-    static func createNoteWithoutOverwriting(in folder: URL, title: String, text: String) -> URL? {
+    static func createNoteWithoutOverwriting(in folder: URL, title: String, text: String, syntax: NoteSyntax = .markdown) -> URL? {
         debugWait("made a note in", folder)
         let name = fileName(from: title).isEmpty ? "Untitled" : fileName(from: title)
         for _ in 0..<1000 {
-            let url = uniqueURL(in: folder, name: name, extension: "md")
+            let url = uniqueURL(in: folder, name: name, extension: syntax.pathExtension)
             var taken = false
             var written = false
             NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: nil) { url in
@@ -463,8 +481,10 @@ enum FileOperations {
         var used = Set<String>()
         for file in files {
             // A note not on this device, as iCloud used to show it: ".Groceries.md.icloud".
-            if file.lastPathComponent.hasPrefix("."), file.lastPathComponent.lowercased().hasSuffix(".md.icloud") { return }
-            guard file.pathExtension.lowercased() == "md" else { continue }
+            if file.lastPathComponent.hasPrefix("."), file.pathExtension.lowercased() == "icloud",
+               NoteSyntax.isNote(pathExtension: file.deletingPathExtension().pathExtension) { return }
+            // Markdown and AsciiDoc notes alike: a picture an `.adoc` note shows is in use.
+            guard NoteSyntax.isNote(pathExtension: file.pathExtension) else { continue }
             if let values = try? file.resourceValues(forKeys: Set(keys)), values.isUbiquitousItem == true,
                values.ubiquitousItemDownloadingStatus != .current { return }
             guard let text = NoteDocument.read(file) else { continue }
@@ -486,8 +506,9 @@ enum FileOperations {
     }
 
     /// Where a note's Markdown points into `.assets`, the file name in the first group. The Mac's disks don't mind case,
-    /// so neither does this: a link made upper case still shows its picture.
-    private static let assetLinks = try? NSRegularExpression(pattern: "\\.assets/([^)\\s\\]|]+)", options: .caseInsensitive)
+    /// so neither does this: a link made upper case still shows its picture. AsciiDoc's `image::.assets/a.png[Alt]`
+    /// ends the name at its bracket.
+    private static let assetLinks = try? NSRegularExpression(pattern: "\\.assets/([^)\\s\\]\\[|]+)", options: .caseInsensitive)
 
     /// The `.assets` files a note's Markdown points at, by file name.
     static func assetNames(in text: String) -> Set<String> {

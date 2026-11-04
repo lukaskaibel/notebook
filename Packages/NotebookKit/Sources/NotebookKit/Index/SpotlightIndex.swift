@@ -31,6 +31,8 @@ final class SpotlightIndex {
         /// Everything in it, for Spotlight to find it by; nil for a note that is only in iCloud.
         var text: String?
         var modified: Date?
+        /// What it is written in, which says its kind in Spotlight.
+        var syntax: NoteSyntax = .markdown
     }
 
     /// Changes Spotlight takes in whole or not at all.
@@ -62,7 +64,7 @@ final class SpotlightIndex {
 
     /// Goes up whenever what an item has changes (how the snippet is made, which attributes it sets): every note is
     /// given to Spotlight again.
-    nonisolated static let version = 1
+    nonisolated static let version = 2
     /// About what one batch holds.
     nonisolated static let batchItems = 100
     nonisolated static let batchBytes = 2_000_000
@@ -238,8 +240,9 @@ final class SpotlightIndex {
     }
 
     nonisolated static func item(for entry: SearchIndex.Entry, id: String, domain: String) -> Item {
-        Item(id: id, domain: domain, title: entry.name, snippet: entry.text.map { NotePoints.beginning(of: $0, title: entry.name) } ?? "",
-             folder: entry.place.components(separatedBy: " › ").last ?? entry.place, text: entry.text, modified: entry.modified)
+        Item(id: id, domain: domain, title: entry.name, snippet: entry.text.map { NotePoints.beginning(of: $0, title: entry.name, syntax: NoteSyntax(url: entry.url)) } ?? "",
+             folder: entry.place.components(separatedBy: " › ").last ?? entry.place, text: entry.text, modified: entry.modified,
+             syntax: NoteSyntax(url: entry.url))
     }
 
     /// Gives Spotlight the plan in batches, each carrying the number after the last. Before each, what Spotlight has is
@@ -370,6 +373,8 @@ final class CoreSpotlightStore: SpotlightStore, @unchecked Sendable {
     /// Used by one update at a time (`SpotlightIndex`), as batches need.
     private let index: CSSearchableIndex
     private static let markdown = UTType("net.daringfireball.markdown") ?? .plainText
+    /// Declared by the app (`Config/Info.plist`).
+    private static let asciidoc = UTType("org.asciidoc") ?? .plainText
 
     init(name: String) {
         index = CSSearchableIndex(name: name)
@@ -428,7 +433,7 @@ final class CoreSpotlightStore: SpotlightStore, @unchecked Sendable {
     }
 
     static func searchableItem(_ item: SpotlightIndex.Item) -> CSSearchableItem {
-        let attributes = CSSearchableItemAttributeSet(contentType: markdown)
+        let attributes = CSSearchableItemAttributeSet(contentType: item.syntax == .asciidoc ? asciidoc : markdown)
         attributes.title = item.title
         attributes.displayName = item.title
         attributes.contentDescription = item.snippet.isEmpty ? nil : item.snippet

@@ -114,7 +114,7 @@ public enum NoteExporter {
         view.appearance = NSAppearance(named: .aqua)
         view.exportMargin = margin
         view.setFrameSize(NSSize(width: width, height: 200))
-        copy.load(text: editor.text, folder: editor.folder, title: title, meta: "")
+        copy.load(text: editor.text, folder: editor.folder, title: title, meta: "", syntax: editor.syntax)
         // Draw once so pictures and diagrams start loading, then wait (a few seconds at most) until they are there.
         fit(copy, margin: margin)
         for _ in 0..<80 {

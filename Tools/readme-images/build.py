@@ -142,6 +142,13 @@ def devices(theme, scene=""):
     return finish(canvas, 2000)
 
 
+def asciidoc(theme):
+    """The AsciiDoc note on the iPad, from its title to its source block, as a card."""
+    ipad = Image.open(f"{raw}/ipad-asciidoc-{theme}.png").convert("RGBA")
+    card = crop_card(ipad, (0, 0, ipad.width, round(ipad.height * 0.74)), theme)
+    return place(card, theme, (110, 90), 1400, rim=False)
+
+
 def phone_screen(theme):
     """The iPhone's screen alone, for the website, which draws the phone around it."""
     screen = Image.open(f"{raw}/iphone-{theme}.png").convert("RGB")
@@ -152,6 +159,7 @@ print("iPhone and iPad, handwritten note")
 for theme in ["dark", "light"]:
     webp(devices(theme), f"devices-{theme}")
     webp(devices(theme, "-handwriting"), f"handwriting-{theme}")
+    webp(asciidoc(theme), f"asciidoc-{theme}")
     webp(phone_screen(theme), f"iphone-{theme}")
 
 if only == "devices":

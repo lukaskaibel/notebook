@@ -136,7 +136,7 @@ public enum NoteExporter {
         copy.textView.overrideUserInterfaceStyle = .light
         copy.container.widthTracksTextView = false
         copy.container.size = CGSize(width: width, height: .greatestFiniteMagnitude)
-        EditorStyle.unscaled { copy.load(text: editor.text, folder: editor.folder, title: "", meta: "") }
+        EditorStyle.unscaled { copy.load(text: editor.text, folder: editor.folder, title: "", meta: "", syntax: editor.syntax) }
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         for _ in 0..<80 {

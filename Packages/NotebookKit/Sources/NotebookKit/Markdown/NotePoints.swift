@@ -8,8 +8,8 @@ enum NotePoints {
     static let maximumLines = 10
     static let maximumLength = 600
 
-    static func text(of markdown: String) -> String {
-        let document = MarkdownParser.parse(markdown)
+    static func text(of markdown: String, syntax: NoteSyntax = .markdown) -> String {
+        let document = MarkdownParser.parse(markdown, syntax: syntax)
         let string = markdown as NSString
         var open: [String] = []
         var rest: [String] = []
@@ -26,7 +26,7 @@ enum NotePoints {
                 } else {
                     rest.append("• " + text)
                 }
-            case .paragraph, .quote:
+            case .paragraph, .quote, .continuation, .definition, .admonition:
                 let text = plain(line, in: string)
                 if !text.isEmpty { rest.append(text) }
             default:
@@ -48,15 +48,15 @@ enum NotePoints {
     /// The first lines of a note as plain text, in their order, as Spotlight shows them under its name: front matter,
     /// pictures, code, tables and maths left out, and a first heading that only says the note's name. Only the start
     /// of a long note is read.
-    static func beginning(of markdown: String, title: String, maximumLength: Int = 300) -> String {
+    static func beginning(of markdown: String, title: String, maximumLength: Int = 300, syntax: NoteSyntax = .markdown) -> String {
         let start = String(markdown.prefix(4 * maximumLength + 2000))
-        let document = MarkdownParser.parse(start)
+        let document = MarkdownParser.parse(start, syntax: syntax)
         let string = start as NSString
         var lines: [String] = []
         var length = 0
         for line in document.lines {
             switch line.kind {
-            case .paragraph, .quote, .listItem, .heading:
+            case .paragraph, .quote, .listItem, .heading, .continuation, .definition, .admonition:
                 let text = plain(line, in: string)
                 guard !text.isEmpty else { continue }
                 if case .heading = line.kind, lines.isEmpty, SearchIndex.fold(text) == SearchIndex.fold(title) { continue }
@@ -79,10 +79,14 @@ enum NotePoints {
             switch span.kind {
             case .image, .embed, .footnoteReference, .todoMark:
                 dropped.insert(integersIn: span.range.location..<span.range.upperBound)
+            case .replacement:
+                break
             default:
                 for marker in span.markers { dropped.insert(integersIn: marker.location..<marker.upperBound) }
             }
         }
+        // A term's `::` (AsciiDoc).
+        if case .definition(_, let marker) = line.kind { dropped.insert(integersIn: marker.location..<marker.upperBound) }
         var kept = IndexSet(integersIn: line.content.location..<line.content.upperBound)
         kept.subtract(dropped)
         var text = kept.rangeView.map { string.substring(with: NSRange(location: $0.lowerBound, length: $0.count)) }.joined()

@@ -22,7 +22,7 @@ final class CodeBlockTests: XCTestCase {
         XCTAssertEqual(layout.blockBox(at: closing, origin: origin), box, "the closing fence is in the same box")
         XCTAssertTrue(box.contains(h.point(of: closing)), "the box goes round the closing fence")
         XCTAssertTrue(box.contains(h.point(of: h.range(of: "```mermaid").location)), "and the opening one")
-        let decoration = h.editor.storage.attribute(.notebookDecoration, at: closing, effectiveRange: nil) as? Decoration
+        let decoration = h.editor.storage.attribute(.notebookBlockDecoration, at: closing, effectiveRange: nil) as? Decoration
         XCTAssertEqual(decoration?.kind, .codeBlock(language: "mermaid", active: true, preview: .diagram(source: "graph LR\n  A --> B")),
                        "the preview under the box draws the diagram's source")
         h.snapshot("diagram-being-edited")
@@ -37,7 +37,7 @@ final class CodeBlockTests: XCTestCase {
         let closing = h.range(of: "$$\n\nAfter").location
         let box = try XCTUnwrap(layout.blockBox(at: h.range(of: "x^2").location, origin: origin))
         XCTAssertTrue(box.contains(h.point(of: closing)), "the box goes round the closing $$")
-        let decoration = h.editor.storage.attribute(.notebookDecoration, at: closing, effectiveRange: nil) as? Decoration
+        let decoration = h.editor.storage.attribute(.notebookBlockDecoration, at: closing, effectiveRange: nil) as? Decoration
         XCTAssertEqual(decoration?.kind, .codeBlock(language: "tex", active: true, preview: .math(tex: "x^2")))
     }
 

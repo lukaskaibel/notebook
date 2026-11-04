@@ -34,7 +34,7 @@ public enum FileKind: String, Sendable {
     private init(pathExtension: String?) {
         guard let pathExtension else { self = .folder; return }
         switch pathExtension.lowercased() {
-        case "md", "markdown": self = .note
+        case "md", "markdown", "adoc", "asciidoc": self = .note
         case "pdf": self = .pdf
         case "png", "jpg", "jpeg", "gif", "heic", "heif", "webp", "tiff", "tif", "bmp", "svg", "raw", "dng": self = .image
         case "mov", "mp4", "m4v", "avi", "mkv", "webm": self = .video

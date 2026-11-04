@@ -254,7 +254,7 @@ extension EditorController {
         let file = DrawingFile(size: CGSize(width: width, height: height))
         guard file.writeStrokes(picture: picture) else { return nil }
         DrawingStore.shared.setLive(file, for: picture)
-        let markdown = "![Drawing](\(Self.markdownPath(picture.lastPathComponent)))"
+        let markdown = NoteMarkup.picture(Self.markdownPath(picture.lastPathComponent), alt: "Drawing", syntax: syntax)
         let caret = min(caret, storage.length)
         let line = nsText.lineRange(for: NSRange(location: caret, length: 0))
         var lineEnd = line.upperBound

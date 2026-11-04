@@ -68,9 +68,9 @@ public final class NotePreview: EditorControllerDelegate {
         self.files = files ?? [:]
         folder = files == nil ? nil : url.deletingLastPathComponent()
         if shown {
-            editor.load(text: text, folder: folder, title: title, meta: meta) { $0 }
+            editor.load(text: text, folder: folder, title: title, meta: meta, syntax: NoteSyntax(url: url)) { $0 }
         } else {
-            editor.load(text: text, folder: folder, title: title, meta: meta)
+            editor.load(text: text, folder: folder, title: title, meta: meta, syntax: NoteSyntax(url: url))
         }
     }
 
@@ -122,7 +122,7 @@ public final class NotePreview: EditorControllerDelegate {
     public func editor(_ editor: EditorController, resolve target: String) -> URL? {
         guard let folder, !target.isEmpty else { return nil }
         let name = target.split(separator: "#", maxSplits: 1).first.map(String.init) ?? target
-        let names = (name as NSString).pathExtension.isEmpty ? [name + ".md", name] : [name]
+        let names = (name as NSString).pathExtension.isEmpty ? NoteSyntax.noteExtensions.sorted().map { name + "." + $0 } + [name] : [name]
         for base in ["", ".assets/"] {
             for name in names {
                 // A name with a folder in it isn't in the list, but the folder can be read by now.

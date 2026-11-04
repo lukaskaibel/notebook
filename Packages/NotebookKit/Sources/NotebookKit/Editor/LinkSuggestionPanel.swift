@@ -212,6 +212,18 @@ extension EditorController {
         guard let anchor = suggestionAnchor, let close = closingBrackets(after: anchor) else { closeSuggestions(); return }
         let range = NSRange(location: anchor, length: close - anchor)
         closeSuggestions()
+        if syntax == .asciidoc {
+            // AsciiDoc has no `[[links]]` (they are anchors): an `xref:` to the note, or a link to the file, by the way
+            // there from this note's folder.
+            let whole = NSRange(location: anchor - 2, length: close + 2 - (anchor - 2))
+            let url = suggestion.kind == .create ? nil : delegate?.editor(self, resolve: suggestion.insert)
+            let path = url.map { url in folder.map { LinkUpdate.relativePath(from: $0, to: url) } ?? url.lastPathComponent }
+                ?? suggestion.insert + "." + NoteSyntax.asciidoc.pathExtension
+            let link = suggestion.kind == .file ? NoteMarkup.link(path, text: suggestion.title, syntax: .asciidoc)
+                : NoteMarkup.noteLink(name: suggestion.title, path: path, syntax: .asciidoc)
+            replace(whole, with: link, select: NSRange(location: whole.location + (link as NSString).length, length: 0), actionName: "Add Link")
+            return
+        }
         replace(range, with: suggestion.insert, select: NSRange(location: anchor + (suggestion.insert as NSString).length + 2, length: 0), actionName: "Add Link")
     }
 }

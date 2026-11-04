@@ -163,11 +163,12 @@ extension EditorController {
         let line = document.lines[index]
         let text = nsText
 
-        // ```lang + Return closes the fence for you.
+        // ```lang + Return closes the fence for you; in AsciiDoc `----` and the other delimiters too.
         if line.kind == .fence, selection.length == 0, selection.location == line.range.upperBound,
-           let block = line.block, index == document.blocks[block].lines.lowerBound, !isClosed(block) {
+           let block = line.block, index == document.blocks[block].lines.first(where: { document.lines[$0].kind == .fence }), !isClosed(block) {
             let fenceText = text.substring(with: line.range).trimmingCharacters(in: .whitespaces)
-            let fence = String(fenceText.prefix { $0 == "`" || $0 == "~" })
+            let isDelimiter = syntax == .asciidoc && fenceText.count >= 4 && Set(fenceText).count == 1
+            let fence = isDelimiter ? fenceText : String(fenceText.prefix { $0 == "`" || $0 == "~" })
             replace(selection, with: "\n\n" + fence, select: NSRange(location: selection.location + 1, length: 0))
             return true
         }
@@ -186,18 +187,24 @@ extension EditorController {
             }
         }
 
-        if [.tableHeader, .tableDelimiter, .tableRow].contains(line.kind), selection.length == 0, let block = line.block,
-           case .table(let alignments) = document.blocks[block].kind, insertTableRow(at: index, in: document.blocks[block], columns: alignments.count) {
-            return true
+        if syntax == .asciidoc {
+            if [.tableHeader, .tableDelimiter, .tableRow].contains(line.kind), let block = line.block, case .table = document.blocks[block].kind {
+                if insertAsciiDocTableRow(at: index, in: document.blocks[block]) { return true }
+            }
+        } else {
+            if [.tableHeader, .tableDelimiter, .tableRow].contains(line.kind), selection.length == 0, let block = line.block,
+               case .table(let alignments) = document.blocks[block].kind, insertTableRow(at: index, in: document.blocks[block], columns: alignments.count) {
+                return true
+            }
+            if startTable(on: index) { return true }
         }
-        if startTable(on: index) { return true }
 
         switch line.kind {
         case .code:
             let leading = text.substring(with: line.range).prefix { $0 == " " || $0 == "\t" }
             replace(selection, with: "\n" + leading, select: NSRange(location: selection.location + 1 + (String(leading) as NSString).length, length: 0))
             return true
-        case .fence, .math, .mathDelimiter, .tableHeader, .tableDelimiter, .tableRow, .frontmatterDelimiter, .frontmatter:
+        case .fence, .math, .mathDelimiter, .tableHeader, .tableDelimiter, .tableRow, .frontmatterDelimiter, .frontmatter, .markup, .comment:
             return false
         default:
             break
@@ -210,6 +217,8 @@ extension EditorController {
             setSelection(NSRange(location: line.range.upperBound, length: 0))
             return insertNewline()
         }
+
+        if syntax == .asciidoc, selection.length == 0, newAsciiDocParagraph(at: index) { return true }
 
         // Return leaves a style at its end and splits one in its middle, continues a list or quote with the next
         // marker, and ends it on an empty item.
@@ -247,6 +256,62 @@ extension EditorController {
         default:
             return false
         }
+    }
+
+    /// Return in an AsciiDoc paragraph starts the next paragraph, with the blank line between them AsciiDoc needs: a line
+    /// break alone would keep the paragraph going, as it shows. Right before a break inside a paragraph, that break
+    /// and the new one make the blank line. In the text that goes on with a list item, Return makes the next item.
+    private func newAsciiDocParagraph(at index: Int) -> Bool {
+        let line = document.lines[index]
+        let caret = selection.location
+        guard caret >= line.range.location, caret <= line.range.upperBound else { return false }
+        switch line.kind {
+        case .continuation(let item, _):
+            if case .listItem(let found) = document.lines[safe: item]?.kind {
+                let prefix = continuation(of: found, text: nsText)
+                replace(NSRange(location: caret, length: 0), with: "\n" + prefix, select: NSRange(location: caret + 1 + (prefix as NSString).length, length: 0))
+                return true
+            }
+        case .paragraph, .admonition:
+            break
+        default:
+            return false
+        }
+        // An empty line is no paragraph to end.
+        guard !nsText.substring(with: line.range).trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+        if caret == line.range.upperBound, document.isSoftBreak(after: index, in: nsText) {
+            replace(NSRange(location: caret, length: 0), with: "\n", select: NSRange(location: caret + 2, length: 0))
+        } else {
+            replace(NSRange(location: caret, length: 0), with: "\n\n", select: NSRange(location: caret + 2, length: 0))
+        }
+        return true
+    }
+
+    /// A list item, or a line of text that goes on with one.
+    private func isInList(_ line: MarkdownLine) -> Bool {
+        switch line.kind {
+        case .listItem, .continuation: true
+        default: false
+        }
+    }
+
+    /// Shift-Return in AsciiDoc text: a line break that shows, ` +` at the end of the line, which is AsciiDoc's.
+    func insertAsciiDocLineBreak() -> Bool {
+        guard syntax == .asciidoc, selection.length == 0, !document.lines.isEmpty else { return false }
+        let index = document.lineIndex(containing: selection.location)
+        let line = document.lines[index]
+        switch line.kind {
+        case .paragraph, .admonition, .continuation, .listItem:
+            break
+        default:
+            return false
+        }
+        let caret = selection.location
+        let before = nsText.substring(with: NSRange(location: line.range.location, length: caret - line.range.location))
+        guard !before.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+        let mark = before.hasSuffix(" ") ? "+\n" : " +\n"
+        replace(NSRange(location: caret, length: 0), with: mark, select: NSRange(location: caret + (mark as NSString).length, length: 0))
+        return true
     }
 
     /// Return in a table makes a new empty row under the caret's row (under the delimiter row, from the header), with
@@ -350,6 +415,9 @@ extension EditorController {
         guard !document.lines.isEmpty else { return false }
         let index = document.lineIndex(containing: selection.location)
         let line = document.lines[index]
+        if syntax == .asciidoc, let block = line.block, case .table = document.blocks[block].kind {
+            return moveToAsciiDocCell(by: direction, in: document.blocks[block])
+        }
         guard [.tableHeader, .tableDelimiter, .tableRow].contains(line.kind), selection.upperBound <= line.range.upperBound,
               let block = line.block, case .table(let alignments) = document.blocks[block].kind else { return false }
         let text = nsText
@@ -399,9 +467,79 @@ extension EditorController {
         return true
     }
 
+    // MARK: - AsciiDoc tables
+
+    /// Return in an AsciiDoc table (`|===`): after the opening delimiter of a table not yet closed, a row and the
+    /// closing delimiter; at the end of a row written on one line, a new empty row under it (under the blank line
+    /// after the header), the caret in its first cell; on an empty last row, out of the table. In cells written on
+    /// lines of their own, a new cell.
+    private func insertAsciiDocTableRow(at index: Int, in block: MarkdownBlock) -> Bool {
+        let text = nsText
+        let line = document.lines[index]
+        let caret = selection.location
+        guard selection.length == 0 else { return false }
+        let delimiters = block.lines.filter { document.lines[$0].kind == .tableDelimiter }
+        let columns = { () -> Int in if case .table(let alignments) = block.kind { max(1, alignments.count) } else { 1 } }()
+        let emptyRow = "|" + String(repeating: " |", count: columns - 1) + " "
+        if line.kind == .tableDelimiter {
+            guard index == delimiters.first, delimiters.count == 1, caret == line.range.upperBound else { return false }
+            let delimiter = text.substring(with: line.range).trimmingCharacters(in: .whitespaces)
+            replace(NSRange(location: caret, length: 0), with: "\n| \n" + delimiter, select: NSRange(location: caret + 3, length: 0))
+            return true
+        }
+        guard caret == line.range.upperBound else { return false }
+        let units = Array(text.substring(with: line.range).utf16)
+        let separators = units.enumerated().filter { $0.element == 124 && ($0.offset == 0 || units[$0.offset - 1] != 92) }.count
+        guard separators >= columns else {
+            // A cell of its own on this line: the next one under it.
+            replace(NSRange(location: caret, length: 0), with: "\n| ", select: NSRange(location: caret + 3, length: 0))
+            return true
+        }
+        let isEmpty = units.allSatisfy { $0 == 124 || $0 == 32 || $0 == 9 }
+        if isEmpty, index + 1 < document.lines.count, document.lines[index + 1].kind == .tableDelimiter {
+            // An empty last row: it goes, and the caret goes on under the table.
+            let closing = document.lines[index + 1]
+            let after = closing.range.upperBound
+            replace(NSRange(location: line.range.location, length: after - line.range.location),
+                    with: text.substring(with: closing.range) + "\n", select: NSRange(location: line.range.location + closing.range.length + 1, length: 0))
+            return true
+        }
+        // The header keeps the blank line under it, which makes it the header.
+        var at = line.range.upperBound
+        if line.kind == .tableHeader, index + 1 < document.lines.count, document.lines[index + 1].kind == .blank {
+            at = document.lines[index + 1].range.upperBound
+        }
+        replace(NSRange(location: at, length: 0), with: "\n" + emptyRow, select: NSRange(location: at + 3, length: 0))
+        return true
+    }
+
+    /// Tab and ⇧Tab in an AsciiDoc table: the next or the previous cell, its text selected; past the last one, a new row.
+    private func moveToAsciiDocCell(by direction: Int, in block: MarkdownBlock) -> Bool {
+        let text = nsText
+        let units = Array((text as String).utf16)
+        let delimiters = block.lines.filter { document.lines[$0].kind == .tableDelimiter }
+        guard let open = delimiters.first else { return false }
+        let close = delimiters.count > 1 ? delimiters[delimiters.count - 1] : block.lines.upperBound + 1
+        let separator = units[document.lines[open].range.location]
+        let columns = { () -> Int? in if case .table(let alignments) = block.kind { alignments.count } else { nil } }()
+        let cells = AsciiDocTable.rows(units, lines: document.lines, inner: (open + 1)..<close, separator: separator, columns: columns).flatMap(\.cells).map(\.range)
+        guard !cells.isEmpty else { return true }
+        let caret = selection.location
+        let current = cells.lastIndex { $0.location <= caret } ?? -1
+        let next = current + direction
+        if next >= cells.count {
+            guard direction > 0, let last = cells.last else { return true }
+            setSelection(NSRange(location: document.lines[document.lineIndex(containing: last.upperBound)].range.upperBound, length: 0))
+            return insertAsciiDocTableRow(at: document.lineIndex(containing: selection.location), in: block)
+        }
+        guard next >= 0 else { return true }
+        setSelection(cells[next])
+        return true
+    }
+
+    /// Whether a block of code has its closing fence: two of them (AsciiDoc's attributes may come before the first).
     private func isClosed(_ block: Int) -> Bool {
-        let found = document.blocks[block]
-        return found.lines.count > 1 && document.lines[found.lines.upperBound].kind == .fence
+        document.blocks[block].lines.filter { document.lines[$0].kind == .fence }.count > 1
     }
 
     /// The prefix for the next item: same indent and marker, the next number, an unticked box.
@@ -410,6 +548,7 @@ extension EditorController {
         var marker: String
         switch item.marker {
         case .bullet(let character): marker = String(character)
+        case .ordered(_, _) where item.counted: marker = text.substring(with: item.markerRange)
         case .ordered(let number, let delimiter): marker = "\(number + 1)\(delimiter)"
         }
         marker += " "
@@ -421,7 +560,8 @@ extension EditorController {
     func renumberList(after location: Int) {
         guard !document.lines.isEmpty else { return }
         let start = document.lineIndex(containing: location)
-        guard case .listItem(let first) = document.lines[start].kind, first.isOrdered else { return }
+        // AsciiDoc's `. Item` counts itself.
+        guard case .listItem(let first) = document.lines[start].kind, first.isOrdered, !first.counted else { return }
         var expected: Int?
         if start > 0, case .listItem(let previous) = document.lines[start - 1].kind, previous.indent == first.indent,
            case .ordered(let number, _) = previous.marker {
@@ -476,6 +616,11 @@ extension EditorController {
             switch line.kind {
             case .listItem(let item):
                 if item.level > 0, item.indent > 0 { return indent(by: -1) }
+                // In AsciiDoc a line right under an item is its text: the line leaves the list with a blank line.
+                if syntax == .asciidoc, index > 0, isInList(document.lines[index - 1]) {
+                    replace(item.prefix, with: "\n", select: NSRange(location: item.prefix.location + 1, length: 0))
+                    return true
+                }
                 replace(item.prefix, with: "", select: NSRange(location: item.prefix.location, length: 0))
                 return true
             case .quote(_, let prefix):
@@ -511,7 +656,7 @@ extension EditorController {
         // pulling the line into it.
         if location == line.range.location, index > 0, line.range.length > 0 {
             let above = document.lines[index - 1]
-            if let block = above.block, document.blocks[block].isSwappable {
+            if let block = above.block, document.blocks[block].isWhole {
                 setSelection(document.blocks[block].range)
                 return true
             }
@@ -580,6 +725,11 @@ extension EditorController {
         let text = nsText
 
         let listLines = lines.filter { document.lines[$0].kind.isListItem }
+        if syntax == .asciidoc, !listLines.isEmpty {
+            // AsciiDoc nests an item by its marker: `*` in is `**`.
+            _ = perform(direction > 0 ? MarkdownEditing.indent : MarkdownEditing.outdent, actionName: direction > 0 ? "Indent" : "Outdent")
+            return true
+        }
         if listLines.isEmpty {
             if case .code = document.lines[first].kind {
                 if direction > 0 { insert("    ") } else { outdentCode(lines) }
@@ -815,7 +965,7 @@ extension EditorController {
         for index in first...last {
             let line = document.lines[index]
             switch line.kind {
-            case .blank, .thematicBreak, .fence, .code, .mathDelimiter, .math, .tableDelimiter, .frontmatterDelimiter, .frontmatter: continue
+            case .blank, .thematicBreak, .fence, .code, .mathDelimiter, .math, .tableDelimiter, .frontmatterDelimiter, .frontmatter, .markup, .comment: continue
             default: break
             }
             var range = NSIntersectionRange(selection, NSRange(location: line.content.location, length: line.range.upperBound - line.content.location))
@@ -868,10 +1018,12 @@ extension EditorController {
             let prefix: String
             switch all ? .body : format {
             case .body: prefix = ""; indent = ""
-            case .heading(let level): prefix = String(repeating: "#", count: level) + " "; indent = ""
-            case .bullets: prefix = "- "
-            case .numbered: prefix = "\(number). "; number += 1
-            case .checklist: prefix = "- [ ] "
+            case .heading(let level): prefix = String(repeating: syntax == .asciidoc ? "=" : "#", count: level) + " "; indent = ""
+            case .bullets: prefix = syntax == .asciidoc ? "* " : "- "
+            case .numbered:
+                prefix = syntax == .asciidoc ? ". " : "\(number). "
+                number += 1
+            case .checklist: prefix = syntax == .asciidoc ? "* [ ] " : "- [ ] "
             case .quote: prefix = "> "; indent = ""
             }
             lines.append(indent + prefix + content)
@@ -893,7 +1045,12 @@ extension EditorController {
 
     func insertLink() {
         let selection = self.selection
-        if selection.length > 0 {
+        if selection.length > 0, syntax == .asciidoc {
+            // `link:#[words]` until the address is typed in the link editor.
+            let selected = nsText.substring(with: selection)
+            replace(selection, with: "link:#[" + selected + "]", select: NSRange(location: selection.upperBound + 7, length: 0), actionName: "Add Link")
+            editLink(at: NSRange(location: selection.location, length: selection.length + 8), isNew: true)
+        } else if selection.length > 0 {
             let selected = nsText.substring(with: selection)
             replace(selection, with: "[" + selected + "]()", select: NSRange(location: selection.upperBound + 1, length: 0), actionName: "Add Link")
             // The address goes in with the link editor, as the address itself is never shown in the text.
