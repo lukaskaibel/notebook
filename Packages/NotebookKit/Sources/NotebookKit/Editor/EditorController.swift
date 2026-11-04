@@ -480,6 +480,9 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         isApplyingStyle = true
         if isLoading {
             MarkdownStyler.style(storage, document: document, lines: lines, environment: environment)
+            // As after an edit: the text's own fixing ran before the styling, which gave emoji, CJK and signs the
+            // typeface hasn't (`⋯`, `⇄`) its font again, and they drew as nothing.
+            storage.fixAttributes(in: NSRange(location: 0, length: storage.length))
         } else if let first = lines.min(), let last = lines.max() {
             let start = document.lines[first].fullRange.location
             let scope = NSRange(location: start, length: document.lines[last].fullRange.upperBound - start)

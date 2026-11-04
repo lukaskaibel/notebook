@@ -37,8 +37,20 @@ enum MarkdownStyler {
     /// One decoration per block, shared by all its lines, so the box behind a block is one run of text.
     private static var blockDecorations: [NSRange: Decoration] = [:]
 
-    private static func decoration(for block: MarkdownBlock, _ kind: Decoration.Kind) -> Decoration {
+    private static func decoration(for block: MarkdownBlock, _ kind: Decoration.Kind, in s: NSTextStorage) -> Decoration {
         if let existing = blockDecorations[block.range], existing.kind == kind { return existing }
+        // A block styled again only in part keeps the box its other lines have, or it would be drawn in pieces; but not
+        // one the line before it has too, which belongs to a block above that it used to be part of.
+        let start = block.range.location
+        var existing: Decoration?
+        s.enumerateAttribute(.notebookBlockDecoration, in: NSIntersectionRange(block.range, NSRange(location: 0, length: s.length))) { value, _, stop in
+            if let value = value as? Decoration { existing = value; stop.pointee = true }
+        }
+        if let existing, existing.kind == kind,
+           start == 0 || start > s.length || s.attribute(.notebookBlockDecoration, at: start - 1, effectiveRange: nil) as? Decoration !== existing {
+            blockDecorations[block.range] = existing
+            return existing
+        }
         let decoration = Decoration(kind)
         blockDecorations[block.range] = decoration
         return decoration
@@ -332,7 +344,7 @@ enum MarkdownStyler {
             .paragraphStyle: style,
             .baselineOffset: EditorStyle.baselineOffset(for: EditorStyle.mono, lineHeight: EditorStyle.codeLineHeight),
             // The preview belongs to the box, so the box goes round the closing fence too and the preview hangs below it.
-            .notebookBlockDecoration: decoration(for: block, .codeBlock(language: language, active: previewKind != nil || language == "yaml" || language == "tex", preview: previewKind)),
+            .notebookBlockDecoration: decoration(for: block, .codeBlock(language: language, active: previewKind != nil || language == "yaml" || language == "tex", preview: previewKind), in: s),
         ], range: full)
         switch line.kind {
         case .fence, .frontmatterDelimiter, .mathDelimiter, .markup:
@@ -361,7 +373,7 @@ enum MarkdownStyler {
             .font: EditorStyle.mono,
             .paragraphStyle: EditorStyle.paragraph(lineHeight: 22, before: isFirst ? 8 : 0, after: isLast ? 10 : 0, firstIndent: pad, indent: pad, tail: -pad),
             .baselineOffset: EditorStyle.baselineOffset(for: EditorStyle.mono, lineHeight: 22),
-            .notebookBlockDecoration: decoration(for: block, .codeBlock(language: "", active: true)),
+            .notebookBlockDecoration: decoration(for: block, .codeBlock(language: "", active: true), in: s),
         ], range: line.fullRange)
         if line.kind == .tableDelimiter || line.kind == .markup {
             s.addAttribute(.foregroundColor, value: Theme.faint, range: line.range)
@@ -399,7 +411,7 @@ enum MarkdownStyler {
         let pad: CGFloat = 16
         s.addAttributes([
             .paragraphStyle: EditorStyle.paragraph(before: isFirst ? 10 : 0, after: isLast ? 14 : 0, firstIndent: pad, indent: pad, tail: -pad),
-            .notebookBlockDecoration: decoration(for: block, .callout(type: type)),
+            .notebookBlockDecoration: decoration(for: block, .callout(type: type), in: s),
         ], range: line.fullRange)
         guard case .quote(_, let prefix) = line.kind else { return }
         hide(s, prefix, .always)
@@ -443,7 +455,7 @@ enum MarkdownStyler {
         if !isFirst, line.kind == .markup {
             styleMarkup(s, line: line, shown: active)
             if active { inset(s, full, by: pad, before: 0, after: isLast ? 14 : 0) }
-            s.addAttribute(.notebookBlockDecoration, value: decoration(for: block, .callout(type: type)), range: full)
+            s.addAttribute(.notebookBlockDecoration, value: decoration(for: block, .callout(type: type), in: s), range: full)
             return
         }
         if isFirst {
@@ -473,7 +485,7 @@ enum MarkdownStyler {
             styleContent(s, text: text, doc: doc, line: line, index: index, env: env)
             inset(s, full, by: pad, before: 0, after: isLast ? 14 : nil)
         }
-        s.addAttribute(.notebookBlockDecoration, value: decoration(for: block, .callout(type: type)), range: full)
+        s.addAttribute(.notebookBlockDecoration, value: decoration(for: block, .callout(type: type), in: s), range: full)
     }
 
     /// AsciiDoc markup on a line of its own: faint while it shows, else folded away, which only the caret coming to it
