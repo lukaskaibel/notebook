@@ -43,12 +43,13 @@ BUNDLES = {
   "Notebook" => APP_ID,
   "NotebookWidgets" => "#{APP_ID}.Widgets",
   "NotebookShare" => "#{APP_ID}.Share",
-  "NotebookQuickLook" => "#{APP_ID}.QuickLook"
+  "NotebookQuickLook" => "#{APP_ID}.QuickLook",
+  "NotebookThumbnail" => "#{APP_ID}.Thumbnail"
 }.freeze
 # The App Group the app shares with its extensions (NOTEBOOK_APP_GROUP in Config/Shared.xcconfig), with the
 # identifiers that have it.
 APP_GROUP = "group.com.lukaskbl.Notebook"
-APP_GROUP_BUNDLES = [APP_ID, "#{APP_ID}.Widgets", "#{APP_ID}.Share", "#{APP_ID}.QuickLook"].freeze
+APP_GROUP_BUNDLES = [APP_ID, "#{APP_ID}.Widgets", "#{APP_ID}.Share", "#{APP_ID}.QuickLook", "#{APP_ID}.Thumbnail"].freeze
 # Absolute paths, taken while loading: lanes run from other folders, and __dir__ is relative in a Fastfile.
 HERE = File.expand_path(__dir__)
 ROOT = File.expand_path("..", HERE)
