@@ -421,8 +421,9 @@ each shown in itself), the size, the line spacing and the line width; on iPhone 
 notes larger or smaller on top of that, as it does the text of other apps (not in a PDF or printout). The icon is a leather notebook, and Settings › App Icon makes it yours:
 pick the leather, the elastic band, the ribbon and the background, and the Dock shows your notebook while the app is
 open. Links, the caret, folders and the icons of files are in ink blue to go with it, or in the accent colour you chose
-in System Settings. Press Space on a note in the Finder and Quick Look shows it in the same look, with its title on
-top, and the Finder's icons show the top of each note that way too.
+in System Settings. Press Space on a note in the Finder, or tap one in the Files app on an iPhone or iPad, and Quick
+Look shows it in the same look, with its title on top. The icons of notes in the Finder and the Files app show the top
+of each note that way too.
 
 ### On iPhone and iPad
 
@@ -545,7 +546,9 @@ screens.
 - **Quick Look** shows a note as Notebook does, not its Markdown, in the typeface and size you chose: press Space on it
   in the Finder, or look at it in the Finder's column view or Get Info. Its pictures and drawings come too; in a folder
   the Mac guards, such as Documents or Downloads, the Mac first asks whether Notebook may read it. If another app's
-  preview comes up, turn it off in System Settings › General › Login Items & Extensions › Quick Look.
+  preview comes up, turn it off in System Settings › General › Login Items & Extensions › Quick Look. On iPhone and
+  iPad, tap a note in the Files app, or one attached in another app that shows files with Quick Look. iOS lets Quick
+  Look read only the note itself, so its pictures show by their names there.
 - **Thumbnails** of notes in the Finder's icon and gallery views, in Open panels and in the Files app on iPhone and
   iPad: the top of the note as Notebook shows it, on a white page. Only the note is read for them, never what is next to
   it, so browsing a folder never makes the Mac ask; pictures show by their names. The Mac picks up a new thumbnail
@@ -878,9 +881,9 @@ Planned, and not built yet:
 - **Versions of a note renamed or moved outside Notebook,** in the Finder or another app, don't follow it: they go to
   the History's Trash, and come back only if it gets its old name again (#148).
 - On iPhone and iPad there is no Settings › App Icon (iOS only switches between icons built into the app), no PNG
-  export, no window of its own for a single file and no Paste into a folder in the list (#298). Quick Look in the Files
-  app still shows a note's Markdown: iOS 27 shows Markdown files as plain text without asking other apps, so
-  Notebook's Quick Look is on the Mac for now (the Files app's thumbnails do show notes as Notebook does).
+  export, no window of its own for a single file and no Paste into a folder in the list (#298). Quick Look there shows
+  a note's pictures by their names, as iOS lets it read only the note, and before iOS 27.2 it may show the note's
+  Markdown instead.
 - **Sketches** as files of their own, next to your notes rather than in one.
 - **Handwritten notes on the Mac:** you write on their pages there as on any PDF, but new handwritten notes, new pages,
   pictures on pages and All Pages are on iPhone and iPad only. Text boxes and shapes aren't offered: the PDF couldn't

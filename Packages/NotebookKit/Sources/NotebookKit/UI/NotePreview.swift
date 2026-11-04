@@ -22,14 +22,13 @@ import os
 public final class NotePreview: EditorControllerDelegate {
     public let editor: EditorController
     /// For a thumbnail: the Finder asks for them as you browse, so only the note is read, never its folder, and the
-    /// Mac never asks whether Notebook may. Its pictures show by their names.
+    /// Mac never asks whether Notebook may. Without the folder, its pictures show by their names and links as links
+    /// (EditorController.isFolderOutOfReach).
     let isThumbnail: Bool
     /// The note's folder once what is in it could be read; nil before, and when it can't be.
     private var folder: URL?
     /// What is in the note's folder and its `.assets`, by path in lower case.
     private var files: [String: String] = [:]
-    /// The note shown.
-    private var note: URL?
 
     public convenience init() { self.init(thumbnail: false) }
 
@@ -42,7 +41,12 @@ public final class NotePreview: EditorControllerDelegate {
         editor.isReadOnly = true
         editor.layoutManager.hidesEditingControls = true
         editor.layoutManager.picturesOutOfReach = true
-        editor.layoutManager.filesOutOfReach = thumbnail
+        #if os(iOS)
+        // Quick Look puts the note below its bar, yet tells it how much room the bar takes: the text view would blur
+        // as much of the note's top, title and all, as if the bar were over it.
+        editor.textView.topEdgeEffect.isHidden = true
+        editor.textView.bottomEdgeEffect.isHidden = true
+        #endif
     }
 
     #if os(macOS)
@@ -77,7 +81,6 @@ public final class NotePreview: EditorControllerDelegate {
 
     private func show(_ text: String, title: String, meta: String, files: [String: String]?, from url: URL) {
         let shown = editor.storage.length > 0
-        note = url
         self.files = files ?? [:]
         folder = files == nil ? nil : url.deletingLastPathComponent()
         if shown {
@@ -133,16 +136,8 @@ public final class NotePreview: EditorControllerDelegate {
     /// `![[Kyoto.jpg]]` and `[[Plan]]` find what is next to the note or in its `.assets`: Quick Look doesn't have the
     /// rest of the library to look in.
     public func editor(_ editor: EditorController, resolve target: String) -> URL? {
-        guard !target.isEmpty else { return nil }
+        guard let folder, !target.isEmpty else { return nil }
         let name = target.split(separator: "#", maxSplits: 1).first.map(String.init) ?? target
-        // A thumbnail doesn't look next to the note: a note or file it links to is taken to be there, as it nearly
-        // always is, and shows by its name (the editor reads nothing of it: filesOutOfReach). A picture shows by its
-        // name too.
-        if isThumbnail, let note {
-            guard !MarkdownStyler.isImageName(name) else { return nil }
-            return note.deletingLastPathComponent().appendingPathComponent((name as NSString).pathExtension.isEmpty ? name + ".md" : name)
-        }
-        guard let folder else { return nil }
         let names = (name as NSString).pathExtension.isEmpty ? [name + ".md", name] : [name]
         for base in ["", ".assets/"] {
             for name in names {

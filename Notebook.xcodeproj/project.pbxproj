@@ -17,7 +17,7 @@
 		F10000000000000000000100 /* NotebookKit in Frameworks */ = {isa = PBXBuildFile; productRef = F10000000000000000000101 /* NotebookKit */; };
 		F100000000000000000000B2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000B1 /* Assets.xcassets */; };
 		F10000000000000000000102 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000B1 /* Assets.xcassets */; };
-		F100000000000000000000A1 /* NotebookQuickLook.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F100000000000000000000A2 /* NotebookQuickLook.appex */; platformFilters = (macos, ); settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		F100000000000000000000A1 /* NotebookQuickLook.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F100000000000000000000A2 /* NotebookQuickLook.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F10000000000000000000103 /* NotebookThumbnail.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F10000000000000000000104 /* NotebookThumbnail.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -553,9 +553,6 @@
 		};
 		F100000000000000000000AD /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			platformFilters = (
-				macos,
-			);
 			target = F100000000000000000000A4 /* NotebookQuickLook */;
 			targetProxy = F100000000000000000000A3 /* PBXContainerItemProxy */;
 		};

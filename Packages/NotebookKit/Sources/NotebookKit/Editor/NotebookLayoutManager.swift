@@ -15,6 +15,8 @@ protocol EditorLayoutSource: AnyObject {
     /// Something changed size (a diagram finished drawing): lay it out again.
     func objectNeedsLayout(_ range: NSRange)
     func noteText(for url: URL) -> String?
+    /// Quick Look without the note's folder: nothing next to the note is read, and it shows by its name.
+    var isFolderOutOfReach: Bool { get }
     /// A drawing is open in a canvas over the text, which draws it.
     func showsCanvas(for picture: URL) -> Bool
 }
@@ -32,9 +34,9 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
     /// For Quick Look, which may read the note but not the pictures next to it: a picture it can't read is out of
     /// reach rather than missing, and shows by its name.
     var picturesOutOfReach = false
-    /// For a thumbnail, which reads the note and nothing else: the pictures, files and notes it shows are drawn by their
-    /// names and kinds, without reading them.
-    var filesOutOfReach = false
+    /// Quick Look without the note's folder (`EditorLayoutSource.isFolderOutOfReach`): the pictures, files and notes the
+    /// note shows are drawn by their names and kinds, without reading them.
+    private var filesOutOfReach: Bool { source?.isFolderOutOfReach ?? false }
     /// Where the code block with the copy button over it starts: its language label makes way for the button.
     var copyButtonBlock: Int?
     /// Show Changes in Version History: what was added since an earlier version and what was taken out, marked in it.
@@ -610,10 +612,12 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
         Theme.cardBorder.setStroke()
         card.lineWidth = 1
         card.stroke()
-        drawSymbol(url == nil ? "doc.badge.plus" : "doc.text", size: 13, color: url == nil ? Theme.textTertiary : Theme.accent, center: CGPoint(x: rect.minX + 22, y: rect.minY + 22))
-        NSAttributedString(string: url?.deletingPathExtension().lastPathComponent ?? target, attributes: [.font: NSFont.systemFont(ofSize: 14, weight: .semibold), .foregroundColor: url == nil ? Theme.textTertiary : Theme.text])
+        // Out of reach, what it embeds may well be there, as its link would show: by its name.
+        let missing = url == nil && !filesOutOfReach
+        drawSymbol(missing ? "doc.badge.plus" : "doc.text", size: 13, color: missing ? Theme.textTertiary : Theme.accent, center: CGPoint(x: rect.minX + 22, y: rect.minY + 22))
+        NSAttributedString(string: url?.deletingPathExtension().lastPathComponent ?? target, attributes: [.font: NSFont.systemFont(ofSize: 14, weight: .semibold), .foregroundColor: missing ? Theme.textTertiary : Theme.text])
             .draw(with: NSRect(x: rect.minX + 36, y: rect.minY + 13, width: rect.width - 52, height: 20), options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], context: nil)
-        var excerpt = url == nil ? "This note doesn't exist yet. Click to create it." : ""
+        var excerpt = missing ? "This note doesn't exist yet. Click to create it." : ""
         if let url, !filesOutOfReach, let text = source?.noteText(for: url) {
             let lines = text.split(separator: "\n", omittingEmptySubsequences: true).prefix(4).map { line -> String in
                 var line = String(line)

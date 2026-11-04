@@ -165,7 +165,6 @@ public enum NoteExporter {
         let copy = EditorController()
         copy.layoutManager.hidesEditingControls = true
         copy.layoutManager.picturesOutOfReach = editor.layoutManager.picturesOutOfReach
-        copy.layoutManager.filesOutOfReach = editor.layoutManager.filesOutOfReach
         let delegate = ResolvingDelegate(source: editor)
         copy.delegate = delegate
         copy.textView.overrideUserInterfaceStyle = .light
