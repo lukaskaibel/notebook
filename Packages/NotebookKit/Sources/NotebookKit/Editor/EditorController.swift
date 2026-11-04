@@ -416,8 +416,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         StyleEnvironment(
             folder: folder,
             resolve: { [weak self] target in self.flatMap { $0.delegate?.editor($0, resolve: target) } },
-            // Quick Look without the note's folder: what is next to the note is out of reach, pictures and links alike.
-            linksOutOfReach: layoutManager.picturesOutOfReach && folder == nil,
+            linksOutOfReach: isFolderOutOfReach,
             activeBlock: activeBlock,
             composing: suggestionAnchor,
             previewHeight: { [weak self] block in self?.previewHeight(for: block) ?? 0 }
@@ -884,6 +883,11 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     }
 
     // MARK: - EditorLayoutSource
+
+    /// Quick Look without the note's folder (a thumbnail, or a preview that can't read the folder, as on iPhone and
+    /// iPad): what is next to the note is out of reach. Links show as links, and pictures, files and notes by their
+    /// names, without being read.
+    var isFolderOutOfReach: Bool { layoutManager.picturesOutOfReach && folder == nil }
 
     func objectNeedsDisplay(_ range: NSRange) {
         guard range.upperBound <= storage.length else { return }

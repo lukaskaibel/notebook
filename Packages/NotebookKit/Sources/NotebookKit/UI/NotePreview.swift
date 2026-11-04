@@ -16,15 +16,24 @@ import os
 /// What is next to the note is read in the background. In a folder the Mac guards, such as Documents or Downloads, the
 /// Mac first asks whether Notebook may read it: the note shows meanwhile, with its pictures by their names, and gets
 /// them once that is allowed.
+///
+/// A thumbnail (NoteThumbnail) shows the note the same way, but only its top and never what is next to it.
 @MainActor
 public final class NotePreview: EditorControllerDelegate {
     public let editor: EditorController
+    /// For a thumbnail: the Finder asks for them as you browse, so only the note is read, never its folder, and the
+    /// Mac never asks whether Notebook may. Without the folder, its pictures show by their names and links as links
+    /// (EditorController.isFolderOutOfReach).
+    let isThumbnail: Bool
     /// The note's folder once what is in it could be read; nil before, and when it can't be.
     private var folder: URL?
     /// What is in the note's folder and its `.assets`, by path in lower case.
     private var files: [String: String] = [:]
 
-    public init() {
+    public convenience init() { self.init(thumbnail: false) }
+
+    init(thumbnail: Bool) {
+        isThumbnail = thumbnail
         // The typeface and heading marks set in Notebook now, before the editor takes them.
         NotebookSettings.shared.followAppLook()
         editor = EditorController()
@@ -54,6 +63,7 @@ public final class NotePreview: EditorControllerDelegate {
         }.value
         let title = url.deletingPathExtension().lastPathComponent
         let meta = Workspace.meta(modified: modified)
+        if isThumbnail { return show(NoteThumbnail.top(of: text), title: title, meta: meta, files: nil, from: url) }
         let reading = Task.detached(priority: .userInitiated) { Self.files(nextTo: url) }
         // Most folders are read at once, and the note shows with everything in it. Otherwise it shows without them.
         if let files = await Self.value(of: reading, within: .milliseconds(400)) {

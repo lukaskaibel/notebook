@@ -76,6 +76,26 @@ public enum NoteExporter {
         }
     }
 
+    /// The top of the note on a page `size` points big, `scale` pixels to the point: as a picture of it is laid out
+    /// (`data(for:title:as: .png)`), but on white and cut off where the page ends. For thumbnails (NoteThumbnail).
+    static func top(of editor: EditorController, title: String, size: CGSize, scale: CGFloat) async -> (image: CGImage, copy: Copy)? {
+        let width = EditorStyle.contentWidth + 96
+        let copy = await layOut(editor, title: title, width: width, margin: 48)
+        let page = NSRect(x: 0, y: 0, width: width, height: (width * size.height / size.width).rounded())
+        let view = copy.view
+        view.drawsBackground = true
+        view.backgroundColor = Theme.panel
+        if view.frame.height < page.height { view.setFrameSize(NSSize(width: width, height: page.height)) }
+        guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int((size.width * scale).rounded()), pixelsHigh: Int((size.height * scale).rounded()),
+                                            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
+        else { return nil }
+        // The page's points on the picture's pixels: the page drawn smaller.
+        bitmap.size = page.size
+        view.cacheDisplay(in: page, to: bitmap)
+        guard let image = bitmap.cgImage else { return nil }
+        return (image, copy)
+    }
+
     // MARK: - The copy
 
     final class Copy {
@@ -108,6 +128,7 @@ public enum NoteExporter {
     static func layOut(_ editor: EditorController, title: String, width: CGFloat, margin: CGFloat) async -> Copy {
         let copy = EditorController()
         copy.layoutManager.hidesEditingControls = true
+        copy.layoutManager.picturesOutOfReach = editor.layoutManager.picturesOutOfReach
         let delegate = ResolvingDelegate(source: editor)
         copy.delegate = delegate
         let view = copy.textView

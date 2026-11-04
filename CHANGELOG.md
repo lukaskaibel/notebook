@@ -18,6 +18,11 @@ versions follow [semantic versioning](https://semver.org).
   another app that shows files with Quick Look, and you see its headings, to-dos, tables and maths in your typeface
   and size instead of its Markdown. iOS lets Quick Look read only the note itself, so its pictures show by their
   names, and links show as links. Seen working on iOS 27.2; earlier versions of iOS 27 may still show the Markdown.
+- Notes have thumbnails as Notebook shows them: the Finder's icon and gallery views, Open panels and the Files app on
+  iPhone and iPad show the top of a note with its title, headings, to-dos, tables and maths, on a white page like other
+  documents, instead of a page of Markdown. They are set in the typeface and size chosen in Settings › Text. Only the
+  note itself is read, so browsing Documents or Downloads never makes the Mac ask whether Notebook may read them;
+  pictures and attached files show by their names.
 - Tables grow as you type them. Type a first row like `| Day | Area |` and press Return: the `| --- | --- |` row goes
   in under it, with an empty row and the caret in its first cell. Tab goes to the next cell with its text selected,
   ⇧Tab to the one before, and Tab in the last cell makes a new row. A `| --- |` row you type yourself, with its `:` for

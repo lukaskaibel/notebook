@@ -14,8 +14,11 @@
 		F1000000000000000000008B /* NotebookCapture in Frameworks */ = {isa = PBXBuildFile; productRef = F1000000000000000000008A /* NotebookCapture */; };
 		F1000000000000000000008E /* NotebookShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F10000000000000000000080 /* NotebookShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F100000000000000000000A0 /* NotebookKit in Frameworks */ = {isa = PBXBuildFile; productRef = F100000000000000000000AA /* NotebookKit */; };
+		F10000000000000000000100 /* NotebookKit in Frameworks */ = {isa = PBXBuildFile; productRef = F10000000000000000000101 /* NotebookKit */; };
 		F100000000000000000000B2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000B1 /* Assets.xcassets */; };
+		F10000000000000000000102 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000B1 /* Assets.xcassets */; };
 		F100000000000000000000A1 /* NotebookQuickLook.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F100000000000000000000A2 /* NotebookQuickLook.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		F10000000000000000000103 /* NotebookThumbnail.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F10000000000000000000104 /* NotebookThumbnail.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -47,6 +50,13 @@
 			remoteGlobalIDString = F100000000000000000000A4;
 			remoteInfo = NotebookQuickLook;
 		};
+		F10000000000000000000105 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F1000000000000000000000B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F10000000000000000000106;
+			remoteInfo = NotebookThumbnail;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -59,6 +69,7 @@
 				F1000000000000000000006E /* NotebookWidgets.appex in Embed Foundation Extensions */,
 				F1000000000000000000008E /* NotebookShare.appex in Embed Foundation Extensions */,
 				F100000000000000000000A1 /* NotebookQuickLook.appex in Embed Foundation Extensions */,
+				F10000000000000000000103 /* NotebookThumbnail.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -82,8 +93,11 @@
 		F10000000000000000000024 /* Notebook-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Notebook-macOS.entitlements"; sourceTree = "<group>"; };
 		F10000000000000000000025 /* Notebook-iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Notebook-iOS.entitlements"; sourceTree = "<group>"; };
 		F100000000000000000000A2 /* NotebookQuickLook.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NotebookQuickLook.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		F10000000000000000000104 /* NotebookThumbnail.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NotebookThumbnail.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		F100000000000000000000A5 /* QuickLook.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = QuickLook.xcconfig; sourceTree = "<group>"; };
+		F10000000000000000000107 /* Thumbnail.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Thumbnail.xcconfig; sourceTree = "<group>"; };
 		F100000000000000000000A6 /* QuickLook-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "QuickLook-Info.plist"; sourceTree = "<group>"; };
+		F10000000000000000000108 /* Thumbnail-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Thumbnail-Info.plist"; sourceTree = "<group>"; };
 		F100000000000000000000B3 /* QuickLook-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "QuickLook-macOS.entitlements"; sourceTree = "<group>"; };
 		F100000000000000000000B4 /* QuickLook-AppGroup-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "QuickLook-AppGroup-macOS.entitlements"; sourceTree = "<group>"; };
 		F100000000000000000000B1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = Notebook/Assets.xcassets; sourceTree = SOURCE_ROOT; };
@@ -113,6 +127,11 @@
 		F100000000000000000000A7 /* NotebookQuickLook */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = NotebookQuickLook;
+			sourceTree = "<group>";
+		};
+		F10000000000000000000109 /* NotebookThumbnail */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = NotebookThumbnail;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -158,6 +177,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F1000000000000000000010A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F10000000000000000000100 /* NotebookKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -169,6 +196,7 @@
 				F10000000000000000000061 /* NotebookWidgets */,
 				F10000000000000000000081 /* NotebookShare */,
 				F100000000000000000000A7 /* NotebookQuickLook */,
+				F10000000000000000000109 /* NotebookThumbnail */,
 				F10000000000000000000020 /* Config */,
 				F10000000000000000000007 /* Products */,
 			);
@@ -182,6 +210,7 @@
 				F10000000000000000000060 /* NotebookWidgets.appex */,
 				F10000000000000000000080 /* NotebookShare.appex */,
 				F100000000000000000000A2 /* NotebookQuickLook.appex */,
+				F10000000000000000000104 /* NotebookThumbnail.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -204,6 +233,8 @@
 				F100000000000000000000A6 /* QuickLook-Info.plist */,
 				F100000000000000000000B3 /* QuickLook-macOS.entitlements */,
 				F100000000000000000000B4 /* QuickLook-AppGroup-macOS.entitlements */,
+				F10000000000000000000107 /* Thumbnail.xcconfig */,
+				F10000000000000000000108 /* Thumbnail-Info.plist */,
 				F100000000000000000000B1 /* Assets.xcassets */,
 			);
 			path = Config;
@@ -227,6 +258,7 @@
 				F10000000000000000000071 /* PBXTargetDependency */,
 				F10000000000000000000091 /* PBXTargetDependency */,
 				F100000000000000000000AD /* PBXTargetDependency */,
+				F1000000000000000000010B /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				F10000000000000000000004 /* Notebook */,
@@ -330,6 +362,29 @@
 			productReference = F100000000000000000000A2 /* NotebookQuickLook.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		F10000000000000000000106 /* NotebookThumbnail */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F1000000000000000000010C /* Build configuration list for PBXNativeTarget "NotebookThumbnail" */;
+			buildPhases = (
+				F1000000000000000000010D /* Sources */,
+				F1000000000000000000010A /* Frameworks */,
+				F1000000000000000000010E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				F10000000000000000000109 /* NotebookThumbnail */,
+			);
+			name = NotebookThumbnail;
+			packageProductDependencies = (
+				F10000000000000000000101 /* NotebookKit */,
+			);
+			productName = NotebookThumbnail;
+			productReference = F10000000000000000000104 /* NotebookThumbnail.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -356,6 +411,9 @@
 					F100000000000000000000A4 = {
 						CreatedOnToolsVersion = 27.0;
 					};
+					F10000000000000000000106 = {
+						CreatedOnToolsVersion = 27.0;
+					};
 				};
 			};
 			buildConfigurationList = F10000000000000000000011 /* Build configuration list for PBXProject "Notebook" */;
@@ -380,6 +438,7 @@
 				F10000000000000000000062 /* NotebookWidgets */,
 				F10000000000000000000082 /* NotebookShare */,
 				F100000000000000000000A4 /* NotebookQuickLook */,
+				F10000000000000000000106 /* NotebookThumbnail */,
 			);
 		};
 /* End PBXProject section */
@@ -421,6 +480,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F1000000000000000000010E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F10000000000000000000102 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -459,6 +526,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F1000000000000000000010D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -481,6 +555,11 @@
 			isa = PBXTargetDependency;
 			target = F100000000000000000000A4 /* NotebookQuickLook */;
 			targetProxy = F100000000000000000000A3 /* PBXContainerItemProxy */;
+		};
+		F1000000000000000000010B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F10000000000000000000106 /* NotebookThumbnail */;
+			targetProxy = F10000000000000000000105 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -972,6 +1051,41 @@
 			};
 			name = Debug;
 		};
+		F1000000000000000000010F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F10000000000000000000107 /* Thumbnail.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/Thumbnail-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Notebook;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
 		F100000000000000000000AF /* Release */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = F100000000000000000000A5 /* QuickLook.xcconfig */;
@@ -1007,6 +1121,41 @@
 			};
 			name = Release;
 		};
+		F10000000000000000000110 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F10000000000000000000107 /* Thumbnail.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/Thumbnail-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Notebook;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		F100000000000000000000B0 /* AppStore */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = F100000000000000000000A5 /* QuickLook.xcconfig */;
@@ -1018,6 +1167,41 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/QuickLook-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Notebook;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = AppStore;
+		};
+		F10000000000000000000111 /* AppStore */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F10000000000000000000107 /* Thumbnail.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/Thumbnail-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Notebook;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1105,6 +1289,16 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		F1000000000000000000010C /* Build configuration list for PBXNativeTarget "NotebookThumbnail" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F1000000000000000000010F /* Debug */,
+				F10000000000000000000110 /* Release */,
+				F10000000000000000000111 /* AppStore */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -1132,6 +1326,10 @@
 			productName = NotebookCapture;
 		};
 		F100000000000000000000AA /* NotebookKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = NotebookKit;
+		};
+		F10000000000000000000101 /* NotebookKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = NotebookKit;
 		};

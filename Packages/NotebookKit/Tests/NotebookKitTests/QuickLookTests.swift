@@ -155,8 +155,8 @@ final class QuickLookTests: XCTestCase {
         XCTAssertEqual(settings.typography, Typography())
     }
 
-    /// Quick Look is asked for the kinds of files the extension claims in its Info.plist, which has to be every kind
-    /// Notebook opens as a note: a kind of note the app learns to open is shown in Quick Look too.
+    /// Quick Look is asked for the kinds of files the extensions claim in their Info.plists, which has to be every kind
+    /// Notebook opens as a note: a kind of note the app learns to open is shown in Quick Look, and has a thumbnail, too.
     func testQuickLookClaimsEveryKindOfNote() throws {
         let config = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -167,11 +167,103 @@ final class QuickLookTests: XCTestCase {
         }
         let types = try XCTUnwrap(plist("Info.plist")["CFBundleDocumentTypes"] as? [[String: Any]])
         let notes = Set(types.filter { $0["CFBundleTypeRole"] as? String == "Editor" }.flatMap { $0["LSItemContentTypes"] as? [String] ?? [] })
-        let extensionInfo = try XCTUnwrap(plist("QuickLook-Info.plist")["NSExtension"] as? [String: Any])
-        let attributes = try XCTUnwrap(extensionInfo["NSExtensionAttributes"] as? [String: Any])
-        let claimed = Set(try XCTUnwrap(attributes["QLSupportedContentTypes"] as? [String]))
         XCTAssertFalse(notes.isEmpty)
-        XCTAssertEqual(claimed, notes, "Config/QuickLook-Info.plist claims the kinds of notes Config/Info.plist opens")
+        for name in ["QuickLook-Info.plist", "Thumbnail-Info.plist"] {
+            let extensionInfo = try XCTUnwrap(plist(name)["NSExtension"] as? [String: Any])
+            let attributes = try XCTUnwrap(extensionInfo["NSExtensionAttributes"] as? [String: Any])
+            let claimed = Set(try XCTUnwrap(attributes["QLSupportedContentTypes"] as? [String]))
+            XCTAssertEqual(claimed, notes, "Config/\(name) claims the kinds of notes Config/Info.plist opens")
+        }
+    }
+
+    // MARK: - Thumbnails
+
+    /// A note's thumbnail is the top of it set by the app's editor: the same text, fonts, colours and spacing as in the
+    /// app, under its title, on a page about the shape of a sheet of paper.
+    func testTheThumbnailSetsANoteAsTheAppDoes() async throws {
+        let url = folder.appendingPathComponent("Kyoto trip.md")
+        try note.write(to: url, atomically: true, encoding: .utf8)
+        try "# Budget\nFlights €1,240".write(to: folder.appendingPathComponent("Budget.md"), atomically: true, encoding: .utf8)
+        let app = EditorHarness(note)
+        let size = NoteThumbnail.size(fitting: CGSize(width: 256, height: 256))
+        XCTAssertEqual(size, CGSize(width: 197, height: 256))
+        let (image, editor) = try await NoteThumbnail.page(of: url, size: size, scale: 2)
+
+        XCTAssertEqual(image.width, 394)
+        XCTAssertEqual(image.height, 512)
+        XCTAssertEqual(editor.text, app.editor.text)
+        XCTAssertEqual(editor.titleText, "Kyoto trip")
+        assertSameLook(editor.storage, app.editor.storage)
+        // Drawn: white paper, with the title's ink near the top.
+        let pixels = try bitmap(image)
+        XCTAssertEqual(pixels.colorAt(x: 2, y: 2)?.usingColorSpace(.sRGB)?.brightnessComponent ?? 0, 1, accuracy: 0.02)
+        let title = (0..<pixels.pixelsWide).flatMap { x in (20..<70).map { (x, $0) } }
+        XCTAssertTrue(title.contains { pixels.colorAt(x: $0.0, y: $0.1).map { $0.usingColorSpace(.sRGB)!.brightnessComponent < 0.4 } ?? false })
+    }
+
+    /// The Finder asks for thumbnails as you scroll by, so a thumbnail reads the note and nothing next to it, and a
+    /// note in a folder the Mac guards never makes it ask whether Notebook may: its pictures show by their names, and
+    /// the notes and files it links to by theirs, still as links.
+    func testTheThumbnailReadsOnlyTheNote() async throws {
+        let url = folder.appendingPathComponent("Kyoto trip.md")
+        try """
+        Gates at dawn, see [[Budget]] and [[Tickets.pdf]].
+
+        ![[torii.png]]
+
+        ![](.assets/rail%20pass.png)
+
+        ![[Tickets.pdf]]
+
+        ![[Budget]]
+        """.write(to: url, atomically: true, encoding: .utf8)
+        try FileManager.default.createDirectory(at: folder.appendingPathComponent(".assets"), withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: EditorHarness("").folder.appendingPathComponent(".assets/torii.png"),
+                                         to: folder.appendingPathComponent(".assets/torii.png"))
+        try "# Budget\nFlights €1,240".write(to: folder.appendingPathComponent("Budget.md"), atomically: true, encoding: .utf8)
+        NotePreview.readingDelay = 30
+        defer { NotePreview.readingDelay = 0 }
+
+        let started = Date()
+        let (image, editor) = try await NoteThumbnail.page(of: url, size: NoteThumbnail.size(fitting: CGSize(width: 256, height: 256)), scale: 2)
+        XCTAssertLessThan(Date().timeIntervalSince(started), 5, "the folder isn't read")
+        XCTAssertNil(editor.folder)
+        XCTAssertTrue(editor.isFolderOutOfReach, "nothing next to the note is read to draw it")
+        let storage = editor.storage
+        var objects: [EditorObject.Kind] = []
+        storage.enumerateAttribute(.notebookObject, in: NSRange(location: 0, length: storage.length)) { value, _, _ in
+            if let object = value as? EditorObject {
+                switch object.kind {
+                case .image, .fileCard, .noteEmbed: objects.append(object.kind)
+                default: break
+                }
+            }
+        }
+        XCTAssertEqual(objects.map { "\($0)" }, [
+            "\(EditorObject.Kind.image(url: nil, source: "torii.png", inline: false))",
+            "\(EditorObject.Kind.image(url: nil, source: ".assets/rail%20pass.png", inline: false))",
+            "\(EditorObject.Kind.noteEmbed(target: "Tickets.pdf", url: nil))",
+            "\(EditorObject.Kind.noteEmbed(target: "Budget", url: nil))",
+        ])
+        for name in ["Budget", "Tickets.pdf"] {
+            let link = (storage.string as NSString).range(of: name)
+            XCTAssertEqual(describe(storage.attribute(.foregroundColor, at: link.location, effectiveRange: nil)!), describe(Theme.accent), "\(name) as a link, not a missing note")
+        }
+    }
+
+    /// A long note isn't laid out to its end for its thumbnail: only what is more than enough for its top.
+    func testTheThumbnailReadsTheTopOfALongNote() async throws {
+        let url = folder.appendingPathComponent("Diary.md")
+        let lines = (1...4000).map { "Day \($0): walked along the river and wrote it down." }
+        try lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
+        let (_, editor) = try await NoteThumbnail.page(of: url, size: NoteThumbnail.size(fitting: CGSize(width: 512, height: 512)), scale: 2)
+        XCTAssertTrue(editor.text.hasPrefix(lines.prefix(100).joined(separator: "\n")))
+        XCTAssertLessThan((editor.text as NSString).length, NoteThumbnail.length + 100)
+        XCTAssertTrue(editor.text.hasSuffix("\n"), "cut at the end of a line")
+    }
+
+    private func bitmap(_ image: CGImage) throws -> NSBitmapImageRep {
+        NSBitmapImageRep(cgImage: image)
     }
 
     /// Every character in the same font, colour and paragraph style, with the same marks and objects.
