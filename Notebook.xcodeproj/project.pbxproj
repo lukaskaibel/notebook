@@ -109,8 +109,6 @@
 		F10000000000000000000107 /* Thumbnail.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Thumbnail.xcconfig; sourceTree = "<group>"; };
 		F100000000000000000000A6 /* QuickLook-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "QuickLook-Info.plist"; sourceTree = "<group>"; };
 		F10000000000000000000108 /* Thumbnail-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Thumbnail-Info.plist"; sourceTree = "<group>"; };
-		F100000000000000000000B3 /* QuickLook-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "QuickLook-macOS.entitlements"; sourceTree = "<group>"; };
-		F100000000000000000000B4 /* QuickLook-AppGroup-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "QuickLook-AppGroup-macOS.entitlements"; sourceTree = "<group>"; };
 		F100000000000000000000B1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = Notebook/Assets.xcassets; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -241,8 +239,6 @@
 				F10000000000000000000095 /* AppGroup.entitlements */,
 				F100000000000000000000A5 /* QuickLook.xcconfig */,
 				F100000000000000000000A6 /* QuickLook-Info.plist */,
-				F100000000000000000000B3 /* QuickLook-macOS.entitlements */,
-				F100000000000000000000B4 /* QuickLook-AppGroup-macOS.entitlements */,
 				F10000000000000000000107 /* Thumbnail.xcconfig */,
 				F10000000000000000000108 /* Thumbnail-Info.plist */,
 				F100000000000000000000B1 /* Assets.xcassets */,

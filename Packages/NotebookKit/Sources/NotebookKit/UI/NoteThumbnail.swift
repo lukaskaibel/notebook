@@ -11,8 +11,7 @@ import Foundation
 /// shown again in either.
 ///
 /// Only the note is read. The Finder asks for thumbnails as you scroll by, so nothing next to the note is looked at,
-/// and a note in a folder the Mac guards, such as Documents or Downloads, never makes it ask whether Notebook may read
-/// it. Pictures, and the files and notes it links to, show by their names.
+/// even where it could be. Pictures, and the files and notes it links to, show by their names.
 @MainActor
 public enum NoteThumbnail {
     /// The page: about the shape of a sheet of paper, as large as fits in `maximum`.
