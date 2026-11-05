@@ -69,9 +69,9 @@ final class QuickLookTests: XCTestCase {
         assertSameLook(preview.editor.storage, app.editor.storage)
     }
 
-    /// A folder the Mac asks about first doesn't hold Quick Look up: the note shows at once, with its picture by its
-    /// name, and the picture comes once the folder could be read.
-    func testTheNoteShowsWhileItsFolderIsAskedAbout() async throws {
+    /// A folder slow to read doesn't hold Quick Look up: the note shows at once, with its picture by its name, and the
+    /// picture comes once the folder could be read.
+    func testTheNoteShowsWhileItsFolderIsRead() async throws {
         let url = folder.appendingPathComponent("Kyoto trip.md")
         try "Gates at dawn.\n\n![[torii.png]]\n".write(to: url, atomically: true, encoding: .utf8)
         try FileManager.default.createDirectory(at: folder.appendingPathComponent(".assets"), withIntermediateDirectories: true)
@@ -91,9 +91,9 @@ final class QuickLookTests: XCTestCase {
         XCTAssertEqual(picture(in: preview)?.lastPathComponent, "torii.png")
     }
 
-    /// Where Quick Look can't read the note's folder, as on iPhone and iPad, a `[[link]]` shows as a link: what it names
-    /// may well be there. Once the folder could be read, a link to nothing in it shows as a note still to be made, as in
-    /// the app.
+    /// Where Quick Look can't read the note's folder, as on the Mac, iPhone and iPad, a `[[link]]` shows as a link: what
+    /// it names may well be there. Once the folder could be read, a link to nothing in it shows as a note still to be
+    /// made, as in the app.
     func testLinksShowAsLinksWhileTheFolderIsOutOfReach() async throws {
         let url = folder.appendingPathComponent("Kyoto trip.md")
         try "Costs are in [[Budget]].\n".write(to: url, atomically: true, encoding: .utf8)
@@ -216,9 +216,8 @@ final class QuickLookTests: XCTestCase {
         assertSameLook(editor.storage, app.editor.storage)
     }
 
-    /// The Finder asks for thumbnails as you scroll by, so a thumbnail reads the note and nothing next to it, and a
-    /// note in a folder the Mac guards never makes it ask whether Notebook may: its pictures show by their names, and
-    /// the notes and files it links to by theirs, still as links.
+    /// The Finder asks for thumbnails as you scroll by, so a thumbnail reads the note and nothing next to it, even where
+    /// it could: its pictures show by their names, and the notes and files it links to by theirs, still as links.
     func testTheThumbnailReadsOnlyTheNote() async throws {
         let url = folder.appendingPathComponent("Kyoto trip.md")
         try """
