@@ -77,7 +77,8 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         outline.style = .sourceList
         outline.backgroundColor = .clear
         outline.rowSizeStyle = .default
-        outline.indentationPerLevel = 10
+        // A folder's files a step further in than in Notes, so a subfolder's chevron sits under its folder's icon.
+        outline.indentationPerLevel = 14
         outline.focusRingType = .none
         outline.allowsEmptySelection = true
         outline.floatsGroupRows = false
@@ -1007,10 +1008,11 @@ final class SidebarHeaderCell: NSTableCellView {
             label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
             label.centerYAnchor.constraint(equalTo: centerYAnchor, constant: 1),
             label.trailingAnchor.constraint(lessThanOrEqualTo: hiddenButton.leadingAnchor, constant: -4),
-            // Left of the row's own Show/Hide chevron, which comes up on hover at the end of the row. The eye keeps its
-            // place while the folder button is away.
-            addButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -28),
-            hiddenButton.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -2),
+            // Right up to the row's own Show/Hide chevron, which comes up on hover at the end of the row (its button
+            // starts 24 pt before the cell's end), and the eye as far from the folder button: the three a group, about
+            // 5 pt between each. The eye keeps its place while the folder button is away.
+            addButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -25),
+            hiddenButton.trailingAnchor.constraint(equalTo: addButton.leadingAnchor),
         ])
         updateButtons()
     }
@@ -1107,11 +1109,12 @@ final class SidebarFileCell: NSTableCellView {
         addSubview(label)
         addSubview(accessory)
         addSubview(count)
-        // Icon and name where Notes has them. The icon keeps its own size, centred on its column.
+        // The icon clear of a folder's chevron, which AppKit puts just before the cell, and the name clear of the icon:
+        // Notes has them closer, which looked cramped. The icon keeps its own size, centred on its column.
         NSLayoutConstraint.activate([
-            icon.centerXAnchor.constraint(equalTo: leadingAnchor, constant: 9),
+            icon.centerXAnchor.constraint(equalTo: leadingAnchor, constant: 12),
             icon.centerYAnchor.constraint(equalTo: centerYAnchor),
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24),
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 29),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
             label.trailingAnchor.constraint(lessThanOrEqualTo: accessory.leadingAnchor, constant: -4),
             accessory.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),

@@ -624,17 +624,23 @@ enum DebugRemote {
             }
             log("showhidden \(argument): \(workspace.locations.filter(workspace.showsHiddenFolders(in:)).map(\.name))")
         case "hoverheader":
-            // hoverheader <title> <1|0>: as if the pointer rested on a section's header (the real one stays put).
+            // hoverheader <title> <1|0>: as if the pointer rested on a section's header (the real one stays put), with
+            // the row's own Show/Hide, which AppKit shows only under a real pointer.
             guard let outline = workspace?.sidebar?.outline, let space = argument.lastIndex(of: " ") else { break }
             for row in 0..<outline.numberOfRows {
                 guard let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarHeaderCell, cell.label.stringValue == argument[..<space] else { continue }
                 cell.isHovered = argument[argument.index(after: space)...] == "1"
                 let height = window?.contentView?.bounds.height ?? 0
-                func place(_ button: NSButton) -> String {
-                    let frame = button.convert(button.bounds, to: nil)
-                    return button.isHidden ? "hidden" : "at \(Int(frame.midX)) \(Int(height - frame.midY))"
+                func place(_ view: NSView) -> String {
+                    let frame = view.convert(view.bounds, to: nil)
+                    return view.isHidden ? "hidden" : "at \(Int(frame.minX))…\(Int(frame.maxX)) \(Int(height - frame.midY))"
                 }
-                log("hoverheader \(argument): eye \(place(cell.hiddenButton)), plus \(place(cell.addButton))")
+                var parts = ["eye \(place(cell.hiddenButton))", "plus \(place(cell.addButton))"]
+                if let showHide = outline.rowView(atRow: row, makeIfNecessary: false)?.subviews.first(where: { $0.identifier == NSOutlineView.showHideButtonIdentifier }) {
+                    showHide.isHidden = !cell.isHovered
+                    parts.append("show/hide \(place(showHide))")
+                }
+                log("hoverheader \(argument): " + parts.joined(separator: ", "))
             }
         case "rowmenu":
             // rowmenu <name>: the titles of the context menu of the sidebar row showing that name.

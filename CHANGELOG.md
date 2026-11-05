@@ -54,6 +54,9 @@ versions follow [semantic versioning](https://semver.org).
   the first, instead of a line break that cut the table in two. From the header it makes the first row; at the start
   of a row, a row above it. Return in an empty last row leaves the table, as an empty item leaves a list, and a row
   typed by hand from its first `|` replaces the empty one.
+- The Mac sidebar has more room: a folder's icon no longer touches its arrow, names sit a little further from their
+  icons, and what is inside a folder steps further in. The buttons that come up on a location's name under the
+  pointer, New Folder and the eye, now sit next to its Show/Hide arrow, evenly spaced, instead of apart from it.
 
 ### Fixed
 
