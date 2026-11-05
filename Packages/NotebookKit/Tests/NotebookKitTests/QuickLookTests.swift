@@ -108,6 +108,25 @@ final class QuickLookTests: XCTestCase {
         XCTAssertEqual(link(in: preview), .chip(resolved: false), "no Budget next to the note")
     }
 
+    /// On the Mac, a note in one of Notebook's locations is read through the app's bookmark to the location: the
+    /// innermost folder kept that the note is in, and none for a note elsewhere. The app keeps them (LocationTests).
+    func testQuickLookOpensTheLocationTheNoteIsIn() throws {
+        let library = folder.appendingPathComponent("Library")
+        let inner = library.appendingPathComponent("Shared")
+        for made in [library.appendingPathComponent("Travel"), inner] {
+            try FileManager.default.createDirectory(at: made, withIntermediateDirectories: true)
+        }
+        QuickLookAccess.keep(QuickLookAccess.bookmarks(for: [library, inner]), in: group)
+        func opened(_ path: String) -> String? {
+            QuickLookAccess.open(for: folder.appendingPathComponent(path), in: group)?.resolvingSymlinksInPath().path
+        }
+        XCTAssertEqual(opened("Library/Travel/Kyoto trip.md"), library.resolvingSymlinksInPath().path)
+        XCTAssertEqual(opened("Library/Shared/Plan.md"), inner.resolvingSymlinksInPath().path)
+        XCTAssertNil(opened("Elsewhere/Note.md"))
+        XCTAssertNil(opened("Library.md"), "a note next to the location isn't in it")
+        XCTAssertNil(QuickLookAccess.open(for: library.appendingPathComponent("Travel/Kyoto trip.md"), in: nil), "a build without the App Group")
+    }
+
     /// How the note's `[[Budget]]` shows.
     private func link(in preview: NotePreview) -> Decoration.Kind? {
         let storage = preview.editor.storage

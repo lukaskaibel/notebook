@@ -573,8 +573,9 @@ screens.
 - **Quick Look** shows a note as Notebook does, not its Markdown, in the typeface and size you chose: press Space on it
   in the Finder, or look at it in the Finder's column view or Get Info. If another app's preview comes up, turn it off
   in System Settings › General › Login Items & Extensions › Quick Look. On iPhone and iPad, tap a note in the Files
-  app, or one attached in another app that shows files with Quick Look. Quick Look lets Notebook read only the note
-  itself, so its pictures and drawings show by their names.
+  app, or one attached in another app that shows files with Quick Look. On the Mac a note in one of your locations
+  shows its pictures and drawings too; elsewhere, and on iPhone and iPad, they show by their names, as Quick Look lets
+  Notebook read only the note itself.
 - **Thumbnails** of notes in the Finder's icon and gallery views, in Open panels and in the Files app on iPhone and
   iPad: the top of the note as Notebook shows it, on a white page. Only the note is read for them, never what is next to
   it, so browsing a folder never makes the Mac ask; pictures show by their names. The Mac picks up a new thumbnail
@@ -914,8 +915,8 @@ Planned, and not built yet:
 - On iPhone and iPad there is no Settings › App Icon (iOS only switches between icons built into the app), no PNG
   export, no window of its own for a single file and no Paste into a folder in the list (#298). Before iOS 27.2,
   Quick Look there may show a note's Markdown instead.
-- **Pictures in Quick Look:** Quick Look lets Notebook read only the note itself, so a note's pictures and drawings
-  show by their names there, on the Mac as on iPhone and iPad (#318).
+- **Pictures in Quick Look on iPhone and iPad,** and on the Mac for notes outside your locations: Quick Look lets
+  Notebook read only the note itself, so a note's pictures and drawings show by their names there (#318).
 - **Sketches** as files of their own, next to your notes rather than in one.
 - **Handwritten notes on the Mac:** you write on their pages there as on any PDF, but new handwritten notes, new pages,
   pictures on pages and All Pages are on iPhone and iPad only. Text boxes and shapes aren't offered: the PDF couldn't
