@@ -65,6 +65,12 @@ public final class NotePreview: EditorControllerDelegate {
         let title = url.deletingPathExtension().lastPathComponent
         let meta = Workspace.meta(modified: modified)
         if isThumbnail { return show(NoteThumbnail.top(of: text), title: title, meta: meta, files: nil, from: url) }
+        #if os(macOS)
+        // Prototype (#318): bookmarks to the note's pictures, put into the extension's defaults by hand.
+        let (log, found) = await Task.detached(priority: .userInitiated) { Self.tryBookmarks(for: url) }.value
+        UserDefaults.standard.set(log, forKey: "bm.log")
+        bookmarked = found
+        #endif
         let reading = Task.detached(priority: .userInitiated) { Self.files(nextTo: url) }
         // Most folders are read at once, and the note shows with everything in it. Otherwise it shows without them.
         if let files = await Self.value(of: reading, within: .milliseconds(400)) {
@@ -83,12 +89,55 @@ public final class NotePreview: EditorControllerDelegate {
     private func show(_ text: String, title: String, meta: String, files: [String: String]?, from url: URL) {
         let shown = editor.storage.length > 0
         self.files = files ?? [:]
-        folder = files == nil ? nil : url.deletingLastPathComponent()
+        folder = files == nil && bookmarked.isEmpty ? nil : url.deletingLastPathComponent()
         if shown {
             editor.load(text: text, folder: folder, title: title, meta: meta, syntax: NoteSyntax(url: url)) { $0 }
         } else {
             editor.load(text: text, folder: folder, title: title, meta: meta, syntax: NoteSyntax(url: url))
         }
+    }
+
+    /// Prototype (#318): pictures found through bookmarks, by file name in lower case.
+    private var bookmarked: [String: URL] = [:]
+
+    /// Prototype (#318): resolves the bookmark of each kind in the extension's defaults ("bm.document", relative to the
+    /// note; "bm.app"; "bm.plain"), and reads what it names. Says what happened, line by line.
+    nonisolated private static func tryBookmarks(for note: URL) -> (String, [String: URL]) {
+        var log = "note \(note.path)\n"
+        var found: [String: URL] = [:]
+        // A plain bookmark to a folder the note is in: once it is resolved, the note's folder can be listed as usual.
+        if let data = UserDefaults.standard.data(forKey: "bm.folder") {
+            var stale = false
+            if let url = try? URL(resolvingBookmarkData: data, options: [.withoutUI], relativeTo: nil, bookmarkDataIsStale: &stale) {
+                let accessing = url.startAccessingSecurityScopedResource()
+                let listed = files(nextTo: note)
+                log += "folder: resolved \(url.path), stale \(stale), accessing \(accessing), note's folder lists \(listed.map { "\($0.count) names" } ?? "nothing")\n"
+            } else {
+                log += "folder: resolve failed\n"
+            }
+        }
+        for kind in ["document", "app", "plain"] {
+            guard let data = UserDefaults.standard.data(forKey: "bm.\(kind)") else { continue }
+            var stale = false
+            do {
+                let url = switch kind {
+                case "document": try URL(resolvingBookmarkData: data, options: [.withSecurityScope, .withoutUI], relativeTo: note, bookmarkDataIsStale: &stale)
+                case "app": try URL(resolvingBookmarkData: data, options: [.withSecurityScope, .withoutUI], relativeTo: nil, bookmarkDataIsStale: &stale)
+                default: try URL(resolvingBookmarkData: data, options: [.withoutUI], relativeTo: nil, bookmarkDataIsStale: &stale)
+                }
+                let accessing = url.startAccessingSecurityScopedResource()
+                do {
+                    let bytes = try Data(contentsOf: url)
+                    log += "\(kind): resolved, stale \(stale), accessing \(accessing), read \(bytes.count) bytes\n"
+                    found[url.lastPathComponent.lowercased()] = url
+                } catch {
+                    log += "\(kind): resolved, stale \(stale), accessing \(accessing), read failed: \((error as NSError).domain) \((error as NSError).code)\n"
+                }
+            } catch {
+                log += "\(kind): resolve failed: \((error as NSError).domain) \((error as NSError).code) \(error.localizedDescription)\n"
+            }
+        }
+        return (log, found)
     }
 
     /// How long reading the note's folder takes in tests, as for a slow one.
@@ -139,6 +188,7 @@ public final class NotePreview: EditorControllerDelegate {
     public func editor(_ editor: EditorController, resolve target: String) -> URL? {
         guard let folder, !target.isEmpty else { return nil }
         let name = target.split(separator: "#", maxSplits: 1).first.map(String.init) ?? target
+        if let url = bookmarked[(name as NSString).lastPathComponent.lowercased()] { return url }
         let names = (name as NSString).pathExtension.isEmpty ? NoteSyntax.noteExtensions.sorted().map { name + "." + $0 } + [name] : [name]
         for base in ["", ".assets/"] {
             for name in names {

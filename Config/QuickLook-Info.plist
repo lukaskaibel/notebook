@@ -12,6 +12,7 @@
 			<array>
 				<string>net.daringfireball.markdown</string>
 				<string>org.asciidoc</string>
+				<string>com.lukaskbl.qlproto</string>
 			</array>
 			<key>QLSupportsSearchableItems</key>
 			<false/>
