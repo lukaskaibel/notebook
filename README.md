@@ -113,7 +113,8 @@ which shows the picture or the file's card all the same and follows the file whe
 a copy). A folder from your folders goes in as a link to it; folders are never copied into a note. Copy a file in the sidebar with Copy in its menu, or the open one with ⇧⌘C, and paste it in a note, the Finder,
 Mail or Messages; a small capsule says what was copied. Drag
 a picture or file card to another place in the note to move it, or into another note, a folder in the sidebar, the
-Finder or another app for a copy. Delete it from the note and the file goes to the Trash once you leave the note, unless
+Finder or another app for a copy. On the Mac a caret shows where it will go while you drag: at the start of the line it
+goes before, or at the end of the one it goes after, since a picture always has a line of its own. Delete it from the note and the file goes to the Trash once you leave the note, unless
 another note in the folder still uses it. Move a note to another folder and its pictures move along.
 
 ### Drawings
@@ -824,7 +825,7 @@ While writing:
 | Tab, ⇧Tab in a table | The next or previous cell, its text selected; Tab in the last cell: a new row |
 | `[[` | Suggestions for a link; ↑↓ and Return or Tab to pick |
 | Space on a selected picture | Quick Look |
-| Drag a picture or file in a note | Move it to another line; ⌥ drops a copy. Into another note, the sidebar, the Finder or another app: a copy |
+| Drag a picture or file in a note | Move it to another line, where the caret shows; ⌥ drops a copy. Into another note, the sidebar, the Finder or another app: a copy |
 | Double-click a drawing | Draw in it |
 | Esc, or start typing | Stop drawing; typing goes on below the drawing |
 | Shift while drawing | A straight line, level or upright when it nearly is (in a PDF too) |

@@ -996,10 +996,15 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     /// The caret drawn from the baseline up to the top of the text, rather than over the whole line.
     func caretRect(proposed rect: NSRect) -> NSRect {
         let selection = self.selection
-        guard selection.length == 0, storage.length > 0, let line = caretLine(of: selection.location, at: rect.midY) else {
+        guard selection.length == 0 else { return shortCaret(rect, line: rect, font: EditorStyle.body) }
+        return caretRect(proposed: rect, at: selection.location)
+    }
+
+    /// The caret at a character, as the text view proposed it there, such as where a drag would drop.
+    func caretRect(proposed rect: NSRect, at index: Int) -> NSRect {
+        guard storage.length > 0, let line = caretLine(of: index, at: rect.midY) else {
             return shortCaret(rect, line: rect, font: EditorStyle.body)
         }
-        let index = selection.location
         guard let character = line.character else {
             // An empty line: the caret where its text will go.
             return shortCaret(rect, line: line.used, font: index < storage.length ? font(at: index) : EditorStyle.body)
