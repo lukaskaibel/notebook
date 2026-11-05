@@ -140,6 +140,7 @@ extension EditorController {
               let rect = layoutManager.headingMarkRect(at: marker.location, origin: textView.textContainerOrigin),
               rect.intersects(dirtyRect) else { return }
         layoutManager.drawHeadingMark(level, in: rect)
+        shownHeadingMark = rect
     }
 
     /// Title, Heading, Subheading or Body, for the heading the caret is on, each set as it is in the note.

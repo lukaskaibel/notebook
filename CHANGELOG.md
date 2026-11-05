@@ -76,6 +76,12 @@ versions follow [semantic versioning](https://semver.org).
   styled again.
 - Notes with long tables open several times faster: each table was set up again for every one of its rows. A note of
   20 tables of 30 rows opens about seven times as fast.
+- Typing no longer stops for a moment when files change while you write, such as when the note saves or iCloud brings
+  in other files. Every link in the open note was set up again each time; now only a link whose note came or went, or
+  a picture or embed whose file changed, is. In a note with 150 links that took a fifth of a second.
+- Typing is lighter when pictures, tables or embedded notes are on screen: each key drew the whole window again,
+  measuring every table again, asking the disk about every picture and reading every embedded note anew. Now it draws
+  only the lines around the caret, a third of the drawing it was, and a key takes a quarter less time.
 
 ## [1.2.0] – not released yet
 

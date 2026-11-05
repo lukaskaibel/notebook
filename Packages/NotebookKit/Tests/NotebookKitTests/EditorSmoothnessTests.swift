@@ -60,6 +60,70 @@ final class EditorSmoothnessTests: XCTestCase {
         return average
     }
 
+    /// A file changing somewhere else in the library (the note's own save, iCloud bringing in others) leaves the note's
+    /// links as they are. Only a link whose note came or went, or a picture whose file changed, is styled again.
+    func testFileChangesRestyleOnlyTheLinksTheyConcern() {
+        let h = EditorHarness("Costs are in [[Budget]].\n\nIdeas go in [[Ideas]].\n\n![](.assets/torii.png)\n\nThe end.")
+        func decoration(_ text: String) -> Decoration? {
+            h.editor.storage.attribute(.notebookDecoration, at: h.range(of: text).location, effectiveRange: nil) as? Decoration
+        }
+        func object(_ text: String) -> EditorObject? {
+            h.editor.storage.attribute(.notebookObject, at: h.range(of: text).location, effectiveRange: nil) as? EditorObject
+        }
+        let budget = decoration("[[Budget]]"), ideas = decoration("[[Ideas]]"), picture = object("![](")
+        XCTAssertEqual(ideas?.kind, .chip(resolved: false), "no note Ideas yet")
+        XCTAssertNotNil(picture)
+
+        h.editor.refreshLinks(changed: [h.folder.appendingPathComponent("Other.md").path, h.folder.path])
+        h.editor.refreshLinks(changed: [])
+        XCTAssertTrue(decoration("[[Budget]]") === budget && decoration("[[Ideas]]") === ideas && object("![](") === picture,
+                      "another file changing styles none of the links again")
+
+        h.notes["ideas"] = h.folder.appendingPathComponent("Ideas.md")
+        h.editor.refreshLinks(changed: [])
+        XCTAssertEqual(decoration("[[Ideas]]")?.kind, .chip(resolved: true), "the link to the new note shows as one")
+        XCTAssertTrue(decoration("[[Budget]]") === budget && object("![](") === picture, "the others stay as they were")
+
+        let ideasNow = decoration("[[Ideas]]")
+        h.editor.refreshLinks(changed: [h.folder.appendingPathComponent(".assets/torii.png").path])
+        XCTAssertFalse(object("![](") === picture, "the picture whose file changed is shown again")
+        XCTAssertTrue(decoration("[[Budget]]") === budget && decoration("[[Ideas]]") === ideasNow)
+    }
+
+    /// Moving the caret draws again the lines it left and went to, and the heading level it showed in the margin.
+    /// Typing draws again only the line around the caret, not the whole window.
+    func testCaretMoveDrawsOnlyItsLines() {
+        let h = EditorHarness(longNote(sections: 4), height: 900)
+        let heading = h.range(of: "Section 1").location
+        h.caret(heading)
+        h.textView.displayIfNeeded()
+        let mark = h.editor.shownHeadingMark
+        XCTAssertNotNil(mark, "the heading's level shows in the margin")
+        func drawing(_ action: () -> Void) -> [NSRect] {
+            h.textView.drawnRects = []
+            h.textView.recordsDrawing = true
+            action()
+            h.textView.displayIfNeeded()
+            h.textView.recordsDrawing = false
+            return h.textView.drawnRects
+        }
+        // Up to the first section's paragraph, both on screen.
+        let target = h.range(of: "paragraph 0").location
+        let moved = drawing { h.caret(target) }
+        for point in [h.point(of: heading), h.point(of: target)] {
+            XCTAssertTrue(h.textView.visibleRect.contains(point))
+            XCTAssertTrue(moved.contains { $0.contains(point) }, "the line the caret left and the one it is on")
+        }
+        if let mark { XCTAssertTrue(moved.contains { $0.contains(NSPoint(x: mark.midX, y: mark.midY)) }, "the level leaves the margin") }
+
+        let typed = drawing { h.type("a") }
+        let area = typed.reduce(0) { $0 + $1.width * $1.height }
+        let visible = h.textView.visibleRect.width * h.textView.visibleRect.height
+        XCTAssertGreaterThan(area, 0)
+        XCTAssertLessThan(area, visible * 0.25, "a key draws again the lines around the caret, not the window")
+        XCTAssertTrue(typed.contains { $0.contains(h.point(of: target)) })
+    }
+
     func testBlockClosingAboveViewDoesNotMoveWhatYouSee() {
         let h = EditorHarness(longNote(sections: 12), height: 600)
         // Open the first table for editing: it shows its Markdown, taller than the rendered table.

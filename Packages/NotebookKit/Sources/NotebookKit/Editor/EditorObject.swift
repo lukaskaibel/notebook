@@ -37,6 +37,23 @@ final class EditorObject: NSObject {
         case linkEdit
         /// A to-do's date or place, after its words.
         case todoPill(TodoPill)
+
+        /// For pictures, drawings, file cards and embedded notes: which of them it is and the file it shows, to tell
+        /// whether styling it again would show something else.
+        var shownFile: ShownFile? {
+            switch self {
+            case .image(let url, _, let inline): ShownFile(kind: inline ? "inline picture" : "picture", url: url)
+            case .drawing(let url): ShownFile(kind: "drawing", url: url)
+            case .fileCard(let url, let name): ShownFile(kind: "file " + name, url: url)
+            case .noteEmbed(let target, let url): ShownFile(kind: "note " + target, url: url)
+            default: nil
+            }
+        }
+    }
+
+    struct ShownFile: Equatable {
+        var kind: String
+        var url: URL?
     }
 
     enum ChipIcon {

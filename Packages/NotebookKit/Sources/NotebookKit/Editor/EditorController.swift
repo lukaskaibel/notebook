@@ -227,6 +227,15 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     /// Characters whose glyphs are to be made again once the edit going on is over (`flushGlyphs`).
     private var pendingGlyphs = IndexSet()
     private var isGlyphFlushScheduled = false
+    /// The selection as last drawn: when it moves, the lines it leaves are drawn again, as are the ones it goes to.
+    var displayedSelection: [NSRange] = []
+    #if os(macOS)
+    /// Where the heading's level was last drawn in the margin, to be drawn away once the caret leaves it.
+    var shownHeadingMark: NSRect?
+    #endif
+    /// The notes embedded in this one, by path, as read: their cards draw a few lines of them, on every frame they show
+    /// in. Read again once their file changed (`refreshLinks`).
+    private var embeddedTexts: [String: String?] = [:]
 
     public override init() {
         _ = NotebookSettings.shared
@@ -276,6 +285,9 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         let text = text ?? ""
         isLoading = true
         self.folder = folder
+        // What other notes say is read again for the next: a note open on its own isn't told when they change.
+        embeddedTexts = [:]
+        displayedSelection = []
         closeSuggestions()
         jump = nil
         revealAnimator.cancel()
@@ -397,17 +409,24 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     public func folderMoved(to folder: URL) {
         guard folder.standardizedFileURL != self.folder?.standardizedFileURL else { return }
         self.folder = folder
-        refreshLinks()
+        // Pictures by relative path are other files now, which tells their lines apart.
+        refreshLinks(changed: [])
     }
 
-    public func refreshLinks() {
+    /// Styles again the lines whose links show differently now: a note one goes to was made, moved or deleted, or a
+    /// picture, drawing or embedded file one shows changed. `changed` holds the paths of the files that changed, as
+    /// the file watcher tells them; empty when only where links go may have changed (the index learnt names), nil when
+    /// any file may have changed. Lines whose links show as they did keep their attributes and layout.
+    public func refreshLinks(changed: Set<String>? = nil) {
+        let paths = changed.map { Set($0.map(HiddenFolders.withoutPrivate)) }
+        if let paths {
+            for path in embeddedTexts.keys where paths.contains(HiddenFolders.withoutPrivate(path)) { embeddedTexts[path] = nil }
+        } else {
+            embeddedTexts = [:]
+        }
+        let env = environment
         let lines = document.lines.indices.filter { index in
-            document.lines[index].spans.contains { span in
-                switch span.kind {
-                case .wikiLink, .embed, .image: true
-                default: false
-                }
-            }
+            MarkdownStyler.linksChanged(in: storage, line: document.lines[index], env: env, changed: paths)
         }
         guard !lines.isEmpty else { return }
         restyle(lines: lines)
@@ -924,7 +943,10 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     }
 
     func noteText(for url: URL) -> String? {
-        try? String(contentsOf: url, encoding: .utf8)
+        if let known = embeddedTexts[url.path] { return known }
+        let text = try? String(contentsOf: url, encoding: .utf8)
+        embeddedTexts[url.path] = .some(text)
+        return text
     }
 
     // MARK: - Selection and focus
@@ -940,10 +962,38 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         }
         if !isTracking { updateReveal() }
         updateSuggestions()
-        textNeedsDisplay()
+        selectionNeedsDisplay()
         // The heading's level tag follows the caret, whether or not its #s show.
         marginNeedsDisplay()
         updateCaretContext()
+    }
+
+    /// The selection moved: the lines it left and the ones it is on are drawn again, for the rings round selected
+    /// pictures and tables (the text view draws the caret and the highlight itself). Only those lines: drawing the
+    /// whole window again on every key took longer than the rest of the keystroke.
+    func selectionNeedsDisplay() {
+        let now = selectedRanges
+        linesNeedDisplay(displayedSelection + now)
+        displayedSelection = now
+    }
+
+    /// The whole lines of `ranges` as far as they are in `shown`, with `neighbours` the line before and after each too
+    /// (a callout's box reaches into them; the Mac's text view reaches out by itself).
+    func displayLines(_ ranges: [NSRange], within shown: NSRange, neighbours: Bool) -> [NSRange] {
+        let length = storage.length
+        guard length > 0, shown.length > 0 else { return [] }
+        var lines: [NSRange] = []
+        for range in ranges {
+            let start = max(0, min(range.location, length)), end = max(start, min(range.upperBound, length))
+            // Only what is on screen.
+            let first = max(start, shown.location), last = min(end, shown.upperBound)
+            guard first <= last else { continue }
+            var line = nsText.lineRange(for: NSRange(location: min(first, length - 1), length: last - min(first, length - 1)))
+            if neighbours, line.location > 0 { line = NSUnionRange(line, nsText.lineRange(for: NSRange(location: line.location - 1, length: 0))) }
+            if neighbours, line.upperBound < length { line = NSUnionRange(line, nsText.lineRange(for: NSRange(location: line.upperBound, length: 0))) }
+            lines.append(line)
+        }
+        return lines
     }
 
     func textChanged() {
