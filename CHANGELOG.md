@@ -7,6 +7,10 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- On the Mac, a caret shows where what you drag over a note will go, as in Notes. A picture, drawing or file card of the
+  note goes on a line of its own, so its caret sits at the start of the line it will go before, or at the end of the
+  one it will go after, and next to a picture or table as tall as it; files, pictures and text from the Finder, other
+  apps or another note show it where the pointer is.
 - AsciiDoc notes. A `.adoc` file is a note like a Markdown one, on the Mac, iPhone and iPad: shown as it reads while
   you type, its marks next to the caret. Section titles, lists and checklists, terms and their descriptions, `NOTE:`
   and `[WARNING]` blocks as callouts, examples and sidebars as boxes, tables with their column widths and cells over
@@ -56,6 +60,9 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- A picture dragged to another place in its note no longer goes into a table, code block, quote or callout and breaks
+  it in two: it goes before or after the whole of it. Dropped on the right of another picture, a file card or a table,
+  it goes after it rather than before, and a file dropped there from the Finder no longer goes into a table's Markdown.
 - On iPhone and iPad, a Nextcloud folder chosen with Add Location showed in the sidebar but stayed empty. Nextcloud
   gives other apps only single files, not its folders, so Notebook can't show what's in them; it now says so instead of
   adding the folder. A folder like this added before is pointed out once, with how to remove it.
