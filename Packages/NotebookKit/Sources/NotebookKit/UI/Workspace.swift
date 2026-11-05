@@ -332,9 +332,9 @@ public final class Workspace: NSObject {
 
     /// Search knows other notes now: links to them show as links, in this window and in notes open on their own.
     private func refreshLinks() {
-        editor.refreshLinks()
+        editor.refreshLinks(changed: [])
         #if os(macOS)
-        FileWindows.shared.refreshLinks()
+        FileWindows.shared.refreshLinks(changed: [])
         #endif
     }
 
@@ -881,7 +881,10 @@ public final class Workspace: NSObject {
         read(changed, again: true)
         index.refresh(folders: indexFolders, locations: locations)
         remindersMayHaveChanged(in: indexFolders)
-        editor.refreshLinks()
+        // Only the links that show one of these files, or whose note came or went, are styled again: the note's own
+        // save, or iCloud bringing in other files, mustn't restyle every link while you type.
+        ImageStore.shared.forget(folders)
+        editor.refreshLinks(changed: folders)
         if let current = currentURL, !FileManager.default.fileExists(atPath: current.path), note == nil {
             currentURL = nil
         }

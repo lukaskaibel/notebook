@@ -146,8 +146,30 @@ extension EditorController: NSTextViewDelegate, NSTextFieldDelegate {
         textView.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
     }
 
+    /// Everything in the text view is drawn again: what shows changed all over the note.
     func textNeedsDisplay() { textView.needsDisplay = true }
-    func marginNeedsDisplay() { textView.needsDisplay = true }
+
+    /// The heading's level in the margin moved with the caret, or went: where it was drawn and where it goes are drawn
+    /// again.
+    func marginNeedsDisplay() {
+        let rect = headingMarkLevel.flatMap { layoutManager.headingMarkRect(at: $0.marker.location, origin: textView.textContainerOrigin) }
+        for mark in [shownHeadingMark, rect].compactMap({ $0 }) { textView.setNeedsDisplay(mark.insetBy(dx: -2, dy: -2)) }
+        shownHeadingMark = rect
+    }
+
+    /// The lines of `ranges` are drawn again, across the whole width, as far as they are on screen or drawn ahead.
+    func linesNeedDisplay(_ ranges: [NSRange]) {
+        guard storage.length > 0, !ranges.isEmpty else { return }
+        let origin = textView.textContainerOrigin
+        let area = textView.visibleRect.union(textView.preparedContentRect).offsetBy(dx: -origin.x, dy: -origin.y)
+        let shown = layoutManager.characterRange(forGlyphRange: layoutManager.glyphRange(forBoundingRect: area, in: container), actualGlyphRange: nil)
+        for lines in displayLines(ranges, within: shown, neighbours: false) {
+            let glyphs = layoutManager.glyphRange(forCharacterRange: lines, actualCharacterRange: nil)
+            guard glyphs.length > 0 else { continue }
+            let rect = layoutManager.boundingRect(forGlyphRange: glyphs, in: container)
+            textView.setNeedsDisplay(NSRect(x: 0, y: origin.y + rect.minY, width: textView.bounds.width, height: rect.height))
+        }
+    }
 
     /// Changes the text the way typing does, so it can be undone.
     func performEdit(_ range: NSRange, with string: String) -> Bool {

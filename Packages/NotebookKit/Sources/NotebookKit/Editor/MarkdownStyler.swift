@@ -534,34 +534,68 @@ enum MarkdownStyler {
         return span
     }
 
-    private static func styleBlockObject(_ s: NSTextStorage, span: InlineSpan, line: MarkdownLine, env: StyleEnvironment) {
-        let kind: EditorObject.Kind
+    /// What a picture or embed on a line of its own shows: the picture, a drawing, a card for a file or another note.
+    private static func blockObjectKind(_ span: InlineSpan, env: StyleEnvironment) -> EditorObject.Kind? {
         switch span.kind {
         case .image(let source, _):
             let url = fileURL(source, env: env)
-            if let url, !isImageFile(url) {
-                kind = .fileCard(url: url, name: url.lastPathComponent)
-            } else if let url, DrawingFile.isDrawing(url) {
-                kind = .drawing(url: url)
-            } else {
-                kind = .image(url: url, source: source, inline: false)
-            }
+            if let url, !isImageFile(url) { return .fileCard(url: url, name: url.lastPathComponent) }
+            if let url, DrawingFile.isDrawing(url) { return .drawing(url: url) }
+            return .image(url: url, source: source, inline: false)
         case .embed(let target):
             let url = env.resolve(target)
-            if let url, DrawingFile.isDrawing(url) {
-                kind = .drawing(url: url)
-            } else if let url, isImageFile(url) {
-                kind = .image(url: url, source: target, inline: false)
-            } else if let url, !NoteSyntax.isNote(pathExtension: url.pathExtension) {
-                kind = .fileCard(url: url, name: url.lastPathComponent)
-            } else if url == nil, isImageName(target) {
-                kind = .image(url: nil, source: target, inline: false)
-            } else {
-                kind = .noteEmbed(target: target, url: url)
-            }
+            if let url, DrawingFile.isDrawing(url) { return .drawing(url: url) }
+            if let url, isImageFile(url) { return .image(url: url, source: target, inline: false) }
+            if let url, !NoteSyntax.isNote(pathExtension: url.pathExtension) { return .fileCard(url: url, name: url.lastPathComponent) }
+            if url == nil, isImageName(target) { return .image(url: nil, source: target, inline: false) }
+            return .noteEmbed(target: target, url: url)
         default:
-            return
+            return nil
         }
+    }
+
+    /// Whether styling `line` again would show its links differently: a note one goes to was made or went away, a
+    /// picture or embed shows another file now, or the file it shows is among `changed` (paths, as
+    /// `HiddenFolders.withoutPrivate` gives them; nil when any may have changed). Lines whose links show as they did
+    /// are left alone: a file changing somewhere in the library mustn't restyle every link in the note.
+    static func linksChanged(in s: NSTextStorage, line: MarkdownLine, env: StyleEnvironment, changed: Set<String>?) -> Bool {
+        for span in line.spans where span.range.location < s.length {
+            let target: String
+            switch span.kind {
+            case .wikiLink(let name, _): target = name
+            case .embed(let name): target = name
+            case .image: target = ""
+            default: continue
+            }
+            if let object = s.attribute(.notebookObject, at: span.range.location, effectiveRange: nil) as? EditorObject,
+               let shown = object.kind.shownFile {
+                let expected: EditorObject.Kind?
+                if case .image(_, _, true) = object.kind, case .image(let source, _) = span.kind {
+                    expected = .image(url: fileURL(source, env: env), source: source, inline: true)
+                } else {
+                    expected = blockObjectKind(span, env: env)
+                }
+                guard let expected, expected.shownFile == shown else { return true }
+                if let url = shown.url, isAmong(url, changed) { return true }
+            } else if let decoration = s.attribute(.notebookDecoration, at: span.range.location, effectiveRange: nil) as? Decoration,
+                      case .chip(let resolved) = decoration.kind, !target.isEmpty {
+                if resolved != (env.linksOutOfReach || env.resolve(target) != nil) { return true }
+            }
+        }
+        return false
+    }
+
+    /// Whether `url` is one of `paths`, directly or through a link (iCloud Drive's Desktop and Documents); nil is
+    /// every file.
+    private static func isAmong(_ url: URL, _ paths: Set<String>?) -> Bool {
+        guard let paths else { return true }
+        guard !paths.isEmpty else { return false }
+        let path = HiddenFolders.withoutPrivate(url.standardizedFileURL.path)
+        return paths.contains(path) || paths.contains(HiddenFolders.withoutPrivate(url.resolvingSymlinksInPath().path))
+    }
+
+    private static func styleBlockObject(_ s: NSTextStorage, span: InlineSpan, line: MarkdownLine, env: StyleEnvironment) {
+        guard let kind = blockObjectKind(span, env: env) else { return }
         s.addAttribute(.paragraphStyle, value: EditorStyle.objectParagraph(), range: line.fullRange)
         hide(s, NSRange(location: line.range.location, length: span.range.location - line.range.location), .always)
         s.addAttribute(.notebookObject, value: EditorObject(kind, range: span.range), range: NSRange(location: span.range.location, length: 1))

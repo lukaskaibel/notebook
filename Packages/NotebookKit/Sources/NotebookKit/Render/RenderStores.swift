@@ -26,8 +26,27 @@ final class ImageStore {
     /// Pictures still being decoded.
     var isBusy: Bool { !loading.isEmpty }
 
+    /// When each picture's file last changed, and when that was asked: layout and drawing ask on every frame a picture
+    /// is in, while you type, and the disk is asked again only once the file watcher says it changed (`forget`), or a
+    /// few seconds later for files it doesn't watch.
+    private var modifications: [String: (date: Date?, asked: CFTimeInterval)] = [:]
+
     private func modified(_ url: URL) -> Date? {
-        try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+        let now = CACurrentMediaTime()
+        if let known = modifications[url.path], now - known.asked < 3 { return known.date }
+        let date = try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+        modifications[url.path] = (date, now)
+        return date
+    }
+
+    /// The files at these paths (or in these folders) changed: their pictures are looked at again when next shown.
+    func forget(_ paths: Set<String>) {
+        guard !modifications.isEmpty else { return }
+        let changed = Set(paths.map(HiddenFolders.withoutPrivate))
+        for path in modifications.keys {
+            let plain = HiddenFolders.withoutPrivate(path)
+            if changed.contains(plain) || changed.contains((plain as NSString).deletingLastPathComponent) { modifications[path] = nil }
+        }
     }
 
     /// The picture's size in points, upright, or nil when the file isn't a picture or isn't there (yet).
