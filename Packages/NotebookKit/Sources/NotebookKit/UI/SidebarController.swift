@@ -1008,11 +1008,11 @@ final class SidebarHeaderCell: NSTableCellView {
             label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
             label.centerYAnchor.constraint(equalTo: centerYAnchor, constant: 1),
             label.trailingAnchor.constraint(lessThanOrEqualTo: hiddenButton.leadingAnchor, constant: -4),
-            // Right up to the row's own Show/Hide chevron, which comes up on hover at the end of the row (its button
-            // starts 24 pt before the cell's end), and the eye as far from the folder button: the three a group, about
-            // 5 pt between each. The eye keeps its place while the folder button is away.
-            addButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -25),
-            hiddenButton.trailingAnchor.constraint(equalTo: addButton.leadingAnchor),
+            // Left of the row's own Show/Hide chevron, which comes up on hover at the end of the row, and the eye left of
+            // the folder button: 8.5 pt between the drawn symbols, as between a row's icon and its name. The eye's symbol
+            // sits a point left of its button's middle. The eye keeps its place while the folder button is away.
+            addButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -28),
+            hiddenButton.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -3.5),
         ])
         updateButtons()
     }

@@ -56,7 +56,7 @@ versions follow [semantic versioning](https://semver.org).
   typed by hand from its first `|` replaces the empty one.
 - The Mac sidebar has more room: a folder's icon no longer touches its arrow, names sit a little further from their
   icons, and what is inside a folder steps further in. The buttons that come up on a location's name under the
-  pointer, New Folder and the eye, now sit next to its Show/Hide arrow, evenly spaced, instead of apart from it.
+  pointer, the eye and New Folder, are evenly spaced up to its Show/Hide arrow.
 
 ### Fixed
 
