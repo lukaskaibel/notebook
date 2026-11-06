@@ -24,8 +24,28 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     }
     /// The address for the file coordinator, which asks for it from other threads.
     @ObservationIgnored private let presentedURL: Mutex<URL>
-    public private(set) var text: String
-    private(set) var savedText: String
+    /// The note's text, with what was typed in its editor since it was last taken from there (`typed(in:)`).
+    public private(set) var text: String {
+        get {
+            takeTyped()
+            return taken
+        }
+        set { taken = newValue }
+    }
+    /// The text as last taken from the editor, or read from the file. Nothing on screen shows it, so it isn't observed:
+    /// setting an observed text compares the whole of it with what it was.
+    @ObservationIgnored private var taken: String
+    @ObservationIgnored private(set) var savedText: String
+    /// The editor this note was last typed in, and which of the notes it showed was this one (its `loadCount`): what
+    /// is typed there is taken from it only when the note needs its text, not with every key (`typed(in:)`).
+    @ObservationIgnored private weak var typingEditor: EditorController?
+    @ObservationIgnored private var typingLoad = 0
+    /// Typed in the editor since the text was last taken from it.
+    @ObservationIgnored private var isTypedAhead = false
+    /// How often the whole text was taken from the editor: as it is saved, compared or kept, not as you type.
+    @ObservationIgnored private(set) var timesTaken = 0
+    /// The length of `openedText` in UTF-16, which the editor's length is held against as you type.
+    @ObservationIgnored private var openedLength = 0
     /// Made with ⌘N and not given a title yet; thrown away if left without text too, even text typed and taken out again.
     var isNew = false
     public private(set) var modified: Date?
@@ -151,7 +171,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         // wait for the write.
         let pending = Self.isBeingWritten(url) ? .reading : Self.wait(for: url)
         let loaded = pending == nil ? Self.read(url) ?? "" : ""
-        text = loaded
+        taken = loaded
         savedText = loaded
         self.pending = pending
         modified = Self.modificationDate(url)
@@ -170,6 +190,9 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     /// asked about any more keeps both (`keepBoth`).
     func close() {
         guard !isClosed else { return }
+        // What was typed is the note's text from now on, and the editor may show another note next.
+        takeTyped()
+        typingEditor = nil
         // What was typed is kept as a version as you stop.
         keepCopyOfChanges()
         isClosed = true
@@ -262,19 +285,63 @@ public final class NoteDocument: NSObject, NSFilePresenter {
         }
     }
 
-    /// Takes in what is typed and saves it a moment later. Nothing is, before the note's own text is in.
-    func update(text newText: String) {
-        guard isLoaded, !isClosed, newText != text else { return }
-        // The note as it was before you started changing it, once each time it is opened.
-        if !hasBeenTypedIn {
-            hasBeenTypedIn = true
-            keepCopy(text)
+    /// A key was typed in `editor`, which shows this note. The text stays there until the note needs it (`takeTyped`):
+    /// to save it a moment later, to compare it or keep a copy of it, and as the note is moved or left. Taken with every
+    /// key, the whole text was copied and compared twice, which in a long note took longer than the rest of the key.
+    func typed(in editor: EditorController) {
+        guard isLoaded, !isClosed else { return }
+        if typingEditor !== editor { typingEditor = editor }
+        typingLoad = editor.loadCount
+        isTypedAhead = true
+        // Another length than it had when it was opened says at once that it changed, as you type. At the same length
+        // (typed back to it, a letter typed over another, Revert To › Last Opened) only the text can say, so it is taken.
+        if editor.storage.length != openedLength {
+            if !isChangedSinceOpening { isChangedSinceOpening = true }
+        } else {
+            takeTyped()
+            noteWhetherChangedSinceOpening()
         }
-        text = newText
-        changedSinceCopy = true
-        noteWhetherChangedSinceOpening()
         // Held during a move, it is written once the move is done, and quitting waits for that.
         if moves > 0 { updateWriting() }
+        saveSoon()
+    }
+
+    /// Takes in the whole text: as the note is left or saved at once, or a version is restored over it. Nothing is,
+    /// before the note's own text is in. It is saved a moment later.
+    func update(text newText: String) {
+        guard isLoaded, !isClosed else { return }
+        // What was typed in the editor is in this text.
+        isTypedAhead = false
+        guard take(newText) else { return }
+        if moves > 0 { updateWriting() }
+        saveSoon()
+    }
+
+    /// Takes in what was typed in the editor since it was last taken. Not once the editor was given another note to
+    /// show (leaving a note takes what was typed in it first): that text is never this note's.
+    private func takeTyped() {
+        guard isTypedAhead else { return }
+        isTypedAhead = false
+        guard let editor = typingEditor, editor.loadCount == typingLoad else { return }
+        timesTaken += 1
+        take(editor.text)
+    }
+
+    /// The text changed to `newText`: the note as it was before is kept as a version first, once each time it is opened.
+    @discardableResult
+    private func take(_ newText: String) -> Bool {
+        guard isLoaded, !isClosed, newText != taken else { return false }
+        if !hasBeenTypedIn {
+            hasBeenTypedIn = true
+            keepCopy(taken)
+        }
+        taken = newText
+        changedSinceCopy = true
+        noteWhetherChangedSinceOpening()
+        return true
+    }
+
+    private func saveSoon() {
         saveTimer?.invalidate()
         saveTimer = Timer.scheduledTimer(withTimeInterval: Self.saveDelay, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.saveNow() }
@@ -341,11 +408,12 @@ public final class NoteDocument: NSObject, NSFilePresenter {
     /// is kept as it is now.
     private func opened() {
         openedText = text
+        openedLength = text.utf16.count
         noteWhetherChangedSinceOpening()
         history?.keep(text, of: url, onlyIfChanged: true)
     }
 
-    /// As you type: lengths that differ say it at once, and a long note's text takes a while to compare.
+    /// As the text is taken in: lengths that differ say it at once, and a long note's text takes a while to compare.
     private func noteWhetherChangedSinceOpening() {
         let changed = openedText.map { $0.utf16.count != text.utf16.count || $0 != text } ?? false
         if changed != isChangedSinceOpening { isChangedSinceOpening = changed }
@@ -373,6 +441,7 @@ public final class NoteDocument: NSObject, NSFilePresenter {
 
     /// Keeps a copy of what changed since the last one: as you stop, the note closing or the app going away.
     func keepCopyOfChanges() {
+        takeTyped()
         guard isLoaded, changedSinceCopy else { return }
         keepCopy(text)
     }

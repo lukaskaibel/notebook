@@ -44,6 +44,55 @@ final class EditorSmoothnessTests: XCTestCase {
         }
     }
 
+    /// A key typed in a long note costs the note next to nothing: the text stays in the editor until the note needs it,
+    /// and is taken once, as it is saved, rather than copied and compared with every key.
+    func testTypingInLongNoteLeavesTheTextInTheEditor() async throws {
+        let h = EditorHarness(longNote(sections: 150))
+        let url = h.folder.appendingPathComponent("Long.md")
+        try h.text.write(to: url, atomically: true, encoding: .utf8)
+        let note = NoteDocument(url: url, history: nil)
+        var spent = Timing.Sample(processor: 0, wall: 0), keys = 0
+        h.onTextChange = { editor in
+            spent = spent + Timing.measure { note.typed(in: editor) }
+            keys += 1
+        }
+        let start = h.range(of: "paragraph 75").location
+        h.caret(start)
+        XCTAssertFalse(note.isChangedSinceOpening)
+        try assertFast("what a key costs the note in a long note", under: 0.0003) {
+            (spent, keys) = (Timing.Sample(processor: 0, wall: 0), 0)
+            for character in "quick brown fox " {
+                h.textView.insertText(String(character), replacementRange: h.textView.selectedRange())
+            }
+            XCTAssertEqual(keys, 16)
+            return spent / keys
+        }
+        XCTAssertEqual(note.timesTaken, 0, "no key took the whole text")
+        XCTAssertTrue(note.isChangedSinceOpening, "longer than when it was opened, which needs no comparing")
+
+        // Whatever asks for the text gets what was typed, taken once.
+        XCTAssertTrue(note.hasUnsavedChanges)
+        XCTAssertEqual(note.text, h.text)
+        XCTAssertEqual(note.timesTaken, 1)
+        let deadline = Date().addingTimeInterval(TestRun.patience)
+        while (try? String(contentsOf: url, encoding: .utf8)) != h.text, Date() < deadline { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), h.text, "saved a moment after the last key")
+        XCTAssertEqual(note.timesTaken, 1, "saving took nothing more")
+
+        // Typed back to the length it was opened with: only the text says whether it changed, so that key takes it.
+        h.select(NSRange(location: start, length: h.textView.selectedRange().location - start))
+        h.textView.deleteBackward(nil)
+        XCTAssertEqual(note.timesTaken, 2)
+        XCTAssertFalse(note.isChangedSinceOpening, "the same as when it was opened")
+        h.select(NSRange(location: start, length: 1))
+        h.textView.insertText("P", replacementRange: h.textView.selectedRange())
+        XCTAssertEqual(note.timesTaken, 3)
+        XCTAssertTrue(note.isChangedSinceOpening, "a letter typed over another")
+        XCTAssertEqual(note.text, h.text)
+        note.close()
+        await NoteDocument.allWritten()
+    }
+
     /// What a keystroke at the caret takes on average, laid out.
     private func keystroke(in h: EditorHarness) -> Timing.Sample {
         let caret = h.selection.location
