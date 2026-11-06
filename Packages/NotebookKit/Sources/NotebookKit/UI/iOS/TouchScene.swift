@@ -362,6 +362,13 @@ struct TouchSettings: View {
                     Text("Notebook reads the words in pictures, scanned PDFs and handwriting on this device, in the background, so search finds them.")
                 }
                 Section {
+                    Link(destination: AppReview.writeReviewURL) {
+                        Label("Rate Notebook on the App Store", systemImage: "star")
+                    }
+                } footer: {
+                    Text("A rating or a few words in the App Store help others find Notebook.")
+                }
+                Section {
                     LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
                     NavigationLink("Acknowledgements") { AcknowledgementsView() }
                 }

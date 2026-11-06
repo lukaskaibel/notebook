@@ -12,6 +12,8 @@ advertising, and it collects nothing about you.
   Files app shows under On My iPhone › Notebook.
 - **Favourites, recently opened files, the folders open in the sidebar and your settings** (typeface, text size,
   what the sidebar shows, the notebook on the app icon) are kept in the app's preferences on your device.
+- **When to ask for a rating:** the last few days you opened Notebook, and when it last asked you to rate it on the App
+  Store, are kept in the app's preferences on your device. A rating you give goes to Apple, as for any app.
 - **The folders you hide and the reminders of notes you set** are kept in the app's preferences and, in the App Store
   build, in iCloud's key-value store, which Apple syncs to your other devices signed in to the same Apple Account. A
   reminder of a note is the place of the note in your folders, its time and the place it reminds you at (a name and its

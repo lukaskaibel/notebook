@@ -7,6 +7,11 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- Notebook asks for a rating on the App Store, with the system's own prompt, once you have used it on three days: only
+  as you finish something, when you leave a note you wrote in or a to-do you ticked in To-dos has gone, never as it
+  opens or as you start a new note, and at most once a version and two months apart (the system shows it at most three
+  times a year). Rate Notebook on the App Store is always there too, in the app menu on the Mac and at the end of
+  Settings on iPhone and iPad.
 - On the Mac, a caret shows where what you drag over a note will go, as in Notes. A picture, drawing or file card of the
   note goes on a line of its own, so its caret sits at the start of the line it will go before, or at the end of the
   one it will go after, and next to a picture or table as tall as it; files, pictures and text from the Finder, other
