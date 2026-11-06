@@ -24,9 +24,10 @@ versions follow [semantic versioning](https://semver.org).
 - Quick Look shows a note as Notebook does: press Space on a note in the Finder, or look at it in the Finder's column
   view or Get Info, and you see its headings, to-dos, tables, maths and diagrams, with its title and when it was last
   edited on top, instead of its Markdown. It is set in the typeface, size, line spacing and width chosen in Settings ›
-  Text, in Notebook's ink blue. Its text can be selected and copied. The Mac lets Quick Look read only the note itself,
-  so its pictures and drawings show by their names, and links show as links. A tip at the bottom of the sidebar shows
-  the way, with a button to Quick Look's settings, where another app that previews Markdown can be turned off.
+  Text, in Notebook's ink blue. Its text can be selected and copied. A note in one of the locations in Notebook's
+  sidebar shows its pictures and drawings too, once Notebook has been opened since the Mac started; a note elsewhere
+  shows them by their names, and links as links. A tip at the bottom of the sidebar shows the way, with a button to
+  Quick Look's settings, where another app that previews Markdown can be turned off.
 - Quick Look on iPhone and iPad shows a note as Notebook does too: tap a note in the Files app, or one attached in
   another app that shows files with Quick Look, and you see its headings, to-dos, tables and maths in your typeface
   and size instead of its Markdown. iOS lets Quick Look read only the note itself, so its pictures show by their
@@ -57,6 +58,12 @@ versions follow [semantic versioning](https://semver.org).
   the first, instead of a line break that cut the table in two. From the header it makes the first row; at the start
   of a row, a row above it. Return in an empty last row leaves the table, as an empty item leaves a list, and a row
   typed by hand from its first `|` replaces the empty one.
+- The Mac sidebar has more room and borrows some of Notion's manners while keeping the Mac's look. A folder's icon no
+  longer touches its arrow, which is a little quieter; names sit further from their icons; and what is inside a folder
+  steps further in. The row under the pointer gets a soft fill and ••• for its right-click menu, and a folder also +
+  for a new note in it. A location's name has ••• and + too: ••• holds New Folder, Show Hidden Folders, Show in Finder
+  and Remove from Sidebar, + makes a note at its top, and a click on the name folds the location. The eye shows by the
+  name only while hidden folders show, and hides them again.
 
 ### Fixed
 

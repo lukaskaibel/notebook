@@ -100,14 +100,62 @@ final class NewFolderTests: XCTestCase {
         return try XCTUnwrap(row(name, under: parent, in: sidebar))
     }
 
-    func testThePlusOnALocationsHeaderMakesAFolderToName() async throws {
-        let (workspace, sidebar) = try await makeSidebar()
+    /// The plus on a location's header makes a note there, as Notion's + on a section makes a page.
+    func testThePlusOnALocationsHeaderMakesANote() async throws {
+        let (_, sidebar) = try await makeSidebar()
         let cell = try header("iCloud Drive", in: sidebar)
         XCTAssertTrue(cell.addButton.isHidden, "only under the pointer")
         cell.isHovered = true
         XCTAssertFalse(cell.addButton.isHidden)
-        XCTAssertEqual(cell.addButton.accessibilityLabel(), "New Folder in iCloud Drive")
+        XCTAssertEqual(cell.addButton.accessibilityLabel(), "New Note in iCloud Drive")
         cell.addButton.performClick(nil)
+        try await until("Untitled.md at the top of iCloud Drive") {
+            FileManager.default.fileExists(atPath: self.drive.appendingPathComponent("Untitled.md").path)
+        }
+    }
+
+    /// A click on a section's header folds it and opens it again, as in Notion; a click on its buttons doesn't.
+    func testAClickOnASectionsHeaderFoldsIt() async throws {
+        let (_, sidebar) = try await makeSidebar()
+        let outline = sidebar.outline
+        let cell = try header("iCloud Drive", in: sidebar)
+        let row = outline.row(for: cell)
+        let entry = try XCTUnwrap(outline.item(atRow: row) as? SidebarEntry)
+        func click(at point: NSPoint) {
+            let event = NSEvent.mouseEvent(with: .leftMouseDown, location: outline.convert(point, to: nil), modifierFlags: [], timestamp: 0,
+                                           windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+            outline.mouseDown(with: event)
+        }
+        let label = NSPoint(x: outline.rect(ofRow: row).minX + 30, y: outline.rect(ofRow: row).midY)
+        XCTAssertTrue(outline.isItemExpanded(entry))
+        click(at: label)
+        try await until("iCloud Drive folded") { !outline.isItemExpanded(entry) }
+        XCTAssertFalse(cell.isExpanded, "its arrow turned")
+        XCTAssertEqual(names(sidebar), [])
+        click(at: label)
+        try await until("iCloud Drive open again") { outline.isItemExpanded(entry) }
+        XCTAssertEqual(names(sidebar), ["Desktop", "Obsidian", "Papers"])
+
+        // The ••• under the pointer takes its own click: the section stays open.
+        let header = try self.header("iCloud Drive", in: sidebar)
+        header.isHovered = true
+        header.layoutSubtreeIfNeeded()
+        click(at: outline.convert(NSPoint(x: header.moreButton.frame.midX, y: header.moreButton.frame.midY), from: header))
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertTrue(outline.isItemExpanded(entry))
+    }
+
+    /// New Folder is in the header's •••, its right-click menu.
+    func testNewFolderInALocationsMenuMakesAFolderToName() async throws {
+        let (workspace, sidebar) = try await makeSidebar()
+        let cell = try header("iCloud Drive", in: sidebar)
+        XCTAssertTrue(cell.moreButton.isHidden, "only under the pointer")
+        cell.isHovered = true
+        XCTAssertFalse(cell.moreButton.isHidden)
+        XCTAssertEqual(cell.moreButton.accessibilityLabel(), "More for iCloud Drive")
+        let menu = NSMenu()
+        sidebar.fill(menu, row: sidebar.outline.row(for: cell))
+        menu.performActionForItem(at: try XCTUnwrap(menu.items.firstIndex { $0.title == "New Folder" }))
 
         let row = try await newRow("New Folder", under: drive, in: sidebar)
         let made = drive.appendingPathComponent("New Folder")

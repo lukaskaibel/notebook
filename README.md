@@ -439,7 +439,9 @@ lists each kind of file has a symbol of its own, in the accent colour as folders
 
 The window is built from the system's own pieces: a source-list sidebar, a toolbar with the system's search field and
 share menu, an inspector, Settings, alerts, PDFKit, AVKit and Quick Look. It follows the system's light or dark
-appearance. The inspector shows a note's outline, with the section you're reading marked and a word count; a click on
+appearance. Some of the sidebar's manners come from Notion: the row under the pointer gets a soft fill, with ••• for its
+menu and, on a folder, + for a new note in it; a location's name has the same two, and a click on it folds the
+location. The inspector shows a note's outline, with the section you're reading marked and a word count; a click on
 a heading scrolls there. In Settings › Text you pick the typeface (San Francisco, New York, Rounded or Monospaced,
 each shown in itself), the size, the line spacing and the line width; on iPhone and iPad the system's text size makes
 notes larger or smaller on top of that, as it does the text of other apps (not in a PDF or printout). The icon is a leather notebook, and Settings › App Icon makes it yours:
@@ -508,8 +510,9 @@ screens.
   in it: Desktop and Documents when they are kept in iCloud, and the folders of apps such as Pages or Obsidian.
   Folders are read and changes to files written in the background, so even a large iCloud Drive shows at once and
   nothing waits for it. Create, rename, duplicate and move notes and folders, by drag and drop or with Move To;
-  Option-drag copies. The New Folder button next to a location's name makes a folder at its top, New Folder in a
-  folder's menu one inside it, named in place as in the Finder. Deleting moves to the Trash, never further, and Undo
+  Option-drag copies. New Folder in the ••• next to a location's name makes a folder at its top, New Folder in a
+  folder's menu one inside it, named in place as in the Finder; the + next to a location's or folder's name makes a
+  note there. Deleting moves to the Trash, never further, and Undo
   (⌘Z) puts it back, as it takes back a rename, a move or a new file. Favourites sit at the top of the sidebar.
 - **Sorted by name or by date.** View › Sort By, or Sort By in the ⋯ menu on iPhone and iPad, sorts every folder's
   notes and files by name, as the Finder does, or newest first by when they were last edited or made, as Notes does.
@@ -526,8 +529,9 @@ screens.
   a new note, folder, copy or import that you have changed since asks first too.
 - **Hidden folders.** Right-click a folder you don't want to see, such as one another app keeps in iCloud Drive, and
   choose Hide Folder, or on iPhone and iPad touch and hold it. It leaves the sidebar, search and Move To, and stays
-  hidden on your other Macs, iPhones and iPads through iCloud. The eye next to the location's name, or ⇧⌘., shows
-  hidden folders again, dimmed, until you click it again; on iPhone and iPad, Show Hidden Folders is in the ⋯ menu.
+  hidden on your other Macs, iPhones and iPads through iCloud. Show Hidden Folders in the ••• next to the location's
+  name, or ⇧⌘., shows hidden folders again, dimmed, with an eye by the name that hides them again; on iPhone and iPad,
+  Show Hidden Folders is in the ⋯ menu.
 - **Folders with a symbol and a colour.** Customize Folder… gives a folder a colour and a symbol or an emoji, found in
   groups, suggested for its name or searched for, kept on the folder as the Finder keeps them, so the Finder shows them
   too.
@@ -573,8 +577,9 @@ screens.
 - **Quick Look** shows a note as Notebook does, not its Markdown, in the typeface and size you chose: press Space on it
   in the Finder, or look at it in the Finder's column view or Get Info. If another app's preview comes up, turn it off
   in System Settings › General › Login Items & Extensions › Quick Look. On iPhone and iPad, tap a note in the Files
-  app, or one attached in another app that shows files with Quick Look. Quick Look lets Notebook read only the note
-  itself, so its pictures and drawings show by their names.
+  app, or one attached in another app that shows files with Quick Look. On the Mac a note in one of your locations
+  shows its pictures and drawings too; elsewhere, and on iPhone and iPad, they show by their names, as Quick Look lets
+  Notebook read only the note itself.
 - **Thumbnails** of notes in the Finder's icon and gallery views, in Open panels and in the Files app on iPhone and
   iPad: the top of the note as Notebook shows it, on a white page. Only the note is read for them, never what is next to
   it, so browsing a folder never makes the Mac ask; pictures show by their names. The Mac picks up a new thumbnail
@@ -914,8 +919,8 @@ Planned, and not built yet:
 - On iPhone and iPad there is no Settings › App Icon (iOS only switches between icons built into the app), no PNG
   export, no window of its own for a single file and no Paste into a folder in the list (#298). Before iOS 27.2,
   Quick Look there may show a note's Markdown instead.
-- **Pictures in Quick Look:** Quick Look lets Notebook read only the note itself, so a note's pictures and drawings
-  show by their names there, on the Mac as on iPhone and iPad (#318).
+- **Pictures in Quick Look on iPhone and iPad,** and on the Mac for notes outside your locations: Quick Look lets
+  Notebook read only the note itself, so a note's pictures and drawings show by their names there (#318).
 - **Sketches** as files of their own, next to your notes rather than in one.
 - **Handwritten notes on the Mac:** you write on their pages there as on any PDF, but new handwritten notes, new pages,
   pictures on pages and All Pages are on iPhone and iPad only. Text boxes and shapes aren't offered: the PDF couldn't
@@ -1004,7 +1009,8 @@ takes the scenes in light and dark, and lays them out together with `Design/soci
 window and the iPhone's screen from them too. The iPhone and iPad pictures come from two simulators of its own, without
 the Simulator app's window. It doesn't take over your Mac (only the search suggestions show on screen for a moment) and
 leaves your own Notebook's settings alone. Run it again when a change shows in one of them (`devices` takes only the
-iPhone and iPad picture, which works with the screen asleep):
+iPhone and iPad picture, which works with the screen asleep, and `mac` only the Mac's, with the iPhone and iPad
+captures of the last run):
 
 ```bash
 Tools/readme-images.sh
