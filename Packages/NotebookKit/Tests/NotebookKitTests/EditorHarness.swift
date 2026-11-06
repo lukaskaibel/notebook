@@ -158,7 +158,10 @@ final class EditorHarness: NSObject, EditorControllerDelegate {
 
     // MARK: - EditorControllerDelegate
 
-    func editorTextDidChange(_ editor: EditorController) {}
+    /// Told of every change to the text, as the app tells the note open in the editor.
+    var onTextChange: ((EditorController) -> Void)?
+
+    func editorTextDidChange(_ editor: EditorController) { onTextChange?(editor) }
     func editor(_ editor: EditorController, open target: LinkTarget.Kind) { opened.append(target) }
     func editor(_ editor: EditorController, quickLook url: URL) {}
     func editor(_ editor: EditorController, commitTitle title: String) { committedTitles.append(title) }

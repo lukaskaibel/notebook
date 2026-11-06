@@ -239,7 +239,7 @@ final class FileWindowController: NSWindowController, NSWindowDelegate, EditorCo
     // MARK: - EditorControllerDelegate
 
     func editorTextDidChange(_ editor: EditorController) {
-        note.update(text: editor.text)
+        note.typed(in: editor)
     }
 
     func editor(_ editor: EditorController, open target: LinkTarget.Kind) {
