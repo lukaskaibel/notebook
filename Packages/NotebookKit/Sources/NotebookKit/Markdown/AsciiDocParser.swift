@@ -44,10 +44,11 @@ enum AsciiDocParser {
 
     // MARK: - Reading
 
-    private struct Reader {
+    struct Reader {
         let u: [UInt16]
         let typing: Bool
         var lines: [MarkdownLine]
+        /// The blocks read: in the order they were closed, and from the line reading started at.
         var blocks: [MarkdownBlock] = []
         var index = 0
         /// Lines of block attributes (`[source,python]`, `[[id]]`) read but not yet given to the block under them.
@@ -62,6 +63,12 @@ enum AsciiDocParser {
         var afterBlank = true
         /// The line of the note's title, `= Title`, if it has one.
         var title: Int?
+        /// No line further down can be the note's title any more: there is one, or a block or text came first.
+        var titleClosed = false
+        /// The lines up to here are known to leave the title open.
+        var titleChecked = 0
+        /// The lines reading could start again at, as they were read.
+        var resumePoints: [ResumePoint] = []
 
         struct Container {
             var delimiter: String
@@ -87,52 +94,72 @@ enum AsciiDocParser {
             lines = MarkdownParser.splitLines(u)
         }
 
+        /// Reading again from a line where it could start again (or from the start), the lines from there on not read
+        /// yet.
+        init(u: [UInt16], typing: Bool, lines: [MarkdownLine], from point: ResumePoint?) {
+            self.u = u
+            self.typing = typing
+            self.lines = lines
+            guard let point else { return }
+            index = point.line
+            titleClosed = true
+            if case .asciidoc(let afterBlank, let markers, let counts) = point.state {
+                self.afterBlank = afterBlank
+                list = ListState(markers: markers, counts: counts)
+            }
+        }
+
         func text(_ line: Int) -> String { MarkdownParser.lineText(u, lines[line].range) }
 
         func trimmed(_ line: Int) -> String { text(line).trimmingCharacters(in: .whitespaces) }
 
         func isBlank(_ line: Int) -> Bool { lines[line].kind == .blank }
 
-        mutating func read() {
+        /// Reads to the end of the note, or to the start of a line where `stop` says what follows is known, and tells
+        /// whether it stopped there. Reading can start again only where nothing is open: no container, no list item
+        /// that a line could go on with, no attributes waiting for their block, and the title settled.
+        @discardableResult
+        mutating func read(stop: (Int, ParserState) -> Bool = { _, _ in false }) -> Bool {
             while index < lines.count {
+                if !titleClosed {
+                    titleClosed = title != nil || !blocks.isEmpty
+                        || !(titleChecked..<index).allSatisfy { isBlank($0) || lines[$0].kind == .comment || lines[$0].kind == .markup }
+                    titleChecked = index
+                }
+                if titleClosed, containers.isEmpty, pending.isEmpty, item == nil, !attached {
+                    let state = ParserState.asciidoc(afterBlank: afterBlank, markers: list.markers, counts: list.counts)
+                    if stop(index, state) { return true }
+                    resumePoints.append(ResumePoint(line: index, state: state))
+                }
                 readLine()
             }
             while let container = containers.popLast() {
                 close(container, last: lines.count - 1)
             }
             flushPending()
+            return false
         }
 
         func document() -> MarkdownDocument {
             var lines = self.lines
-            // Blocks in the order they start (a container closes after the blocks in it), the lines pointing at theirs.
+            let blocks = Self.ordered(self.blocks, lines: &lines, in: lines.indices)
+            MarkdownParser.fingerprint(&lines, u)
+            let attributes = AsciiDocParser.attributes(in: u, lines: lines)
+            AsciiDocParser.readSpans(&lines, u, in: lines.indices, attributes: attributes, typing: typing)
+            return MarkdownDocument(lines: lines, blocks: blocks, length: u.count, syntax: .asciidoc, typing: typing,
+                                    resumePoints: resumePoints, attributes: attributes)
+        }
+
+        /// Blocks in the order they start (a container closes after the blocks in it), the lines pointing at theirs,
+        /// which come after `offset` others.
+        static func ordered(_ blocks: [MarkdownBlock], lines: inout [MarkdownLine], in range: Range<Int>, offset: Int = 0) -> [MarkdownBlock] {
             let order = blocks.indices.sorted { (blocks[$0].lines.lowerBound, -blocks[$0].lines.count) < (blocks[$1].lines.lowerBound, -blocks[$1].lines.count) }
             var position = [Int](repeating: 0, count: blocks.count)
             for (new, old) in order.enumerated() { position[old] = new }
-            let blocks = order.map { self.blocks[$0] }
-            for line in lines.indices {
-                if let block = lines[line].block { lines[line].block = position[block] }
+            for line in range {
+                if let block = lines[line].block { lines[line].block = position[block] + offset }
             }
-            MarkdownParser.fingerprint(&lines, u)
-
-            let attributes = AsciiDocParser.attributes(in: u, lines: lines)
-            let context = AsciiDocInlineParser.Context(attributes: attributes)
-            for line in lines.indices {
-                switch lines[line].kind {
-                case .paragraph, .heading, .listItem, .quote, .tableHeader, .tableRow, .blockTitle, .admonition, .definition, .continuation:
-                    lines[line].spans = AsciiDocInlineParser.spans(in: u, range: lines[line].content, context: context, typing: typing)
-                    if case .listItem(let item) = lines[line].kind, item.isTask {
-                        let marks = TodoMarks.spans(in: u, range: lines[line].content)
-                        if !marks.isEmpty {
-                            lines[line].spans.removeAll { span in marks.contains { NSIntersectionRange($0.range, span.range).length > 0 } }
-                            lines[line].spans = (lines[line].spans + marks).sorted { $0.range.location < $1.range.location || ($0.range.location == $1.range.location && $0.range.length > $1.range.length) }
-                        }
-                    }
-                default:
-                    break
-                }
-            }
-            return MarkdownDocument(lines: lines, blocks: blocks, length: u.count, syntax: .asciidoc)
+            return order.map { blocks[$0] }
         }
 
         // MARK: Lines
@@ -200,7 +227,7 @@ enum AsciiDocParser {
                 lines[line].kind = .heading(level: level, marker: marker.range)
                 lines[line].content = NSRange(location: marker.range.upperBound, length: range.upperBound - marker.range.upperBound)
                 index += 1
-                if level == 1, title == nil, blocks.isEmpty, (0..<line).allSatisfy({ isBlank($0) || lines[$0].kind == .comment || lines[$0].kind == .markup }) {
+                if level == 1, !titleClosed, title == nil, blocks.isEmpty, (0..<line).allSatisfy({ isBlank($0) || lines[$0].kind == .comment || lines[$0].kind == .markup }) {
                     title = line
                     readHeader()
                 }
@@ -727,6 +754,26 @@ enum AsciiDocParser {
                 return (admonition.lowercased(), admonition.count + 1 + spaces)
             }
             return nil
+        }
+    }
+
+    /// Inline AsciiDoc in the lines that hold text.
+    static func readSpans(_ lines: inout [MarkdownLine], _ u: [UInt16], in range: Range<Int>, attributes: [String: String], typing: Bool) {
+        let context = AsciiDocInlineParser.Context(attributes: attributes)
+        for line in range {
+            switch lines[line].kind {
+            case .paragraph, .heading, .listItem, .quote, .tableHeader, .tableRow, .blockTitle, .admonition, .definition, .continuation:
+                lines[line].spans = AsciiDocInlineParser.spans(in: u, range: lines[line].content, context: context, typing: typing)
+                if case .listItem(let item) = lines[line].kind, item.isTask {
+                    let marks = TodoMarks.spans(in: u, range: lines[line].content)
+                    if !marks.isEmpty {
+                        lines[line].spans.removeAll { span in marks.contains { NSIntersectionRange($0.range, span.range).length > 0 } }
+                        lines[line].spans = (lines[line].spans + marks).sorted { $0.range.location < $1.range.location || ($0.range.location == $1.range.location && $0.range.length > $1.range.length) }
+                    }
+                }
+            default:
+                break
+            }
         }
     }
 

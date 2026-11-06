@@ -84,16 +84,27 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
     ) -> Int {
         guard let storage = textStorage else { return 0 }
         let count = glyphRange.length
+        let length = storage.length
         var changed: [NSLayoutManager.GlyphProperty]?
+        // The two attributes are read a run at a time: reading all of a character's attributes, a dictionary to bridge
+        // for every one, was most of the time glyphs took.
+        var object: EditorObject?
+        var objectRun = NSRange(location: 0, length: 0)
+        var mode: Int?
+        var modeRun = NSRange(location: 0, length: 0)
         for i in 0..<count {
             let index = charIndexes[i]
-            guard index < storage.length else { continue }
-            let attributes = storage.attributes(at: index, effectiveRange: nil)
-            if let object = attributes[.notebookObject] as? EditorObject, showsAsObject(object, index) {
+            guard index < length else { continue }
+            if !NSLocationInRange(index, objectRun) {
+                object = storage.attribute(.notebookObject, at: index, effectiveRange: &objectRun) as? EditorObject
+            }
+            if !NSLocationInRange(index, modeRun) {
+                mode = storage.attribute(.notebookHidden, at: index, effectiveRange: &modeRun) as? Int
+            }
+            if let object, showsAsObject(object, index) {
                 if changed == nil { changed = Array(UnsafeBufferPointer(start: props, count: count)) }
                 changed![i] = .controlCharacter
-            } else if let mode = attributes[.notebookHidden] as? Int,
-                      mode == HiddenMode.always.rawValue || !(source?.isRevealed(index) ?? false) {
+            } else if let mode, mode == HiddenMode.always.rawValue || !(source?.isRevealed(index) ?? false) {
                 // A control glyph without width rather than a null glyph: null glyphs at the start of a paragraph
                 // make TextKit lay its first line out as a continuation line.
                 if changed == nil { changed = Array(UnsafeBufferPointer(start: props, count: count)) }
