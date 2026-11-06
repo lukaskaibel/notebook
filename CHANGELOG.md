@@ -82,6 +82,9 @@ versions follow [semantic versioning](https://semver.org).
 - Typing is lighter when pictures, tables or embedded notes are on screen: each key drew the whole window again,
   measuring every table again, asking the disk about every picture and reading every embedded note anew. Now it draws
   only the lines around the caret, a third of the drawing it was, and a key takes a quarter less time.
+- Typing in long notes is lighter: each key copied the note's whole text and compared it twice, one to three
+  milliseconds for every key in a note of 45,000 characters. Now the note takes what you typed only when it saves, a
+  moment after you stop, or when you leave it.
 
 ## [1.2.0] – not released yet
 

@@ -502,6 +502,46 @@ final class NoteDocumentTests: XCTestCase {
         second.close()
     }
 
+    /// What is typed stays in the editor until the note needs it: a rename takes it to save it first, what is typed
+    /// during the rename is held and written under the new name, and leaving the note takes the rest. An editor that
+    /// went on to show another note gives the note none of that one's text.
+    func testTextTypedInTheEditorIsTakenWhenNeeded() async throws {
+        let (note, old) = makeNote("one\ntwo")
+        let h = EditorHarness(note.text)
+        h.onTextChange = { note.typed(in: $0) }
+        func type(_ text: String) {
+            h.caret((h.text as NSString).length)
+            h.textView.insertText(text, replacementRange: h.textView.selectedRange())
+        }
+        type(" three")
+        XCTAssertEqual(note.timesTaken, 0)
+        XCTAssertTrue(note.isChangedSinceOpening)
+
+        let documents = await NoteDocument.beginMoving(old)
+        XCTAssertEqual(onDisk(old), "one\ntwo three", "saved before the rename")
+        type(" four")
+        XCTAssertTrue(NoteDocument.isWriting, "quitting waits for what was typed during the rename")
+        let renamed = await Task.detached { FileOperations.rename(old, to: "Renamed", presenter: note) }.value
+        let new = try XCTUnwrap(renamed)
+        NoteDocument.endMoving(documents, from: old, to: new)
+        try await until("written under the new name") { onDisk(new) == "one\ntwo three four" }
+
+        type(" five")
+        note.close()
+        await NoteDocument.allWritten()
+        XCTAssertEqual(onDisk(new), "one\ntwo three four five", "taken as it was left")
+
+        let (other, otherURL) = makeNote("other")
+        h.editor.load(text: other.text, folder: h.folder, title: "other", meta: "")
+        h.onTextChange = { other.typed(in: $0) }
+        type(" typed")
+        h.editor.load(text: "a third note", folder: h.folder, title: "third", meta: "")
+        XCTAssertEqual(other.text, "other", "the text of the note the editor shows now")
+        other.close()
+        await NoteDocument.allWritten()
+        XCTAssertEqual(onDisk(otherURL), "other")
+    }
+
     /// A file replaced by one that can't be read: still there, so no deletion, and not written over while it can't be
     /// read to see what it says. Once it can, saving goes on.
     func testAnUnreadableFileIsNotWrittenOver() async throws {

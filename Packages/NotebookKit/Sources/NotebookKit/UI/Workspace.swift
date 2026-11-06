@@ -2607,7 +2607,8 @@ public struct Problem: Identifiable, Equatable {
 
 extension Workspace: EditorControllerDelegate {
     public func editorTextDidChange(_ editor: EditorController) {
-        note?.update(text: editor.text)
+        // The note takes the text from the editor when it needs it, not with every key.
+        note?.typed(in: editor)
         #if os(iOS)
         if freshNote != nil, note?.isEmpty == false { freshNote = nil }
         #endif
