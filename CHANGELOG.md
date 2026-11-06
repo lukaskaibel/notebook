@@ -54,9 +54,12 @@ versions follow [semantic versioning](https://semver.org).
   the first, instead of a line break that cut the table in two. From the header it makes the first row; at the start
   of a row, a row above it. Return in an empty last row leaves the table, as an empty item leaves a list, and a row
   typed by hand from its first `|` replaces the empty one.
-- The Mac sidebar has more room: a folder's icon no longer touches its arrow, names sit a little further from their
-  icons, and what is inside a folder steps further in. The buttons that come up on a location's name under the
-  pointer, the eye and New Folder, are evenly spaced up to its Show/Hide arrow.
+- The Mac sidebar has more room and borrows some of Notion's manners while keeping the Mac's look. A folder's icon no
+  longer touches its arrow, which is a little quieter; names sit further from their icons; and what is inside a folder
+  steps further in. The row under the pointer gets a soft fill and ••• for its right-click menu, and a folder also +
+  for a new note in it. A location's name has ••• and + too: ••• holds New Folder, Show Hidden Folders, Show in Finder
+  and Remove from Sidebar, + makes a note at its top, and a click on the name folds the location. The eye shows by the
+  name only while hidden folders show, and hides them again.
 
 ### Fixed
 
