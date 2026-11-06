@@ -120,7 +120,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     private(set) var document = MarkdownParser.parse("")
     /// What the note is written in: Markdown, or AsciiDoc for an `.adoc` file. It is read, drawn and typed in that.
     public private(set) var syntax: NoteSyntax = .markdown
-    private var lineSignatures: [Int] = []
+    private(set) var lineSignatures: [Int] = []
     /// Character ranges whose hidden punctuation is shown, because the caret is in or next to them.
     private(set) var revealed: [NSRange] = []
     /// The block the caret is in, if it shows its Markdown then (tables, math, diagrams, frontmatter).
@@ -462,7 +462,11 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         if !isLoading { scheduleOutlineUpdate() }
         let oldDocument = document
         let oldSignatures = lineSignatures
-        document = MarkdownParser.parse(storage.mutableString, typing: isTypingIn, syntax: syntax)
+        let oldActiveBlock = activeBlock
+        // Read again from the block above the edit to where the lines read as they did before.
+        let update = MarkdownParser.update(document, storage.mutableString, edited: editedRange, changeInLength: delta,
+                                           typing: isTypingIn, syntax: syntax)
+        document = update.document
         // Keep the revealed punctuation where it was until the caret settles, moved along with the edit.
         let oldEnd = editedRange.location + editedRange.length - delta
         let oldRevealed = revealed
@@ -481,7 +485,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         }
         if let typed = typedHeading, typed > editedRange.location { typedHeading = typed >= oldEnd ? typed + delta : nil }
 
-        let signatures = computeSignatures()
+        let signatures = signatures(after: update, old: oldSignatures, of: oldDocument, activeBlock: oldActiveBlock)
         var lines: [Int] = []
         let lineDelta = document.lines.count - oldDocument.lines.count
         for index in document.lines.indices {
@@ -573,16 +577,47 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
 
     /// What decides how a line looks: its text, what kind of line it is, the block it is in and whether that block is
     /// being edited. Lines whose signature didn't change keep their attributes.
-    private func computeSignatures() -> [Int] {
-        var blockHashes: [Int] = []
-        for (index, block) in document.blocks.enumerated() {
+    func computeSignatures() -> [Int] {
+        var signatures = [Int](repeating: 0, count: document.lines.count)
+        updateSignatures(of: IndexSet(integersIn: document.lines.indices), in: &signatures)
+        return signatures
+    }
+
+    /// The signatures after an edit: those of the lines read again and of the line above them (whose AsciiDoc line
+    /// break may wrap into the next line now), and of the lines of a block that opened or closed, are worked out
+    /// again; the others are the old ones, moved along.
+    private func signatures(after update: MarkdownParser.Update, old: [Int], of oldDocument: MarkdownDocument, activeBlock oldActive: Int?) -> [Int] {
+        guard old.count == oldDocument.lines.count, update.oldEnd <= old.count, update.start <= update.end else { return computeSignatures() }
+        var signatures = Array(old[0..<update.start])
+        signatures += repeatElement(0, count: update.end - update.start)
+        signatures += old[update.oldEnd...]
+        guard signatures.count == document.lines.count else { return computeSignatures() }
+        var lines = IndexSet(integersIn: max(0, update.start - 1)..<update.end)
+        let wasActive = oldActive.flatMap(update.block(fromOld:))
+        if wasActive != activeBlock {
+            for block in [wasActive, activeBlock].compactMap({ $0 }) where block < document.blocks.count {
+                lines.insert(integersIn: document.blocks[block].lines.lowerBound..<document.blocks[block].lines.upperBound + 1)
+            }
+        }
+        updateSignatures(of: lines, in: &signatures)
+        return signatures
+    }
+
+    private func updateSignatures(of lines: IndexSet, in signatures: inout [Int]) {
+        var blockHashes: [Int: Int] = [:]
+        func blockHash(_ index: Int) -> Int {
+            if let hash = blockHashes[index] { return hash }
+            let block = document.blocks[index]
             var hasher = Hasher()
             for line in block.lines { hasher.combine(document.lines[line].textHash) }
             hasher.combine(index == activeBlock)
             hasher.combine(block.kind)
-            blockHashes.append(hasher.finalize())
+            let hash = hasher.finalize()
+            blockHashes[index] = hash
+            return hash
         }
-        return document.lines.enumerated().map { index, line in
+        for index in lines {
+            let line = document.lines[index]
             var hasher = Hasher()
             hasher.combine(line.textHash)
             Self.combineShape(of: line, into: &hasher)
@@ -591,12 +626,12 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
                 Self.combineShape(of: document.lines[item], into: &hasher)
             }
             if let block = line.block {
-                hasher.combine(blockHashes[block])
+                hasher.combine(blockHash(block))
                 hasher.combine(index - document.blocks[block].lines.lowerBound)
             }
             hasher.combine(index == 0)
             if document.syntax == .asciidoc { hasher.combine(document.isSoftBreak(after: index, in: nsText)) }
-            return hasher.finalize()
+            signatures[index] = hasher.finalize()
         }
     }
 

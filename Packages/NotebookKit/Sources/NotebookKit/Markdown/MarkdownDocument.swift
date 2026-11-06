@@ -9,6 +9,13 @@ public struct MarkdownDocument {
     public var length: Int
     /// What it was read as.
     public var syntax: NoteSyntax = .markdown
+    /// Read for typing in it (see `InlineParser.spans`), which reads a few things differently.
+    var typing = false
+    /// The lines where reading could start again after an edit, in order: the parser had nothing open across them, and
+    /// carried only this state into them (`MarkdownParser.update`).
+    var resumePoints: [ResumePoint] = []
+    /// AsciiDoc: the note's attributes, which the inline markup of every line reads.
+    var attributes: [String: String] = [:]
 
     /// The line that holds a character (or the caret at that index).
     public func lineIndex(containing location: Int) -> Int {
@@ -46,6 +53,17 @@ public struct MarkdownLine: Equatable {
     public var textHash: Int = 0
 
     public var fullRange: NSRange { NSRange(location: range.location, length: range.length + breakLength) }
+
+    /// The same line, moved by `offset` characters, with the lines and blocks before it moved by `lines` and `blocks`.
+    func moved(by offset: Int, lines: Int, blocks: Int) -> MarkdownLine {
+        var line = self
+        line.range = range.shifted(by: offset)
+        line.content = content.shifted(by: offset)
+        line.block = block.map { $0 + blocks }
+        if !spans.isEmpty { line.spans = spans.map { $0.shifted(by: offset) } }
+        line.kind = kind.moved(by: offset, lines: lines)
+        return line
+    }
 }
 
 public enum LineKind: Hashable {
@@ -82,6 +100,51 @@ public enum LineKind: Hashable {
     case continuation(item: Int, indent: NSRange)
 
     public var isListItem: Bool { if case .listItem = self { true } else { false } }
+
+    func moved(by offset: Int, lines: Int) -> LineKind {
+        switch self {
+        case .heading(let level, let marker):
+            return .heading(level: level, marker: marker.shifted(by: offset))
+        case .listItem(var item):
+            item.indentRange = item.indentRange.shifted(by: offset)
+            item.markerRange = item.markerRange.shifted(by: offset)
+            item.prefix = item.prefix.shifted(by: offset)
+            item.checkbox = item.checkbox?.shifted(by: offset)
+            return .listItem(item)
+        case .quote(let depth, let prefix):
+            return .quote(depth: depth, prefix: prefix.shifted(by: offset))
+        case .footnoteDefinition(let label):
+            return .footnoteDefinition(label: label.shifted(by: offset))
+        case .blockTitle(let marker):
+            return .blockTitle(marker: marker.shifted(by: offset))
+        case .admonition(let marker):
+            return .admonition(marker: marker.shifted(by: offset))
+        case .definition(let term, let marker):
+            return .definition(term: term.shifted(by: offset), marker: marker.shifted(by: offset))
+        case .continuation(let item, let indent):
+            return .continuation(item: item + lines, indent: indent.shifted(by: offset))
+        case .blank, .paragraph, .thematicBreak, .fence, .code, .mathDelimiter, .math, .tableHeader, .tableDelimiter, .tableRow,
+             .frontmatterDelimiter, .frontmatter, .markup, .comment:
+            return self
+        }
+    }
+}
+
+/// A line where reading a note could start again: the parser had nothing open across it (no block, no attributes
+/// waiting for one), and carried only `state` into it.
+struct ResumePoint: Equatable {
+    var line: Int
+    var state: ParserState
+
+    func moved(lines: Int) -> ResumePoint { ResumePoint(line: line + lines, state: state) }
+}
+
+/// What a parser carries from the lines above into a line, none of it tied to where the line is.
+enum ParserState: Equatable {
+    /// The indents of the list items above, which give an item its level.
+    case markdown(listIndents: [Int])
+    /// Whether a blank line came right before, and the markers and counts of the list being read.
+    case asciidoc(afterBlank: Bool, markers: [String], counts: [Int])
 }
 
 public struct ListItem: Hashable {
@@ -218,6 +281,13 @@ public struct MarkdownBlock: Equatable {
     public var range: NSRange
     /// AsciiDoc: it has lines of markup (its attributes, its delimiters) that fold away until the caret goes in.
     public var opens = false
+
+    func moved(by offset: Int, lines lineOffset: Int) -> MarkdownBlock {
+        var block = self
+        block.lines = (lines.lowerBound + lineOffset)...(lines.upperBound + lineOffset)
+        block.range = range.shifted(by: offset)
+        return block
+    }
 
     /// Blocks whose look changes as a whole when the caret goes in: they show their Markdown then.
     public var isSwappable: Bool { isWhole || opens }

@@ -11,11 +11,15 @@ public enum MarkdownParser {
 
     /// The same, reading the text out of an `NSString` in one copy rather than one character at a time.
     public static func parse(_ string: NSString, typing: Bool = false, syntax: NoteSyntax = .markdown) -> MarkdownDocument {
+        parse(units: units(of: string), typing: typing, syntax: syntax)
+    }
+
+    static func units(of string: NSString) -> [UInt16] {
         var units = [UInt16](repeating: 0, count: string.length)
         units.withUnsafeMutableBufferPointer { buffer in
             if let base = buffer.baseAddress { string.getCharacters(base, range: NSRange(location: 0, length: string.length)) }
         }
-        return parse(units: units, typing: typing, syntax: syntax)
+        return units
     }
 
     static func parse(units u: [UInt16], typing: Bool = false, syntax: NoteSyntax) -> MarkdownDocument {
@@ -27,137 +31,163 @@ public enum MarkdownParser {
 
     /// `typing`: the note is being typed in (see `InlineParser.spans`).
     static func parse(units u: [UInt16], typing: Bool = false) -> MarkdownDocument {
-        var lines = splitLines(u)
+        var reader = Reader(u: u, typing: typing, lines: splitLines(u))
+        reader.readFrontmatter()
+        reader.read()
+        fingerprint(&reader.lines, u)
+        readSpans(&reader.lines, u, in: reader.lines.indices, typing: typing)
+        return MarkdownDocument(lines: reader.lines, blocks: reader.blocks, length: u.count, typing: typing, resumePoints: reader.resumePoints)
+    }
+
+    /// Reads lines into their kinds and blocks, from `index` on.
+    struct Reader {
+        let u: [UInt16]
+        let typing: Bool
+        var lines: [MarkdownLine]
         var blocks: [MarkdownBlock] = []
         var index = 0
+        /// The indents of the list items above, which give an item its level.
         var listIndents: [Int] = []
+        /// The lines reading could start again at, as they were read.
+        var resumePoints: [ResumePoint] = []
 
-        func closeBlock(_ kind: MarkdownBlock.Kind, from first: Int, to last: Int) {
+        mutating func closeBlock(_ kind: MarkdownBlock.Kind, from first: Int, to last: Int) {
             let start = lines[first].range.location
             let end = lines[last].range.upperBound
             blocks.append(MarkdownBlock(kind: kind, lines: first...last, range: NSRange(location: start, length: end - start)))
             for line in first...last { lines[line].block = blocks.count - 1 }
         }
 
-        // Frontmatter: a `---` on the very first line, closed by `---` or `...`.
-        if lines.count > 1, lineText(u, lines[0].range) == "---" {
-            if let close = (1..<lines.count).first(where: { ["---", "..."].contains(lineText(u, lines[$0].range)) }) {
-                lines[0].kind = .frontmatterDelimiter
-                lines[close].kind = .frontmatterDelimiter
-                for line in 1..<close { lines[line].kind = .frontmatter }
-                closeBlock(.frontmatter, from: 0, to: close)
-                index = close + 1
+        mutating func readFrontmatter() {
+            // Frontmatter: a `---` on the very first line, closed by `---` or `...`.
+            if lines.count > 1, lineText(u, lines[0].range) == "---" {
+                if let close = (1..<lines.count).first(where: { ["---", "..."].contains(lineText(u, lines[$0].range)) }) {
+                    lines[0].kind = .frontmatterDelimiter
+                    lines[close].kind = .frontmatterDelimiter
+                    for line in 1..<close { lines[line].kind = .frontmatter }
+                    closeBlock(.frontmatter, from: 0, to: close)
+                    index = close + 1
+                }
             }
         }
 
-        while index < lines.count {
-            let range = lines[index].range
-            let indent = leadingIndent(u, range)
+        /// Reads to the end of the note, or to the start of a line where `stop` says what follows is known, and tells
+        /// whether it stopped there.
+        @discardableResult
+        mutating func read(stop: (Int, ParserState) -> Bool = { _, _ in false }) -> Bool {
+            while index < lines.count {
+                let state = ParserState.markdown(listIndents: listIndents)
+                if stop(index, state) { return true }
+                resumePoints.append(ResumePoint(line: index, state: state))
+                let range = lines[index].range
+                let indent = leadingIndent(u, range)
 
-            // Fenced code: ``` or ~~~, up to the closing fence or the end of the note.
-            if indent.columns <= 3, let fence = fenceOpening(u, range, after: indent.units) {
-                lines[index].kind = .fence
-                var last = index
-                var line = index + 1
-                while line < lines.count {
-                    if isFenceClose(u, lines[line].range, fence: fence) {
-                        lines[line].kind = .fence
+                // Fenced code: ``` or ~~~, up to the closing fence or the end of the note.
+                if indent.columns <= 3, let fence = fenceOpening(u, range, after: indent.units) {
+                    lines[index].kind = .fence
+                    var last = index
+                    var line = index + 1
+                    while line < lines.count {
+                        if isFenceClose(u, lines[line].range, fence: fence) {
+                            lines[line].kind = .fence
+                            last = line
+                            break
+                        }
+                        lines[line].kind = .code
                         last = line
-                        break
+                        line += 1
                     }
-                    lines[line].kind = .code
-                    last = line
-                    line += 1
-                }
-                let language = fence.info.split(separator: " ").first.map(String.init)?.lowercased() ?? ""
-                closeBlock(language == "mermaid" ? .mermaid : .code(language: language), from: index, to: last)
-                index = last + 1
-                listIndents = []
-                continue
-            }
-
-            let trimmed = lineText(u, range).trimmingCharacters(in: .whitespaces)
-
-            // Display math: `$$` on lines of their own, or `$$ … $$` on one line.
-            if indent.columns <= 3, trimmed == "$$" {
-                if let close = ((index + 1)..<lines.count).first(where: { lineText(u, lines[$0].range).trimmingCharacters(in: .whitespaces) == "$$" }) {
-                    lines[index].kind = .mathDelimiter
-                    lines[close].kind = .mathDelimiter
-                    for line in (index + 1)..<close { lines[line].kind = .math }
-                    closeBlock(.math, from: index, to: close)
-                    index = close + 1
+                    let language = fence.info.split(separator: " ").first.map(String.init)?.lowercased() ?? ""
+                    closeBlock(language == "mermaid" ? .mermaid : .code(language: language), from: index, to: last)
+                    index = last + 1
+                    listIndents = []
                     continue
                 }
-            } else if indent.columns <= 3, trimmed.count > 4, trimmed.hasPrefix("$$"), trimmed.hasSuffix("$$") {
-                lines[index].kind = .math
-                closeBlock(.math, from: index, to: index)
+
+                let trimmed = lineText(u, range).trimmingCharacters(in: .whitespaces)
+
+                // Display math: `$$` on lines of their own, or `$$ … $$` on one line.
+                if indent.columns <= 3, trimmed == "$$" {
+                    if let close = ((index + 1)..<lines.count).first(where: { lineText(u, lines[$0].range).trimmingCharacters(in: .whitespaces) == "$$" }) {
+                        lines[index].kind = .mathDelimiter
+                        lines[close].kind = .mathDelimiter
+                        for line in (index + 1)..<close { lines[line].kind = .math }
+                        closeBlock(.math, from: index, to: close)
+                        index = close + 1
+                        continue
+                    }
+                } else if indent.columns <= 3, trimmed.count > 4, trimmed.hasPrefix("$$"), trimmed.hasSuffix("$$") {
+                    lines[index].kind = .math
+                    closeBlock(.math, from: index, to: index)
+                    index += 1
+                    continue
+                }
+
+                // Tables: a row of cells, a delimiter row under it, and rows until a line without a pipe.
+                if index + 1 < lines.count, containsPipe(u, range),
+                   let alignments = delimiterRow(u, lines[index + 1].range),
+                   tableCells(u, range).count == alignments.count {
+                    lines[index].kind = .tableHeader
+                    lines[index + 1].kind = .tableDelimiter
+                    var last = index + 1
+                    var line = index + 2
+                    while line < lines.count, containsPipe(u, lines[line].range), !isBlank(u, lines[line].range) {
+                        lines[line].kind = .tableRow
+                        last = line
+                        line += 1
+                    }
+                    closeBlock(.table(alignments: alignments), from: index, to: last)
+                    index = last + 1
+                    listIndents = []
+                    continue
+                }
+
+                // Quotes and callouts: consecutive lines starting with `>`.
+                if indent.columns <= 3, quotePrefix(u, range) != nil {
+                    var last = index
+                    var line = index
+                    while line < lines.count, let prefix = quotePrefix(u, lines[line].range) {
+                        lines[line].kind = .quote(depth: prefix.depth, prefix: prefix.range)
+                        lines[line].content = NSRange(location: prefix.range.upperBound, length: lines[line].range.upperBound - prefix.range.upperBound)
+                        last = line
+                        line += 1
+                    }
+                    let firstContent = lineText(u, lines[index].content)
+                    if let type = calloutType(firstContent) {
+                        closeBlock(.callout(type: type), from: index, to: last)
+                    } else {
+                        closeBlock(.quote, from: index, to: last)
+                    }
+                    index = last + 1
+                    listIndents = []
+                    continue
+                }
+
+                lines[index].kind = classifySingle(u, range, indent: indent, listIndents: &listIndents)
+                // Four stars alone make a rule, but while the note is typed in they are the empty pair of bold marks
+                // that typing `**` puts in, waiting for their text.
+                if typing, lines[index].kind == .thematicBreak, lineText(u, range) == "****" { lines[index].kind = .paragraph }
+                switch lines[index].kind {
+                case .heading(_, let marker):
+                    lines[index].content = NSRange(location: marker.upperBound, length: range.upperBound - marker.upperBound)
+                case .listItem(let item):
+                    lines[index].content = NSRange(location: item.prefix.upperBound, length: range.upperBound - item.prefix.upperBound)
+                case .footnoteDefinition(let label):
+                    lines[index].content = NSRange(location: label.upperBound, length: range.upperBound - label.upperBound)
+                case .paragraph:
+                    if indent.columns == 0 { listIndents = [] }
+                default:
+                    break
+                }
                 index += 1
-                continue
             }
-
-            // Tables: a row of cells, a delimiter row under it, and rows until a line without a pipe.
-            if index + 1 < lines.count, containsPipe(u, range),
-               let alignments = delimiterRow(u, lines[index + 1].range),
-               tableCells(u, range).count == alignments.count {
-                lines[index].kind = .tableHeader
-                lines[index + 1].kind = .tableDelimiter
-                var last = index + 1
-                var line = index + 2
-                while line < lines.count, containsPipe(u, lines[line].range), !isBlank(u, lines[line].range) {
-                    lines[line].kind = .tableRow
-                    last = line
-                    line += 1
-                }
-                closeBlock(.table(alignments: alignments), from: index, to: last)
-                index = last + 1
-                listIndents = []
-                continue
-            }
-
-            // Quotes and callouts: consecutive lines starting with `>`.
-            if indent.columns <= 3, quotePrefix(u, range) != nil {
-                var last = index
-                var line = index
-                while line < lines.count, let prefix = quotePrefix(u, lines[line].range) {
-                    lines[line].kind = .quote(depth: prefix.depth, prefix: prefix.range)
-                    lines[line].content = NSRange(location: prefix.range.upperBound, length: lines[line].range.upperBound - prefix.range.upperBound)
-                    last = line
-                    line += 1
-                }
-                let firstContent = lineText(u, lines[index].content)
-                if let type = calloutType(firstContent) {
-                    closeBlock(.callout(type: type), from: index, to: last)
-                } else {
-                    closeBlock(.quote, from: index, to: last)
-                }
-                index = last + 1
-                listIndents = []
-                continue
-            }
-
-            lines[index].kind = classifySingle(u, range, indent: indent, listIndents: &listIndents)
-            // Four stars alone make a rule, but while the note is typed in they are the empty pair of bold marks that
-            // typing `**` puts in, waiting for their text.
-            if typing, lines[index].kind == .thematicBreak, lineText(u, range) == "****" { lines[index].kind = .paragraph }
-            switch lines[index].kind {
-            case .heading(_, let marker):
-                lines[index].content = NSRange(location: marker.upperBound, length: range.upperBound - marker.upperBound)
-            case .listItem(let item):
-                lines[index].content = NSRange(location: item.prefix.upperBound, length: range.upperBound - item.prefix.upperBound)
-            case .footnoteDefinition(let label):
-                lines[index].content = NSRange(location: label.upperBound, length: range.upperBound - label.upperBound)
-            case .paragraph:
-                if indent.columns == 0 { listIndents = [] }
-            default:
-                break
-            }
-            index += 1
+            return false
         }
+    }
 
-        fingerprint(&lines, u)
-
-        // Inline Markdown in every line that holds text.
-        for line in lines.indices {
+    /// Inline Markdown in the lines that hold text.
+    static func readSpans(_ lines: inout [MarkdownLine], _ u: [UInt16], in range: Range<Int>, typing: Bool) {
+        for line in range {
             switch lines[line].kind {
             case .paragraph, .heading, .listItem, .quote, .footnoteDefinition, .tableHeader, .tableRow:
                 lines[line].spans = InlineParser.spans(in: u, range: lines[line].content, typing: typing)
@@ -173,14 +203,13 @@ public enum MarkdownParser {
                 break
             }
         }
-        return MarkdownDocument(lines: lines, blocks: blocks, length: u.count)
     }
 
     // MARK: - Lines
 
     /// A cheap fingerprint of every line, for telling which lines changed.
-    static func fingerprint(_ lines: inout [MarkdownLine], _ u: [UInt16]) {
-        for line in lines.indices {
+    static func fingerprint(_ lines: inout [MarkdownLine], _ u: [UInt16], in range: Range<Int>? = nil) {
+        for line in range ?? lines.indices {
             var hash: UInt64 = 0xcbf29ce484222325
             let range = lines[line].fullRange
             for i in range.location..<min(range.upperBound, u.count) {
@@ -191,24 +220,32 @@ public enum MarkdownParser {
     }
 
     static func splitLines(_ u: [UInt16]) -> [MarkdownLine] {
+        splitLines(u, in: 0..<u.count, last: true)
+    }
+
+    /// The lines of whole lines of the text: `characters` starts where a line does and ends after a line break, or at
+    /// the end of the text where it takes in the `last` line, the one without a break.
+    static func splitLines(_ u: [UInt16], in characters: Range<Int>, last: Bool) -> [MarkdownLine] {
         var result: [MarkdownLine] = []
-        var start = 0
-        var i = 0
-        while i < u.count {
+        var start = characters.lowerBound
+        var i = start
+        while i < characters.upperBound {
             if u[i] == 10 {
                 let end = i > start && u[i - 1] == 13 ? i - 1 : i
-                let range = NSRange(location: start, length: end - start)
-                result.append(MarkdownLine(range: range, breakLength: i + 1 - end, kind: .paragraph, block: nil, content: range, spans: []))
+                result.append(rawLine(u, NSRange(location: start, length: end - start), breakLength: i + 1 - end))
                 start = i + 1
             }
             i += 1
         }
-        let range = NSRange(location: start, length: u.count - start)
-        result.append(MarkdownLine(range: range, breakLength: 0, kind: .paragraph, block: nil, content: range, spans: []))
-        for index in result.indices where isBlank(u, result[index].range) {
-            result[index].kind = .blank
+        if last {
+            result.append(rawLine(u, NSRange(location: start, length: characters.upperBound - start), breakLength: 0))
         }
         return result
+    }
+
+    /// A line as it is before it is read: blank or not.
+    static func rawLine(_ u: [UInt16], _ range: NSRange, breakLength: Int) -> MarkdownLine {
+        MarkdownLine(range: range, breakLength: breakLength, kind: isBlank(u, range) ? .blank : .paragraph, block: nil, content: range, spans: [])
     }
 
     static func lineText(_ u: [UInt16], _ range: NSRange) -> String {
