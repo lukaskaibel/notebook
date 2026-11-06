@@ -7,6 +7,10 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- On the Mac, a caret shows where what you drag over a note will go, as in Notes. A picture, drawing or file card of the
+  note goes on a line of its own, so its caret sits at the start of the line it will go before, or at the end of the
+  one it will go after, and next to a picture or table as tall as it; files, pictures and text from the Finder, other
+  apps or another note show it where the pointer is.
 - AsciiDoc notes. A `.adoc` file is a note like a Markdown one, on the Mac, iPhone and iPad: shown as it reads while
   you type, its marks next to the caret. Section titles, lists and checklists, terms and their descriptions, `NOTE:`
   and `[WARNING]` blocks as callouts, examples and sidebars as boxes, tables with their column widths and cells over
@@ -18,12 +22,12 @@ versions follow [semantic versioning](https://semver.org).
   and `include::` links follow files that move, and `<<id>>` scrolls to its section. Quick Look and thumbnails show it
   as Notebook does. A new note in a folder of AsciiDoc files is AsciiDoc too.
 - Quick Look shows a note as Notebook does: press Space on a note in the Finder, or look at it in the Finder's column
-  view or Get Info, and you see its headings, to-dos, tables, maths, diagrams, pictures and drawings, with its title
-  and when it was last edited on top, instead of its Markdown. It is set in the typeface, size, line spacing and width
-  chosen in Settings › Text, in Notebook's ink blue. Its text can be selected and copied. In a folder the Mac guards,
-  such as Documents or Downloads, the Mac first asks whether Notebook may read it; the note shows meanwhile and its
-  pictures follow once you allow it. A tip at the bottom of the sidebar shows the way, with a button to Quick Look's
-  settings, where another app that previews Markdown can be turned off.
+  view or Get Info, and you see its headings, to-dos, tables, maths and diagrams, with its title and when it was last
+  edited on top, instead of its Markdown. It is set in the typeface, size, line spacing and width chosen in Settings ›
+  Text, in Notebook's ink blue. Its text can be selected and copied. A note in one of the locations in Notebook's
+  sidebar shows its pictures and drawings too, once Notebook has been opened since the Mac started; a note elsewhere
+  shows them by their names, and links as links. A tip at the bottom of the sidebar shows the way, with a button to
+  Quick Look's settings, where another app that previews Markdown can be turned off.
 - Quick Look on iPhone and iPad shows a note as Notebook does too: tap a note in the Files app, or one attached in
   another app that shows files with Quick Look, and you see its headings, to-dos, tables and maths in your typeface
   and size instead of its Markdown. iOS lets Quick Look read only the note itself, so its pictures show by their
@@ -63,6 +67,9 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- A picture dragged to another place in its note no longer goes into a table, code block, quote or callout and breaks
+  it in two: it goes before or after the whole of it. Dropped on the right of another picture, a file card or a table,
+  it goes after it rather than before, and a file dropped there from the Finder no longer goes into a table's Markdown.
 - On iPhone and iPad, a Nextcloud folder chosen with Add Location showed in the sidebar but stayed empty. Nextcloud
   gives other apps only single files, not its folders, so Notebook can't show what's in them; it now says so instead of
   adding the folder. A folder like this added before is pointed out once, with how to remove it.
@@ -76,6 +83,12 @@ versions follow [semantic versioning](https://semver.org).
   styled again.
 - Notes with long tables open several times faster: each table was set up again for every one of its rows. A note of
   20 tables of 30 rows opens about seven times as fast.
+- Typing no longer stops for a moment when files change while you write, such as when the note saves or iCloud brings
+  in other files. Every link in the open note was set up again each time; now only a link whose note came or went, or
+  a picture or embed whose file changed, is. In a note with 150 links that took a fifth of a second.
+- Typing is lighter when pictures, tables or embedded notes are on screen: each key drew the whole window again,
+  measuring every table again, asking the disk about every picture and reading every embedded note anew. Now it draws
+  only the lines around the caret, a third of the drawing it was, and a key takes a quarter less time.
 
 ## [1.2.0] – not released yet
 

@@ -8,16 +8,18 @@
 
 PRODUCT_BUNDLE_IDENTIFIER = $(NOTEBOOK_BUNDLE_IDENTIFIER).QuickLook
 
-// On the Mac every extension runs in the sandbox, in every build. Quick Look lets it read the note it shows, and it may
-// read the rest of the home folder too, read only, for the pictures and drawings in the note's .assets: a temporary
-// exception to the sandbox, as Quick Look has no way to hand an extension the files next to a note. The App Group,
-// wherever the app has it (Shared.xcconfig), brings the typeface and heading marks set in the app
-// (NotebookSettings.lookKeys); without it notes show as Notebook sets them at first.
-NOTEBOOK_QUICKLOOK_MAC_ENTITLEMENTS = Config/QuickLook-macOS.entitlements
-NOTEBOOK_QUICKLOOK_MAC_ENTITLEMENTS[config=AppStore] = Config/QuickLook-AppGroup-macOS.entitlements
+// On the Mac every extension runs in the sandbox, in every build. Quick Look lets it read the note it shows and nothing
+// else. For a note in one of Notebook's locations the app leaves a bookmark to the location in the App Group, through
+// which the extension reads the note's folder (QuickLookAccess); elsewhere, and in builds without the App Group, the
+// pictures and drawings in the note's .assets show by their names and links as links (NotePreview). A temporary
+// exception to read the home folder showed them everywhere, but App Review doesn't grant it (Guideline 2.4.5(i), Mac
+// beta build 2026.1104.1731). The App Group, wherever the app has it (Shared.xcconfig), also brings the typeface and
+// heading marks set in the app (NotebookSettings.lookKeys); without it notes show as Notebook sets them at first.
+NOTEBOOK_QUICKLOOK_MAC_ENTITLEMENTS = Config/Extension-macOS.entitlements
+NOTEBOOK_QUICKLOOK_MAC_ENTITLEMENTS[config=AppStore] = Config/AppGroup-macOS.entitlements
 CODE_SIGN_ENTITLEMENTS[sdk=macosx*] = $(NOTEBOOK_QUICKLOOK_MAC_ENTITLEMENTS)
-// On iPhone and iPad Quick Look lets it read only the note, and there is no exception to ask for: pictures show by
-// their names and links as links (NotePreview). The Simulator has no sandbox, so there they show as in the app.
+// On iPhone and iPad Quick Look likewise lets it read only the note. The Simulator has no sandbox, so there pictures
+// show as in the app.
 NOTEBOOK_QUICKLOOK_IOS_ENTITLEMENTS =
 NOTEBOOK_QUICKLOOK_IOS_ENTITLEMENTS[sdk=iphonesimulator*] = Config/AppGroup.entitlements
 NOTEBOOK_QUICKLOOK_IOS_ENTITLEMENTS[config=AppStore] = Config/AppGroup.entitlements

@@ -112,12 +112,14 @@ final class TableModel {
         var size: CGSize
     }
 
-    private var cachedLayout: (width: CGFloat, layout: Layout)?
+    /// Layouts made, by the width they were made for: layout asks for the page's width and drawing for the table's
+    /// own, so one alone was made again on every frame the table is in.
+    private var cachedLayouts: [(width: CGFloat, layout: Layout)] = []
 
     /// Columns as wide as their widest cell; when that is wider than the page, wide columns give up room first and
     /// their text wraps.
     func layout(maxWidth: CGFloat) -> Layout {
-        if let cached = cachedLayout, abs(cached.width - maxWidth) < 0.5 { return cached.layout }
+        if let cached = cachedLayouts.first(where: { abs($0.width - maxWidth) < 0.5 }) { return cached.layout }
         let columns = alignments.count
         var natural = Array(repeating: CGFloat(40), count: columns)
         for row in rows {
@@ -159,7 +161,8 @@ final class TableModel {
             heights.append(max(height, 18) + Self.padding.height * 2)
         }
         let layout = Layout(columnWidths: widths, rowHeights: heights, size: CGSize(width: ceil(widths.reduce(0, +)), height: ceil(heights.reduce(0, +))))
-        cachedLayout = (maxWidth, layout)
+        cachedLayouts.append((maxWidth, layout))
+        if cachedLayouts.count > 4 { cachedLayouts.removeFirst() }
         return layout
     }
 

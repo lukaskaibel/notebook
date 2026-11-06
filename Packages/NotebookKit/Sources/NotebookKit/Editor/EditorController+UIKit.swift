@@ -200,10 +200,21 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
 
     var isDarkAppearance: Bool { textView.traitCollection.userInterfaceStyle == .dark }
 
-    /// Selected pictures and tables draw a ring of their own, in the text.
+    /// Everything on screen is drawn again: what shows changed all over the note.
     func textNeedsDisplay() {
-        let glyphs = layoutManager.glyphRange(forBoundingRect: textView.bounds.offsetBy(dx: -textOrigin.x, dy: -textOrigin.y), in: container)
-        layoutManager.invalidateDisplay(forGlyphRange: glyphs)
+        layoutManager.invalidateDisplay(forGlyphRange: shownGlyphs)
+    }
+
+    /// The lines of `ranges` are drawn again, as far as they are on screen: selected pictures and tables draw a ring of
+    /// their own, in the text.
+    func linesNeedDisplay(_ ranges: [NSRange]) {
+        guard storage.length > 0, !ranges.isEmpty else { return }
+        let shown = layoutManager.characterRange(forGlyphRange: shownGlyphs, actualGlyphRange: nil)
+        for lines in displayLines(ranges, within: shown, neighbours: true) { layoutManager.invalidateDisplay(forCharacterRange: lines) }
+    }
+
+    private var shownGlyphs: NSRange {
+        layoutManager.glyphRange(forBoundingRect: textView.bounds.offsetBy(dx: -textOrigin.x, dy: -textOrigin.y), in: container)
     }
 
     /// The heading level in the margin: shown next to the heading the caret is on, where there is room for it.

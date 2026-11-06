@@ -28,6 +28,8 @@ struct LocationSurvey: Sendable {
     /// The location is a file, not a folder: one chosen from an app that gives other apps no folders (`Location.found`).
     var isFile = false
     var linked: [LinkedFolder]
+    /// Plain bookmarks to the location's folder and its linked folders, for Quick Look on the Mac (QuickLookAccess).
+    var quickLook: [String: Data] = [:]
     /// The location's top, when it had to be read (again).
     var top: [FileNode.Listing]?
     /// The other folders read, parents first.
@@ -49,6 +51,10 @@ struct LocationSurvey: Sendable {
         survey.isFile = Location.found(at: url) == .file
         let isICloudDrive = Location(id: job.id, name: "", path: url.path, bookmark: nil).isICloudDrive
         survey.linked = isICloudDrive ? Location.iCloudDriveLinks(in: url) : []
+        #if os(macOS)
+        // Made while the app has its access afresh, at every launch and for a new location.
+        survey.quickLook = QuickLookAccess.bookmarks(for: [url] + survey.linked.map(\.url))
+        #endif
         let moved = url.path != job.url.path
         if !job.isRead || moved || survey.linked != job.linked {
             survey.top = FileNode.list(url, linked: survey.linked)

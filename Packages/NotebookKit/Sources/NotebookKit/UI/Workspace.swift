@@ -141,6 +141,8 @@ public final class Workspace: NSObject {
     var selectedFolder: URL?
     /// Locations given on the command line for this run only (tests, the demo library).
     @ObservationIgnored private(set) var temporaryLocations = false
+    /// Plain bookmarks to each location's folders, made when it was last looked at, for Quick Look (QuickLookAccess).
+    @ObservationIgnored private var quickLookFolders: [UUID: [String: Data]] = [:]
     @ObservationIgnored private(set) var isStarted = false
     /// Brings the main window up (set by the window, which SwiftUI opens).
     @ObservationIgnored var showWindow: (() -> Void)?
@@ -332,9 +334,9 @@ public final class Workspace: NSObject {
 
     /// Search knows other notes now: links to them show as links, in this window and in notes open on their own.
     private func refreshLinks() {
-        editor.refreshLinks()
+        editor.refreshLinks(changed: [])
         #if os(macOS)
-        FileWindows.shared.refreshLinks()
+        FileWindows.shared.refreshLinks(changed: [])
         #endif
     }
 
@@ -523,6 +525,7 @@ public final class Workspace: NSObject {
                 reloadsAll = true
             }
             locations[index].linked = survey.linked
+            quickLookFolders[survey.id] = survey.quickLook
             if survey.isFile, reportedFiles.insert(survey.id).inserted { reportNoFolder(locations[index].name, isLocation: true) }
             guard let root = roots[survey.id] else { continue }
             root.linked = survey.linked
@@ -539,6 +542,7 @@ public final class Workspace: NSObject {
             reloadsAll = true
         }
         if saves, !temporaryLocations { LocationStore.save(locations) }
+        keepForQuickLook()
         // An older lookup's files are as good as any, but only the newest knows every location, and only the one with the
         // bookmarks where they moved.
         surveysDone = max(surveysDone, count)
@@ -664,9 +668,19 @@ public final class Workspace: NSObject {
         locations.removeAll { $0.id == id }
         nameLocations()
         if !temporaryLocations { LocationStore.save(locations) }
+        // Quick Look no longer reads next to its notes.
+        quickLookFolders[id] = nil
+        keepForQuickLook()
         locationsChanged()
         // Its notes leave the widgets, and Edit Widget.
         publishWidgetNotes()
+    }
+
+    /// Keeps the bookmarks to every location's folders for Quick Look in the App Group, on the Mac (QuickLookAccess).
+    private func keepForQuickLook() {
+        #if os(macOS)
+        QuickLookAccess.keep(quickLookFolders.values.reduce(into: [:]) { $0.merge($1) { kept, _ in kept } }, in: NotebookSettings.groupDefaults)
+        #endif
     }
 
     #if os(macOS)
@@ -881,7 +895,10 @@ public final class Workspace: NSObject {
         read(changed, again: true)
         index.refresh(folders: indexFolders, locations: locations)
         remindersMayHaveChanged(in: indexFolders)
-        editor.refreshLinks()
+        // Only the links that show one of these files, or whose note came or went, are styled again: the note's own
+        // save, or iCloud bringing in other files, mustn't restyle every link while you type.
+        ImageStore.shared.forget(folders)
+        editor.refreshLinks(changed: folders)
         if let current = currentURL, !FileManager.default.fileExists(atPath: current.path), note == nil {
             currentURL = nil
         }

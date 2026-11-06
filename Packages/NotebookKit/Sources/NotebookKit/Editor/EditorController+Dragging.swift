@@ -91,12 +91,8 @@ extension EditorController {
         let text = nsText
         func isBlank(_ line: NSRange) -> Bool { text.substring(with: line).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         func line(at index: Int) -> NSRange { text.lineRange(for: NSRange(location: index, length: 0)) }
-        let dropped = line(at: min(location, text.length))
-        var target = dropped.location
-        // The caret of the drop shows after the line's text: the picture goes after the line.
-        let textEnd = dropped.upperBound - (text.substring(with: dropped).hasSuffix("\n") ? 1 : 0)
-        if location > dropped.location, location >= textEnd { target = dropped.upperBound }
-        if location >= text.length, text.length > 0 { target = text.length }
+        let place = paragraphPlace(droppedAt: location)
+        let target = place.after ? (location >= text.length ? text.length : place.line.upperBound) : place.line.location
 
         let atEnd = target == text.length
         let before = target > 0 && !isBlank(line(at: target - 1)) && !(atEnd && text.hasSuffix("\n\n"))
@@ -104,6 +100,63 @@ extension EditorController {
         if atEnd, text.length > 0, !text.hasSuffix("\n") { lead = "\n\n" }
         let after = !atEnd && !isBlank(line(at: target))
         return (target, lead + markdown + "\n" + (after ? "\n" : ""), (lead as NSString).length)
+    }
+
+    /// The lines a picture dropped at a character goes next to, and whether it goes after them, as it does when
+    /// dropped at the end of their text, or before them. A table, code block, quote or other block counts as one line,
+    /// so the picture never goes into one.
+    private func paragraphPlace(droppedAt location: Int) -> (line: NSRange, after: Bool) {
+        let text = nsText
+        let (lines, block, object) = dropLines(at: location)
+        if location >= text.length, text.length > 0 { return (lines, true) }
+        switch block?.kind {
+        // Properties stay at the top, and AsciiDoc's attributes with the block they are for.
+        case .frontmatter: return (lines, true)
+        case .markup: return (lines, false)
+        default: break
+        }
+        // A picture, table or diagram drawn in place of its Markdown: after it unless dropped at its start, as the
+        // pointer is on its right half.
+        if let object { return (lines, location > object) }
+        if let block {
+            // By the line it was dropped on: the first half of the block before it, the second half after it.
+            let position = document.lineIndex(containing: location) - block.lines.lowerBound
+            return (lines, location >= lineTextEnd(lines) || position * 2 >= block.lines.count)
+        }
+        return (lines, location > lines.location && location >= lineTextEnd(lines))
+    }
+
+    /// The line a character is on, or all the lines of the block it is in (a table, a code block, a quote), and where
+    /// the picture, table or diagram drawn in their place is, if they are drawn as one.
+    private func dropLines(at index: Int) -> (lines: NSRange, block: MarkdownBlock?, object: Int?) {
+        let text = nsText
+        let index = min(max(index, 0), text.length)
+        var lines = text.lineRange(for: NSRange(location: index, length: 0))
+        let block = document.block(containing: index).flatMap { $0.range.upperBound <= text.length ? $0 : nil }
+        if let block { lines = text.lineRange(for: block.range) }
+        guard lines.length > 0 else { return (lines, block, nil) }
+        let glyphs = layoutManager.glyphRange(forCharacterRange: lines, actualCharacterRange: nil)
+        return (lines, block, layoutManager.blockObject(inGlyphRange: glyphs)?.0)
+    }
+
+    /// Where something dropped at a character goes in: where it is, except in the Markdown of a picture, table or
+    /// diagram drawn in its place, where it goes after it.
+    func dropIndex(at index: Int) -> Int {
+        let (lines, _, object) = dropLines(at: index)
+        guard let object, index > object, index < lineTextEnd(lines) else { return index }
+        return lineTextEnd(lines)
+    }
+
+    /// Where a line's text ends, before its line break.
+    private func lineTextEnd(_ line: NSRange) -> Int {
+        line.upperBound - (line.length > 0 && nsText.character(at: line.upperBound - 1) == 10 ? 1 : 0)
+    }
+
+    /// Where the caret of a drag shows that a picture of the note dropped at a character goes: at the start of the
+    /// line it goes before, or at the end of the one it goes after.
+    func objectDropCaret(droppedAt location: Int) -> Int {
+        let place = paragraphPlace(droppedAt: location)
+        return place.after ? lineTextEnd(place.line) : place.line.location
     }
 
     /// Text moved by dragging within the note: taken out and put in where it was dropped, in one change that one undo
@@ -205,14 +258,86 @@ extension EditorController {
         return drag
     }
 
-    /// What a drop here does where AppKit's text view can't tell: a picture of this note moves (Option copies it),
-    /// one from another note is copied, and so are pictures that come as files written once they are dropped. Nil
-    /// leaves it to the text view.
+    /// What a drop here does: a picture of this note moves (Option copies it), one from another note is copied, and
+    /// so is everything else the editor pastes where it is dropped: files, pictures, text from other apps and notes.
+    /// Answered here, AppKit draws no caret of its own for them, at the character under the pointer, next to the drop
+    /// caret. Nil leaves it to the text view: text dragged within the note, which AppKit moves and shows itself.
     func dropOperation(for info: NSDraggingInfo) -> NSDragOperation? {
+        guard textView.isEditable else { return nil }
         if info.draggingSource is ObjectDrag {
             return ownObjectDrag(info) != nil && info.draggingSourceOperationMask.contains(.move) ? .move : .copy
         }
-        return promisedFiles(on: info.draggingPasteboard).isEmpty ? nil : .copy
+        if isOwnTextDrag(info) { return nil }
+        let pasteboard = info.draggingPasteboard
+        if !promisedFiles(on: pasteboard).isEmpty { return .copy }
+        guard pasteboard.availableType(from: Self.droppedTypes) != nil else { return nil }
+        let mask = info.draggingSourceOperationMask
+        return mask.contains(.copy) ? .copy : mask.contains(.generic) ? .generic : nil
+    }
+
+    /// What `paste(from:at:)` takes from a drag.
+    private static let droppedTypes: [NSPasteboard.PasteboardType] = [
+        fragmentType, .fileURL, .png, .tiff, NSPasteboard.PasteboardType("public.jpeg"), NSPasteboard.PasteboardType("public.heic"), .string,
+    ]
+
+    /// Text of this note dragged within it, which AppKit moves.
+    func isOwnTextDrag(_ info: NSDraggingInfo) -> Bool {
+        info.draggingSource as? NSTextView === textView
+    }
+
+    // MARK: Drop caret
+
+    /// Shows where what is dragged over the note goes if it is dropped now, with a caret like the note's own: a
+    /// picture of the note before or after the line it is over, anything else where the pointer is. A drag the note
+    /// doesn't take shows none, and text dragged within the note shows AppKit's.
+    func showDropCaret(for info: NSDraggingInfo, operation: NSDragOperation) {
+        guard !operation.isEmpty, textView.isEditable, !isOwnTextDrag(info),
+              let frame = dropCaretFrame(at: dropCaretIndex(for: info)) else { return hideDropCaret() }
+        let caret = textView.dropCaret
+        caret.color = textView.insertionPointColor
+        // Above drawings and buttons in the text.
+        if textView.subviews.last !== caret { textView.addSubview(caret, positioned: .above, relativeTo: nil) }
+        if caret.frame.size != frame.size { caret.needsDisplay = true }
+        caret.frame = frame
+        caret.isHidden = false
+    }
+
+    func hideDropCaret() {
+        textView.dropCaret.isHidden = true
+    }
+
+    /// The character a drop goes in at, as the caret shows it.
+    func dropCaretIndex(for info: NSDraggingInfo) -> Int {
+        let index = min(textView.dropIndex(for: info), storage.length)
+        if let drag = ownObjectDrag(info), isWholeObject(drag.range) { return objectDropCaret(droppedAt: index) }
+        return index
+    }
+
+    /// The drop caret at a character, in the text view: as the caret is drawn there, or next to a picture, drawing or
+    /// table as tall as it, before it at the start of its line and after it at the end.
+    func dropCaretFrame(at index: Int) -> NSRect? {
+        let index = min(max(index, 0), storage.length)
+        if let start = dropLines(at: index).object, let box = layoutManager.blockObjectRect(at: start, origin: textOrigin) {
+            return NSRect(x: index <= start ? box.minX - 5 : box.maxX + 3, y: box.minY, width: 2, height: box.height)
+        }
+        guard let proposed = insertionRect(at: index) else { return nil }
+        let caret = caretRect(proposed: proposed, at: index)
+        return NSRect(x: caret.minX, y: caret.minY, width: 2, height: caret.height)
+    }
+
+    /// Where the text view puts the caret at a character: as wide as nothing, as tall as the line.
+    private func insertionRect(at index: Int) -> NSRect? {
+        if index >= storage.length, layoutManager.extraLineFragmentTextContainer != nil {
+            let line = layoutManager.extraLineFragmentUsedRect
+            return NSRect(x: line.minX + textOrigin.x, y: line.minY + textOrigin.y, width: 0, height: line.height)
+        }
+        let glyphs = layoutManager.glyphRange(forCharacterRange: NSRange(location: index, length: 0), actualCharacterRange: nil)
+        var found: NSRect?
+        layoutManager.enumerateEnclosingRects(forGlyphRange: glyphs, withinSelectedGlyphRange: glyphs, in: container) { rect, stop in
+            found = rect
+            stop.pointee = true
+        }
+        return found?.offsetBy(dx: textOrigin.x, dy: textOrigin.y)
     }
 
     /// Drops a picture of this note where it was dragged to. Returns false for anything else.

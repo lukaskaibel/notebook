@@ -78,7 +78,7 @@ final class DrawingTests: XCTestCase {
         XCTAssertEqual(file.size.width, floor(h.editor.container.size.width - 2), "as wide as the text")
 
         // A canvas lies over it, and has the focus.
-        let canvas = try XCTUnwrap(h.editor.drawingSession?.canvases[picture])
+        let canvas = try self.canvas(h, picture)
         let index = try XCTUnwrap(h.editor.drawingObjects().first?.index)
         XCTAssertEqual(canvas.frame, h.editor.layoutManager.blockObjectRect(at: index, origin: h.textView.textContainerOrigin))
         XCTAssertTrue(h.window.firstResponder === canvas)
@@ -97,7 +97,7 @@ final class DrawingTests: XCTestCase {
         h.caret(4)
         h.editor.beginDrawing()
         let first = try XCTUnwrap(drawings(in: h).first)
-        h.editor.drawingSession?.canvases[first]?.addStroke(through: [CGPoint(x: 10, y: 10), CGPoint(x: 40, y: 30)], ink: PKInk(.pen), width: 3)
+        try self.canvas(h, first).addStroke(through: [CGPoint(x: 10, y: 10), CGPoint(x: 40, y: 30)], ink: PKInk(.pen), width: 3)
         h.editor.endDrawing()
         XCTAssertEqual(h.text, "One\n![Drawing](\(EditorController.markdownPath(first.lastPathComponent)))\nTwo\n\nThree")
 
@@ -133,13 +133,20 @@ final class DrawingTests: XCTestCase {
         h.editor.setScrollTop(rect.minY + 300)
         h.settle()
         var top = h.editor.scrollTop
+        // As if the strokes changed on disk since they were read: they are read again, in the background.
+        try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(60)], ofItemAtPath: DrawingFile.strokesURL(for: picture).path)
         h.editor.beginDrawing()
         XCTAssertEqual(h.editor.drawingSession?.focused?.standardizedFileURL, picture.standardizedFileURL, "the drawing on screen")
         XCTAssertTrue(h.editor.drawingSession?.created.isEmpty ?? false, "no new one")
         XCTAssertEqual(h.editor.scrollTop, top, accuracy: 0.5, "the note stays where it was")
 
+        // Its strokes are read in the background if they weren't yet: the canvas comes once they are, and the note
+        // still stays where it was.
+        for _ in 0..<60 where h.editor.drawingSession?.canvases.isEmpty ?? true { h.settle(0.05) }
+        XCTAssertEqual(h.editor.scrollTop, top, accuracy: 0.5, "the note stays where it was once the canvas is there")
+
         // Two fingers on the trackpad scroll the note over the drawing.
-        let canvas = try XCTUnwrap(h.editor.drawingSession?.canvases.values.first)
+        let canvas = try self.canvas(h)
         let wheel = try XCTUnwrap(CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: -120, wheel2: 0, wheel3: 0).flatMap(NSEvent.init(cgEvent:)))
         canvas.scrollWheel(with: wheel)
         XCTAssertGreaterThan(h.editor.scrollTop, top + 60)
@@ -182,7 +189,7 @@ final class DrawingTests: XCTestCase {
         h.caret(5)
         h.editor.beginDrawing()
         let picture = try XCTUnwrap(drawings(in: h).first)
-        let canvas = try XCTUnwrap(h.editor.drawingSession?.canvases[picture])
+        let canvas = try self.canvas(h, picture)
         canvas.addStroke(through: [CGPoint(x: 20, y: 20), CGPoint(x: 120, y: 60)], ink: PKInk(.pen), width: 3)
         XCTAssertTrue(canvas.hasUnsavedChanges)
         h.editor.endDrawing()
@@ -208,7 +215,7 @@ final class DrawingTests: XCTestCase {
         h.caret(5)
         h.editor.beginDrawing()
         let picture = try XCTUnwrap(drawings(in: h).first)
-        let canvas = try XCTUnwrap(h.editor.drawingSession?.canvases[picture])
+        let canvas = try self.canvas(h, picture)
         let height = canvas.file.size.height
         let after = h.range(of: "After").location
         let before = h.editor.yPosition(of: after)
@@ -226,7 +233,7 @@ final class DrawingTests: XCTestCase {
         // Trimmed to its strokes, the lowest of which is near its edge now: a stroke higher up leaves it as it is.
         h.editor.endDrawing()
         h.editor.beginDrawing(in: picture)
-        let trimmed = try XCTUnwrap(h.editor.drawingSession?.canvases[picture])
+        let trimmed = try self.canvas(h, picture)
         let trimmedHeight = trimmed.file.size.height
         XCTAssertLessThan(trimmedHeight, height + 100, "trimmed to its strokes")
         trimmed.addStroke(through: [CGPoint(x: 100, y: 30), CGPoint(x: 160, y: 60)], ink: PKInk(.pen), width: 3)
@@ -240,7 +247,7 @@ final class DrawingTests: XCTestCase {
         h.caret(5)
         h.editor.beginDrawing()
         let picture = try XCTUnwrap(drawings(in: h).first)
-        let canvas = try XCTUnwrap(h.editor.drawingSession?.canvases[picture])
+        let canvas = try self.canvas(h, picture)
         let index = try XCTUnwrap(h.editor.drawingObjects().first?.index)
         let rect = try XCTUnwrap(h.editor.layoutManager.blockObjectRect(at: index, origin: h.textView.textContainerOrigin))
         XCTAssertEqual(canvas.frame.minY, rect.minY)
@@ -263,7 +270,7 @@ final class DrawingTests: XCTestCase {
         h.caret(5)
         h.editor.beginDrawing()
         let picture = try XCTUnwrap(drawings(in: h).first)
-        let canvas = try XCTUnwrap(h.editor.drawingSession?.canvases[picture])
+        let canvas = try self.canvas(h, picture)
         for x in [20.0, 80, 140] {
             canvas.addStroke(through: [CGPoint(x: x, y: 20), CGPoint(x: x + 40, y: 60)], ink: PKInk(.pen), width: 3)
         }
@@ -283,7 +290,7 @@ final class DrawingTests: XCTestCase {
         h.editor.beginDrawing()
         XCTAssertFalse(h.editor.canUndoDrawing, "nothing drawn yet")
         let picture = try XCTUnwrap(drawings(in: h).first)
-        let canvas = try XCTUnwrap(h.editor.drawingSession?.canvases[picture])
+        let canvas = try self.canvas(h, picture)
         canvas.addStroke(through: [CGPoint(x: 20, y: 20), CGPoint(x: 60, y: 60)], ink: PKInk(.pen), width: 3)
         canvas.addStroke(through: [CGPoint(x: 80, y: 20), CGPoint(x: 120, y: 60)], ink: PKInk(.pen), width: 3)
         XCTAssertTrue(h.editor.canUndoDrawing)
@@ -305,7 +312,7 @@ final class DrawingTests: XCTestCase {
         DrawingTools.shared.tool = .pen
         h.editor.beginDrawing()
         let picture = try XCTUnwrap(drawings(in: h).first)
-        let canvas = try XCTUnwrap(h.editor.drawingSession?.canvases[picture])
+        let canvas = try self.canvas(h, picture)
         let start = canvas.convert(NSPoint(x: 30, y: 40), to: nil)
         let end = canvas.convert(NSPoint(x: 160, y: 90), to: nil)
         func event(_ type: NSEvent.EventType, _ location: NSPoint) -> NSEvent {
@@ -330,7 +337,7 @@ final class DrawingTests: XCTestCase {
         h.caret(3)
         h.editor.beginDrawing()
         let picture = try XCTUnwrap(drawings(in: h).first)
-        h.editor.drawingSession?.canvases[picture]?.addStroke(through: [CGPoint(x: 10, y: 10), CGPoint(x: 40, y: 30)], ink: PKInk(.pen), width: 3)
+        try self.canvas(h, picture).addStroke(through: [CGPoint(x: 10, y: 10), CGPoint(x: 40, y: 30)], ink: PKInk(.pen), width: 3)
         let second = h.range(of: "Second").location
         h.click(at: h.point(of: second + 2, fraction: 0.2))
         XCTAssertFalse(h.editor.isDrawing)
@@ -348,7 +355,7 @@ final class DrawingTests: XCTestCase {
         h.settle()
         h.editor.beginDrawing()
         let picture = try XCTUnwrap(drawings(in: h).first)
-        h.editor.drawingSession?.canvases[picture]?.addStroke(through: [CGPoint(x: 10, y: 10), CGPoint(x: 40, y: 30)], ink: PKInk(.pen), width: 3)
+        try self.canvas(h, picture).addStroke(through: [CGPoint(x: 10, y: 10), CGPoint(x: 40, y: 30)], ink: PKInk(.pen), width: 3)
         h.settle()
         let target = h.range(of: "Line 53 ").location
         let onScreen = h.editor.yPosition(of: target) - h.editor.scrollTop
@@ -356,6 +363,17 @@ final class DrawingTests: XCTestCase {
         XCTAssertFalse(h.editor.isDrawing)
         XCTAssertEqual(h.editor.yPosition(of: target) - h.editor.scrollTop, onScreen, accuracy: 0.5, "the drawing got shorter above it, and the note scrolled by as much")
         XCTAssertEqual(h.selection, NSRange(location: target + 2, length: 0))
+    }
+
+    /// The canvas of a drawing, once its strokes are read: in the background, unless showing the drawing read them
+    /// already.
+    private func canvas(_ h: EditorHarness, _ picture: URL? = nil) throws -> DrawingCanvas {
+        func current() -> DrawingCanvas? {
+            guard let canvases = h.editor.drawingSession?.canvases else { return nil }
+            return picture.map { canvases[$0] } ?? canvases.values.first
+        }
+        for _ in 0..<60 where current() == nil { h.settle(0.05) }
+        return try XCTUnwrap(current(), "the drawing's strokes were read")
     }
 
     func testTypingWhileDrawingWritesBelowTheDrawing() throws {
@@ -367,7 +385,7 @@ final class DrawingTests: XCTestCase {
         // Selected, as a double-click leaves it, and opened for drawing.
         h.select(h.range(of: "![Drawing](.assets/Map.png)"))
         h.editor.beginDrawing(in: try XCTUnwrap(drawings(in: h).first))
-        let canvas = try XCTUnwrap(h.editor.drawingSession?.canvases.values.first)
+        let canvas = try self.canvas(h)
         let key = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: h.window.windowNumber,
                                                  context: nil, characters: "H", charactersIgnoringModifiers: "H", isARepeat: false, keyCode: 4))
         canvas.keyDown(with: key)

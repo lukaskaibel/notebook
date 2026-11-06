@@ -208,8 +208,17 @@ final class MarkdownTextView: NSTextView {
     #if DEBUG
     /// For recordings of a window in the background, which draws no caret of its own.
     static var drawsCaretAlways = false
+    /// For tests: the parts of the view drawn while `recordsDrawing` is on.
+    var drawnRects: [NSRect] = []
+    var recordsDrawing = false
 
     override func draw(_ dirtyRect: NSRect) {
+        if recordsDrawing {
+            var rects: UnsafePointer<NSRect>?
+            var count = 0
+            getRectsBeingDrawn(&rects, count: &count)
+            if let rects { drawnRects += (0..<count).map { rects[$0] } }
+        }
         super.draw(dirtyRect)
         guard Self.drawsCaretAlways, selectedRange().length == 0, window?.firstResponder === self,
               let window, var rect = Optional(firstRect(forCharacterRange: selectedRange(), actualRange: nil)) else { return }
@@ -239,8 +248,13 @@ final class MarkdownTextView: NSTextView {
         }
     }
 
+    /// Whatever the text system draws again is drawn across the whole width and a little above and below: the caret is
+    /// wider than AppKit's, the heading's level and signs are drawn in the margin, and the boxes round code and
+    /// callouts reach out of their lines. Once, the whole view was drawn again on every move of the caret, which hid
+    /// what was left behind.
     override func setNeedsDisplay(_ rect: NSRect, avoidAdditionalLayout flag: Bool) {
-        super.setNeedsDisplay(rect.insetBy(dx: -2, dy: 0), avoidAdditionalLayout: flag)
+        guard !rect.isEmpty else { return super.setNeedsDisplay(rect, avoidAdditionalLayout: flag) }
+        super.setNeedsDisplay(NSRect(x: bounds.minX, y: rect.minY - 14, width: bounds.width, height: rect.height + 28), avoidAdditionalLayout: flag)
     }
 
     // MARK: - Focus
@@ -295,9 +309,48 @@ final class MarkdownTextView: NSTextView {
         controller?.dropOperation(for: dragInfo) ?? super.dragOperation(for: dragInfo, type: type)
     }
 
+    // MARK: - Drops
+
+    /// The caret that shows where a drag over the note drops. AppKit draws one only for drags whose operation it works
+    /// out itself, never for pictures, which the editor moves itself, and at the character under the pointer.
+    let dropCaret = DropCaretView()
+
+    /// The character a drop goes in at: the one nearest the pointer, outside tables and diagrams.
+    func dropIndex(for info: NSDraggingInfo) -> Int {
+        let index = characterIndexForInsertion(at: convert(info.draggingLocation, from: nil))
+        return controller?.dropIndex(at: index) ?? index
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        let operation = super.draggingEntered(sender)
+        controller?.showDropCaret(for: sender, operation: operation)
+        return operation
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        let operation = super.draggingUpdated(sender)
+        controller?.showDropCaret(for: sender, operation: operation)
+        return operation
+    }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        super.draggingExited(sender)
+        controller?.hideDropCaret()
+    }
+
+    override func draggingEnded(_ sender: NSDraggingInfo) {
+        super.draggingEnded(sender)
+        controller?.hideDropCaret()
+    }
+
+    override func concludeDragOperation(_ sender: NSDraggingInfo?) {
+        super.concludeDragOperation(sender)
+        controller?.hideDropCaret()
+    }
+
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        let point = convert(sender.draggingLocation, from: nil)
-        let index = characterIndexForInsertion(at: point)
+        controller?.hideDropCaret()
+        let index = dropIndex(for: sender)
         // A picture dragged within the note is moved by the editor; text dragged within it is AppKit's; files and
         // pictures from elsewhere are the editor's.
         if controller?.dropObject(sender, at: index) == true { return true }
@@ -313,6 +366,37 @@ final class MarkdownTextView: NSTextView {
         if controller?.handleKeyDown(event) == true { return }
         super.keyDown(with: event)
     }
+}
+
+/// The caret that shows where a drag over the note drops, drawn as the note's own caret is.
+final class DropCaretView: NSView {
+    var color: NSColor = .controlAccentColor {
+        didSet { if color != oldValue { needsDisplay = true } }
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        // A layer of its own, so it moves without the text being drawn again.
+        wantsLayer = true
+        layerContentsRedrawPolicy = .onSetNeedsDisplay
+        isHidden = true
+        setAccessibilityElement(false)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        color.setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: 1, yRadius: 1).fill()
+    }
+
+    // The drag goes on to the text under it.
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 /// The title above the note: the file's name, renamed when you change it.

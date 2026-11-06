@@ -88,8 +88,8 @@ public final class FileWindows {
         for controller in controllers.values { controller.save(quitting: quitting) }
     }
 
-    func refreshLinks() {
-        for controller in controllers.values { controller.editor.refreshLinks() }
+    func refreshLinks(changed: Set<String>? = nil) {
+        for controller in controllers.values { controller.editor.refreshLinks(changed: changed) }
     }
 
     /// The editor of the window that shows a note, once its text is in.

@@ -140,6 +140,30 @@ final class LocationTests: XCTestCase {
         XCTAssertFalse(workspace.isLinkedFolder(desktop.appendingPathComponent("Trip")))
     }
 
+    /// Quick Look on the Mac gets a bookmark to every location's folders, linked ones too, made as they are looked at,
+    /// and loses those of a location taken out of the sidebar (QuickLookAccess).
+    func testQuickLookGetsABookmarkToEveryLocation() async throws {
+        let group = TestRun.settings()
+        NotebookSettings.groupDefaults = group
+        defer { NotebookSettings.groupDefaults = nil }
+        let workspace = try await makeWorkspace()
+        func kept() -> Set<String> { Set((group.dictionary(forKey: QuickLookAccess.key) as? [String: Data] ?? [:]).keys) }
+        func folders() -> Set<String> {
+            Set(workspace.locations.flatMap { [$0.url] + $0.linked.map(\.url) }.map(\.standardizedFileURL.path))
+        }
+        XCTAssertEqual(workspace.locations.count, 2)
+        XCTAssertTrue(folders().contains(desktop.path), "iCloud Drive's Desktop")
+        XCTAssertEqual(kept(), folders())
+        XCTAssertEqual(QuickLookAccess.open(for: plan, in: group)?.resolvingSymlinksInPath().path, desktop.resolvingSymlinksInPath().path,
+                       "the Desktop's note opens the Desktop")
+
+        let location = try XCTUnwrap(workspace.location(containing: drive))
+        workspace.removeLocation(location.id)
+        XCTAssertEqual(kept(), folders())
+        XCTAssertEqual(kept().count, 1, "the library alone")
+        XCTAssertNil(QuickLookAccess.open(for: drive.appendingPathComponent("Papers/Note.md"), in: group))
+    }
+
     func testLinkedFoldersStayPut() async throws {
         let workspace = try await makeWorkspace()
         let renamed = await workspace.rename(desktop, to: "Renamed").value

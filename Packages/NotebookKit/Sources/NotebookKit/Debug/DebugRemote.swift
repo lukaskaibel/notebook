@@ -298,7 +298,7 @@ enum DebugRemote {
             }
         case "drawing", "drawstroke", "drawinfo", "drawundo", "drawredo":
             if let editor { log(editor.debugDrawing(command, argument)) }
-        case "dragtypes", "dragobject", "dropfile":
+        case "dragtypes", "dragobject", "dropfile", "dragover":
             if let editor { log(editor.debugDragging(command, argument)) }
         case "drawtool":
             // drawtool pen|pencil|marker|eraser [width 0-2] [object|pixel|RRGGBB]

@@ -69,9 +69,9 @@ final class QuickLookTests: XCTestCase {
         assertSameLook(preview.editor.storage, app.editor.storage)
     }
 
-    /// A folder the Mac asks about first doesn't hold Quick Look up: the note shows at once, with its picture by its
-    /// name, and the picture comes once the folder could be read.
-    func testTheNoteShowsWhileItsFolderIsAskedAbout() async throws {
+    /// A folder slow to read doesn't hold Quick Look up: the note shows at once, with its picture by its name, and the
+    /// picture comes once the folder could be read.
+    func testTheNoteShowsWhileItsFolderIsRead() async throws {
         let url = folder.appendingPathComponent("Kyoto trip.md")
         try "Gates at dawn.\n\n![[torii.png]]\n".write(to: url, atomically: true, encoding: .utf8)
         try FileManager.default.createDirectory(at: folder.appendingPathComponent(".assets"), withIntermediateDirectories: true)
@@ -91,9 +91,9 @@ final class QuickLookTests: XCTestCase {
         XCTAssertEqual(picture(in: preview)?.lastPathComponent, "torii.png")
     }
 
-    /// Where Quick Look can't read the note's folder, as on iPhone and iPad, a `[[link]]` shows as a link: what it names
-    /// may well be there. Once the folder could be read, a link to nothing in it shows as a note still to be made, as in
-    /// the app.
+    /// Where Quick Look can't read the note's folder, as on the Mac, iPhone and iPad, a `[[link]]` shows as a link: what
+    /// it names may well be there. Once the folder could be read, a link to nothing in it shows as a note still to be
+    /// made, as in the app.
     func testLinksShowAsLinksWhileTheFolderIsOutOfReach() async throws {
         let url = folder.appendingPathComponent("Kyoto trip.md")
         try "Costs are in [[Budget]].\n".write(to: url, atomically: true, encoding: .utf8)
@@ -106,6 +106,25 @@ final class QuickLookTests: XCTestCase {
 
         try await TestRun.wait(while: { link(in: preview) == .chip(resolved: true) })
         XCTAssertEqual(link(in: preview), .chip(resolved: false), "no Budget next to the note")
+    }
+
+    /// On the Mac, a note in one of Notebook's locations is read through the app's bookmark to the location: the
+    /// innermost folder kept that the note is in, and none for a note elsewhere. The app keeps them (LocationTests).
+    func testQuickLookOpensTheLocationTheNoteIsIn() throws {
+        let library = folder.appendingPathComponent("Library")
+        let inner = library.appendingPathComponent("Shared")
+        for made in [library.appendingPathComponent("Travel"), inner] {
+            try FileManager.default.createDirectory(at: made, withIntermediateDirectories: true)
+        }
+        QuickLookAccess.keep(QuickLookAccess.bookmarks(for: [library, inner]), in: group)
+        func opened(_ path: String) -> String? {
+            QuickLookAccess.open(for: folder.appendingPathComponent(path), in: group)?.resolvingSymlinksInPath().path
+        }
+        XCTAssertEqual(opened("Library/Travel/Kyoto trip.md"), library.resolvingSymlinksInPath().path)
+        XCTAssertEqual(opened("Library/Shared/Plan.md"), inner.resolvingSymlinksInPath().path)
+        XCTAssertNil(opened("Elsewhere/Note.md"))
+        XCTAssertNil(opened("Library.md"), "a note next to the location isn't in it")
+        XCTAssertNil(QuickLookAccess.open(for: library.appendingPathComponent("Travel/Kyoto trip.md"), in: nil), "a build without the App Group")
     }
 
     /// How the note's `[[Budget]]` shows.
@@ -216,9 +235,8 @@ final class QuickLookTests: XCTestCase {
         assertSameLook(editor.storage, app.editor.storage)
     }
 
-    /// The Finder asks for thumbnails as you scroll by, so a thumbnail reads the note and nothing next to it, and a
-    /// note in a folder the Mac guards never makes it ask whether Notebook may: its pictures show by their names, and
-    /// the notes and files it links to by theirs, still as links.
+    /// The Finder asks for thumbnails as you scroll by, so a thumbnail reads the note and nothing next to it, even where
+    /// it could: its pictures show by their names, and the notes and files it links to by theirs, still as links.
     func testTheThumbnailReadsOnlyTheNote() async throws {
         let url = folder.appendingPathComponent("Kyoto trip.md")
         try """

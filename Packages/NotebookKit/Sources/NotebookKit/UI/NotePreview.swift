@@ -13,16 +13,19 @@ import os
 /// Look can't do is left out: the editor doesn't change the note, and doesn't look for pictures and links beyond the
 /// note's folder.
 ///
-/// What is next to the note is read in the background. In a folder the Mac guards, such as Documents or Downloads, the
-/// Mac first asks whether Notebook may read it: the note shows meanwhile, with its pictures by their names, and gets
-/// them once that is allowed.
+/// Quick Look lets the extension read only the note, on the Mac as on iPhone and iPad (Config/QuickLook.xcconfig), so
+/// its pictures show by their names and its links as links. On the Mac a note in one of Notebook's locations is the
+/// exception: the app leaves a bookmark to each location's folders for Quick Look (QuickLookAccess), which opens the
+/// note's folder. Where the folder can be read, so also in the iOS Simulator, which has no sandbox, what is next to the
+/// note is read in the background, and a folder slow to read doesn't hold the note up: it shows meanwhile and gets its
+/// pictures once the folder is read.
 ///
 /// A thumbnail (NoteThumbnail) shows the note the same way, but only its top and never what is next to it.
 @MainActor
 public final class NotePreview: EditorControllerDelegate {
     public let editor: EditorController
-    /// For a thumbnail: the Finder asks for them as you browse, so only the note is read, never its folder, and the
-    /// Mac never asks whether Notebook may. Without the folder, its pictures show by their names and links as links
+    /// For a thumbnail: the Finder asks for them as you browse, so only the note is read, never its folder, even where
+    /// it could be. Without the folder, its pictures show by their names and links as links
     /// (EditorController.isFolderOutOfReach).
     let isThumbnail: Bool
     /// The note's folder once what is in it could be read; nil before, and when it can't be.
@@ -64,7 +67,14 @@ public final class NotePreview: EditorControllerDelegate {
         let title = url.deletingPathExtension().lastPathComponent
         let meta = Workspace.meta(modified: modified)
         if isThumbnail { return show(NoteThumbnail.top(of: text), title: title, meta: meta, files: nil, from: url) }
-        let reading = Task.detached(priority: .userInitiated) { Self.files(nextTo: url) }
+        let group = NotebookSettings.groupDefaults
+        let reading = Task.detached(priority: .userInitiated) { () -> [String: String]? in
+            #if os(macOS)
+            // In one of Notebook's locations, the app's bookmark to it opens the note's folder.
+            _ = QuickLookAccess.open(for: url, in: group)
+            #endif
+            return Self.files(nextTo: url)
+        }
         // Most folders are read at once, and the note shows with everything in it. Otherwise it shows without them.
         if let files = await Self.value(of: reading, within: .milliseconds(400)) {
             show(text, title: title, meta: meta, files: files, from: url)
@@ -90,7 +100,7 @@ public final class NotePreview: EditorControllerDelegate {
         }
     }
 
-    /// How long reading the note's folder takes in tests, as when the Mac asks first.
+    /// How long reading the note's folder takes in tests, as for a slow one.
     nonisolated(unsafe) static var readingDelay: TimeInterval = 0
 
     /// The names of what is next to the note and in its `.assets`, or nil when the folder can't be read.

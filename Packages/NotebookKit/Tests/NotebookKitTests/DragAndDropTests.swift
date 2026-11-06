@@ -120,6 +120,136 @@ final class DragAndDropTests: XCTestCase {
         XCTAssertEqual(h.textView.draggingUpdated(drop), .copy, "it comes from a note that isn't open any more")
     }
 
+    // MARK: - Drop caret
+
+    func testADraggedPictureShowsWhereItGoes() throws {
+        let h = EditorHarness(note)
+        let caret = h.textView.dropCaret
+        XCTAssertTrue(caret.isHidden, "no caret before anything is dragged")
+        // Over the middle of a line it goes before the line: the caret is at its start, not under the pointer.
+        let third = h.range(of: "Third line")
+        let over = ownDrop(h, at: third.location + 5)
+        XCTAssertEqual(h.textView.draggingEntered(over), .move)
+        XCTAssertEqual(h.editor.dropCaretIndex(for: over), third.location)
+        XCTAssertFalse(caret.isHidden)
+        XCTAssertEqual(caret.frame, try ownCaret(h, at: third.location), "it looks as the caret does there")
+        XCTAssertTrue(h.textView.subviews.last === caret, "above anything else in the text")
+        // At the end of a line's text it goes after the line.
+        let second = h.range(of: "Second line")
+        XCTAssertEqual(h.textView.draggingUpdated(ownDrop(h, at: second.upperBound)), .move)
+        XCTAssertEqual(caret.frame, try ownCaret(h, at: second.upperBound))
+        XCTAssertEqual(h.textView.draggingUpdated(ownDrop(h, at: (h.text as NSString).length)), .move)
+        XCTAssertEqual(caret.frame, try ownCaret(h, at: (h.text as NSString).length), "after the last line")
+        // Dropped, it goes where the caret was, and the caret goes.
+        let drop = ownDrop(h, at: third.location + 5)
+        XCTAssertEqual(h.textView.draggingUpdated(drop), .move)
+        XCTAssertTrue(h.textView.performDragOperation(drop))
+        h.textView.concludeDragOperation(drop)
+        XCTAssertTrue(caret.isHidden)
+        XCTAssertTrue(h.text.hasSuffix("Second line\n\n![](.assets/torii.png)\n\nThird line"), h.text)
+    }
+
+    func testTheDropCaretGoesWhenTheDragLeavesTheNote() {
+        let h = EditorHarness(note)
+        _ = h.textView.draggingEntered(ownDrop(h, at: h.range(of: "Third line").location))
+        XCTAssertFalse(h.textView.dropCaret.isHidden)
+        h.textView.draggingExited(nil)
+        XCTAssertTrue(h.textView.dropCaret.isHidden)
+        _ = h.textView.draggingEntered(ownDrop(h, at: h.range(of: "Third line").location))
+        h.textView.draggingEnded(ownDrop(h, at: .zero))
+        XCTAssertTrue(h.textView.dropCaret.isHidden, "nor does it stay when the drag ends elsewhere")
+    }
+
+    func testOverAnotherPictureTheCaretIsBesideItAsTallAsIt() throws {
+        let h = EditorHarness("First line\n\n\(picture)\n\nSecond line\n\n\(picture)\n\nLast line")
+        let other = (h.text as NSString).range(of: picture, options: .backwards)
+        let box = try XCTUnwrap(h.editor.layoutManager.blockObjectRect(at: other.location, origin: h.textView.textContainerOrigin))
+        _ = h.textView.draggingEntered(ownDrop(h, at: NSPoint(x: box.minX + 10, y: box.midY)))
+        XCTAssertEqual(h.editor.dropCaretIndex(for: ownDrop(h, at: NSPoint(x: box.minX + 10, y: box.midY))), other.location)
+        let before = h.textView.dropCaret.frame
+        XCTAssertEqual(before.height, box.height)
+        XCTAssertEqual(before.minY, box.minY)
+        XCTAssertLessThan(before.maxX, box.minX, "before it, on its left")
+        let right = ownDrop(h, at: NSPoint(x: box.maxX + 20, y: box.midY))
+        _ = h.textView.draggingUpdated(right)
+        let after = h.textView.dropCaret.frame
+        XCTAssertEqual(after.height, box.height)
+        XCTAssertGreaterThan(after.minX, box.maxX, "after it, on its right")
+        XCTAssertTrue(h.textView.performDragOperation(right))
+        XCTAssertEqual(h.text, "First line\n\nSecond line\n\n\(picture)\n\n\(picture)\n\nLast line")
+        XCTAssertEqual(h.selection, (h.text as NSString).range(of: picture, options: .backwards), "the dragged one is the second")
+    }
+
+    func testAPictureDroppedNextToATableGoesBeforeOrAfterAllOfIt() throws {
+        let table = "| Day | Area |\n| --- | --- |\n| 1 | Fushimi |\n| 2 | Nara |"
+        let h = EditorHarness("\(picture)\n\nFirst line\n\n\(table)\n\nLast line")
+        let start = h.range(of: "| Day").location
+        let box = try XCTUnwrap(h.editor.layoutManager.blockObjectRect(at: start, origin: h.textView.textContainerOrigin))
+        let after = ownDrop(h, at: NSPoint(x: box.maxX + 30, y: box.maxY - 5))
+        XCTAssertEqual(h.textView.draggingUpdated(after), .move)
+        XCTAssertGreaterThan(h.textView.dropCaret.frame.minX, box.maxX, "the caret is after the table")
+        XCTAssertTrue(h.textView.performDragOperation(after))
+        XCTAssertEqual(h.text, "First line\n\n\(table)\n\n\(picture)\n\nLast line")
+    }
+
+    func testAPictureDroppedInACodeBlockGoesBeforeOrAfterAllOfIt() {
+        let code = "```swift\nlet a = 1\nlet b = 2\nlet c = 3\n```"
+        let note = "\(picture)\n\nFirst line\n\n\(code)\n\nLast line"
+        let h = EditorHarness(note)
+        let early = ownDrop(h, at: h.range(of: "let a").location + 3)
+        XCTAssertEqual(h.editor.dropCaretIndex(for: early), h.range(of: "```swift").location, "in its first half, before it")
+        let late = ownDrop(h, at: h.range(of: "let c").location + 3)
+        XCTAssertEqual(h.editor.dropCaretIndex(for: late), h.range(of: code).upperBound, "in its second half, after it")
+        XCTAssertEqual(h.textView.draggingUpdated(late), .move)
+        XCTAssertTrue(h.textView.performDragOperation(late))
+        XCTAssertEqual(h.text, "First line\n\n\(code)\n\n\(picture)\n\nLast line")
+    }
+
+    func testAPictureDroppedOnThePropertiesGoesUnderThem() {
+        let properties = "---\ntags: travel\n---"
+        let h = EditorHarness("\(properties)\nFirst line\n\n\(picture)")
+        let drop = ownDrop(h, at: 0)
+        XCTAssertEqual(h.editor.dropCaretIndex(for: drop), (properties as NSString).length, "properties stay at the top")
+        XCTAssertTrue(h.textView.performDragOperation(drop))
+        XCTAssertTrue(h.text.hasPrefix("\(properties)\n\n\(picture)\n\nFirst line"), h.text)
+    }
+
+    func testTextFromAnotherAppShowsTheCaretWhereThePointerIs() throws {
+        let h = EditorHarness(note)
+        let index = h.range(of: "Third line").location + 5
+        let drop = FakeDrop(pasteboard: Self.pasteboard(with: ["words" as NSString]), source: nil,
+                            location: h.textView.convert(point(h, at: index), to: nil), window: h.window, mask: .copy)
+        XCTAssertEqual(h.textView.draggingEntered(drop), .copy)
+        XCTAssertEqual(h.editor.dropCaretIndex(for: drop), index, "text goes in where it is dropped")
+        XCTAssertEqual(h.textView.dropCaret.frame, try ownCaret(h, at: index))
+        XCTAssertLessThan(h.textView.dropCaret.frame.height, 24, "as tall as the text, not the line")
+    }
+
+    func testTextDraggedWithinTheNoteKeepsAppKitsCaret() {
+        let h = EditorHarness(note)
+        h.select(h.range(of: "First"))
+        let drop = FakeDrop(pasteboard: Self.pasteboard(with: ["First" as NSString]), source: h.textView,
+                            location: h.textView.convert(point(h, at: h.range(of: "Third line").location + 5), to: nil), window: h.window)
+        XCTAssertNil(h.editor.dropOperation(for: drop), "AppKit moves it")
+        _ = h.textView.draggingEntered(drop)
+        XCTAssertTrue(h.textView.dropCaret.isHidden, "and shows where with its own caret")
+    }
+
+    func testANoteThatCantBeEditedShowsNoDropCaret() {
+        let h = EditorHarness(note)
+        h.textView.isEditable = false
+        _ = h.textView.draggingEntered(ownDrop(h, at: h.range(of: "Third line").location))
+        XCTAssertTrue(h.textView.dropCaret.isHidden)
+    }
+
+    func testTheDropCaretOnAnEmptyLine() throws {
+        let h = EditorHarness(note)
+        let blank = h.range(of: "Second line").location - 1
+        XCTAssertEqual(h.editor.dropCaretIndex(for: ownDrop(h, at: blank)), blank)
+        _ = h.textView.draggingEntered(ownDrop(h, at: blank))
+        XCTAssertEqual(h.textView.dropCaret.frame, try ownCaret(h, at: blank))
+    }
+
     // MARK: - Dropping in another note
 
     func testAPictureDroppedInAnotherNoteIsCopiedOnALineOfItsOwn() throws {
@@ -232,6 +362,17 @@ final class DragAndDropTests: XCTestCase {
         let text = h.text as NSString
         if index < text.length, index == 0 || text.character(at: index - 1) == 10 { return h.point(of: index, fraction: 0) }
         return h.point(of: index - 1, fraction: 1)
+    }
+
+    /// The note's own caret at a character, as the text view draws it there.
+    private func ownCaret(_ h: EditorHarness, at index: Int) throws -> NSRect {
+        let selection = h.selection
+        defer { h.select(selection) }
+        h.caret(index)
+        var proposed = h.textView.firstRect(forCharacterRange: NSRange(location: index, length: 0), actualRange: nil)
+        proposed = h.textView.convert(h.window.convertFromScreen(proposed), from: nil)
+        let caret = h.editor.caretRect(proposed: NSRect(x: proposed.minX, y: proposed.minY, width: 1, height: proposed.height))
+        return NSRect(x: caret.minX, y: caret.minY, width: 2, height: caret.height)
     }
 
     static func pasteboard(with items: [NSPasteboardWriting]) -> NSPasteboard {

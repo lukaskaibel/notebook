@@ -113,7 +113,8 @@ which shows the picture or the file's card all the same and follows the file whe
 a copy). A folder from your folders goes in as a link to it; folders are never copied into a note. Copy a file in the sidebar with Copy in its menu, or the open one with ⇧⌘C, and paste it in a note, the Finder,
 Mail or Messages; a small capsule says what was copied. Drag
 a picture or file card to another place in the note to move it, or into another note, a folder in the sidebar, the
-Finder or another app for a copy. Delete it from the note and the file goes to the Trash once you leave the note, unless
+Finder or another app for a copy. On the Mac a caret shows where it will go while you drag: at the start of the line it
+goes before, or at the end of the one it goes after, since a picture always has a line of its own. Delete it from the note and the file goes to the Trash once you leave the note, unless
 another note in the folder still uses it. Move a note to another folder and its pictures move along.
 
 ### Drawings
@@ -574,11 +575,11 @@ screens.
 - **Spotlight** finds your notes by their names and words too, on the Mac, iPhone and iPad, and opens them in
   Notebook. It gets what search has already read, in the background, and after a launch only what changed.
 - **Quick Look** shows a note as Notebook does, not its Markdown, in the typeface and size you chose: press Space on it
-  in the Finder, or look at it in the Finder's column view or Get Info. Its pictures and drawings come too; in a folder
-  the Mac guards, such as Documents or Downloads, the Mac first asks whether Notebook may read it. If another app's
-  preview comes up, turn it off in System Settings › General › Login Items & Extensions › Quick Look. On iPhone and
-  iPad, tap a note in the Files app, or one attached in another app that shows files with Quick Look. iOS lets Quick
-  Look read only the note itself, so its pictures show by their names there.
+  in the Finder, or look at it in the Finder's column view or Get Info. If another app's preview comes up, turn it off
+  in System Settings › General › Login Items & Extensions › Quick Look. On iPhone and iPad, tap a note in the Files
+  app, or one attached in another app that shows files with Quick Look. On the Mac a note in one of your locations
+  shows its pictures and drawings too; elsewhere, and on iPhone and iPad, they show by their names, as Quick Look lets
+  Notebook read only the note itself.
 - **Thumbnails** of notes in the Finder's icon and gallery views, in Open panels and in the Files app on iPhone and
   iPad: the top of the note as Notebook shows it, on a white page. Only the note is read for them, never what is next to
   it, so browsing a folder never makes the Mac ask; pictures show by their names. The Mac picks up a new thumbnail
@@ -829,7 +830,7 @@ While writing:
 | Tab, ⇧Tab in a table | The next or previous cell, its text selected; Tab in the last cell: a new row |
 | `[[` | Suggestions for a link; ↑↓ and Return or Tab to pick |
 | Space on a selected picture | Quick Look |
-| Drag a picture or file in a note | Move it to another line; ⌥ drops a copy. Into another note, the sidebar, the Finder or another app: a copy |
+| Drag a picture or file in a note | Move it to another line, where the caret shows; ⌥ drops a copy. Into another note, the sidebar, the Finder or another app: a copy |
 | Double-click a drawing | Draw in it |
 | Esc, or start typing | Stop drawing; typing goes on below the drawing |
 | Shift while drawing | A straight line, level or upright when it nearly is (in a PDF too) |
@@ -916,9 +917,10 @@ Planned, and not built yet:
 - **Versions of a note renamed or moved outside Notebook,** in the Finder or another app, don't follow it: they go to
   the History's Trash, and come back only if it gets its old name again (#148).
 - On iPhone and iPad there is no Settings › App Icon (iOS only switches between icons built into the app), no PNG
-  export, no window of its own for a single file and no Paste into a folder in the list (#298). Quick Look there shows
-  a note's pictures by their names, as iOS lets it read only the note, and before iOS 27.2 it may show the note's
-  Markdown instead.
+  export, no window of its own for a single file and no Paste into a folder in the list (#298). Before iOS 27.2,
+  Quick Look there may show a note's Markdown instead.
+- **Pictures in Quick Look on iPhone and iPad,** and on the Mac for notes outside your locations: Quick Look lets
+  Notebook read only the note itself, so a note's pictures and drawings show by their names there (#318).
 - **Sketches** as files of their own, next to your notes rather than in one.
 - **Handwritten notes on the Mac:** you write on their pages there as on any PDF, but new handwritten notes, new pages,
   pictures on pages and All Pages are on iPhone and iPad only. Text boxes and shapes aren't offered: the PDF couldn't
