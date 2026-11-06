@@ -664,6 +664,11 @@ struct TodosView: View {
             guard ticked[row.id] != nil else { return }
             if case .note(let note) = row { workspace.finishReminder(note.reminder.id) }
             withAnimation(Theme.spring) { ticked[row.id] = nil }
+            // Done with the to-dos you ticked, the last one gone: a moment to ask for a rating, unless you went on to
+            // write in one.
+            if row.isTodo, ticked.isEmpty, editing == nil {
+                AppReview.shared.finishedSomething { ticked.isEmpty && editing == nil }
+            }
         }
     }
 

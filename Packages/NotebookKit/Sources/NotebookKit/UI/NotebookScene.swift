@@ -30,6 +30,7 @@ public struct NotebookScene: Scene {
         .commands {
             CommandGroup(replacing: .appInfo) {
                 Button("About Notebook") { Acknowledgements.showAbout() }
+                Button("Rate Notebook on the App Store…") { AppReview.openAppStore() }
             }
             CommandGroup(replacing: .importExport) {
                 Button { workspace.chooseAppleNotesExport() } label: { Label("Import from Apple Notes…", systemImage: "square.and.arrow.down.on.square") }

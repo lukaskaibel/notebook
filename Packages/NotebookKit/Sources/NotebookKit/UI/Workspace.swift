@@ -400,6 +400,8 @@ public final class Workspace: NSObject {
             locations = LocationStore.load()
             hidden = HiddenFolders()
             reminders = Reminders()
+            // Your own notes: the days you use Notebook on count towards asking for a rating.
+            if !ProcessInfo.isTesting { AppReview.shared.start() }
             #if os(iOS)
             followMovedFolder()
             #endif
@@ -975,6 +977,7 @@ public final class Workspace: NSObject {
             if focusTitle { editor.focusTitle() }
             return
         }
+        let wrote = wroteInOpenFile
         // Another file: the PDF's drawing is saved as it goes (`PDFDrawingSession`).
         drawsOnPDF = nil
         showsTodos = false
@@ -1038,6 +1041,29 @@ public final class Workspace: NSObject {
         }
         // Only the selection moves in the sidebar: nothing above it changes, so nothing jumps.
         reveal(target, select: true)
+        // Not for a new note, which you start typing in at once.
+        if wrote, !focusTitle { leftWhatYouWrote() }
+    }
+
+    /// You wrote in the file that is open: typed in the note, or drew on the PDF.
+    private var wroteInOpenFile: Bool {
+        if note?.isChangedSinceOpening == true { return true }
+        #if os(iOS)
+        if let session = pdfEditing.session, let currentURL, FileNode.samePath(session.url, currentURL), session.isTouched { return true }
+        #endif
+        return false
+    }
+
+    /// You left a file you wrote in, for another, the folder or To-dos: done with it, a moment to ask for a rating. Not
+    /// once you are writing again: in a new handwritten note, which you start writing in at once, or in the next note.
+    private func leftWhatYouWrote() {
+        AppReview.shared.finishedSomething { [weak self] in
+            guard let self else { return false }
+            #if os(iOS)
+            if freshNote != nil { return false }
+            #endif
+            return note?.isChangedSinceOpening != true && !editor.isEditingTitle
+        }
     }
 
     /// Puts the open note in the editor: its text, or only its title while the text is on its way. Back and Forward
@@ -1069,6 +1095,7 @@ public final class Workspace: NSObject {
     /// Leaves the file that is open, for the folder it is in: the iPhone's Back.
     public func closeFile() {
         guard currentURL != nil else { return }
+        let wrote = wroteInOpenFile
         keepSnapshot()
         keepPlace()
         leaveCurrentNote()
@@ -1077,6 +1104,7 @@ public final class Workspace: NSObject {
         stats = NoteStats()
         currentHeading = nil
         isTitleScrolledAway = false
+        if wrote { leftWhatYouWrote() }
     }
 
     /// Opens a note again, where you left it: going back to it on the iPhone.
@@ -1449,6 +1477,7 @@ public final class Workspace: NSObject {
         #else
         keepSnapshot()
         #endif
+        let wrote = wroteInOpenFile
         keepPlace()
         leaveCurrentNote()
         currentURL = nil
@@ -1465,6 +1494,7 @@ public final class Workspace: NSObject {
             historyIndex = history.count - 1
         }
         sidebarSelectTodos()
+        if wrote { leftWhatYouWrote() }
     }
 
     /// To-dos turned off or on in Settings. Off, the list goes back to what was open before it, and the notifications
