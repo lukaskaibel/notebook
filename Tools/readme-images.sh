@@ -3,6 +3,7 @@
 # Design/social-preview.png.
 #   Tools/readme-images.sh            all of them
 #   Tools/readme-images.sh devices    only the iPhone and iPad picture, which needs no screen
+#   Tools/readme-images.sh mac        only the Mac's pictures, laid out with the iPhone and iPad captures of the last run
 # The Mac app runs in the background on a fresh copy of the sample notes (Files/DemoLibrary.swift), under a bundle
 # identifier of its own so your Notebook's settings stay as they are. It never comes to the front and leaves keyboard
 # and mouse alone; only the search suggestions show on screen for a moment. The iPhone and iPad pictures come from two
@@ -159,6 +160,7 @@ for theme in dark light; do
 done
 fi
 
+if [ "$only" != mac ]; then
 echo "Building for iPhone and iPad…"
 ios_app=$work/DerivedData-iOS/Build/Products/Debug-iphonesimulator/Notebook.app
 xcodebuild -project Notebook.xcodeproj -scheme Notebook -configuration Debug -destination 'generic/platform=iOS Simulator' \
@@ -221,6 +223,7 @@ for theme in dark light; do
     "pdfoverview" "wait 2.5" "done"
 done
 xcrun simctl shutdown "$iphone" "$ipad" 2>/dev/null || true
+fi
 
 if [ "$only" != devices ]; then
   size=$(sips -g pixelWidth -g pixelHeight "$raw/note-dark.png" | awk '/pixel/ { printf "%s ", $2 }')

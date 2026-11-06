@@ -439,7 +439,9 @@ lists each kind of file has a symbol of its own, in the accent colour as folders
 
 The window is built from the system's own pieces: a source-list sidebar, a toolbar with the system's search field and
 share menu, an inspector, Settings, alerts, PDFKit, AVKit and Quick Look. It follows the system's light or dark
-appearance. The inspector shows a note's outline, with the section you're reading marked and a word count; a click on
+appearance. Some of the sidebar's manners come from Notion: the row under the pointer gets a soft fill, with ••• for its
+menu and, on a folder, + for a new note in it; a location's name has the same two, and a click on it folds the
+location. The inspector shows a note's outline, with the section you're reading marked and a word count; a click on
 a heading scrolls there. In Settings › Text you pick the typeface (San Francisco, New York, Rounded or Monospaced,
 each shown in itself), the size, the line spacing and the line width; on iPhone and iPad the system's text size makes
 notes larger or smaller on top of that, as it does the text of other apps (not in a PDF or printout). The icon is a leather notebook, and Settings › App Icon makes it yours:
@@ -508,8 +510,9 @@ screens.
   in it: Desktop and Documents when they are kept in iCloud, and the folders of apps such as Pages or Obsidian.
   Folders are read and changes to files written in the background, so even a large iCloud Drive shows at once and
   nothing waits for it. Create, rename, duplicate and move notes and folders, by drag and drop or with Move To;
-  Option-drag copies. The New Folder button next to a location's name makes a folder at its top, New Folder in a
-  folder's menu one inside it, named in place as in the Finder. Deleting moves to the Trash, never further, and Undo
+  Option-drag copies. New Folder in the ••• next to a location's name makes a folder at its top, New Folder in a
+  folder's menu one inside it, named in place as in the Finder; the + next to a location's or folder's name makes a
+  note there. Deleting moves to the Trash, never further, and Undo
   (⌘Z) puts it back, as it takes back a rename, a move or a new file. Favourites sit at the top of the sidebar.
 - **Sorted by name or by date.** View › Sort By, or Sort By in the ⋯ menu on iPhone and iPad, sorts every folder's
   notes and files by name, as the Finder does, or newest first by when they were last edited or made, as Notes does.
@@ -526,8 +529,9 @@ screens.
   a new note, folder, copy or import that you have changed since asks first too.
 - **Hidden folders.** Right-click a folder you don't want to see, such as one another app keeps in iCloud Drive, and
   choose Hide Folder, or on iPhone and iPad touch and hold it. It leaves the sidebar, search and Move To, and stays
-  hidden on your other Macs, iPhones and iPads through iCloud. The eye next to the location's name, or ⇧⌘., shows
-  hidden folders again, dimmed, until you click it again; on iPhone and iPad, Show Hidden Folders is in the ⋯ menu.
+  hidden on your other Macs, iPhones and iPads through iCloud. Show Hidden Folders in the ••• next to the location's
+  name, or ⇧⌘., shows hidden folders again, dimmed, with an eye by the name that hides them again; on iPhone and iPad,
+  Show Hidden Folders is in the ⋯ menu.
 - **Folders with a symbol and a colour.** Customize Folder… gives a folder a colour and a symbol or an emoji, found in
   groups, suggested for its name or searched for, kept on the folder as the Finder keeps them, so the Finder shows them
   too.
@@ -1005,7 +1009,8 @@ takes the scenes in light and dark, and lays them out together with `Design/soci
 window and the iPhone's screen from them too. The iPhone and iPad pictures come from two simulators of its own, without
 the Simulator app's window. It doesn't take over your Mac (only the search suggestions show on screen for a moment) and
 leaves your own Notebook's settings alone. Run it again when a change shows in one of them (`devices` takes only the
-iPhone and iPad picture, which works with the screen asleep):
+iPhone and iPad picture, which works with the screen asleep, and `mac` only the Mac's, with the iPhone and iPad
+captures of the last run):
 
 ```bash
 Tools/readme-images.sh

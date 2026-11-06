@@ -202,6 +202,20 @@ enum DebugRemote {
         case "click", "doubleclick", "rightclick":
             // click <x> <y>: in points from the window's top-left corner.
             if numbers.count >= 2 { click(at: CGPoint(x: numbers[0], y: numbers[1]), count: command == "doubleclick" ? 2 : 1, right: command == "rightclick") }
+        case "windowclick":
+            // windowclick <x> <y>: a press and release the window hands to the view under the point, as it does a real
+            // click, so a button in a list's row tracks it itself (click hands every click in a list to the list).
+            if numbers.count >= 2, let window, let content = window.contentView {
+                let location = CGPoint(x: numbers[0], y: content.bounds.height - numbers[1])
+                let hit = (content.superview ?? content).hitTest(location)
+                func event(_ type: NSEvent.EventType) -> NSEvent? {
+                    NSEvent.mouseEvent(with: type, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                       windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1)
+                }
+                if let up = event(.leftMouseUp) { NSApp.postEvent(up, atStart: false) }
+                if let down = event(.leftMouseDown) { window.sendEvent(down) }
+                log("windowclick \(Int(numbers[0])),\(Int(numbers[1])) on \(hit.map { String(describing: type(of: $0)) } ?? "nothing")")
+            }
         case "clicktext":
             // clicktext <character index> [fraction across the character]
             if let editor, let index = numbers.first, let point = windowPoint(ofCharacter: Int(index), fraction: numbers.count > 1 ? numbers[1] : 0.5, in: editor) {
@@ -593,6 +607,7 @@ enum DebugRemote {
                     var header = ""
                     if let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarHeaderCell {
                         if !cell.hiddenButton.isHidden { header += " [eye\(cell.hiddenButton.contentTintColor == .controlAccentColor ? " on" : "")]" }
+                        if !cell.moreButton.isHidden { header += " [•••]" }
                         if !cell.addButton.isHidden { header += " [+]" }
                     }
                     // The name being typed, in its field.
@@ -623,19 +638,33 @@ enum DebugRemote {
                 workspace.showHiddenFolders(argument[argument.index(after: space)...] == "1", in: location)
             }
             log("showhidden \(argument): \(workspace.locations.filter(workspace.showsHiddenFolders(in:)).map(\.name))")
-        case "hoverheader":
-            // hoverheader <title> <1|0>: as if the pointer rested on a section's header (the real one stays put).
+        case "hoverheader", "hoverrow":
+            // hoverheader <title> <1|0>, hoverrow <name> <1|0>: as if the pointer rested on a section's header or on a
+            // row (the real one stays put), with where its buttons are; 0 lets the real pointer decide again.
             guard let outline = workspace?.sidebar?.outline, let space = argument.lastIndex(of: " ") else { break }
-            for row in 0..<outline.numberOfRows {
-                guard let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarHeaderCell, cell.label.stringValue == argument[..<space] else { continue }
-                cell.isHovered = argument[argument.index(after: space)...] == "1"
-                let height = window?.contentView?.bounds.height ?? 0
-                func place(_ button: NSButton) -> String {
-                    let frame = button.convert(button.bounds, to: nil)
-                    return button.isHidden ? "hidden" : "at \(Int(frame.midX)) \(Int(height - frame.midY))"
-                }
-                log("hoverheader \(argument): eye \(place(cell.hiddenButton)), plus \(place(cell.addButton))")
+            let name = String(argument[..<space])
+            guard argument[argument.index(after: space)...] == "1" else {
+                outline.pinnedHoverRow = nil
+                log("\(command) \(argument)")
+                break
             }
+            guard let row = (0..<outline.numberOfRows).first(where: { row in
+                let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView
+                return cell?.textField?.stringValue == name && (cell is SidebarHeaderCell) == (command == "hoverheader")
+            }) else { log("\(command): no \(name)"); break }
+            outline.pinnedHoverRow = row
+            let height = window?.contentView?.bounds.height ?? 0
+            func place(_ view: NSView) -> String {
+                let frame = view.convert(view.bounds, to: nil)
+                return view.isHidden ? "hidden" : "at \(Int(frame.minX))…\(Int(frame.maxX)) \(Int(height - frame.midY))"
+            }
+            var parts: [String] = []
+            if let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarHeaderCell {
+                parts = ["eye \(place(cell.hiddenButton))", "more \(place(cell.moreButton))", "plus \(place(cell.addButton))"]
+            } else if let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarFileCell {
+                parts = ["more \(place(cell.moreButton))", "plus \(place(cell.addButton))"]
+            }
+            log("\(command) \(argument): " + parts.joined(separator: ", "))
         case "rowmenu":
             // rowmenu <name>: the titles of the context menu of the sidebar row showing that name.
             guard let sidebar = workspace?.sidebar, let outline = Optional(sidebar.outline) else { break }
@@ -660,7 +689,7 @@ enum DebugRemote {
                 break
             }
         case "clickeye", "clickplus":
-            // clickeye <title>, clickplus <title>: presses the eye or the plus (New Folder) on a section's header.
+            // clickeye <title>, clickplus <title>: presses the eye (Hide Hidden Folders) or the plus (New Note) on a section's header.
             guard let outline = workspace?.sidebar?.outline else { break }
             for row in 0..<outline.numberOfRows {
                 guard let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarHeaderCell, cell.label.stringValue == argument else { continue }

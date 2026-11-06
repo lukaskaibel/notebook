@@ -77,7 +77,8 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         outline.style = .sourceList
         outline.backgroundColor = .clear
         outline.rowSizeStyle = .default
-        outline.indentationPerLevel = 10
+        // A folder's files a step further in than in Notes, so a subfolder's chevron sits under its folder's icon.
+        outline.indentationPerLevel = 14
         outline.focusRingType = .none
         outline.allowsEmptySelection = true
         outline.floatsGroupRows = false
@@ -103,6 +104,10 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         scrollView.scrollerStyle = .overlay
         scrollView.automaticallyAdjustsContentInsets = false
         scrollView.contentInsets = NSEdgeInsets(top: 0, left: 0, bottom: 8, right: 0)
+        // Scrolling moves other rows under the pointer.
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(outline, selector: #selector(SidebarOutlineView.queueHoverUpdate),
+                                               name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
         workspace.sidebar = self
         NotificationCenter.default.addObserver(self, selector: #selector(optionsChanged), name: .notebookSidebarOptionsChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(orderChanged), name: .notebookFileOrderChanged, object: nil)
@@ -505,17 +510,28 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         !((item as? SidebarEntry)?.isHeader ?? false)
     }
 
+    func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
+        outlineView.makeView(withIdentifier: SidebarRowView.identifier, owner: nil) as? SidebarRowView ?? SidebarRowView()
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, didAdd rowView: NSTableRowView, forRow row: Int) {
+        outline.queueHoverUpdate()
+    }
+
     func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
         if let entry = item as? SidebarEntry, case .header(let title, let id) = entry.kind {
             let cell = outlineView.makeView(withIdentifier: SidebarHeaderCell.identifier, owner: nil) as? SidebarHeaderCell ?? SidebarHeaderCell()
             cell.label.stringValue = title
+            cell.isExpanded = outlineView.isItemExpanded(item)
+            cell.fold = { [weak self] in self?.toggle(section: entry) }
+            // A location's header has ••• (its right-click menu) and + (a new note at its top); Favorites has neither.
             let location = workspace.locations.first { $0.id == id }
-            cell.showAddButton(for: title, add: location.map { location in { [weak self] in self?.workspace.newFolder(in: location.url) } })
-            if let location, workspace.hasHiddenFolders(in: location) {
-                let shows = workspace.showsHiddenFolders(in: location)
-                cell.showHiddenButton(shows: shows) { [weak self] in self?.workspace.showHiddenFolders(!shows, in: location) }
+            cell.setButtons(for: title, more: location == nil ? nil : { [weak self] button in self?.showMenu(forRowOf: button) },
+                            add: location.map { location in { [weak self] in self?.workspace.newNote(in: location.url) } })
+            if let location, workspace.hasHiddenFolders(in: location), workspace.showsHiddenFolders(in: location) {
+                cell.showHiddenButton(true) { [weak self] in self?.workspace.showHiddenFolders(false, in: location) }
             } else {
-                cell.showHiddenButton(shows: nil)
+                cell.showHiddenButton(false)
             }
             return cell
         }
@@ -523,8 +539,14 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         cell.label.delegate = self
         if (item as? SidebarEntry)?.isTodos == true {
             cell.configureTodos(count: workspace.dueTodoCount)
+            cell.setButtons(more: nil, add: nil)
             return cell
         }
+        // Under the pointer: ••• (the row's right-click menu), and on a folder + (a new note in it), as in Notion.
+        let rowURL = (item as? FileNode)?.url ?? (item as? SidebarEntry)?.url
+        let isFolder = (item as? FileNode)?.isFolder ?? rowURL.map(FileNode.isFolder) ?? false
+        cell.setButtons(more: { [weak self] button in self?.showMenu(forRowOf: button) },
+                        add: isFolder ? rowURL.map { url in { [weak self] in self?.workspace.newNote(in: url) } } : nil)
         let nested = outlineView.level(forItem: item) > 1
         if let node = item as? FileNode {
             // Folders on screen are read ahead, so opening one shows its files straight away.
@@ -545,8 +567,17 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         return cell
     }
 
+    /// The little arrow by a section's name, turned for open or folded.
+    private func showFolding(of item: Any?) {
+        guard let entry = item as? SidebarEntry, entry.isHeader else { return }
+        let row = outline.row(forItem: entry)
+        guard row >= 0, let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarHeaderCell else { return }
+        cell.isExpanded = outline.isItemExpanded(entry)
+    }
+
     func outlineViewItemDidExpand(_ notification: Notification) {
         outline.placeChevron(of: notification.userInfo?["NSObject"])
+        showFolding(of: notification.userInfo?["NSObject"])
         if let entry = notification.userInfo?["NSObject"] as? SidebarEntry, let key = entry.sectionKey {
             guard !isExpandingSections else { return }
             collapsedSections.remove(key)
@@ -558,6 +589,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
 
     func outlineViewItemDidCollapse(_ notification: Notification) {
         outline.placeChevron(of: notification.userInfo?["NSObject"])
+        showFolding(of: notification.userInfo?["NSObject"])
         if let entry = notification.userInfo?["NSObject"] as? SidebarEntry, let key = entry.sectionKey {
             collapsedSections.insert(key)
             UserDefaults.standard.set(Array(collapsedSections), forKey: "collapsedSections")
@@ -602,11 +634,32 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
 
     /// A click on a folder opens or closes it straight away, every click, with a short slide.
     func toggle(_ node: FileNode) {
+        slide(node)
+    }
+
+    /// A click on a section's header folds it or opens it again.
+    func toggle(section entry: SidebarEntry) {
+        slide(entry)
+    }
+
+    private func slide(_ item: Any) {
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.16
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            if outline.isItemExpanded(node) { outline.animator().collapseItem(node) } else { outline.animator().expandItem(node) }
+            if outline.isItemExpanded(item) { outline.animator().collapseItem(item) } else { outline.animator().expandItem(item) }
         }
+    }
+
+    /// The ••• of a row or a section's header: its right-click menu, under the button.
+    func showMenu(forRowOf view: NSView) {
+        let row = outline.row(for: view)
+        guard row >= 0 else { return }
+        let menu = NSMenu()
+        fill(menu, row: row)
+        guard !menu.items.isEmpty else { return }
+        let below = view.isFlipped ? NSPoint(x: 0, y: view.bounds.maxY + 4) : NSPoint(x: 0, y: -4)
+        menu.popUp(positioning: nil, at: below, in: view)
+        outline.queueHoverUpdate()
     }
 
     @objc private func doubleClicked(_ sender: Any?) {
@@ -882,10 +935,21 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
 final class SidebarOutlineView: NSOutlineView {
     weak var controller: SidebarController?
 
-    // A folder opens or closes on the press itself, so quick clicks each count; dragging still works after it.
+    // A folder opens or closes on the press itself, so quick clicks each count; dragging still works after it. A
+    // section folds with a click on its header, as in Notion; the header's buttons take their own clicks.
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         let row = row(at: point)
+        // ••• and + (and the eye) take their own clicks: the row stays as it is.
+        if row >= 0, let cell = view(atColumn: 0, row: row, makeIfNecessary: false),
+           cell.subviews.contains(where: { $0 is NSButton && !$0.isHidden && $0.frame.contains(cell.convert(point, from: self)) }) {
+            super.mouseDown(with: event)
+            return
+        }
+        if row >= 0, let entry = item(atRow: row) as? SidebarEntry, entry.isHeader {
+            controller?.toggle(section: entry)
+            return
+        }
         if row >= 0, let node = item(atRow: row) as? FileNode, node.isFolder,
            event.modifierFlags.intersection([.command, .shift]).isEmpty,
            !frameOfOutlineCell(atRow: row).insetBy(dx: -4, dy: -4).contains(point) {
@@ -894,11 +958,103 @@ final class SidebarOutlineView: NSOutlineView {
         super.mouseDown(with: event)
     }
 
+    // A folder's arrow a step quieter than AppKit's, as Notion has them: the folder's icon and name say more. No
+    // Show/Hide at the end of a section's header: a click on the header folds it, as in Notion, and its end has the
+    // header's own ••• and +. (Turned off with shouldShowOutlineCell, AppKit wouldn't fold the section at all.)
+    override func makeView(withIdentifier identifier: NSUserInterfaceItemIdentifier, owner: Any?) -> NSView? {
+        let view = super.makeView(withIdentifier: identifier, owner: owner)
+        if identifier == NSOutlineView.disclosureButtonIdentifier { view?.alphaValue = 0.7 }
+        if identifier == NSOutlineView.showHideButtonIdentifier { view?.alphaValue = 0 }
+        return view
+    }
+
+    // MARK: Under the pointer
+
+    /// The row under the pointer, which shows a soft fill and its ••• and + buttons, as rows do in Notion. Only in the
+    /// key window, as other hover effects on the Mac.
+    private(set) var hoveredRow = -1
+    /// A row shown as under the pointer whatever the pointer does, for the debug remote's pictures.
+    var pinnedHoverRow: Int? {
+        didSet { updateHover() }
+    }
+    private var hoverArea: NSTrackingArea?
+    private var isHoverUpdateQueued = false
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverArea { removeTrackingArea(hoverArea) }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self)
+        addTrackingArea(area)
+        hoverArea = area
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        updateHover(onlyIfMoved: true)
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        super.mouseEntered(with: event)
+        if event.trackingArea === hoverArea { updateHover() }
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        if event.trackingArea === hoverArea { updateHover() }
+    }
+
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+        NotificationCenter.default.removeObserver(self, name: NSWindow.didBecomeKeyNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: NSWindow.didResignKeyNotification, object: nil)
+        guard let newWindow else { return }
+        for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
+            NotificationCenter.default.addObserver(self, selector: #selector(queueHoverUpdate), name: name, object: newWindow)
+        }
+    }
+
+    /// Rows move under a pointer that stays put: the list scrolled, changed, or the window came to the front.
+    @objc func queueHoverUpdate() {
+        guard !isHoverUpdateQueued else { return }
+        isHoverUpdateQueued = true
+        DispatchQueue.main.async { [weak self] in
+            self?.isHoverUpdateQueued = false
+            self?.updateHover()
+        }
+    }
+
+    /// `onlyIfMoved`: leaves the rows alone while the pointer stays in the same one.
+    func updateHover(onlyIfMoved: Bool = false) {
+        var row = -1
+        if let pinnedHoverRow {
+            row = pinnedHoverRow
+        } else if let window, window.isKeyWindow {
+            let point = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+            if visibleRect.contains(point) { row = self.row(at: point) }
+        }
+        if onlyIfMoved, row == hoveredRow { return }
+        hoveredRow = row
+        // Every row on screen, as rows that were added or removed have moved the others.
+        enumerateAvailableRowViews { rowView, index in applyHover(to: rowView, row: index) }
+    }
+
+    func applyHover(to rowView: NSTableRowView, row: Int) {
+        let hovered = row == hoveredRow
+        (rowView as? SidebarRowView)?.isHovered = hovered
+        if let cell = rowView.view(atColumn: 0) as? SidebarFileCell {
+            cell.isHovered = hovered
+        } else if let cell = rowView.view(atColumn: 0) as? SidebarHeaderCell {
+            cell.isHovered = hovered
+        }
+    }
+
     // A folder's chevron centred on its icon, which is in the middle of the row; AppKit puts it 1–1.5 pt lower. The
     // chevron is a pixel right of the middle of its picture, so turned down for an open folder it's a pixel lower; a
-    // subfolder's smaller icon is a pixel higher. Section headers keep AppKit's Show/Hide.
+    // subfolder's smaller icon is a pixel higher. Section headers have none: a click on them folds them.
     override func frameOfOutlineCell(atRow row: Int) -> NSRect {
         var frame = super.frameOfOutlineCell(atRow: row)
+        // A header's Show/Hide, which shows nothing, takes no clicks either: + is where it was.
+        if (item(atRow: row) as? SidebarEntry)?.isHeader == true { return NSRect(x: frame.maxX, y: frame.midY, width: 0, height: 0) }
         guard !frame.isEmpty, level(forRow: row) > 0 else { return frame }
         let pixel = 1 / (window?.backingScaleFactor ?? 2)
         let pixels = (isItemExpanded(item(atRow: row)) ? 1 : 0) + (level(forRow: row) > 1 ? 1 : 0)
@@ -961,21 +1117,93 @@ final class SidebarOutlineView: NSOutlineView {
     }
 }
 
+/// A sidebar row. Under the pointer it shows a soft fill in the shape of the selection, as rows do in Notion: the
+/// selection AppKit draws fills the whole row, 10 pt in from the sidebar's sides, with corners of about 7.5 pt.
+final class SidebarRowView: NSTableRowView {
+    static let identifier = NSUserInterfaceItemIdentifier("sidebarRow")
+    /// About half as strong as the selection when the sidebar doesn't have the keyboard.
+    private static let hoverFill = NSColor(name: "SidebarHoverFill") { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor(white: 1, alpha: 0.025) : NSColor(white: 0, alpha: 0.025)
+    }
+
+    var isHovered = false {
+        didSet { if isHovered != oldValue { needsDisplay = true } }
+    }
+
+    override func drawBackground(in dirtyRect: NSRect) {
+        super.drawBackground(in: dirtyRect)
+        guard isHovered, !isSelected, !isGroupRowStyle else { return }
+        Self.hoverFill.setFill()
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 10, dy: 0), xRadius: 7.5, yRadius: 7.5).fill()
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        isHovered = false
+    }
+}
+
+/// ••• or + at the end of a row or section header under the pointer, as Notion has them: a symbol in the controls' grey,
+/// no border.
+@MainActor
+private func hoverButton(_ symbol: String, action: Selector) -> NSButton {
+    let button = NSButton()
+    button.isBordered = false
+    button.imagePosition = .imageOnly
+    button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+    button.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
+    button.contentTintColor = .secondaryLabelColor
+    button.action = action
+    button.isHidden = true
+    button.translatesAutoresizingMaskIntoConstraints = false
+    NSLayoutConstraint.activate([button.widthAnchor.constraint(equalToConstant: 20), button.heightAnchor.constraint(equalToConstant: 20)])
+    return button
+}
+
+/// Where ••• and + sit in a row or header: + about 19 pt from the sidebar's edge, ten inside the row's fill, and •••
+/// 12 pt before it, as in Notion. Measured from the row's end, as a header's cell runs to it and a file's ends 14 pt
+/// before it.
+@MainActor
+private enum HoverButtons {
+    static let addFromRowEnd: CGFloat = 16
+    static let moreBeforeAdd: CGFloat = 4
+
+    /// The + button's trailing constraint, kept at the same place in every row as the cell's end moves.
+    static func place(_ constraint: NSLayoutConstraint, in cell: NSView) {
+        guard let row = cell.superview else { return }
+        let constant = -(addFromRowEnd - (row.bounds.maxX - cell.frame.maxX))
+        if constraint.constant != constant {
+            constraint.constant = constant
+            cell.needsLayout = true
+        }
+    }
+}
+
 final class SidebarHeaderCell: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("header")
     let label = NSTextField(labelWithString: "")
-    /// Makes a folder at the top of the location: there while the pointer is on the header, next to the section's own
-    /// Show/Hide, as the Add button on Smart Mailboxes in Mail and on Albums in Photos. A folder with a plus rather than
-    /// a plain plus, which on "iCloud Drive" could as well mean a new note.
-    let addButton = NSButton()
-    /// Shows a location's hidden folders: there while the pointer is on the header, and in the accent colour while
-    /// they show, like a filter that is on.
+    /// The location's right-click menu (New Note, New Folder, Show in Finder, Show Hidden Folders, Remove from Sidebar),
+    /// there while the pointer is on the header, as Notion's sections have it.
+    let moreButton = hoverButton("ellipsis", action: #selector(SidebarHeaderCell.moreClicked(_:)))
+    /// A new note at the top of the location, as Notion's + on a section makes a page.
+    let addButton = hoverButton("plus", action: #selector(SidebarHeaderCell.addClicked))
+    /// While a location's hidden folders show: the eye in the accent colour, like a filter that is on, which hides them
+    /// again. Show Hidden Folders itself is in •••.
     let hiddenButton = NSButton()
-    private var addFolder: (() -> Void)?
-    private var toggleHidden: (() -> Void)?
-    private var showsHidden: Bool?
+    /// Turned down while the section is open, right while it's folded; under the pointer, as AppKit's Show/Hide was.
+    private let foldArrow = NSImageView()
+    private var addEnd: NSLayoutConstraint!
+    private var more: ((NSView) -> Void)?
+    private var add: (() -> Void)?
+    private var hideHidden: (() -> Void)?
+    /// Folds or opens the section: what a click on the header does, offered to VoiceOver as an action, as the
+    /// Show/Hide button was.
+    var fold: (() -> Void)?
     var isHovered = false {
         didSet { updateButtons() }
+    }
+    var isExpanded = true {
+        didSet { updateFolding() }
     }
 
     init() {
@@ -986,87 +1214,90 @@ final class SidebarHeaderCell: NSTableCellView {
         label.textColor = .secondaryLabelColor
         label.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)
-        for (button, symbol, action) in [(addButton, "folder.badge.plus", #selector(addButtonClicked)), (hiddenButton, "eye", #selector(hiddenButtonClicked))] {
-            button.isBordered = false
-            button.imagePosition = .imageOnly
-            button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
-            button.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
-            button.target = self
-            button.action = action
-            button.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(button)
-            NSLayoutConstraint.activate([
-                button.centerYAnchor.constraint(equalTo: label.centerYAnchor),
-                button.widthAnchor.constraint(equalToConstant: 20),
-                button.heightAnchor.constraint(equalToConstant: 20),
-            ])
-        }
-        addButton.contentTintColor = .secondaryLabelColor
-        addButton.toolTip = "New Folder"
+        for button in [moreButton, addButton] { button.target = self }
+        hiddenButton.isBordered = false
+        hiddenButton.imagePosition = .imageOnly
+        hiddenButton.image = NSImage(systemSymbolName: "eye", accessibilityDescription: nil)
+        hiddenButton.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
+        hiddenButton.contentTintColor = .controlAccentColor
+        hiddenButton.toolTip = "Hide Hidden Folders"
+        hiddenButton.setAccessibilityLabel("Hide Hidden Folders")
+        hiddenButton.target = self
+        hiddenButton.action = #selector(hiddenClicked)
+        hiddenButton.translatesAutoresizingMaskIntoConstraints = false
+        foldArrow.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 9, weight: .semibold)
+        foldArrow.contentTintColor = .tertiaryLabelColor
+        foldArrow.translatesAutoresizingMaskIntoConstraints = false
+        for view in [moreButton, addButton, hiddenButton, foldArrow] { addSubview(view) }
+        addEnd = addButton.trailingAnchor.constraint(equalTo: trailingAnchor)
         NSLayoutConstraint.activate([
             label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
             label.centerYAnchor.constraint(equalTo: centerYAnchor, constant: 1),
-            label.trailingAnchor.constraint(lessThanOrEqualTo: hiddenButton.leadingAnchor, constant: -4),
-            // Left of the row's own Show/Hide chevron, which comes up on hover at the end of the row. The eye keeps its
-            // place while the folder button is away.
-            addButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -28),
-            hiddenButton.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -2),
+            foldArrow.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 4),
+            foldArrow.centerYAnchor.constraint(equalTo: label.centerYAnchor),
+            foldArrow.trailingAnchor.constraint(lessThanOrEqualTo: hiddenButton.leadingAnchor, constant: -2),
+            addEnd,
+            addButton.centerYAnchor.constraint(equalTo: label.centerYAnchor),
+            moreButton.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -HoverButtons.moreBeforeAdd),
+            moreButton.centerYAnchor.constraint(equalTo: label.centerYAnchor),
+            hiddenButton.trailingAnchor.constraint(equalTo: moreButton.leadingAnchor, constant: -HoverButtons.moreBeforeAdd),
+            hiddenButton.centerYAnchor.constraint(equalTo: label.centerYAnchor),
+            hiddenButton.widthAnchor.constraint(equalToConstant: 20),
+            hiddenButton.heightAnchor.constraint(equalToConstant: 20),
         ])
+        updateFolding()
         updateButtons()
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
-    /// `add` is nil for a section that isn't a location (Favorites).
-    func showAddButton(for title: String, add: (() -> Void)?) {
-        addFolder = add
-        addButton.setAccessibilityLabel("New Folder in \(title)")
-        updateHover()
+    /// `more` and `add` are nil for a section that isn't a location (Favorites).
+    func setButtons(for title: String, more: ((NSView) -> Void)?, add: (() -> Void)?) {
+        self.more = more
+        self.add = add
+        moreButton.toolTip = "More"
+        moreButton.setAccessibilityLabel("More for \(title)")
+        addButton.toolTip = "New Note"
+        addButton.setAccessibilityLabel("New Note in \(title)")
+        updateButtons()
     }
 
-    /// `shows` is nil for a section without hidden folders.
-    func showHiddenButton(shows: Bool?, toggle: (() -> Void)? = nil) {
-        showsHidden = shows
-        toggleHidden = toggle
-        let title = shows == true ? "Hide Hidden Folders" : "Show Hidden Folders"
-        hiddenButton.toolTip = title
-        hiddenButton.setAccessibilityLabel(title)
-        updateHover()
-    }
-
-    // The sidebar makes new headers when it reloads, under a pointer that hasn't moved.
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        updateHover()
-    }
-
-    private func updateHover() {
-        guard let window else { return updateButtons() }
-        isHovered = window.isKeyWindow && bounds.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil))
+    /// The eye, while the location shows its hidden folders.
+    func showHiddenButton(_ shows: Bool, hide: (() -> Void)? = nil) {
+        hiddenButton.isHidden = !shows
+        hideHidden = hide
     }
 
     private func updateButtons() {
-        addButton.isHidden = addFolder == nil || !isHovered
-        hiddenButton.isHidden = showsHidden == nil || showsHidden == false && !isHovered
-        hiddenButton.contentTintColor = showsHidden == true ? .controlAccentColor : .secondaryLabelColor
+        moreButton.isHidden = more == nil || !isHovered
+        addButton.isHidden = add == nil || !isHovered
+        foldArrow.isHidden = !isHovered
     }
 
-    @objc private func addButtonClicked() {
-        addFolder?()
+    private func updateFolding() {
+        foldArrow.image = NSImage(systemSymbolName: isExpanded ? "chevron.down" : "chevron.right", accessibilityDescription: nil)
+        setAccessibilityCustomActions([NSAccessibilityCustomAction(name: isExpanded ? "Collapse" : "Expand") { [weak self] in
+            self?.fold?()
+            return self?.fold != nil
+        }])
     }
 
-    @objc private func hiddenButtonClicked() {
-        toggleHidden?()
+    @objc private func moreClicked(_ sender: NSButton) {
+        more?(sender)
     }
 
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        for area in trackingAreas { removeTrackingArea(area) }
-        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self))
+    @objc private func addClicked() {
+        add?()
     }
 
-    override func mouseEntered(with event: NSEvent) { isHovered = true }
-    override func mouseExited(with event: NSEvent) { isHovered = false }
+    @objc private func hiddenClicked() {
+        hideHidden?()
+    }
+
+    override func layout() {
+        HoverButtons.place(addEnd, in: self)
+        super.layout()
+    }
 
     override func prepareForReuse() {
         super.prepareForReuse()
@@ -1081,6 +1312,18 @@ final class SidebarFileCell: NSTableCellView {
     let accessory = NSImageView()
     /// How many to-dos are due, next to To-dos, as Mail counts unread mail.
     let count = NSTextField(labelWithString: "")
+    /// The row's right-click menu, there while the pointer is on the row, as in Notion.
+    let moreButton = hoverButton("ellipsis", action: #selector(SidebarFileCell.moreClicked(_:)))
+    /// On a folder: a new note in it, as Notion's + on a page makes a page in it.
+    let addButton = hoverButton("plus", action: #selector(SidebarFileCell.addClicked))
+    private var more: ((NSView) -> Void)?
+    private var add: (() -> Void)?
+    /// The name ends before ••• and + while they show, and runs on to the bell or cloud otherwise.
+    private var labelBeforeButtons: NSLayoutConstraint!
+    private var addEnd: NSLayoutConstraint!
+    var isHovered = false {
+        didSet { updateButtons() }
+    }
 
     init() {
         super.init(frame: .zero)
@@ -1107,23 +1350,77 @@ final class SidebarFileCell: NSTableCellView {
         addSubview(label)
         addSubview(accessory)
         addSubview(count)
-        // Icon and name where Notes has them. The icon keeps its own size, centred on its column.
+        for button in [moreButton, addButton] {
+            button.target = self
+            addSubview(button)
+        }
+        moreButton.toolTip = "More"
+        addButton.toolTip = "New Note"
+        labelBeforeButtons = label.trailingAnchor.constraint(lessThanOrEqualTo: moreButton.leadingAnchor, constant: -4)
+        addEnd = addButton.trailingAnchor.constraint(equalTo: trailingAnchor)
+        // 9 pt from a folder's arrow, which AppKit puts just before the cell, to the icon, and 9 pt from the icon to the
+        // name, as in Notion; Notes has them closer, which looked cramped. The icon keeps its own size, centred on its
+        // column.
         NSLayoutConstraint.activate([
-            icon.centerXAnchor.constraint(equalTo: leadingAnchor, constant: 9),
+            icon.centerXAnchor.constraint(equalTo: leadingAnchor, constant: 14.5),
             icon.centerYAnchor.constraint(equalTo: centerYAnchor),
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24),
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 32),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
             label.trailingAnchor.constraint(lessThanOrEqualTo: accessory.leadingAnchor, constant: -4),
             accessory.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             accessory.centerYAnchor.constraint(equalTo: centerYAnchor),
             count.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             count.centerYAnchor.constraint(equalTo: centerYAnchor),
+            addEnd,
+            addButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            moreButton.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -HoverButtons.moreBeforeAdd),
+            moreButton.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
     private var tint: NSColor = .secondaryLabelColor
+
+    /// `add` only for a folder; neither for To-dos. ••• stays where it is when there's no +, so names end alike.
+    func setButtons(more: ((NSView) -> Void)?, add: (() -> Void)?) {
+        self.more = more
+        self.add = add
+        updateButtons()
+    }
+
+    private var shownCount = false
+
+    private func updateButtons() {
+        // Not over a name being typed.
+        let shows = isHovered && more != nil && label.currentEditor() == nil
+        moreButton.isHidden = !shows
+        addButton.isHidden = !shows || add == nil
+        labelBeforeButtons.isActive = shows
+        // The bell, cloud or count give way to the buttons.
+        accessory.isHidden = shows
+        count.isHidden = shows || !shownCount
+        moreButton.setAccessibilityLabel("More for \(label.stringValue)")
+        addButton.setAccessibilityLabel("New Note in \(label.stringValue)")
+    }
+
+    @objc private func moreClicked(_ sender: NSButton) {
+        more?(sender)
+    }
+
+    @objc private func addClicked() {
+        add?()
+    }
+
+    override func layout() {
+        HoverButtons.place(addEnd, in: self)
+        super.layout()
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        isHovered = false
+    }
 
     /// To-dos: the checklist, and how many are due today or overdue.
     func configureTodos(count due: Int) {
@@ -1136,15 +1433,18 @@ final class SidebarFileCell: NSTableCellView {
         accessory.image = nil
         isOverdue = false
         count.stringValue = due > 0 ? "\(due)" : ""
+        shownCount = due > 0
         count.isHidden = due == 0
         updateTint()
         toolTip = nil
         setAccessibilityLabel(due > 0 ? "To-dos, \(due) due" : "To-dos")
+        updateButtons()
     }
 
     /// `look` is a folder's symbol or emoji and colour, if you chose any (Customize Folder).
     func configure(name: String, kind: FileKind, inCloud: Bool, url: URL, icon look: FolderIcon? = nil, symbol: String? = nil, nested: Bool, dimmed: Bool = false,
                    reminder: Reminder? = nil) {
+        shownCount = false
         count.isHidden = true
         label.stringValue = name
         label.textColor = dimmed ? .tertiaryLabelColor : inCloud ? .secondaryLabelColor : .labelColor
@@ -1168,6 +1468,7 @@ final class SidebarFileCell: NSTableCellView {
         }
         toolTip = reminder.map { url.path + "\nReminder: " + $0.text } ?? url.path
         setAccessibilityLabel(reminder.map { "\(name), reminder \($0.text)" } ?? name)
+        updateButtons()
     }
 
     private var isOverdue = false
@@ -1200,6 +1501,7 @@ final class SidebarFileCell: NSTableCellView {
         let emphasized = backgroundStyle == .emphasized
         icon.contentTintColor = emphasized ? .alternateSelectedControlTextColor : tint
         count.textColor = emphasized ? .alternateSelectedControlTextColor : .secondaryLabelColor
+        for button in [moreButton, addButton] { button.contentTintColor = emphasized ? .alternateSelectedControlTextColor : .secondaryLabelColor }
         accessory.contentTintColor = emphasized ? .alternateSelectedControlTextColor : isOverdue ? .systemRed : .tertiaryLabelColor
     }
 }
