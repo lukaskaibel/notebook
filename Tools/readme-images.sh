@@ -67,7 +67,8 @@ launch() {
   for _ in $(seq 40); do
     say "open Travel/Kyoto trip.md" "dump"
     sleep 0.5
-    grep -q "Kyoto trip.md" "$work/cmd.log" 2>/dev/null && return 0
+    # Two favourites, so the sidebar's tiles show To-dos and Favorites side by side.
+    grep -q "Kyoto trip.md" "$work/cmd.log" 2>/dev/null && { say "favorite Projects" "favorite Travel/Kyoto trip.md"; sleep 0.5; return 0; }
   done
   echo "The app didn't open the sample notes." >&2
   exit 1

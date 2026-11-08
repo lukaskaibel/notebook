@@ -1040,6 +1040,9 @@ public final class Workspace: NSObject {
             UserDefaults.standard.set(recents, forKey: "recents")
             UserDefaults.standard.set(target.path, forKey: "lastOpened")
         }
+        #if os(macOS)
+        sidebar?.recentsChanged()
+        #endif
         // Only the selection moves in the sidebar: nothing above it changes, so nothing jumps.
         reveal(target, select: true)
         // Not for a new note, which you start typing in at once.
@@ -1483,7 +1486,7 @@ public final class Workspace: NSObject {
     public func showTodos(recordHistory: Bool = true) {
         guard !showsTodos, NotebookSettings.shared.showsTodos else { return }
         showList(Self.todosURL, recordHistory: recordHistory)
-        sidebarSelectTodos()
+        sidebarSelectList()
     }
 
     /// Shows your favourites in place of the file that is open, as To-dos is shown.

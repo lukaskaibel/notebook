@@ -17,7 +17,7 @@ struct HomeTiles: View {
                         tile(.todos()) { HomeTileLabel(title: "To-dos", symbol: "checklist", color: .accentColor, count: workspace.dueTodoCount) }
                     }
                     if favorites > 0 {
-                        tile(.favorites()) { HomeTileLabel(title: "Favorites", symbol: "star.fill", color: .orange, count: favorites) }
+                        tile(.favorites()) { HomeTileLabel(title: "Favorites", symbol: "star.fill", color: HomeStyle.favoritesColor, count: favorites) }
                     }
                 }
                 .listRowInsets(EdgeInsets())

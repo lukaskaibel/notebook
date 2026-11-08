@@ -112,6 +112,12 @@ enum DebugRemote {
             guard let workspace, let location = workspace.locations.first else { return }
             let url = argument.hasPrefix("/") ? URL(fileURLWithPath: argument) : location.url.appendingPathComponent(argument)
             workspace.open(url)
+        case "favorite":
+            // favorite <path>: stars a file or folder of the first location, or takes its star away.
+            guard let workspace, let location = workspace.locations.first else { return }
+            workspace.toggleFavorite(location.url.appendingPathComponent(argument))
+        case "favorites":
+            workspace?.showFavorites()
         case "timeopen":
             // timeopen <path>: opens a note and logs how long the main thread was busy with it, until the window had
             // drawn it and the main thread was free again.

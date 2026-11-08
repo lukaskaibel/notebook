@@ -176,7 +176,7 @@ struct DocumentToolbar: ToolbarContent {
                 Button { workspace.newTodoRequest += 1 } label: { Label("New To-do", systemImage: "plus") }
                     .help("New to-do for today")
             }
-        } else {
+        } else if !workspace.showsFavorites {
             ToolbarSpacer(.fixed)
             ToolbarItem {
                 Button {
@@ -282,6 +282,8 @@ struct DetailColumn: View {
         Group {
             if workspace.showsTodos {
                 TodosView(workspace: workspace)
+            } else if workspace.showsFavorites {
+                FavoritesPage(workspace: workspace)
             } else if let url = workspace.currentURL {
                 if workspace.note != nil {
                     // The wait for a note still in iCloud shows below the toolbar, as a PDF's does.

@@ -26,6 +26,8 @@ enum HomeStyle {
     static let picture = CGSize(width: 128, height: 96)
     static let cardPadding: CGFloat = 8
     #endif
+    /// Favorites' orange, the star's colour where you swipe to add one.
+    static let favoritesColor = Color.theme(.systemOrange)
     static let spacing: CGFloat = {
         #if os(macOS)
         8
@@ -108,7 +110,7 @@ struct HomeTileGrid: View {
                     }
                     if favorites > 0 {
                         Button { workspace.showFavorites() } label: {
-                            HomeTileLabel(title: "Favorites", symbol: "star.fill", color: .orange, count: favorites,
+                            HomeTileLabel(title: "Favorites", symbol: "star.fill", color: HomeStyle.favoritesColor, count: favorites,
                                           isSelected: workspace.showsFavorites)
                         }
                         .buttonStyle(.plain)
@@ -156,7 +158,8 @@ struct RecentCardLabel: View {
         .background(HomeStyle.cardFill, in: shape)
         .contentShape(shape)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(name), in \(folder)")
+        .accessibilityLabel(name)
+        .accessibilityHint("In \(folder)")
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -214,9 +217,33 @@ struct FileThumbnailView: View {
     @State private var image: CGImage?
 
     var body: some View {
+        let isFolder = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+        if isFolder {
+            folder
+        } else {
+            page
+        }
+    }
+
+    /// A favourite folder: its symbol or emoji in its colour, as the sidebar shows it, large.
+    private var folder: some View {
+        let look = workspace.folderIcon(for: url)
+        return ZStack {
+            RoundedRectangle(cornerRadius: HomeStyle.pictureRadius, style: .continuous).fill(.quaternary)
+            if let emoji = look?.emoji {
+                Text(emoji).font(.system(size: 36))
+            } else {
+                Image(systemName: look.flatMap { $0.symbol == nil ? nil : $0.shownSymbol } ?? "folder")
+                    .font(.system(size: 34))
+                    .foregroundStyle(look?.color?.color ?? Color.theme(FileKind.folder.tint))
+            }
+        }
+    }
+
+    private var page: some View {
         let key = FileThumbnails.Key(path: url.standardizedFileURL.path, modified: workspace.index.entry(for: url)?.modified, width: size.width)
         let shape = RoundedRectangle(cornerRadius: HomeStyle.pictureRadius, style: .continuous)
-        ZStack(alignment: .top) {
+        return ZStack(alignment: .top) {
             // A page is white, as thumbnails are in either appearance.
             Color.white
             if let image = image ?? FileThumbnails.shared.cached(key) {
@@ -311,7 +338,10 @@ extension Workspace {
     }
 
     private func shownChildrenIfRead(of folder: URL) -> [FileNode]? {
+        // On iPhone and iPad the lists watch this to show changes; the Mac's sidebar reloads its rows itself.
+        #if os(iOS)
         _ = treeVersion
+        #endif
         guard let node = node(for: folder, reading: false), node.hasLoadedChildren else { return nil }
         let children = shownChildren(of: node, in: location(containing: folder))
         return leaving.isEmpty ? children : children.filter { !isLeaving($0.url) }

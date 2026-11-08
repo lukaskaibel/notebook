@@ -33,9 +33,6 @@ extension Workspace {
     /// again each time.
     func todosChanged() {
         watchForDueReminders()
-        #if os(macOS)
-        sidebar?.refreshTodosRow()
-        #endif
         todoScheduling?.cancel()
         let work = DispatchWorkItem { [weak self] in
             self?.scheduleTodoNotifications()
@@ -63,13 +60,7 @@ extension Workspace {
         #endif
     }
 
-    func sidebarSelectTodos() {
-        #if os(macOS)
-        sidebar?.selectTodos()
-        #endif
-    }
-
-    /// Favorites shows next to the sidebar: its tile is selected, and no row.
+    /// To-dos or Favorites shows next to the sidebar: its tile is selected, and no row.
     func sidebarSelectList() {
         #if os(macOS)
         sidebar?.selectNoRow()

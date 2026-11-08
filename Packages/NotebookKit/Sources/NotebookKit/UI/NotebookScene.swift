@@ -129,7 +129,7 @@ public struct NotebookScene: Scene {
                     Label(workspace.isOutlineVisible ? "Hide Outline" : "Show Outline", systemImage: "sidebar.right")
                 }
                 .keyboardShortcut("i", modifiers: [.command, .control])
-                .disabled(workspace.locations.isEmpty || workspace.showsTodos)
+                .disabled(workspace.locations.isEmpty || workspace.showsTodos || workspace.showsFavorites)
                 Divider()
                 SortByPicker(folder: workspace.folderInView)
                 Toggle(isOn: $settings.foldersFirst) { Label("Keep Folders on Top", systemImage: "folder") }
