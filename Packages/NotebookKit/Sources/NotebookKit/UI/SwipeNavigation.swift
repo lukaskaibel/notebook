@@ -56,7 +56,7 @@ final class PageSwiper {
     func willOpen(_ url: URL) {
         guard let workspace else { return }
         if workspace.note != nil, let current = workspace.currentURL, let snapshot = captureNote() { keep(snapshot, for: current) }
-        if url != Workspace.todosURL, FileKind(url: url, isDirectory: false) != .note { captureQuickLook(after: 0.8) }
+        if !Workspace.isList(url), FileKind(url: url, isDirectory: false) != .note { captureQuickLook(after: 0.8) }
     }
 
     private func keep(_ snapshot: PageSnapshot, for url: URL) {
@@ -132,7 +132,7 @@ final class PageSwiper {
             index += direction == .back ? -1 : 1
             guard workspace.history.indices.contains(index) else { return nil }
             let url = workspace.history[index]
-            if url == Workspace.todosURL || FileManager.default.fileExists(atPath: url.path) { return url }
+            if Workspace.isList(url) || FileManager.default.fileExists(atPath: url.path) { return url }
         }
     }
 

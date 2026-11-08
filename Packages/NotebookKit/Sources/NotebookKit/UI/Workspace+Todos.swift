@@ -69,6 +69,13 @@ extension Workspace {
         #endif
     }
 
+    /// Favorites shows next to the sidebar: its tile is selected, and no row.
+    func sidebarSelectList() {
+        #if os(macOS)
+        sidebar?.selectNoRow()
+        #endif
+    }
+
     // MARK: - A to-do's reminder
 
     /// A to-do's words, date and place, as its line says now.

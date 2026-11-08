@@ -19,6 +19,12 @@ final class Page: Hashable {
     static func todos() -> Page { Page(url: Workspace.todosURL, isFolder: false) }
     var isTodos: Bool { url == Workspace.todosURL }
 
+    /// The favourites' screen, from their tile on the first screen. A list of files, so leaving a note for it closes
+    /// the note as a folder does.
+    static func favorites() -> Page { Page(url: favoritesURL, isFolder: true) }
+    var isFavorites: Bool { url == Self.favoritesURL }
+    private static let favoritesURL = URL(string: "notebook:favorites")!
+
     nonisolated static func == (a: Page, b: Page) -> Bool { a === b }
     nonisolated func hash(into hasher: inout Hasher) { hasher.combine(ObjectIdentifier(self)) }
 }
@@ -36,6 +42,8 @@ struct PhoneBrowser: View {
                 .navigationDestination(for: Page.self) { page in
                     if page.isTodos {
                         TodosView(workspace: workspace)
+                    } else if page.isFavorites {
+                        FavoritesScreen(workspace: workspace, newFolderIn: $newFolderIn)
                     } else if page.isFolder {
                         FolderScreen(workspace: workspace, page: page, newFolderIn: $newFolderIn)
                     } else {
@@ -146,7 +154,8 @@ struct PhoneBrowser: View {
     }
 }
 
-/// The first screen: favourites, what you opened last, and what is in each location, as Notes lists its folders.
+/// The first screen: To-dos and Favorites as tiles, what you opened last as cards, and what is in each location, as
+/// Notes lists its folders.
 struct HomeScreen: View {
     @Bindable var workspace: Workspace
     @Binding var newFolderIn: URL?
@@ -161,37 +170,12 @@ struct HomeScreen: View {
             if isSearching {
                 SearchResultsList(workspace: workspace, query: query) { open($0) }
             } else {
-                if NotebookSettings.shared.showsTodos {
-                    Section {
-                        NavigationLink(value: Page.todos()) { TodosRowLabel(count: workspace.dueTodoCount) }
-                    }
-                }
-                let favorites = workspace.favoriteURLs
-                if !favorites.isEmpty {
-                    Section("Favorites") {
-                        ForEach(favorites, id: \.self) { url in
-                            link(url, row: workspace.row(for: url, favorite: true))
-                        }
-                    }
-                }
-                // With the note you are in: going back to this screen doesn't put its row in at the end and push the
-                // list down.
-                let recents = Array(workspace.recentURLs(includingOpen: true).prefix(3))
-                if !recents.isEmpty {
-                    Section("Recent") {
-                        ForEach(recents, id: \.self) { url in
-                            link(url, row: workspace.row(for: url, showsDetail: true))
-                        }
-                    }
-                }
+                HomeTiles(workspace: workspace)
+                RecentCards(workspace: workspace, newFolderIn: $newFolderIn)
                 ForEach(workspace.locations) { location in
                     Section {
                         let children = workspace.visibleChildren(of: location.url)
-                        ForEach(children, id: \.url) { node in
-                            NavigationLink(value: Page(url: node.url, isFolder: node.isFolder)) { node.row(in: workspace) }
-                                .fileDragAndDrop(node.url, isFolder: node.isFolder, workspace: workspace)
-                                .contextMenu { FileActions(workspace: workspace, url: node.url) { newFolderIn = $0 } }
-                        }
+                        HomeFileRows(workspace: workspace, nodes: children, newFolderIn: $newFolderIn)
                         if children.isEmpty, workspace.isRead(location.url) {
                             Text("Empty").foregroundStyle(.secondary)
                         }
@@ -258,6 +242,14 @@ struct HomeScreen: View {
                 isSearching = false
             case "settings": showsSettings = argument != "hide"
             case "newfolder": newFolderIn = workspace.locations.first?.url
+            // A file or folder of the first location, by its path in it.
+            case "favorite": if let root = workspace.locations.first?.url { workspace.toggleFavorite(root.appendingPathComponent(argument)) }
+            case "unfold":
+                guard let root = workspace.locations.first?.url else { break }
+                let path = root.appendingPathComponent(argument).standardizedFileURL.path
+                var unfolded = Set((UserDefaults.standard.string(forKey: HomeFileRows.unfoldedKey) ?? "").split(separator: "\n").map(String.init))
+                if unfolded.contains(path) { unfolded.remove(path) } else { unfolded.insert(path) }
+                UserDefaults.standard.set(unfolded.sorted().joined(separator: "\n"), forKey: HomeFileRows.unfoldedKey)
             default: break
             }
         }
@@ -279,12 +271,6 @@ struct HomeScreen: View {
                 }
             } label: { label }
         }
-    }
-
-    private func link(_ url: URL, row: FileRow) -> some View {
-        let isFolder = row.kind == .folder
-        return NavigationLink(value: Page(url: url, isFolder: isFolder)) { row }
-            .contextMenu { FileActions(workspace: workspace, url: url) { newFolderIn = $0 } }
     }
 
     private func open(_ result: SearchResult) {

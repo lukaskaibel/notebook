@@ -1,8 +1,8 @@
 #if os(iOS)
 import SwiftUI
 
-/// The iPad, as the Mac: a sidebar with your favourites and a tree of every location, the open file next to it, and
-/// the note's outline in an inspector on the right.
+/// The iPad, as the Mac: a sidebar with the iPhone's first screen in it, To-dos and Favorites as tiles, what you opened
+/// last and a tree of every location, the open file next to it, and the note's outline in an inspector on the right.
 struct PadBrowser: View {
     @Bindable var workspace: Workspace
     @State private var newFolderIn: URL?
@@ -27,7 +27,7 @@ struct PadBrowser: View {
         let wide = width.map { $0 >= Self.wide } ?? true
         _isWide = State(initialValue: wide)
         _hasMeasured = State(initialValue: width != nil)
-        _startsWithoutSidebar = State(initialValue: !wide && (workspace.currentURL != nil || workspace.showsTodos))
+        _startsWithoutSidebar = State(initialValue: !wide && (workspace.currentURL != nil || workspace.showsTodos || workspace.showsFavorites))
     }
 
     /// From this wide on there is room for the sidebar, a column of text and the outline: an iPad in landscape. In
@@ -96,6 +96,8 @@ struct PadBrowser: View {
                 isSearchFocused = false
             case "settings": showsSettings = argument != "hide"
             case "newfolder": newFolderIn = workspace.locations.first?.url
+            case "favorite": if let root = workspace.locations.first?.url { workspace.toggleFavorite(root.appendingPathComponent(argument)) }
+            case "favorites": workspace.showFavorites()
             default: break
             }
         }
@@ -107,7 +109,7 @@ struct PadBrowser: View {
         .onChange(of: workspace.currentURL) { _, url in
             if url != nil { withAnimation { makeWayForPage() } }
         }
-        .onChange(of: workspace.showsTodos) { _, shows in
+        .onChange(of: workspace.showsTodos || workspace.showsFavorites) { _, shows in
             if shows { withAnimation { makeWayForPage() } }
         }
         .onChange(of: workspace.columnVisibility) { _, visibility in
@@ -127,7 +129,7 @@ struct PadBrowser: View {
     /// it comes back if it went for want of room.
     private func fitSidebar() {
         if !isWide {
-            if workspace.currentURL != nil || workspace.showsTodos { makeWayForPage() }
+            if workspace.currentURL != nil || workspace.showsTodos || workspace.showsFavorites { makeWayForPage() }
         } else if workspace.sidebarHiddenForWidth {
             workspace.columnVisibility = .all
             workspace.sidebarHiddenForWidth = false
@@ -188,6 +190,8 @@ struct PadBrowser: View {
                 Group {
                     if workspace.showsTodos {
                         TodosView(workspace: workspace, isInSplitView: true)
+                    } else if workspace.showsFavorites {
+                        FavoritesScreen(workspace: workspace, newFolderIn: $newFolderIn, isInSplitView: true)
                     } else if let url = workspace.currentURL {
                         DocumentScreen(workspace: workspace, url: url, isInSplitView: true)
                     } else {
@@ -210,8 +214,9 @@ struct PadBrowser: View {
 
 }
 
-/// The sidebar: search results while you search; otherwise favourites and a section for every location, with its
-/// folders opening in place, as in the Mac's sidebar.
+/// The sidebar: search results while you search; otherwise the iPhone's first screen, To-dos and Favorites as tiles,
+/// what you opened last as cards, and a section for every location, with its folders opening in place, as in the Mac's
+/// sidebar.
 struct PadSidebar: View {
     @Bindable var workspace: Workspace
     let query: String
@@ -229,16 +234,19 @@ struct PadSidebar: View {
                 if isSearching {
                     SearchResultsList(workspace: workspace, query: query) { workspace.open($0) }
                 } else {
-                    if NotebookSettings.shared.showsTodos {
-                        TodosRowLabel(count: workspace.dueTodoCount)
-                            .tag(Workspace.todosURL)
+                    if NotebookSettings.shared.showsTodos || !workspace.favoriteURLs.isEmpty {
+                        HomeTileGrid(workspace: workspace)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                            .listRowBackground(Color.clear)
+                            .selectionDisabled()
                     }
-                    let favorites = workspace.favoriteURLs
-                    if !favorites.isEmpty {
-                        Section("Favorites", isExpanded: sectionBinding("Favorites")) {
-                            ForEach(favorites, id: \.self) { url in
-                                favorite(url)
-                            }
+                    if !workspace.recentURLs(includingOpen: true).isEmpty {
+                        Section("Recent", isExpanded: sectionBinding("Recent")) {
+                            RecentCardRow(workspace: workspace) { newFolderIn = $0 }
+                                .scrollClipDisabled()
+                                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                                .listRowBackground(Color.clear)
+                                .selectionDisabled()
                         }
                     }
                     ForEach(workspace.locations) { location in
@@ -295,19 +303,6 @@ struct PadSidebar: View {
         })
     }
 
-    private func favorite(_ url: URL) -> some View {
-        let row = workspace.row(for: url, favorite: true)
-        return Group {
-            if row.kind == .folder {
-                Button { workspace.open(url) } label: { row }
-                    .buttonStyle(.plain)
-            } else {
-                row.tag(url)
-            }
-        }
-        .contextMenu { FileActions(workspace: workspace, url: url) { newFolderIn = $0 } }
-    }
-
     private func sectionBinding(_ key: String) -> Binding<Bool> {
         Binding(get: { !collapsedSections.contains(key) }, set: { open in
             if open { collapsedSections.remove(key) } else { collapsedSections.insert(key) }
@@ -339,7 +334,7 @@ struct FolderTree: View {
                 DisclosureGroup(isExpanded: binding(node.url.path)) {
                     FolderTree(workspace: workspace, folder: node.url, expanded: $expanded, newFolderIn: $newFolderIn)
                 } label: {
-                    node.row(in: workspace)
+                    node.row(in: workspace, count: workspace.shownCount(of: node.url))
                         .contentShape(Rectangle())
                         .onTapGesture { withAnimation(.snappy) { toggle(node.url.path) } }
                         .fileDragAndDrop(node.url, isFolder: true, workspace: workspace)

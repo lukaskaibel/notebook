@@ -17,6 +17,9 @@ public final class Workspace: NSObject {
     public private(set) var currentURL: URL?
     /// The To-dos list is shown on the right, in place of a file.
     public private(set) var showsTodos = false
+    /// Your favourites are shown on the right, in place of a file: from their tile at the top of the sidebar on iPad and
+    /// Mac. The iPhone has a screen of its own for them.
+    public private(set) var showsFavorites = false
     public private(set) var note: NoteDocument? {
         // Versions of the note left aren't restored into the next.
         didSet { if note !== oldValue { closeVersions() } }
@@ -114,8 +117,8 @@ public final class Workspace: NSObject {
     /// The outline as the window shows it: To-dos has none, so the inspector makes way for it and comes back with the
     /// next note.
     var showsOutline: Bool {
-        get { isOutlineVisible && !showsTodos }
-        set { if !showsTodos { isOutlineVisible = newValue } }
+        get { isOutlineVisible && !showsTodos && !showsFavorites }
+        set { if !showsTodos, !showsFavorites { isOutlineVisible = newValue } }
     }
     #if os(macOS)
     private static let showsOutlineAtFirst = true
@@ -978,6 +981,7 @@ public final class Workspace: NSObject {
         // Another file: the PDF's drawing is saved as it goes (`PDFDrawingSession`).
         drawsOnPDF = nil
         showsTodos = false
+        showsFavorites = false
         #if os(macOS)
         pages.willOpen(target)
         #else
@@ -1458,6 +1462,10 @@ public final class Workspace: NSObject {
             showTodos(recordHistory: false)
             return true
         }
+        if url == Self.favoritesURL {
+            showFavorites(recordHistory: false)
+            return true
+        }
         guard FileManager.default.fileExists(atPath: url.path) else { return false }
         open(url, recordHistory: false)
         return true
@@ -1465,12 +1473,29 @@ public final class Workspace: NSObject {
 
     /// The To-dos list's place in the history, among the files you opened.
     static let todosURL = URL(string: "notebook:to-dos")!
+    /// The favourites' place in the history.
+    static let favoritesURL = URL(string: "notebook:favorites")!
+
+    /// To-dos or Favorites: a list shown in place of a file, with a place in the history but not on disk.
+    static func isList(_ url: URL) -> Bool { url == todosURL || url == favoritesURL }
 
     /// Shows the To-dos list in place of the file that is open, which is saved and left as when you open another.
     public func showTodos(recordHistory: Bool = true) {
         guard !showsTodos, NotebookSettings.shared.showsTodos else { return }
+        showList(Self.todosURL, recordHistory: recordHistory)
+        sidebarSelectTodos()
+    }
+
+    /// Shows your favourites in place of the file that is open, as To-dos is shown.
+    public func showFavorites(recordHistory: Bool = true) {
+        guard !showsFavorites else { return }
+        showList(Self.favoritesURL, recordHistory: recordHistory)
+        sidebarSelectList()
+    }
+
+    private func showList(_ list: URL, recordHistory: Bool) {
         #if os(macOS)
-        if currentURL != nil { pages.willOpen(Self.todosURL) }
+        if currentURL != nil { pages.willOpen(list) }
         #else
         keepSnapshot()
         #endif
@@ -1484,13 +1509,13 @@ public final class Workspace: NSObject {
         currentHeading = nil
         isTitleScrolledAway = false
         selectedFolder = nil
-        showsTodos = true
+        showsTodos = list == Self.todosURL
+        showsFavorites = list == Self.favoritesURL
         if recordHistory {
             if historyIndex < history.count - 1 { history.removeSubrange((historyIndex + 1)...) }
-            history.append(Self.todosURL)
+            history.append(list)
             historyIndex = history.count - 1
         }
-        sidebarSelectTodos()
         if wrote { leftWhatYouWrote() }
     }
 
@@ -2463,6 +2488,7 @@ public final class Workspace: NSObject {
     /// The open file's name as you read it: notes without their extension.
     var currentTitle: String {
         if showsTodos { return "To-dos" }
+        if showsFavorites { return "Favorites" }
         guard let currentURL else { return "Notebook" }
         if let name = newName(for: currentURL) { return name }
         return FileKind(url: currentURL, isDirectory: false) == .note ? currentURL.deletingPathExtension().lastPathComponent : currentURL.lastPathComponent
@@ -2662,7 +2688,7 @@ extension Workspace: EditorControllerDelegate {
 
     /// To-dos scrolled its title up under the toolbar, or back.
     func todosTitleScrolled(away: Bool) {
-        if showsTodos, isTitleScrolledAway != away { isTitleScrolledAway = away }
+        if showsTodos || showsFavorites, isTitleScrolledAway != away { isTitleScrolledAway = away }
     }
 
     public func editorPositionDidChange(_ editor: EditorController) {
