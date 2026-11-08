@@ -27,26 +27,6 @@ struct MoveToMenu: View {
     }
 }
 
-#if os(iOS)
-/// New Handwritten Note in the menus of folders: a tap makes one of the paper Settings has, the menu one of any paper.
-/// (New Note in a toolbar asks which kind, `NewNoteButton`.)
-struct NewHandwrittenNoteMenu: View {
-    let action: (PaperStyle?) -> Void
-
-    var body: some View {
-        Menu {
-            ForEach(PaperStyle.allCases) { paper in
-                Button { action(paper) } label: { Label(paper.name, systemImage: paper.symbol) }
-            }
-        } label: {
-            Label("New Handwritten Note", systemImage: "pencil.and.scribble")
-        } primaryAction: {
-            action(nil)
-        }
-    }
-}
-
-#endif
 
 struct EmptyState: View {
     var body: some View {

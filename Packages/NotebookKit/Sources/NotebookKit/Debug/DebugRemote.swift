@@ -1170,6 +1170,7 @@ enum DebugRemote {
             if let workspace, DebugFolderIcons.run(command, argument, workspace: workspace, url: resolve, log: log) { break }
             if let workspace, DebugTodos.run(command, argument, workspace: workspace, log: log) { break }
             if let workspace, DebugVersions.run(command, argument, workspace: workspace, log: log) { break }
+            if let workspace, DebugMenus.run(command, argument, workspace: workspace, log: log) { break }
             log("unknown command: \(line)")
         }
     }

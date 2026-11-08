@@ -31,3 +31,18 @@ struct SortByPicker: View {
         }
     }
 }
+
+extension SortByPicker {
+    /// Sort By in a glass menu: a submenu of the orders, the one chosen ticked.
+    @MainActor
+    static func entry(folder: URL?) -> MenuEntry {
+        let orders = NotebookSettings.shared.fileOrders
+        let current = orders.order(of: folder)
+        return .submenu("Sort By", "arrow.up.arrow.down") {
+            for order in FileOrder.allCases {
+                MenuEntry(order.title, checked: order == current) { withAnimation { orders.set(order, for: folder) } }
+            }
+        }
+        .with { $0.value = current.title }
+    }
+}

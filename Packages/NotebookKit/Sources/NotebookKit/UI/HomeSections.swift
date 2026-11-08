@@ -180,7 +180,7 @@ struct RecentCardRow: View {
                 ForEach(recents, id: \.self) { url in
                     Button { workspace.open(url) } label: { RecentCardLabel(workspace: workspace, url: url) }
                         .buttonStyle(.plain)
-                        .contextMenu { RecentCardMenu(workspace: workspace, url: url, newFolder: newFolder) }
+                        .glassContextMenu { RecentCardMenu.entries(workspace, url, newFolder: newFolder) }
                 }
             }
             .padding(.horizontal, leadingInset)
@@ -201,17 +201,16 @@ extension HomeStyle {
 }
 
 /// A card's menu: the file's own, as its row has it.
-private struct RecentCardMenu: View {
-    let workspace: Workspace
-    let url: URL
-    var newFolder: ((URL) -> Void)?
-
-    var body: some View {
+@MainActor
+private enum RecentCardMenu {
+    static func entries(_ workspace: Workspace, _ url: URL, newFolder: ((URL) -> Void)?) -> [MenuEntry] {
         #if os(iOS)
-        FileActions(workspace: workspace, url: url, newFolder: newFolder)
+        FileActions.entries(workspace, url, newFolder: newFolder)
         #else
-        Button("Open") { workspace.open(url) }
-        Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+        [
+            MenuEntry("Open", "arrow.up.forward.app") { workspace.open(url) },
+            MenuEntry("Show in Finder", "folder") { NSWorkspace.shared.activateFileViewerSelecting([url]) },
+        ]
         #endif
     }
 }

@@ -498,7 +498,8 @@ struct TypedPicker<Below: View>: View {
         }
         .padding(.horizontal, 10)
         .frame(height: 32)
-        .background(Color.theme(Theme.menuField), in: .rect(cornerRadius: 9, style: .continuous))
+        // Its corners run alongside the dropdown's or the popover's.
+        .background(Color.theme(Theme.menuField), in: ConcentricRectangle(corners: .concentric(minimum: .fixed(8)), isUniform: true))
         .padding([.horizontal, .top], Self.inset)
     }
 
@@ -818,10 +819,8 @@ struct TypedPicker<Below: View>: View {
             rowButton(row, isLit: isLit)
         } else {
             rowButton(row, isLit: isLit)
-                .contextMenu {
-                    ForEach(row.menu) { item in
-                        Button(role: item.isDestructive ? .destructive : nil, action: item.action) { Label(item.title, systemImage: item.symbol) }
-                    }
+                .glassContextMenu {
+                    row.menu.map { item in MenuEntry(item.title, item.symbol, destructive: item.isDestructive, action: item.action) }
                 }
         }
     }

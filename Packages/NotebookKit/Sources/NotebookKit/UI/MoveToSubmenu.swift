@@ -50,6 +50,12 @@ final class MoveToSubmenu: NSMenu, NSMenuDelegate {
         self.items = items
     }
 
+    /// Move To as the folder picker of a glass menu, for the file at hand.
+    var entry: MenuEntry? {
+        guard let workspace, let url = file() else { return nil }
+        return SharedMenus.moveTo(url, workspace: workspace)
+    }
+
     @objc private func move(_ item: NSMenuItem) {
         guard let folder = item.representedObject as? URL, let url = filled?.url else { return }
         workspace?.move(url, into: folder)

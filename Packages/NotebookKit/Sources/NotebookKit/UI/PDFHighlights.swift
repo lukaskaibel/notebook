@@ -1,4 +1,5 @@
 import PDFKit
+import SwiftUI
 #if os(macOS)
 import AppKit
 #else
@@ -272,7 +273,20 @@ final class NotebookPDFView: PDFView {
         for (index, item) in menu.items.enumerated().reversed() where item.isSeparatorItem && index > 0 && menu.items[index - 1].isSeparatorItem {
             menu.removeItem(item)
         }
-        guard !isInMarkupMode, document != nil else { return menu }
+        guard !isInMarkupMode, document != nil else { return glass(menu, for: event) }
+        // A right-click shows it in glass, like every menu of the app; VoiceOver's Show Menu still gets the AppKit menu.
+        if GlassMenu.isContextClick(event) {
+            var entries: [MenuEntry] = []
+            if let highlight = highlight(at: convert(event.locationInWindow, from: nil)) {
+                entries.append(MenuEntry("Remove Highlight", "eraser") { [weak self] in self?.remove(highlight) })
+                entries.append(colors(selected: HighlightColor(nearest: NSColor(hex: highlight.color))) { [weak self] color in self?.recolor(highlight, color) })
+            } else if canHighlight {
+                entries.append(MenuEntry("Highlight", "highlighter", keys: "⌃⌘H") { [weak self] in self?.highlightSelection(nil) })
+                entries.append(colors(selected: nil) { [weak self] color in self?.highlight(in: color) })
+            }
+            GlassMenu.show(entries + [.divider] + GlassMenu.entries(from: menu), at: event, in: self)
+            return nil
+        }
         var items: [NSMenuItem] = []
         if let highlight = highlight(at: convert(event.locationInWindow, from: nil)) {
             let remove = MenuAction(title: "Remove Highlight") { [weak self] in self?.remove(highlight) }
@@ -294,6 +308,23 @@ final class NotebookPDFView: PDFView {
     }
 
     private static let pdfKitMarkup: Set<String> = ["_removeMarkup:", "_addNote:"]
+
+    /// PDFKit's own menu, in glass for a right-click.
+    private func glass(_ menu: NSMenu, for event: NSEvent) -> NSMenu? {
+        guard GlassMenu.isContextClick(event) else { return menu }
+        GlassMenu.show(GlassMenu.entries(from: menu), at: event, in: self)
+        return nil
+    }
+
+    /// The colours, for a glass menu: each a dot in its colour, the highlight's own ticked.
+    private func colors(selected: HighlightColor?, pick: @escaping (HighlightColor) -> Void) -> MenuEntry {
+        .submenu("Colour", "paintpalette") {
+            HighlightColor.allCases.map { color in
+                MenuEntry(color.name, checked: color == selected) { pick(color) }
+                    .with { $0.icon = .tinted("circle.fill", Color(nsColor: color.color)) }
+            }
+        }
+    }
 
     /// The colours in a row, as Finder's tags are: picking one does `pick`.
     private func colors(selected: HighlightColor?, pick: @escaping (HighlightColor) -> Void) -> NSMenuItem {

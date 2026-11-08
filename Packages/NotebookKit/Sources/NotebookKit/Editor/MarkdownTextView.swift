@@ -185,7 +185,13 @@ final class MarkdownTextView: NSTextView {
     }
 
     override func menu(for event: NSEvent) -> NSMenu? {
-        controller?.contextMenu(for: event, base: super.menu(for: event)) ?? super.menu(for: event)
+        let menu = controller?.contextMenu(for: event, base: super.menu(for: event)) ?? super.menu(for: event)
+        // A right-click shows it in glass, like every menu of the app; VoiceOver's Show Menu still gets the AppKit menu.
+        if GlassMenu.isContextClick(event), let menu, let controller {
+            GlassMenu.show(controller.glassEntries(from: menu), at: event, in: self)
+            return nil
+        }
+        return menu
     }
 
     override func viewDidMoveToWindow() {

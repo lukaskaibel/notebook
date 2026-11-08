@@ -202,6 +202,9 @@ extension EditorController {
             add("Cut", #selector(NSText.cut(_:)), "scissors")
             add("Copy", #selector(NSText.copy(_:)), "doc.on.doc")
             add("Delete", #selector(NSText.delete(_:)), "trash")
+            if let delete = menu.items.last {
+                delete.attributedTitle = NSAttributedString(string: delete.title, attributes: [.foregroundColor: NSColor.systemRed, .font: NSFont.menuFont(ofSize: 0)])
+            }
             return menu
         }
         if let base {
@@ -214,6 +217,43 @@ extension EditorController {
 }
 
 #if os(macOS)
+extension EditorController {
+    /// The text view's right-click menu as glass entries: the system's own items, Cut, Copy and Paste with their keys,
+    /// and Format after them, as the Aa menu has it.
+    func glassEntries(from menu: NSMenu) -> [MenuEntry] {
+        let keys: [Selector: String] = [
+            #selector(NSText.cut(_:)): "⌘X",
+            #selector(NSText.copy(_:)): "⌘C",
+            #selector(NSText.paste(_:)): "⌘V",
+            #selector(NSText.selectAll(_:)): "⌘A",
+        ]
+        menu.update()
+        var entries: [MenuEntry] = []
+        var formatGoesNext = false
+        for item in menu.items {
+            if formatGoesNext, item.isSeparatorItem || item === menu.items.last {
+                formatGoesNext = false
+                if item === menu.items.last, let entry = GlassMenu.entry(item) { entries.append(entry) }
+                entries.append(.divider)
+                entries.append(.submenu("Format", "textformat") { [weak self] in
+                    guard let self else { return [] }
+                    return SharedMenus.format(self, styleSize: MenuMetrics.mac.fontSize)
+                })
+                if item === menu.items.last { continue }
+            }
+            // Not what a note needs: its quotes and dashes are Markdown's, and it is never written top to bottom.
+            if let submenu = item.submenu, submenu.items.contains(where: { [#selector(NSTextView.changeLayoutOrientation(_:)), #selector(NSTextView.toggleAutomaticQuoteSubstitution(_:))].contains($0.action) }) {
+                continue
+            }
+            guard var entry = GlassMenu.entry(item) else { continue }
+            if let action = item.action, let key = keys[action], entry.keys == nil { entry.keys = key }
+            entries.append(entry)
+            if item.action == #selector(NSText.paste(_:)), syntax == .markdown, textView.isEditable { formatGoesNext = true }
+        }
+        return entries
+    }
+}
+
 extension MarkdownTextView {
     @objc func quickLookSelection(_ sender: NSMenuItem) {
         guard let url = sender.representedObject as? URL, let controller else { return }
