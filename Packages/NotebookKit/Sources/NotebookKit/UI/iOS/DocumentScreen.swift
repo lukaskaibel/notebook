@@ -209,44 +209,32 @@ struct DocumentScreen: View {
     }
 
     private var moreMenu: some View {
-        Menu {
+        GlassMenuButton {
             if isNote {
-                Section {
-                    Button { workspace.editor.findInNote() } label: { Label("Find in Note", systemImage: "magnifyingglass") }
-                        .disabled(!isLoaded)
-                    if !isInSplitView {
-                        Button { showsOutline = true } label: { Label("Outline", systemImage: "list.bullet.indent") }
-                    }
-                    Button { workspace.browseVersions() } label: { Label("Version History", systemImage: "clock.arrow.circlepath") }
-                        .disabled(!isLoaded)
+                MenuEntry("Find in Note", "magnifyingglass", keys: "⌘F", enabled: isLoaded) { workspace.editor.findInNote() }
+                if !isInSplitView {
+                    MenuEntry("Outline", "list.bullet.indent") { showsOutline = true }
                 }
-                Section {
-                    let favorite = workspace.isFavorite(url)
-                    Button { workspace.toggleFavorite(url) } label: {
-                        Label(favorite ? "Remove from Favorites" : "Add to Favorites", systemImage: favorite ? "star.slash" : "star")
-                    }
-                    Button { workspace.askForReminder(url) } label: { Label("Remind Me…", systemImage: "bell") }
-                    Button { workspace.editor.focusTitle() } label: { Label("Rename", systemImage: "pencil") }
-                        .disabled(!isLoaded)
-                    MoveToMenu(workspace: workspace, url: url)
-                    Button { workspace.duplicate(url) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
-                }
-                Section {
-                    Button { workspace.copyFile(url) } label: { Label("Copy", systemImage: "doc.on.doc") }
-                    Button { workspace.copyLink(url) } label: { Label("Copy Link", systemImage: "link") }
-                    Button { export() } label: { Label("Export as PDF", systemImage: "doc.richtext") }
-                        .disabled(!isLoaded)
-                    Button { NoteExporter.print(workspace.editor, title: name) } label: { Label("Print", systemImage: "printer") }
-                        .disabled(!isLoaded)
-                }
-                Section {
-                    Button(role: .destructive) { workspace.trash(url) } label: { Label("Delete", systemImage: "trash") }
-                }
+                MenuEntry("Version History", "clock.arrow.circlepath", enabled: isLoaded) { workspace.browseVersions() }
+                MenuEntry.divider
+                let favorite = workspace.isFavorite(url)
+                MenuEntry(favorite ? "Remove from Favorites" : "Add to Favorites", favorite ? "star.slash" : "star") { workspace.toggleFavorite(url) }
+                MenuEntry("Remind Me…", "bell") { workspace.askForReminder(url) }
+                MenuEntry("Rename", "pencil", enabled: isLoaded) { workspace.editor.focusTitle() }
+                SharedMenus.moveTo(url, workspace: workspace)
+                MenuEntry("Duplicate", "plus.square.on.square") { workspace.duplicate(url) }
+                MenuEntry.divider
+                MenuEntry("Copy", "doc.on.doc", keys: "⇧⌘C") { workspace.copyFile(url) }
+                MenuEntry("Copy Link", "link") { workspace.copyLink(url) }
+                MenuEntry("Export as PDF", "doc.richtext", enabled: isLoaded) { export() }
+                MenuEntry("Print", "printer", keys: "⌘P", enabled: isLoaded) { NoteExporter.print(workspace.editor, title: name) }
+                MenuEntry.divider
+                MenuEntry("Delete", "trash", destructive: true) { workspace.trash(url) }
             } else {
                 if !isInSplitView {
-                    Button { showsOutline = true } label: { Label("Info", systemImage: "info.circle") }
+                    MenuEntry("Info", "info.circle") { showsOutline = true }
                 }
-                FileActions(workspace: workspace, url: url)
+                FileActions.entries(workspace, url)
             }
         } label: {
             Label("More", systemImage: "ellipsis")
@@ -329,19 +317,16 @@ struct PDFAddMenu: View {
     var hasPage = false
 
     var body: some View {
-        Menu {
-            Section {
-                ForEach(AttachmentSource.available) { source in
-                    Button { editing.addPictures(from: source) } label: {
-                        Label(source == .files ? "Choose File" : source.name, systemImage: source == .files ? "folder" : source.symbol)
-                    }
-                }
+        GlassMenuButton {
+            for source in AttachmentSource.available {
+                MenuEntry(source == .files ? "Choose File" : source.name, source == .files ? "folder" : source.symbol) { editing.addPictures(from: source) }
             }
+            MenuEntry.divider
             if hasPage {
-                Button { editing.showOverview() } label: { Label("All Pages", systemImage: "square.grid.2x2") }
-                PDFPageItems(editing: editing)
+                MenuEntry("All Pages", "square.grid.2x2") { editing.showOverview() }
+                PDFPageMenu.entries(editing)
             } else {
-                PaperMenu(title: "Add Page", symbol: "doc.badge.plus") { editing.addPage($0) }
+                PDFPageMenu.papers("Add Page", "doc.badge.plus") { editing.addPage($0) }
             }
         } label: {
             Label("Add", systemImage: "plus")
@@ -354,53 +339,31 @@ struct PDFPageMenu: View {
     let editing: PDFEditing
 
     var body: some View {
-        Menu {
-            PDFPageItems(editing: editing)
+        GlassMenuButton {
+            Self.entries(editing)
         } label: {
             Label("Page", systemImage: "doc.on.doc")
         }
     }
-}
 
-private struct PDFPageItems: View {
-    let editing: PDFEditing
-
-    var body: some View {
-        Section("Page \(editing.pageIndex + 1) of \(editing.pageCount)") {
-            PaperMenu(title: "Add Page After", symbol: "doc.badge.plus") { editing.addPage($0) }
-            // Only paper Notebook made: under a page of another PDF is what it shows.
-            if let paper = editing.paper {
-                Menu {
-                    Picker("Paper", selection: Binding(get: { paper }, set: { editing.changePaper(to: $0) })) {
-                        ForEach(PaperStyle.allCases) { style in
-                            Label(style.name, systemImage: style.symbol).tag(style)
-                        }
-                    }
-                } label: {
-                    Label("Paper", systemImage: "doc.richtext")
-                }
-            }
+    @MenuContent
+    static func entries(_ editing: PDFEditing) -> [MenuEntry] {
+        MenuEntry.section("Page \(editing.pageIndex + 1) of \(editing.pageCount)")
+        papers("Add Page After", "doc.badge.plus") { editing.addPage($0) }
+        // Only paper Notebook made: under a page of another PDF is what it shows.
+        if let paper = editing.paper {
+            papers("Paper", "doc.richtext", checked: paper) { editing.changePaper(to: $0) }
         }
-        Section {
-            Button(role: .destructive) { editing.deletePage() } label: { Label("Delete Page", systemImage: "trash") }
-                .disabled(editing.pageCount < 2)
-        }
+        MenuEntry.divider
+        MenuEntry("Delete Page", "trash", enabled: editing.pageCount >= 2, destructive: true) { editing.deletePage() }
     }
-}
 
-/// A menu of the papers, for a new page or a handwritten note.
-struct PaperMenu: View {
-    let title: String
-    let symbol: String
-    let action: (PaperStyle) -> Void
-
-    var body: some View {
-        Menu {
-            ForEach(PaperStyle.allCases) { paper in
-                Button { action(paper) } label: { Label(paper.name, systemImage: paper.symbol) }
+    /// A submenu of the papers, for a new page or a handwritten note; the one a page has ticked.
+    static func papers(_ title: String, _ symbol: String, checked: PaperStyle? = nil, action: @escaping (PaperStyle) -> Void) -> MenuEntry {
+        .submenu(title, symbol) {
+            for paper in PaperStyle.allCases {
+                MenuEntry(paper.name, paper.symbol, checked: paper == checked) { action(paper) }
             }
-        } label: {
-            Label(title, systemImage: symbol)
         }
     }
 }

@@ -65,6 +65,8 @@ public enum Theme {
     static let menuTextTertiary = NSColor(light: 0x6E6E73, dark: 0x8E8E95)
     static let menuField = NSColor.dynamic { isDark in isDark ? NSColor.white.withAlphaComponent(0.08) : NSColor.black.withAlphaComponent(0.05) }
     static let menuHighlight = NSColor.dynamic { isDark in accent.withAlphaComponent(isDark ? 0.24 : 0.14) }
+    /// Under a menu's glass on iPhone and iPad, so a picture behind it never makes its rows hard to read.
+    static let menuBackdrop = NSColor.dynamic { isDark in isDark ? NSColor(white: 0.11, alpha: 0.62) : NSColor(white: 1, alpha: 0.55) }
 
     // The capsules under a to-do being edited, as Reminders draws them: barely darker than the page, darker under the
     // pointer and while their dropdown is open.

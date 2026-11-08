@@ -17,39 +17,26 @@ struct HideFolderButton: View {
 }
 
 /// Shows a location's hidden folders, dimmed, until you turn it off: for its menus.
-struct ShowHiddenFoldersToggle: View {
-    let workspace: Workspace
-    let location: Location
-    /// In a menu of locations, the location's name and symbol instead.
-    var title = "Show Hidden Folders"
-    var symbol = "eye"
-
-    var body: some View {
-        Toggle(isOn: Binding(get: { workspace.showsHiddenFolders(in: location) }, set: { shows in
-            withAnimation { workspace.showHiddenFolders(shows, in: location) }
-        })) {
-            Label(title, systemImage: symbol)
-        }
+@MainActor
+enum ShowHiddenFolders {
+    /// Ticked while they show; in a menu of locations, the location's name and symbol instead.
+    static func entry(_ workspace: Workspace, _ location: Location, title: String = "Show Hidden Folders", symbol: String = "eye") -> MenuEntry {
+        let shows = workspace.showsHiddenFolders(in: location)
+        return MenuEntry(title, symbol, checked: shows) { withAnimation { workspace.showHiddenFolders(!shows, in: location) } }
     }
-}
 
-/// Show Hidden Folders in the ⋯ menu of the sidebar and the first screen, when there are any: for the one location
-/// that has them, or a menu of the locations that do.
-struct ShowHiddenFoldersMenu: View {
-    let workspace: Workspace
-
-    var body: some View {
+    /// Show Hidden Folders in the ⋯ menu of the sidebar and the first screen, when there are any: for the one location
+    /// that has them, or a submenu of the locations that do.
+    @MenuContent
+    static func entries(_ workspace: Workspace) -> [MenuEntry] {
         let locations = workspace.locations.filter(workspace.hasHiddenFolders(in:))
         if locations.count == 1, let location = locations.first {
-            ShowHiddenFoldersToggle(workspace: workspace, location: location)
+            entry(workspace, location)
         } else if !locations.isEmpty {
-            Menu {
-                ForEach(locations) { location in
-                    ShowHiddenFoldersToggle(workspace: workspace, location: location, title: location.name,
-                                            symbol: location.isICloudDrive ? "icloud" : "externaldrive")
+            MenuEntry.submenu("Show Hidden Folders", "eye") {
+                for location in locations {
+                    entry(workspace, location, title: location.name, symbol: location.isICloudDrive ? "icloud" : "externaldrive")
                 }
-            } label: {
-                Label("Show Hidden Folders", systemImage: "eye")
             }
         }
     }
@@ -70,8 +57,8 @@ struct LocationHeader: View {
         HStack {
             // A menu of its own, opened with a tap: a list's context menus come only from its rows, and its long press
             // never reaches a section's header, not even a menu's.
-            Menu {
-                FileActions(workspace: workspace, url: location.url, newFolder: newFolder)
+            GlassMenuButton {
+                FileActions.entries(workspace, location.url, newFolder: newFolder)
             } label: {
                 Text(location.name)
             }

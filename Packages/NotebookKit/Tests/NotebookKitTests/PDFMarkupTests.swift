@@ -145,12 +145,17 @@ final class PDFMarkupTests: XCTestCase {
         let selection = try XCTUnwrap(page.selection(for: text.range(of: "Booking reference")))
         view.setCurrentSelection(selection, animate: false)
         let onText = view.convert(view.convert(CGPoint(x: selection.bounds(for: page).midX, y: selection.bounds(for: page).midY), from: page), to: nil)
-        func rightClick() -> NSMenu? {
-            let event = NSEvent.mouseEvent(with: .rightMouseDown, location: onText, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
+        // A right-click opens the menu in glass; the AppKit menu, which VoiceOver's Show Menu gets, is asked for here by a
+        // click of another button.
+        func rightClick(_ type: NSEvent.EventType = .otherMouseDown) -> NSMenu? {
+            let event = NSEvent.mouseEvent(with: type, location: onText, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
                                            context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
             return view.menu(for: event)
         }
 
+        XCTAssertNil(rightClick(.rightMouseDown))
+        XCTAssertTrue(Dropdown.isOpen, "a right-click opens the glass menu")
+        Dropdown.close()
         let menu = try XCTUnwrap(rightClick())
         XCTAssertEqual(menu.items.first?.title, "Highlight")
         XCTAssertEqual(menu.items.first?.keyEquivalentModifierMask, [.command, .control])

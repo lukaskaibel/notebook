@@ -439,7 +439,12 @@ lists each kind of file has a symbol of its own, in the accent colour as folders
 
 The window is built from the system's own pieces: a source-list sidebar, a toolbar with the system's search field and
 share menu, an inspector, Settings, alerts, PDFKit, AVKit and Quick Look. It follows the system's light or dark
-appearance. Some of the sidebar's manners come from Notion: the row under the pointer gets a soft fill, with ••• for its
+appearance. Menus are the exception, drawn as Linear draws them: right-click anything, or open Aa or ⋯ in the toolbar,
+and a glass panel opens with a symbol and the keys beside each entry and, in a longer menu, a field on top. Type in it
+and it finds any entry, also inside a submenu: "pdf" in the ⋯ menu finds Export As › PDF…. A submenu opens as the
+pointer rests on its row and stays while the pointer heads for it across other rows. Move To lists your folders with
+their own symbols and colours; type a folder's name and press Return. The right-click menu of a note's text has Format
+too. The menu bar stays the Mac's. Some of the sidebar's manners come from Notion: the row under the pointer gets a soft fill, with ••• for its
 menu and, on a folder, + for a new note in it; a location's name has the same two, and a click on it folds the
 location. The inspector shows a note's outline, with the section you're reading marked and a word count; a click on
 a heading scrolls there. In Settings › Text you pick the typeface (San Francisco, New York, Rounded or Monospaced,
@@ -467,10 +472,13 @@ from the camera, the document scanner, your photos or the Files app. The pencil,
 bar, draws in the note with Apple's tool picker. Tap a checkbox to tick it, a link to
 follow it, a picture to look at it, a drawing to draw in it; touch and hold a picture and drag it to move it in the
 note, or let go to copy, share or delete it. Swipe a file to move or delete it, or to make it a favourite; touch and
-hold it for everything else.
+hold it for everything else: its menu opens under it in the same glass panel as the Mac's, sized for a finger, with a
+tap of the phone, and moving on drags the file instead. Long menus have a field to type in, which brings up the
+keyboard only when you tap it. A submenu such as Move To opens in the menu's place, with a way back at its top.
 
 The iPad has the Mac's layout: the sidebar with its folders opening in place, the note next to it, and the outline in
-an inspector. New Note at the top of the sidebar asks whether to type or write by hand. In portrait the sidebar steps aside once you have picked a note. With a keyboard, the Mac's shortcuts
+an inspector. Its menus open their submenus beside them, as on the Mac, show the keys while a keyboard is attached, and
+open with a right-click on a trackpad or mouse too. New Note at the top of the sidebar asks whether to type or write by hand. In portrait the sidebar steps aside once you have picked a note. With a keyboard, the Mac's shortcuts
 work, the menu bar has the Mac's File, View, Go and Format menus, the marks show next to the caret as on the Mac, and
 the bar above the keyboard steps aside, as in Notes: Aa, attachments and the pencil are in the toolbar at the top. Drag
 pictures from Photos into a note, or files onto a folder in the sidebar. A window as narrow as a phone gets the iPhone's

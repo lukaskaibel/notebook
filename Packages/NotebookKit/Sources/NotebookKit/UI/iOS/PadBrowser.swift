@@ -156,22 +156,18 @@ struct PadBrowser: View {
                 }
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Menu {
-                            Button { newFolderIn = newFolderParent } label: {
-                                Label("New Folder", systemImage: "folder.badge.plus")
-                            }
-                            Button { addsLocation = true } label: { Label("Add Location", systemImage: "plus.rectangle.on.folder") }
+                        GlassMenuButton {
+                            MenuEntry("New Folder", "folder.badge.plus", keys: "⇧⌘N") { newFolderIn = newFolderParent }
+                            MenuEntry("Add Location", "plus.rectangle.on.folder") { addsLocation = true }
                             if let folder = workspace.selectedFolder ?? workspace.folderForNewNote {
-                                Button { workspace.appleNotesImportFolder = folder } label: {
-                                    Label("Import from Apple Notes", systemImage: "square.and.arrow.down.on.square")
-                                }
+                                MenuEntry("Import from Apple Notes", "square.and.arrow.down.on.square") { workspace.appleNotesImportFolder = folder }
                             }
-                            Section {
-                                SortByPicker(folder: workspace.folderInView)
-                                Toggle(isOn: $settings.foldersFirst) { Label("Keep Folders on Top", systemImage: "folder") }
-                            }
-                            ShowHiddenFoldersMenu(workspace: workspace)
-                            Button { showsSettings = true } label: { Label("Settings", systemImage: "gearshape") }
+                            MenuEntry.divider
+                            SortByPicker.entry(folder: workspace.folderInView)
+                            MenuEntry("Keep Folders on Top", "folder", checked: settings.foldersFirst) { settings.foldersFirst.toggle() }
+                            ShowHiddenFolders.entries(workspace)
+                            MenuEntry.divider
+                            MenuEntry("Settings", "gearshape", keys: "⌘,") { showsSettings = true }
                         } label: {
                             // Not More, which the note's ⋯ next to it is.
                             Label("More for Notebook", systemImage: "ellipsis")
@@ -305,7 +301,7 @@ struct PadSidebar: View {
                 row.tag(url)
             }
         }
-        .contextMenu { FileActions(workspace: workspace, url: url) { newFolderIn = $0 } }
+        .glassContextMenu { FileActions.entries(workspace, url) { newFolderIn = $0 } }
     }
 
     private func sectionBinding(_ key: String) -> Binding<Bool> {
@@ -343,7 +339,7 @@ struct FolderTree: View {
                         .contentShape(Rectangle())
                         .onTapGesture { withAnimation(.snappy) { toggle(node.url.path) } }
                         .fileDragAndDrop(node.url, isFolder: true, workspace: workspace)
-                        .contextMenu { FileActions(workspace: workspace, url: node.url) { newFolderIn = $0 } }
+                        .glassContextMenu { FileActions.entries(workspace, node.url) { newFolderIn = $0 } }
                         // VoiceOver reads the row, arrow and all, as one: "Personal, collapsed", as Files does.
                         .accessibilityValue(expanded.contains(node.url.path) ? "expanded" : "collapsed")
                 }
@@ -353,7 +349,7 @@ struct FolderTree: View {
                     .tag(node.url)
                     .id(node.url)
                     .fileDragAndDrop(node.url, isFolder: false, workspace: workspace)
-                    .contextMenu { FileActions(workspace: workspace, url: node.url) { newFolderIn = $0 } }
+                    .glassContextMenu { FileActions.entries(workspace, node.url) { newFolderIn = $0 } }
             }
         }
     }

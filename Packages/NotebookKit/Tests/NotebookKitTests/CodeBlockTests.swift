@@ -116,9 +116,18 @@ final class CodeBlockTests: XCTestCase {
     func testContextMenuOfACodeBlockCopiesTheCode() throws {
         let h = EditorHarness(code)
         let point = h.textView.convert(h.point(of: h.range(of: "print").location), to: nil)
-        let event = try XCTUnwrap(NSEvent.mouseEvent(with: .rightMouseDown, location: point, modifierFlags: [], timestamp: 0,
+        // A right-click opens the menu in glass; the AppKit menu it is made from is what VoiceOver's Show Menu gets, here
+        // asked for by a click of another button.
+        let click = try XCTUnwrap(NSEvent.mouseEvent(with: .rightMouseDown, location: point, modifierFlags: [], timestamp: 0,
+                                                     windowNumber: h.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+        XCTAssertNil(h.textView.menu(for: click))
+        XCTAssertTrue(Dropdown.isOpen, "a right-click opens the glass menu")
+        Dropdown.close()
+        let event = try XCTUnwrap(NSEvent.mouseEvent(with: .otherMouseDown, location: point, modifierFlags: [], timestamp: 0,
                                                      windowNumber: h.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
         let menu = try XCTUnwrap(h.textView.menu(for: event))
+        let entries = h.editor.glassEntries(from: menu)
+        XCTAssertEqual(entries.first?.title, "Copy Code", "the glass menu has it first too")
         let item = try XCTUnwrap(menu.items.first)
         XCTAssertEqual(item.title, "Copy Code")
         NSPasteboard.general.clearContents()
@@ -126,7 +135,7 @@ final class CodeBlockTests: XCTestCase {
         XCTAssertEqual(NSPasteboard.general.string(forType: .string), "let a = 1\n\nprint(a)")
 
         let outside = h.textView.convert(h.point(of: h.range(of: "After").location), to: nil)
-        let plain = try XCTUnwrap(NSEvent.mouseEvent(with: .rightMouseDown, location: outside, modifierFlags: [], timestamp: 0,
+        let plain = try XCTUnwrap(NSEvent.mouseEvent(with: .otherMouseDown, location: outside, modifierFlags: [], timestamp: 0,
                                                      windowNumber: h.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
         XCTAssertNotEqual(h.textView.menu(for: plain)?.items.first?.title, "Copy Code")
     }

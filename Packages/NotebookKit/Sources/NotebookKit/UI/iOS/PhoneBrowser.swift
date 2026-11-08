@@ -190,7 +190,7 @@ struct HomeScreen: View {
                         ForEach(children, id: \.url) { node in
                             NavigationLink(value: Page(url: node.url, isFolder: node.isFolder)) { node.row(in: workspace) }
                                 .fileDragAndDrop(node.url, isFolder: node.isFolder, workspace: workspace)
-                                .contextMenu { FileActions(workspace: workspace, url: node.url) { newFolderIn = $0 } }
+                                .glassContextMenu { FileActions.entries(workspace, node.url) { newFolderIn = $0 } }
                         }
                         if children.isEmpty, workspace.isRead(location.url) {
                             Text("Empty").foregroundStyle(.secondary)
@@ -213,20 +213,18 @@ struct HomeScreen: View {
         .refreshable { workspace.refresh(thoroughly: true) }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button { addsLocation = true } label: { Label("Add Location", systemImage: "plus.rectangle.on.folder") }
+                GlassMenuButton {
+                    MenuEntry("Add Location", "plus.rectangle.on.folder") { addsLocation = true }
                     if let folder = workspace.defaultFolder {
-                        Button { workspace.appleNotesImportFolder = folder } label: {
-                            Label("Import from Apple Notes", systemImage: "square.and.arrow.down.on.square")
-                        }
+                        MenuEntry("Import from Apple Notes", "square.and.arrow.down.on.square") { workspace.appleNotesImportFolder = folder }
                     }
                     // The files at the top of each location below are sorted too.
-                    Section {
-                        SortByPicker(folder: nil)
-                        Toggle(isOn: $settings.foldersFirst) { Label("Keep Folders on Top", systemImage: "folder") }
-                    }
-                    ShowHiddenFoldersMenu(workspace: workspace)
-                    Button { showsSettings = true } label: { Label("Settings", systemImage: "gearshape") }
+                    MenuEntry.divider
+                    SortByPicker.entry(folder: nil)
+                    MenuEntry("Keep Folders on Top", "folder", checked: settings.foldersFirst) { settings.foldersFirst.toggle() }
+                    ShowHiddenFolders.entries(workspace)
+                    MenuEntry.divider
+                    MenuEntry("Settings", "gearshape") { showsSettings = true }
                 } label: {
                     Label("More", systemImage: "ellipsis")
                 }
@@ -269,13 +267,10 @@ struct HomeScreen: View {
         if workspace.locations.count == 1, let location = workspace.locations.first {
             Button { newFolderIn = location.url } label: { label }
         } else {
-            Menu {
-                Section("New Folder In") {
-                    ForEach(workspace.locations) { location in
-                        Button { newFolderIn = location.url } label: {
-                            Label(location.name, systemImage: location.isICloudDrive ? "icloud" : "folder")
-                        }
-                    }
+            GlassMenuButton {
+                MenuEntry.section("New Folder In")
+                for location in workspace.locations {
+                    MenuEntry(location.name, location.isICloudDrive ? "icloud" : "folder") { newFolderIn = location.url }
                 }
             } label: { label }
         }
@@ -284,7 +279,7 @@ struct HomeScreen: View {
     private func link(_ url: URL, row: FileRow) -> some View {
         let isFolder = row.kind == .folder
         return NavigationLink(value: Page(url: url, isFolder: isFolder)) { row }
-            .contextMenu { FileActions(workspace: workspace, url: url) { newFolderIn = $0 } }
+            .glassContextMenu { FileActions.entries(workspace, url) { newFolderIn = $0 } }
     }
 
     private func open(_ result: SearchResult) {
@@ -318,7 +313,7 @@ struct FolderScreen: View {
                         node.row(in: workspace, showsDetail: true)
                     }
                     .fileDragAndDrop(node.url, isFolder: node.isFolder, workspace: workspace)
-                    .contextMenu { FileActions(workspace: workspace, url: node.url) { newFolderIn = $0 } }
+                    .glassContextMenu { FileActions.entries(workspace, node.url) { newFolderIn = $0 } }
                     .swipeActions(edge: .trailing) {
                         if !node.isLinked {
                             // Red as in Notes and Mail: a destructive swipe would take the app's ink instead.
@@ -378,28 +373,24 @@ struct FolderScreen: View {
         .onAppear { workspace.selectedFolder = page.url }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Section {
-                        NewHandwrittenNoteMenu { workspace.newHandwrittenNote(in: page.url, paper: $0) }
-                        Button { newFolderIn = page.url } label: { Label("New Folder", systemImage: "folder.badge.plus") }
-                        Button { workspace.appleNotesImportFolder = page.url } label: {
-                            Label("Import from Apple Notes", systemImage: "square.and.arrow.down.on.square")
+                GlassMenuButton {
+                    MenuEntry.submenu("New Handwritten Note", "pencil.and.scribble") {
+                        for paper in PaperStyle.allCases {
+                            MenuEntry(paper.name, paper.symbol) { workspace.newHandwrittenNote(in: page.url, paper: paper) }
                         }
                     }
-                    Section {
-                        SortByPicker(folder: page.url)
-                        Toggle(isOn: $settings.foldersFirst) { Label("Keep Folders on Top", systemImage: "folder") }
-                        Toggle(isOn: $settings.showsOnlyNotes) { Label("Show Only Notes", systemImage: "doc.text") }
-                        if let location = workspace.location(containing: page.url), workspace.hasHiddenFolders(in: location) {
-                            ShowHiddenFoldersToggle(workspace: workspace, location: location)
-                        }
+                    MenuEntry("New Folder", "folder.badge.plus") { newFolderIn = page.url }
+                    MenuEntry("Import from Apple Notes", "square.and.arrow.down.on.square") { workspace.appleNotesImportFolder = page.url }
+                    MenuEntry.divider
+                    SortByPicker.entry(folder: page.url)
+                    MenuEntry("Keep Folders on Top", "folder", checked: settings.foldersFirst) { settings.foldersFirst.toggle() }
+                    MenuEntry("Show Only Notes", "doc.text", checked: settings.showsOnlyNotes) { settings.showsOnlyNotes.toggle() }
+                    if let location = workspace.location(containing: page.url), workspace.hasHiddenFolders(in: location) {
+                        ShowHiddenFolders.entry(workspace, location)
                     }
-                    Section {
-                        let favorite = workspace.isFavorite(page.url)
-                        Button { workspace.toggleFavorite(page.url) } label: {
-                            Label(favorite ? "Remove from Favorites" : "Add to Favorites", systemImage: favorite ? "star.slash" : "star")
-                        }
-                    }
+                    MenuEntry.divider
+                    let favorite = workspace.isFavorite(page.url)
+                    MenuEntry(favorite ? "Remove from Favorites" : "Add to Favorites", favorite ? "star.slash" : "star") { workspace.toggleFavorite(page.url) }
                 } label: {
                     Label("More", systemImage: "ellipsis")
                 }

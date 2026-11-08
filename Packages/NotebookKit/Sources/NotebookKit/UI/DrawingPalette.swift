@@ -67,19 +67,17 @@ struct DrawingPalette: View {
     }
 
     private var widthMenu: some View {
-        Menu {
-            Picker("Width", selection: $tools.widthLevel) {
-                Text("Fine").tag(0)
-                Text("Medium").tag(1)
-                Text("Bold").tag(2)
+        GlassMenuButton {
+            for (level, name) in ["Fine", "Medium", "Bold"].enumerated() {
+                MenuEntry(name, checked: tools.widthLevel == level) { tools.widthLevel = level }
             }
-            .pickerStyle(.inline)
         } label: {
             Image(systemName: "lineweight")
         }
-        .menuIndicator(.hidden)
+        .buttonStyle(.borderless)
         .fixedSize()
         .help("Width")
+        .accessibilityLabel("Width")
     }
 
     private func swatch(_ color: NSColor) -> some View {

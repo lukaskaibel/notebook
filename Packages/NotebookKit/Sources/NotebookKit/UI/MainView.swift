@@ -128,7 +128,7 @@ struct DocumentToolbar: ToolbarContent {
         if let url = workspace.currentURL {
             if let note = workspace.note {
                 ToolbarItemGroup {
-                    FormatMenu().disabled(!note.isLoaded)
+                    FormatMenu(workspace: workspace).disabled(!note.isLoaded)
                     DrawingToggle(workspace: workspace).disabled(!note.isLoaded)
                 }
                 ToolbarSpacer(.fixed)
@@ -177,39 +177,17 @@ struct DocumentToolbar: ToolbarContent {
 }
 
 /// The formatting commands, as in Notes' Aa button: the text styles each set as it is in the note, the rest with
-/// their symbols. They go to the note, which keeps the caret.
+/// their symbols and keys, in glass like every menu of the app. They go to the note, which keeps the caret.
 struct FormatMenu: View {
+    let workspace: Workspace
+
     var body: some View {
-        Menu {
-            style(.title, #selector(MarkdownTextView.makeTitle(_:)))
-            style(.heading, #selector(MarkdownTextView.makeHeading(_:)))
-            style(.subheading, #selector(MarkdownTextView.makeSubheading(_:)))
-            style(.body, #selector(MarkdownTextView.makeBody(_:)))
-            Divider()
-            item("Bold", #selector(MarkdownTextView.toggleBoldface(_:)), "bold")
-            item("Italic", #selector(MarkdownTextView.toggleItalics(_:)), "italic")
-            item("Strikethrough", #selector(MarkdownTextView.toggleStrikethrough(_:)), "strikethrough")
-            item("Highlight", #selector(MarkdownTextView.toggleHighlight(_:)), "highlighter")
-            item("Code", #selector(MarkdownTextView.toggleInlineCode(_:)), "chevron.left.forwardslash.chevron.right")
-            item("Link", #selector(MarkdownTextView.addLink(_:)), "link")
-            Divider()
-            item("Checklist", #selector(MarkdownTextView.makeChecklist(_:)), "checklist")
-            item("Bulleted List", #selector(MarkdownTextView.makeBulletedList(_:)), "list.bullet")
-            item("Numbered List", #selector(MarkdownTextView.makeNumberedList(_:)), "list.number")
-            item("Block Quote", #selector(MarkdownTextView.makeQuote(_:)), "text.quote")
+        GlassMenuButton {
+            SharedMenus.format(workspace.editor, styleSize: MenuMetrics.mac.fontSize)
         } label: {
             Label("Format", systemImage: "textformat")
         }
         .help("Format")
-    }
-
-    private func item(_ title: String, _ action: Selector, _ symbol: String) -> some View {
-        Button { NSApp.sendAction(action, to: nil, from: nil) } label: { Label(title, systemImage: symbol) }
-    }
-
-    private func style(_ style: FormatCommand, _ action: Selector) -> some View {
-        let font = EditorStyle.styleSample(style, size: NSFont.menuFont(ofSize: 0).pointSize, face: NotebookSettings.shared.typography.face)
-        return Button { NSApp.sendAction(action, to: nil, from: nil) } label: { Text(style.name).font(Font(font)) }
     }
 }
 
@@ -218,41 +196,33 @@ struct MoreMenu: View {
     let url: URL
 
     var body: some View {
-        Menu {
+        GlassMenuButton {
             let favorite = workspace.isFavorite(url)
-            Button { workspace.toggleFavorite(url) } label: {
-                Label(favorite ? "Remove from Favorites" : "Add to Favorites", systemImage: favorite ? "star.slash" : "star")
-            }
+            MenuEntry(favorite ? "Remove from Favorites" : "Add to Favorites", favorite ? "star.slash" : "star") { workspace.toggleFavorite(url) }
             if workspace.note != nil {
-                Button { workspace.askForReminder(url) } label: { Label("Remind Me…", systemImage: "bell") }
+                MenuEntry("Remind Me…", "bell") { workspace.askForReminder(url) }
             }
-            Divider()
-            Button { workspace.editor.focusTitle() } label: { Label("Rename", systemImage: "pencil") }
-                .disabled(workspace.note?.isLoaded != true)
-            MoveToMenu(workspace: workspace, url: url)
-            Button { workspace.duplicate(url) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
-            Divider()
-            Button { workspace.copyFile(url) } label: { Label("Copy File", systemImage: "doc.on.doc") }
-            Button { workspace.copyLink(url) } label: { Label("Copy Link", systemImage: "link") }
-            Button { workspace.revealInFinder(url) } label: { Label("Show in Finder", systemImage: "finder") }
+            MenuEntry.divider
+            MenuEntry("Rename", "pencil", enabled: workspace.note?.isLoaded == true) { workspace.editor.focusTitle() }
+            SharedMenus.moveTo(url, workspace: workspace)
+            MenuEntry("Duplicate", "plus.square.on.square", keys: "⌘D") { workspace.duplicate(url) }
+            MenuEntry.divider
+            MenuEntry("Copy File", "doc.on.doc", keys: "⇧⌘C") { workspace.copyFile(url) }
+            MenuEntry("Copy Link", "link") { workspace.copyLink(url) }
+            MenuEntry("Show in Finder", "finder") { workspace.revealInFinder(url) }
             if let note = workspace.note {
-                Divider()
-                Menu {
-                    Button { workspace.export(as: .pdf) } label: { Label("PDF…", systemImage: "doc.richtext") }
-                    Button { workspace.export(as: .png) } label: { Label("PNG Image…", systemImage: "photo") }
-                } label: {
-                    Label("Export As", systemImage: "square.and.arrow.up.on.square")
+                MenuEntry.divider
+                MenuEntry.submenu("Export As", "square.and.arrow.up.on.square", enabled: note.isLoaded) {
+                    MenuEntry("PDF…", "doc.richtext", keys: "⌥⌘E") { workspace.export(as: .pdf) }
+                    MenuEntry("PNG Image…", "photo") { workspace.export(as: .png) }
                 }
-                .disabled(!note.isLoaded)
-                Button { workspace.printNote() } label: { Label("Print…", systemImage: "printer") }
-                    .disabled(!note.isLoaded)
+                MenuEntry("Print…", "printer", keys: "⌘P", enabled: note.isLoaded) { workspace.printNote() }
             }
-            Divider()
-            Button(role: .destructive) { workspace.trash(url) } label: { Label("Move to Trash", systemImage: "trash") }
+            MenuEntry.divider
+            MenuEntry("Move to Trash", "trash", destructive: true) { workspace.trash(url) }
         } label: {
             Label("More", systemImage: "ellipsis")
         }
-        .menuIndicator(.hidden)
         .help("More")
     }
 }

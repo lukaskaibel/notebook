@@ -143,28 +143,16 @@ extension EditorController {
         shownHeadingMark = rect
     }
 
-    /// Title, Heading, Subheading or Body, for the heading the caret is on, each set as it is in the note.
+    /// Title, Heading, Subheading or Body, for the heading the caret is on, each set as it is in the note, in glass as
+    /// the Aa menu has them.
     func showHeadingMenu(at point: NSPoint) {
         let line = document.lines[document.lineIndex(containing: selection.location)]
-        guard case .heading(let level, _) = line.kind else { return }
-        let menu = NSMenu()
-        let items: [(FormatCommand, Selector, Int)] = [
-            (.title, #selector(MarkdownTextView.makeTitle(_:)), 1),
-            (.heading, #selector(MarkdownTextView.makeHeading(_:)), 2),
-            (.subheading, #selector(MarkdownTextView.makeSubheading(_:)), 3),
-            (.body, #selector(MarkdownTextView.makeBody(_:)), 0),
-        ]
-        let size = NSFont.menuFont(ofSize: 0).pointSize
-        for (style, action, itemLevel) in items {
-            let item = NSMenuItem(title: style.name, action: action, keyEquivalent: "")
-            item.attributedTitle = NSAttributedString(string: style.name, attributes: [
-                .font: EditorStyle.styleSample(style, size: size, face: EditorStyle.typography.face),
-            ])
-            item.target = textView
-            item.state = itemLevel == level ? .on : .off
-            menu.addItem(item)
+        guard case .heading = line.kind else { return }
+        let entries = FormatCommand.styles.map { style in
+            MenuEntry(style.name, style.symbol, keys: style.keys, checked: currentLineFormat == style) { [weak self] in self?.perform(style) }
+                .with { $0.font = Font(EditorStyle.styleSample(style, size: MenuMetrics.mac.fontSize, face: EditorStyle.typography.face)) }
         }
-        menu.popUp(positioning: nil, at: NSPoint(x: point.x, y: point.y + 12), in: textView)
+        GlassMenu.show(entries, at: NSRect(x: point.x, y: point.y + 4, width: 1, height: 8), in: textView)
     }
     #endif
 }

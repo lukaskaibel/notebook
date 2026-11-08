@@ -657,9 +657,28 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         let menu = NSMenu()
         fill(menu, row: row)
         guard !menu.items.isEmpty else { return }
-        let below = view.isFlipped ? NSPoint(x: 0, y: view.bounds.maxY + 4) : NSPoint(x: 0, y: -4)
-        menu.popUp(positioning: nil, at: below, in: view)
+        markMenu(of: row)
+        GlassMenu.show(GlassMenu.entries(from: menu), at: view.bounds, in: view) { [weak self] in self?.markMenu(of: nil) }
         outline.queueHoverUpdate()
+    }
+
+    /// A right-click: the row's menu in glass at the pointer, the row ringed while it is open, as AppKit rings it.
+    func showMenu(for event: NSEvent) {
+        let row = outline.row(at: outline.convert(event.locationInWindow, from: nil))
+        let menu = NSMenu()
+        fill(menu, row: row)
+        guard !menu.items.isEmpty else { return }
+        markMenu(of: row >= 0 ? row : nil)
+        GlassMenu.show(GlassMenu.entries(from: menu), at: event, in: outline) { [weak self] in self?.markMenu(of: nil) }
+    }
+
+    /// The row whose menu is open.
+    private var menuRow: Int?
+
+    private func markMenu(of row: Int?) {
+        if let old = menuRow, let view = outline.rowView(atRow: old, makeIfNecessary: false) as? SidebarRowView { view.isMenuTarget = false }
+        menuRow = row
+        if let row, let view = outline.rowView(atRow: row, makeIfNecessary: false) as? SidebarRowView { view.isMenuTarget = true }
     }
 
     @objc private func doubleClicked(_ sender: Any?) {
@@ -832,7 +851,10 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         add(menu, "Show in Finder", "folder") { [weak self] in self?.workspace.revealInFinder(url) }
         if !isLinked {
             menu.addItem(.separator())
-            add(menu, "Move to Trash", "trash") { [weak self] in self?.workspace.trash(url, next: self?.nextFile(after: row)) }
+            let trash = add(menu, "Move to Trash", "trash") { [weak self] in self?.workspace.trash(url, next: self?.nextFile(after: row)) }
+            trash.isDestructive = true
+            trash.keyEquivalent = "\u{8}"
+            trash.keyEquivalentModifierMask = .command
         }
     }
 
@@ -845,7 +867,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     }
 
     @discardableResult
-    private func add(_ menu: NSMenu, _ title: String, _ symbol: String, action: @escaping () -> Void) -> NSMenuItem {
+    private func add(_ menu: NSMenu, _ title: String, _ symbol: String, action: @escaping () -> Void) -> ClosureMenuItem {
         let item = ClosureMenuItem(title: title, action: action)
         item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
         menu.addItem(item)
@@ -956,6 +978,16 @@ final class SidebarOutlineView: NSOutlineView {
             controller?.toggle(node)
         }
         super.mouseDown(with: event)
+    }
+
+    /// A right-click opens the row's menu in glass, like every menu of the app; VoiceOver's Show Menu still gets the
+    /// AppKit menu.
+    override func menu(for event: NSEvent) -> NSMenu? {
+        if GlassMenu.isContextClick(event), let controller {
+            controller.showMenu(for: event)
+            return nil
+        }
+        return super.menu(for: event)
     }
 
     // A folder's arrow a step quieter than AppKit's, as Notion has them: the folder's icon and name say more. No
@@ -1130,8 +1162,19 @@ final class SidebarRowView: NSTableRowView {
         didSet { if isHovered != oldValue { needsDisplay = true } }
     }
 
+    /// Its menu is open: ringed in the accent colour, as AppKit rings the row of a right-click menu.
+    var isMenuTarget = false {
+        didSet { if isMenuTarget != oldValue { needsDisplay = true } }
+    }
+
     override func drawBackground(in dirtyRect: NSRect) {
         super.drawBackground(in: dirtyRect)
+        if isMenuTarget {
+            NSColor.controlAccentColor.setStroke()
+            let ring = NSBezierPath(roundedRect: bounds.insetBy(dx: 11, dy: 1), xRadius: 6.5, yRadius: 6.5)
+            ring.lineWidth = 2
+            ring.stroke()
+        }
         guard isHovered, !isSelected, !isGroupRowStyle else { return }
         Self.hoverFill.setFill()
         NSBezierPath(roundedRect: bounds.insetBy(dx: 10, dy: 0), xRadius: 7.5, yRadius: 7.5).fill()
@@ -1140,6 +1183,7 @@ final class SidebarRowView: NSTableRowView {
     override func prepareForReuse() {
         super.prepareForReuse()
         isHovered = false
+        isMenuTarget = false
     }
 }
 
@@ -1509,6 +1553,8 @@ final class SidebarFileCell: NSTableCellView {
 /// A menu item that runs a closure.
 final class ClosureMenuItem: NSMenuItem {
     private let handler: () -> Void
+    /// Drawn in red in a glass menu, as Move to Trash.
+    var isDestructive = false
 
     init(title: String, action handler: @escaping () -> Void) {
         self.handler = handler

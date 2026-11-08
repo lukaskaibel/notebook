@@ -885,9 +885,6 @@ struct TodoRowView: View {
     @State private var isHovered = false
     @State private var isPicking = false
     @State private var titleWidth: CGFloat = 0
-    #if os(iOS)
-    @State private var rowWidth: CGFloat = 0
-    #endif
 
     /// At most this many lines under a to-do show while it isn't edited.
     static let shownLines = 6
@@ -955,32 +952,10 @@ struct TodoRowView: View {
         .contentShape(.rect)
         #if os(macOS)
         .onHover { isHovered = $0 }
-        .contextMenu { menu }
-        #else
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
-        .contextMenu { menu } preview: { preview }
         #endif
+        .glassContextMenu { menuEntries }
         .accessibilityElement(children: .contain)
     }
-
-    #if os(iOS)
-    /// Touched and held, the row lifts on a card of its own, as a reminder does, rather than its words alone over the
-    /// list.
-    private var preview: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            TodoCircle(mark: isTicked ? .done : mark)
-            VStack(alignment: .leading, spacing: 3) {
-                titleText
-                lines
-                meta
-            }
-        }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 14)
-        .frame(width: rowWidth + 28, alignment: .leading)
-        .background(Color.theme(Theme.panel))
-    }
-    #endif
 
     private var mark: TaskMark {
         if case .todo(let item) = row { item.todo.mark } else { .open }
@@ -1126,42 +1101,42 @@ struct TodoRowView: View {
         }
     }
 
-    @ViewBuilder
-    private var menu: some View {
+    @MenuContent
+    private var menuEntries: [MenuEntry] {
         if case .todo(let item) = row, item.isLoose {
-            Button { moveToNote() } label: { Label("Move to Note…", systemImage: Self.moveSymbol) }
+            MenuEntry("Move to Note…", Self.moveSymbol) { moveToNote() }
         } else {
-            Button { open() } label: { Label("Open Note", systemImage: "doc.text") }
+            MenuEntry("Open Note", "doc.text") { open() }
         }
-        Divider()
+        MenuEntry.divider
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: .now)
-        Button { workspace.move(row, to: today) } label: { Label("Today", systemImage: "star") }
-        Button { workspace.move(row, to: calendar.date(byAdding: .day, value: 1, to: today)) } label: { Label("Tomorrow", systemImage: "sunrise") }
+        MenuEntry("Today", "star") { workspace.move(row, to: today) }
+        MenuEntry("Tomorrow", "sunrise") { workspace.move(row, to: calendar.date(byAdding: .day, value: 1, to: today)) }
         if let weekend = calendar.nextWeekend(startingAfter: today)?.start {
-            Button { workspace.move(row, to: weekend) } label: { Label("This Weekend", systemImage: "sofa") }
+            MenuEntry("This Weekend", "sofa") { workspace.move(row, to: weekend) }
         }
         if let monday = calendar.nextDate(after: today, matching: DateComponents(weekday: 2), matchingPolicy: .nextTime) {
-            Button { workspace.move(row, to: monday) } label: { Label("Next Week", systemImage: "calendar") }
+            MenuEntry("Next Week", "calendar") { workspace.move(row, to: monday) }
         }
-        Button { ask() } label: { Label("Remind Me…", systemImage: "bell") }
+        MenuEntry("Remind Me…", "bell") { ask() }
         if row.date != nil, case .todo = row {
-            Button { workspace.move(row, to: nil) } label: { Label("Remove Date", systemImage: "calendar.badge.minus") }
+            MenuEntry("Remove Date", "calendar.badge.minus") { workspace.move(row, to: nil) }
         }
-        Divider()
-        Button { tick() } label: { Label(isTicked ? "Not Done" : "Mark as Done", systemImage: "checkmark.circle") }
+        MenuEntry.divider
+        MenuEntry(isTicked ? "Not Done" : "Mark as Done", "checkmark.circle") { tick() }
         if case .todo(let item) = row, !isTicked {
             // Obsidian's `[/]` and `[-]`.
             if item.todo.mark == .inProgress {
-                Button { workspace.setTodoMark(item.reference, .open) } label: { Label("Not Started", systemImage: "circle") }
+                MenuEntry("Not Started", "circle") { workspace.setTodoMark(item.reference, .open) }
             } else {
-                Button { workspace.setTodoMark(item.reference, .inProgress) } label: { Label("Mark as In Progress", systemImage: "circle.righthalf.filled") }
+                MenuEntry("Mark as In Progress", "circle.righthalf.filled") { workspace.setTodoMark(item.reference, .inProgress) }
             }
-            Button { workspace.setTodoMark(item.reference, .cancelled) } label: { Label("Mark as Cancelled", systemImage: "xmark.circle") }
+            MenuEntry("Mark as Cancelled", "xmark.circle") { workspace.setTodoMark(item.reference, .cancelled) }
         }
         if row.isTodo {
-            Divider()
-            Button(role: .destructive, action: delete) { Label("Delete", systemImage: "trash") }
+            MenuEntry.divider
+            MenuEntry("Delete", "trash", destructive: true) { delete() }
         }
     }
 }

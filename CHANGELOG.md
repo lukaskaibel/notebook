@@ -56,6 +56,15 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Changed
 
+- Menus are one glass panel, as in Linear and Issues, on the Mac, iPhone and iPad: a symbol beside each entry, its keys
+  on the right, a soft highlight, and in longer menus a field on top to type in, which finds any entry, also inside a
+  submenu (typing "pdf" in the ⋯ menu finds Export As › PDF…). On the Mac every right-click menu (the sidebar's, the
+  note's with Format added, To-dos', a PDF's) and the toolbar's Aa and ⋯ open this way, and the symbols show again,
+  which macOS menus no longer draw; the menu bar stays as it was. Move To is a list of your folders with their own
+  symbols and colours, the one the file is in ticked: type a folder's name and press Return. On iPhone and iPad, touch
+  and hold a file and its menu opens under it, the file marked, with a tap of the phone; move on and you drag the file
+  instead. A submenu opens beside the menu on the iPad and in its place on the iPhone, and the iPad shows the keys
+  while a keyboard is attached.
 - Quick Look and thumbnails take next to no room: they show notes with the editor the app carries, instead of each
   bringing a copy of it, so with them the app is about 15 MB to download on the Mac and 20 MB on iPhone and iPad, not
   35 and 40 MB.

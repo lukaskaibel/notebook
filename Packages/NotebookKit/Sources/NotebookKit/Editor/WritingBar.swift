@@ -451,14 +451,11 @@ struct WritingBarView: View {
     @ViewBuilder
     private func button(_ tool: WritingTool) -> some View {
         if tool == .attach {
-            Menu {
-                ForEach(AttachmentSource.available) { source in
-                    Button { AttachmentPicker.shared.present(source, for: editor) } label: { Label(source.name, systemImage: source.symbol) }
-                }
+            GlassMenuButton {
+                AttachmentMenu.entries(editor)
             } label: {
                 icon(tool)
             }
-            .menuStyle(.button)
             .buttonStyle(.plain)
         } else {
             Button { perform(tool) } label: { icon(tool) }

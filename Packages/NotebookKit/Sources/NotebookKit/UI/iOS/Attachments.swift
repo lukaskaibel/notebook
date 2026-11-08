@@ -172,12 +172,16 @@ struct AttachmentMenu: View {
     let editor: EditorController
 
     var body: some View {
-        Menu {
-            ForEach(AttachmentSource.available) { source in
-                Button { AttachmentPicker.shared.present(source, for: editor) } label: { Label(source.name, systemImage: source.symbol) }
-            }
+        GlassMenuButton {
+            Self.entries(editor)
         } label: {
             Label("Attach", systemImage: "paperclip")
+        }
+    }
+
+    static func entries(_ editor: EditorController) -> [MenuEntry] {
+        AttachmentSource.available.map { source in
+            MenuEntry(source.name, source.symbol) { AttachmentPicker.shared.present(source, for: editor) }
         }
     }
 }

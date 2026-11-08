@@ -220,70 +220,71 @@ extension View {
     }
 }
 
-/// Everything you can do with a file or folder, for its context menu and the ⋯ menu of an open file.
-struct FileActions: View {
-    let workspace: Workspace
-    let url: URL
-    /// Asks for the name of a new folder in this one.
-    var newFolder: ((URL) -> Void)?
-
-    var body: some View {
+/// Everything you can do with a file or folder, for its menu and the ⋯ menu of an open file, in glass.
+@MainActor
+enum FileActions {
+    /// `newFolder` asks for the name of a new folder in this one.
+    @MenuContent
+    static func entries(_ workspace: Workspace, _ url: URL, newFolder: ((URL) -> Void)? = nil) -> [MenuEntry] {
         let isFolder = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
         let kind = FileKind(url: url, isDirectory: isFolder)
         let isLinked = workspace.isLinkedFolder(url)
         let isLocation = workspace.locations.contains { $0.url == url.standardizedFileURL }
         if isFolder {
-            Section {
-                Button { workspace.newNote(in: url) } label: { Label("New Note", systemImage: "square.and.pencil") }
-                NewHandwrittenNoteMenu { workspace.newHandwrittenNote(in: url, paper: $0) }
-                if let newFolder {
-                    Button { newFolder(url) } label: { Label("New Folder", systemImage: "folder.badge.plus") }
+            MenuEntry("New Note", "square.and.pencil") { workspace.newNote(in: url) }
+            MenuEntry.submenu("New Handwritten Note", "pencil.and.scribble") {
+                for paper in PaperStyle.allCases {
+                    MenuEntry(paper.name, paper.symbol) { workspace.newHandwrittenNote(in: url, paper: paper) }
                 }
             }
+            if let newFolder {
+                MenuEntry("New Folder", "folder.badge.plus") { newFolder(url) }
+            }
+            MenuEntry.divider
         } else if kind != .note {
-            Button { workspace.quickLook(url) } label: { Label("Quick Look", systemImage: "eye") }
+            MenuEntry("Quick Look", "eye") { workspace.quickLook(url) }
+            MenuEntry.divider
         }
-        Section {
-            if kind == .note {
-                Button { workspace.askForReminder(url) } label: { Label("Remind Me…", systemImage: "bell") }
-            }
-            if !isLinked, !isLocation {
-                Button { workspace.renaming = url } label: { Label("Rename", systemImage: "pencil") }
-                MoveToMenu(workspace: workspace, url: url)
-                Button { workspace.duplicate(url) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
-            }
-            let favorite = workspace.isFavorite(url)
-            Button { withAnimation { workspace.toggleFavorite(url) } } label: {
-                Label(favorite ? "Remove from Favorites" : "Add to Favorites", systemImage: favorite ? "star.slash" : "star")
-            }
-            if isFolder, workspace.canCustomize(url) {
-                Button { workspace.customizeFolder(url) } label: { Label("Customize Folder…", systemImage: "paintpalette") }
-            }
-            if isFolder, workspace.canHide(url) {
-                HideFolderButton(workspace: workspace, url: url)
+        if kind == .note {
+            MenuEntry("Remind Me…", "bell") { workspace.askForReminder(url) }
+        }
+        if !isLinked, !isLocation {
+            MenuEntry("Rename", "pencil") { workspace.renaming = url }
+            SharedMenus.moveTo(url, workspace: workspace)
+            MenuEntry("Duplicate", "plus.square.on.square") { workspace.duplicate(url) }
+        }
+        let favorite = workspace.isFavorite(url)
+        MenuEntry(favorite ? "Remove from Favorites" : "Add to Favorites", favorite ? "star.slash" : "star") {
+            withAnimation { workspace.toggleFavorite(url) }
+        }
+        if isFolder, workspace.canCustomize(url) {
+            MenuEntry("Customize Folder…", "paintpalette") { workspace.customizeFolder(url) }
+        }
+        if isFolder, workspace.canHide(url) {
+            let isHidden = workspace.isHidden(url)
+            MenuEntry(isHidden ? "Unhide Folder" : "Hide Folder", isHidden ? "eye" : "eye.slash") {
+                withAnimation { workspace.setHidden(url, !isHidden) }
             }
         }
-        Section {
-            // The file itself, as Copy in Files: pasted in a note it is a link to it.
-            if !isLocation {
-                Button { workspace.copyFile(url) } label: { Label("Copy", systemImage: "doc.on.doc") }
-            }
-            if !isFolder {
-                Button { workspace.copyLink(url) } label: { Label("Copy Link", systemImage: "link") }
-            }
-            ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
+        MenuEntry.divider
+        // The file itself, as Copy in Files: pasted in a note it is a link to it.
+        if !isLocation {
+            MenuEntry("Copy", "doc.on.doc", keys: "⇧⌘C") { workspace.copyFile(url) }
         }
+        if !isFolder {
+            MenuEntry("Copy Link", "link") { workspace.copyLink(url) }
+        }
+        MenuEntry("Share", "square.and.arrow.up") { MenuShare.share([url], from: TouchMenus.shared.lastWindow, at: TouchMenus.shared.lastAnchor) }
         if isLocation, let location = workspace.locations.first(where: { $0.url == url.standardizedFileURL }) {
             if workspace.hasHiddenFolders(in: location) {
-                Section { ShowHiddenFoldersToggle(workspace: workspace, location: location) }
+                MenuEntry.divider
+                ShowHiddenFolders.entry(workspace, location)
             }
-            Section {
-                Button(role: .destructive) { workspace.removeLocation(location.id) } label: { Label("Remove from Notebook", systemImage: "minus.circle") }
-            }
+            MenuEntry.divider
+            MenuEntry("Remove from Notebook", "minus.circle", destructive: true) { workspace.removeLocation(location.id) }
         } else if !isLinked {
-            Section {
-                Button(role: .destructive) { workspace.trash(url) } label: { Label("Delete", systemImage: "trash") }
-            }
+            MenuEntry.divider
+            MenuEntry("Delete", "trash", destructive: true) { workspace.trash(url) }
         }
     }
 }
@@ -353,8 +354,8 @@ struct SearchResultsList: View {
                     ForEach(items) { item in
                         Button { open(item.result) } label: { row(item) }
                             .buttonStyle(.plain)
-                            .contextMenu {
-                                if let url = item.result.url { FileActions(workspace: workspace, url: url) }
+                            .glassContextMenu {
+                                if let url = item.result.url { FileActions.entries(workspace, url) }
                             }
                     }
                 } header: {
