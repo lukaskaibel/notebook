@@ -66,9 +66,10 @@ versions follow [semantic versioning](https://semver.org).
 - The Mac sidebar has more room and borrows some of Notion's manners while keeping the Mac's look. A folder's icon no
   longer touches its arrow, which is a little quieter; names sit further from their icons; and what is inside a folder
   steps further in. The row under the pointer gets a soft fill and ••• for its right-click menu, and a folder also +
-  for a new note in it. A location's name has ••• and + too: ••• holds New Folder, Show Hidden Folders, Show in Finder
-  and Remove from Sidebar, + makes a note at its top, and a click on the name folds the location. The eye shows by the
-  name only while hidden folders show, and hides them again.
+  for a new note in it; on a note or other file, which has no +, ••• sits at the row's end, so its name has more room.
+  A location's name has ••• and + too: ••• holds New Folder, Show Hidden Folders, Show in Finder and Remove from
+  Sidebar, + makes a note at its top, and a click on the name folds the location. The eye shows by the name only while
+  hidden folders show, and hides them again.
 
 ### Fixed
 

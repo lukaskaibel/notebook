@@ -1321,6 +1321,9 @@ final class SidebarFileCell: NSTableCellView {
     /// The name ends before ••• and + while they show, and runs on to the bell or cloud otherwise.
     private var labelBeforeButtons: NSLayoutConstraint!
     private var addEnd: NSLayoutConstraint!
+    /// ••• before + on a folder, and in +'s place on a file, which never has one.
+    private var moreBeforeAdd: NSLayoutConstraint!
+    private var moreInAddsPlace: NSLayoutConstraint!
     var isHovered = false {
         didSet { updateButtons() }
     }
@@ -1358,6 +1361,8 @@ final class SidebarFileCell: NSTableCellView {
         addButton.toolTip = "New Note"
         labelBeforeButtons = label.trailingAnchor.constraint(lessThanOrEqualTo: moreButton.leadingAnchor, constant: -4)
         addEnd = addButton.trailingAnchor.constraint(equalTo: trailingAnchor)
+        moreBeforeAdd = moreButton.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -HoverButtons.moreBeforeAdd)
+        moreInAddsPlace = moreButton.trailingAnchor.constraint(equalTo: addButton.trailingAnchor)
         // 9 pt from a folder's arrow, which AppKit puts just before the cell, to the icon, and 9 pt from the icon to the
         // name, as in Notion; Notes has them closer, which looked cramped. The icon keeps its own size, centred on its
         // column.
@@ -1373,7 +1378,7 @@ final class SidebarFileCell: NSTableCellView {
             count.centerYAnchor.constraint(equalTo: centerYAnchor),
             addEnd,
             addButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            moreButton.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -HoverButtons.moreBeforeAdd),
+            moreBeforeAdd,
             moreButton.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
     }
@@ -1382,10 +1387,15 @@ final class SidebarFileCell: NSTableCellView {
 
     private var tint: NSColor = .secondaryLabelColor
 
-    /// `add` only for a folder; neither for To-dos. ••• stays where it is when there's no +, so names end alike.
+    /// `add` only for a folder; neither for To-dos. Without +, ••• moves to the row's end, so a file's name runs on
+    /// further.
     func setButtons(more: ((NSView) -> Void)?, add: (() -> Void)?) {
         self.more = more
         self.add = add
+        // Deactivate before activating, so the two never pull ••• at once.
+        moreBeforeAdd.isActive = false
+        moreInAddsPlace.isActive = false
+        (add == nil ? moreInAddsPlace : moreBeforeAdd).isActive = true
         updateButtons()
     }
 
