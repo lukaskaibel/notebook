@@ -18,14 +18,17 @@ struct FavoritesPage: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: HomeStyle.picture.width + 2 * HomeStyle.cardPadding), spacing: 14)],
                           alignment: .leading, spacing: 14) {
                     ForEach(favorites, id: \.self) { url in
-                        Button { workspace.open(url) } label: { RecentCardLabel(workspace: workspace, url: url) }
-                            .buttonStyle(.plain)
-                            .glassContextMenu {
-                                MenuEntry("Open", "arrow.up.forward.app") { workspace.open(url) }
-                                MenuEntry("Show in Finder", "folder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
-                                MenuEntry.divider
-                                MenuEntry("Remove from Favorites", "star.slash") { withAnimation { workspace.toggleFavorite(url) } }
-                            }
+                        Button { workspace.open(url) } label: {
+                            RecentCardLabel(workspace: workspace, url: url)
+                                .frame(width: HomeStyle.picture.width + 2 * HomeStyle.cardPadding)
+                        }
+                        .buttonStyle(.plain)
+                        .glassContextMenu {
+                            MenuEntry("Open", "arrow.up.forward.app") { workspace.open(url) }
+                            MenuEntry("Show in Finder", "folder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                            MenuEntry.divider
+                            MenuEntry("Remove from Favorites", "star.slash") { withAnimation { workspace.toggleFavorite(url) } }
+                        }
                     }
                 }
             }

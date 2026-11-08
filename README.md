@@ -449,7 +449,8 @@ pointer rests on its row and stays while the pointer heads for it across other r
 their own symbols and colours; type a folder's name and press Return. The right-click menu of a note's text has Format
 too. The menu bar stays the Mac's. The sidebar starts as the iPhone's first screen does, as Reminders' does on each device: To-dos and
 Favorites as tiles with their counts, a click showing the list in the note's place; Recent, cards with a picture of the
-top of each note you opened last; and every folder with how many files are in it. Some of the sidebar's manners come
+top of each note you opened last, pictures and all, which keep their places while the pointer is on them; and every
+folder with how many files are in it. Some of the sidebar's manners come
 from Notion: the row under the pointer gets a soft fill, with ••• for its
 menu and, on a folder, + for a new note in it; a location's name has the same two, and a click on it folds the
 location. The inspector shows a note's outline, with the section you're reading marked and a word count; a click on

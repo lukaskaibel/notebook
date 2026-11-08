@@ -118,6 +118,9 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         NotificationCenter.default.addObserver(outline, selector: #selector(SidebarOutlineView.queueHoverUpdate),
                                                name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
         workspace.sidebar = self
+        // Recent's cards are as wide as the tiles, which follow the sidebar's width; so does the row's height.
+        outline.postsFrameChangedNotifications = true
+        NotificationCenter.default.addObserver(self, selector: #selector(outlineResized), name: NSView.frameDidChangeNotification, object: outline)
         NotificationCenter.default.addObserver(self, selector: #selector(optionsChanged), name: .notebookSidebarOptionsChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(orderChanged), name: .notebookFileOrderChanged, object: nil)
         rebuildTop()
@@ -165,6 +168,19 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         reloadAll()
     }
 
+    /// The sidebar was made wider or narrower: Recent's row takes the height of its cards at once, unanimated.
+    @objc private func outlineResized() {
+        let width = outline.bounds.width
+        guard width != laidOutWidth else { return }
+        laidOutWidth = width
+        let row = outline.row(forItem: recentEntry)
+        guard row >= 0 else { return }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0
+            outline.noteHeightOfRows(withIndexesChanged: [row])
+        }
+    }
+
     /// You chose another order: the files in open folders slide into it, as in the Finder. Closed folders are sorted
     /// when they open.
     @objc private func orderChanged() {
@@ -186,8 +202,8 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     private func rebuildTop() {
         visible = [:]
         var items: [AnyObject] = [searchEntry]
-        if NotebookSettings.shared.showsTodos || !workspace.favoriteURLs.isEmpty { items.append(tilesEntry) }
-        hasRecents = !workspace.recentURLs(includingOpen: true).isEmpty
+        items.append(tilesEntry)
+        hasRecents = !workspace.recentCardURLs.isEmpty
         if hasRecents { items.append(SidebarEntry(.header("Recent", location: nil), children: [recentEntry])) }
         for location in workspace.locations {
             let files = workspace.root(for: location).map { visibleChildren(of: $0) } ?? []
@@ -234,15 +250,20 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     private var hasRecents = false
 
     /// The tiles and the cards, each made once and kept: a reload of the sidebar hands the row the same view, so the
-    /// cards keep their places and where they are scrolled to, and slide when what you opened last changes.
+    /// cards keep their places and where they are scrolled to, and slide when what you opened last changes. Their
+    /// cells are laid out by `SidebarOutlineView.frameOfCell`: the tiles' from edge to edge less `tilesFromEdge`,
+    /// Recent's across the whole sidebar, with its cards in the tiles' column.
     private lazy var tilesCell = SidebarHostedCell(SidebarHostedCell.tiles, HomeTileGrid(workspace: workspace),
-                                                   insets: NSEdgeInsets(top: 4, left: 2, bottom: 6, right: 6))
-    private lazy var recentCell = SidebarHostedCell(SidebarHostedCell.recent, RecentCardRow(workspace: workspace, leadingInset: 2),
-                                                    insets: NSEdgeInsets(top: 2, left: -14, bottom: 6, right: 0))
+                                                   insets: NSEdgeInsets(top: 4, left: 0, bottom: 6, right: 0))
+    private lazy var recentCell = SidebarHostedCell(SidebarHostedCell.recent,
+                                                    RecentCardRow(workspace: workspace, margin: SidebarOutlineView.tilesFromEdge),
+                                                    insets: NSEdgeInsets(top: 2, left: 0, bottom: 6, right: 0))
+    /// The sidebar's width when Recent's row last took its height (`outlineResized`).
+    private var laidOutWidth: CGFloat = 0
 
     /// A file opened: Recent's cards follow by themselves, and the section comes with the first.
     func recentsChanged() {
-        if !hasRecents, !workspace.recentURLs(includingOpen: true).isEmpty { reloadSections() }
+        if !hasRecents, !workspace.recentCardURLs.isEmpty { reloadSections() }
     }
 
     func reloadSections() {
@@ -534,7 +555,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         guard let entry = item as? SidebarEntry else { return outlineView.rowHeight }
         switch entry.kind {
         case .tiles: return 74
-        case .recent: return 140
+        case .recent: return SidebarOutlineView.recentRowHeight(width: outlineView.bounds.width)
         case .header, .search: return outlineView.rowHeight
         }
     }
@@ -1097,13 +1118,52 @@ final class SidebarOutlineView: NSOutlineView {
     }
 
     func applyHover(to rowView: NSTableRowView, row: Int) {
-        let hovered = row == hoveredRow
+        // The tiles and cards show it on the one under the pointer themselves (`HomeHover`), not on the whole row.
+        let hovered = row == hoveredRow && !(rowView.view(atColumn: 0) is SidebarHostedCell)
         (rowView as? SidebarRowView)?.isHovered = hovered
         if let cell = rowView.view(atColumn: 0) as? SidebarFileCell {
             cell.isHovered = hovered
         } else if let cell = rowView.view(atColumn: 0) as? SidebarHeaderCell {
             cell.isHovered = hovered
         }
+    }
+
+    /// How far left of the files' cells Search starts: its magnifying glass lines up with the folders' chevrons and the
+    /// section titles, and with the tiles' symbols, rather than with the files' icons.
+    static let searchShift: CGFloat = 15
+    /// From the sidebar's edges to the tiles and Recent's cards, about as far as a selected row's fill: what is in them,
+    /// `HomeStyle.cardPadding` further in, then lines up with Search, the chevrons and the section titles.
+    static let tilesFromEdge: CGFloat = 10.5
+
+    /// Search reaches as far towards the sidebar's right edge as it starts from its left, so ⌘K ends over the tiles'
+    /// counts. The tiles span the sidebar less `tilesFromEdge` on either side. Recent's row goes all the way across:
+    /// its cards stop at the tiles' column, and the next one peeks in at the edge, so the row plainly scrolls.
+    override func frameOfCell(atColumn column: Int, row: Int) -> NSRect {
+        var frame = super.frameOfCell(atColumn: column, row: row)
+        guard let entry = item(atRow: row) as? SidebarEntry else { return frame }
+        let rowFrame = rect(ofRow: row)
+        switch entry.kind {
+        case .search:
+            frame.origin.x -= Self.searchShift
+            frame.size.width = rowFrame.maxX - (frame.minX - rowFrame.minX) - frame.minX
+        case .tiles:
+            frame.origin.x = rowFrame.minX + Self.tilesFromEdge
+            frame.size.width = rowFrame.width - 2 * Self.tilesFromEdge
+        case .recent:
+            frame.origin.x = rowFrame.minX
+            frame.size.width = rowFrame.width
+        case .header:
+            break
+        }
+        return frame
+    }
+
+    /// Recent's row as tall as its cards, which are as wide as the tiles: their pictures keep their shape as the
+    /// sidebar is made wider or narrower. The rest of a card, its name and folder, and the row's margins take 62 pt.
+    static func recentRowHeight(width: CGFloat) -> CGFloat {
+        let card = (width - 2 * tilesFromEdge - HomeStyle.spacing) / 2
+        let picture = (card - 2 * HomeStyle.cardPadding) * HomeStyle.picture.height / HomeStyle.picture.width
+        return (picture + 62).rounded(.up)
     }
 
     // A folder's chevron centred on its icon, which is in the middle of the row; AppKit puts it 1–1.5 pt lower. The
@@ -1424,6 +1484,12 @@ final class SidebarFileCell: NSTableCellView {
     /// ••• before + on a folder, and in +'s place on a file, which never has one.
     private var moreBeforeAdd: NSLayoutConstraint!
     private var moreInAddsPlace: NSLayoutConstraint!
+    /// A folder's count 8 pt before the cell's end; Search's ⌘K at the tiles' right edge below it, as its cell reaches
+    /// as far from the sidebar's edge as it starts (`SidebarOutlineView.frameOfCell`): the tips of the K on the tiles'
+    /// edge, as the tiles' inset is.
+    private var countEnd: NSLayoutConstraint!
+    private static let countInset: CGFloat = -8
+    private static let searchShortcutInset: CGFloat = -6.75
     var isHovered = false {
         didSet { updateButtons() }
     }
@@ -1459,6 +1525,7 @@ final class SidebarFileCell: NSTableCellView {
         }
         moreButton.toolTip = "More"
         addButton.toolTip = "New Note"
+        countEnd = count.trailingAnchor.constraint(equalTo: trailingAnchor, constant: Self.countInset)
         labelBeforeButtons = label.trailingAnchor.constraint(lessThanOrEqualTo: moreButton.leadingAnchor, constant: -4)
         addEnd = addButton.trailingAnchor.constraint(equalTo: trailingAnchor)
         moreBeforeAdd = moreButton.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -HoverButtons.moreBeforeAdd)
@@ -1474,7 +1541,7 @@ final class SidebarFileCell: NSTableCellView {
             label.trailingAnchor.constraint(lessThanOrEqualTo: accessory.leadingAnchor, constant: -4),
             accessory.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             accessory.centerYAnchor.constraint(equalTo: centerYAnchor),
-            count.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+            countEnd,
             count.centerYAnchor.constraint(equalTo: centerYAnchor),
             addEnd,
             addButton.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -1563,6 +1630,7 @@ final class SidebarFileCell: NSTableCellView {
         count.font = .systemFont(ofSize: 12)
         countColor = .tertiaryLabelColor
         count.stringValue = "⌘K"
+        countEnd.constant = Self.searchShortcutInset
         shownCount = true
         count.isHidden = false
         updateTint()
@@ -1577,6 +1645,7 @@ final class SidebarFileCell: NSTableCellView {
                    reminder: Reminder? = nil, items: Int? = nil) {
         count.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
         countColor = .secondaryLabelColor
+        countEnd.constant = Self.countInset
         count.stringValue = items.map { "\($0)" } ?? ""
         shownCount = items != nil
         count.isHidden = items == nil
