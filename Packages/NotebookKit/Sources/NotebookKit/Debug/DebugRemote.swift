@@ -735,6 +735,10 @@ enum DebugRemote {
         case "searchfocus":
             // searchfocus: ⌘K open to search, as ⌥⌘F and Search in the sidebar open it.
             workspace?.openSearch()
+        case "palettetype", "palettekey":
+            // palettetype <text>, palettekey down|up|return|escape: typed into ⌘K, whose field has no focus while the
+            // window isn't key.
+            NotificationCenter.default.post(name: .notebookDebug, object: nil, userInfo: ["command": command, "argument": argument])
         case "palette":
             // palette: opens or closes ⌘K; palette rows: what it lists.
             if argument == "rows" {
@@ -1498,5 +1502,10 @@ enum DebugRemote {
         try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
         log("snapshot \(path)")
     }
+}
+
+extension Notification.Name {
+    /// A debug remote command for the views: typing into ⌘K.
+    static let notebookDebug = Notification.Name("NotebookDebug")
 }
 #endif

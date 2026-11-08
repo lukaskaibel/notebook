@@ -239,7 +239,7 @@ hidden folders stay out of Spotlight, and it follows as you write, rename, move 
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/search-dark.webp">
-  <img alt="The search field with kyoto typed in: the note Kyoto trip under Files, and under In Notes and PDFs a match on page 1 of Flight tickets.pdf and one in the note Budget, then New Note kyoto" src="Design/screenshots/search-light.webp">
+  <img alt="Search clicked at the top of the sidebar: ⌘K over the note Kyoto trip with kyoto typed in, the note Kyoto trip under Files, matches in Budget, Getting to the ryokan and page 1 of Flight tickets.pdf under In Notes and PDFs, the receipt in Budget under In Pictures and Drawings, then New Note kyoto" src="Design/screenshots/search-light.webp">
 </picture>
 
 ### Everything with ⌘K

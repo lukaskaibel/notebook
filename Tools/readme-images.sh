@@ -149,7 +149,7 @@ for theme in dark light; do
 
   # Search at the top of the sidebar, clicked: ⌘K with kyoto typed in it. Last, so the reading of the pictures has had
   # time and the receipt in Budget is found too.
-  say "clickrow Search" "wait 0.6" "type kyoto"; sleep 2; shot "search-$theme"
+  say "clickrow Search" "wait 0.6" "palettetype kyoto"; sleep 2; shot "search-$theme"
   say "key escape"
 
   kill "$pid"
