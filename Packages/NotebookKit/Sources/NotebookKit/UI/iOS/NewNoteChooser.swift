@@ -8,6 +8,8 @@ struct NewNoteButton: View {
     let workspace: Workspace
     /// Where the note goes; none for the folder new notes go to.
     var folder: URL?
+    /// Plain, as the buttons around it, in the iPad's note bar next to Back and Forward.
+    var isProminent = true
     @State private var asks = false
 
     var body: some View {
@@ -20,7 +22,7 @@ struct NewNoteButton: View {
         } label: {
             Label("New Note", systemImage: "square.and.pencil")
         }
-        .buttonStyle(.glassProminent)
+        .modifier(Prominent(isOn: isProminent))
         .popover(isPresented: $asks) {
             // Worked out as it opens, not kept in state by the button's action: a popover of a toolbar item is built
             // with the state's first value, so on the iPhone it came out side by side and ran off the screen.
@@ -45,6 +47,15 @@ struct NewNoteButton: View {
     private static var isWindowNarrow: Bool {
         let window = UIApplication.shared.connectedScenes.lazy.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first
         return (window?.bounds.width ?? 0) < 600
+    }
+}
+
+/// The accent colour's glass, or the bar's own look.
+private struct Prominent: ViewModifier {
+    let isOn: Bool
+
+    func body(content: Content) -> some View {
+        if isOn { content.buttonStyle(.glassProminent) } else { content }
     }
 }
 

@@ -357,6 +357,56 @@ final class EditorBehaviorTests: XCTestCase {
         XCTAssertEqual(h.text, "| A | B |\n| --- | --- |\n| one | two |\n\nNext\n\nAfter")
     }
 
+    /// Format › Table and the toolbar's Table, as in Notes: two columns, a header and a row, the caret in the first cell;
+    /// on an empty line or under the caret's line, with empty lines around it; one step of Undo.
+    func testInsertTableMakesOneToTypeIn() {
+        let table = "|     |     |\n| --- | --- |\n|     |     |"
+        let tables = { (h: EditorHarness) in h.editor.document.blocks.filter { if case .table = $0.kind { true } else { false } } }
+
+        // Under the line the caret is in, with an empty line before what follows.
+        var h = EditorHarness("Plan\nAfter")
+        h.caret(2)
+        XCTAssertTrue(h.editor.insertTable())
+        XCTAssertEqual(h.text, "Plan\n\n" + table + "\n\nAfter")
+        XCTAssertEqual(h.selection.location, ("Plan\n\n| " as NSString).length, "in the first cell")
+        XCTAssertEqual(tables(h).count, 1)
+        XCTAssertNotNil(h.editor.activeBlock, "open, to type in")
+        h.type("Day")
+        XCTAssertTrue(h.text.hasPrefix("Plan\n\n| Day    |     |\n| --- | --- |\n"), h.text)
+        XCTAssertEqual(tables(h).count, 1)
+
+        // An empty line becomes the table.
+        h = EditorHarness("Plan\n\nAfter")
+        h.caret(5)
+        h.editor.insertTable()
+        XCTAssertEqual(h.text, "Plan\n\n" + table + "\n\nAfter")
+        XCTAssertEqual(h.selection.location, ("Plan\n\n| " as NSString).length)
+
+        // In a table, under it.
+        h = EditorHarness("| A | B |\n| --- | --- |\n| one | two |")
+        h.caret(h.range(of: "one").location)
+        h.editor.insertTable()
+        XCTAssertEqual(h.text, "| A | B |\n| --- | --- |\n| one | two |\n\n" + table)
+        XCTAssertEqual(tables(h).count, 2)
+
+        // An empty note, and Undo.
+        h = EditorHarness("")
+        h.editor.insertTable()
+        XCTAssertEqual(h.text, table)
+        XCTAssertEqual(h.selection.location, 2)
+        h = EditorHarness("Plan")
+        h.caret(4)
+        h.editor.insertTable()
+        h.textView.undoManager?.undo()
+        XCTAssertEqual(h.text, "Plan")
+
+        // Not in an AsciiDoc note.
+        h = EditorHarness("Plan", syntax: .asciidoc)
+        h.caret(4)
+        XCTAssertFalse(h.editor.insertTable())
+        XCTAssertEqual(h.text, "Plan")
+    }
+
     func testUndoAfterReturnInATable() {
         let h = EditorHarness("| A | B |\n| --- | --- |\n| one | two |")
         h.caret(h.text.utf16.count)

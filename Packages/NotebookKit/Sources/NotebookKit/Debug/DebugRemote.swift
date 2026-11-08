@@ -733,8 +733,12 @@ enum DebugRemote {
             }
             log("set \(argument)")
         case "searchfocus":
-            // searchfocus: the caret in the toolbar's search field, as ⌥⌘F puts it there.
-            workspace?.search.focus()
+            // searchfocus: ⌘K open to search, as ⌥⌘F and Search in the sidebar open it.
+            workspace?.openSearch()
+        case "palettetype", "palettekey":
+            // palettetype <text>, palettekey down|up|return|escape: typed into ⌘K, whose field has no focus while the
+            // window isn't key.
+            NotificationCenter.default.post(name: .notebookDebug, object: nil, userInfo: ["command": command, "argument": argument])
         case "palette":
             // palette: opens or closes ⌘K; palette rows: what it lists.
             if argument == "rows" {
@@ -743,18 +747,17 @@ enum DebugRemote {
                 workspace?.togglePalette()
             }
         case "search":
-            // search <text>: what the toolbar's suggestions menu lists for it, once the search in the background is done.
-            if let search = workspace?.search {
-                search.field.stringValue = argument
-                search.session.update(argument)
+            // search <text>: what ⌘K finds for it, once the search in the background is done.
+            if let session = workspace?.paletteSearch {
+                session.update(argument)
                 let start = CACurrentMediaTime()
                 func report() {
-                    guard !search.session.isSearching else {
+                    guard !session.isSearching else {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.005, execute: report)
                         return
                     }
                     log(String(format: "search %@ (%.1f ms, in the background %.1f ms): ", argument, (CACurrentMediaTime() - start) * 1000,
-                               search.session.lastDuration * 1000) + describe(search.session.sections))
+                               session.lastDuration * 1000) + describe(session.sections))
                 }
                 report()
             }
@@ -784,18 +787,6 @@ enum DebugRemote {
             } else {
                 log("recognizer \(argument): \(workspace?.recognizer.text(for: argument) ?? "nothing")")
             }
-        case "searchfield":
-            // searchfield: where the search field, its buttons and the text you type in it are, in the field's points.
-            guard let field = workspace?.search.field, let cell = field.cell as? NSSearchFieldCell else { break }
-            let bounds = field.bounds
-            var line = "searchfield frame=\(field.convert(bounds, to: nil)) bounds=\(bounds) focused=\(field.currentEditor() != nil)"
-            line += " glass=\(cell.searchButtonRect(forBounds: bounds)) text=\(cell.searchTextRect(forBounds: bounds)) clear=\(cell.cancelButtonRect(forBounds: bounds))"
-            if let editor = field.currentEditor() as? NSTextView, let layout = editor.layoutManager, let container = editor.textContainer {
-                layout.ensureLayout(for: container)
-                let used = layout.usedRect(for: container).offsetBy(dx: editor.textContainerOrigin.x, dy: editor.textContainerOrigin.y)
-                line += " editor=\(editor.convert(editor.bounds, to: field)) typed=\(editor.convert(used, to: field))"
-            }
-            log(line)
         case "selectlist":
             // selectlist <row>: selects a row of the inspector's list, as a click on it does.
             if let root = window?.contentView?.superview, let row = numbers.first.map(Int.init) {
@@ -954,10 +945,15 @@ enum DebugRemote {
                 click(at: CGPoint(x: frame.midX, y: content.bounds.height - frame.midY))
             }
         case "searchpick":
-            // searchpick <n>: chooses the nth suggestion, counted over all sections.
-            if let search = workspace?.search, let n = numbers.first.map(Int.init) {
-                let items = search.session.sections.flatMap(\.items)
-                if let item = items[safe: n] { search.run(item.result) }
+            // searchpick <n>: chooses the nth thing ⌘K found, counted over all sections, as a click on it does.
+            if let workspace, let n = numbers.first.map(Int.init) {
+                let items = workspace.paletteSearch.sections.flatMap(\.items)
+                if let item = items[safe: n] {
+                    workspace.palette = nil
+                    workspace.paletteSearch.clear()
+                    workspace.open(item.result)
+                    workspace.focusContent()
+                }
             }
         case "newnote":
             workspace?.newNote()
@@ -1236,7 +1232,7 @@ enum DebugRemote {
         responder: \(window?.firstResponder.map { String(describing: type(of: $0)) } ?? "nil")
         scroll: \(Int(editor.scrollView.contentView.bounds.minY)) inset: \(Int(editor.scrollView.contentInsets.top))
         outline: \(workspace?.outline.map { "\($0.level):\($0.title)" }.joined(separator: ", ") ?? "") current: \(workspace?.currentHeading.map(String.init) ?? "title") titleAway: \(workspace?.isTitleScrolledAway == true)
-        search: \(workspace?.search.field.stringValue ?? "")
+        search: \(workspace?.paletteSearch.query ?? "")
         text: \(text.prefix(4000))
         """)
     }
@@ -1506,5 +1502,10 @@ enum DebugRemote {
         try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
         log("snapshot \(path)")
     }
+}
+
+extension Notification.Name {
+    /// A debug remote command for the views: typing into ⌘K.
+    static let notebookDebug = Notification.Name("NotebookDebug")
 }
 #endif

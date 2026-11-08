@@ -90,9 +90,8 @@ def typing_animation(theme):
 
 
 def search(theme):
-    """The window with the suggestions menu, which may reach past its right edge."""
-    img = window(f"search-{theme}")
-    return place(img, theme, (130, 110), 1800 * img.width // 2560)
+    """The window with ⌘K open from Search at the top of the sidebar, kyoto typed in it."""
+    return place(window(f"search-{theme}"), theme, (130, 110), 1800)
 
 
 print("Mac")

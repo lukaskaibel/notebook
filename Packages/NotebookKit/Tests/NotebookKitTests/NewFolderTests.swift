@@ -170,6 +170,34 @@ final class NewFolderTests: XCTestCase {
         XCTAssertTrue(outline.isItemExpanded(entry))
     }
 
+    /// Search, first in the sidebar, opens ⌘K and is never selected: the row of what is open stays selected.
+    func testSearchAtTheTopOpensThePalette() async throws {
+        let (workspace, sidebar) = try await makeSidebar()
+        let outline = sidebar.outline
+        let entry = try XCTUnwrap(outline.item(atRow: 0) as? SidebarEntry)
+        XCTAssertTrue(entry.isSearch, "above To-dos")
+        let cell = try XCTUnwrap(outline.view(atColumn: 0, row: 0, makeIfNecessary: true) as? SidebarFileCell)
+        XCTAssertEqual(cell.label.stringValue, "Search")
+        XCTAssertEqual(cell.accessibilityRole(), .button)
+        let papers = try XCTUnwrap(row("Papers", under: drive, in: sidebar))
+        outline.selectRowIndexes(IndexSet(integer: papers), byExtendingSelection: false)
+
+        let point = NSPoint(x: outline.rect(ofRow: 0).minX + 60, y: outline.rect(ofRow: 0).midY)
+        let event = NSEvent.mouseEvent(with: .leftMouseDown, location: outline.convert(point, to: nil), modifierFlags: [], timestamp: 0,
+                                       windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+        outline.mouseDown(with: event)
+        XCTAssertEqual(workspace.palette, .search)
+        XCTAssertEqual(outline.selectedRow, papers, "Papers stays selected")
+        XCTAssertEqual(outline.delegate?.outlineView?(outline, shouldSelectItem: entry), false)
+
+        // A second click leaves it open, as does VoiceOver's press.
+        outline.mouseDown(with: event)
+        XCTAssertEqual(workspace.palette, .search)
+        workspace.palette = nil
+        XCTAssertTrue(cell.accessibilityPerformPress())
+        XCTAssertEqual(workspace.palette, .search)
+    }
+
     /// New Folder is in the header's •••, its right-click menu.
     func testNewFolderInALocationsMenuMakesAFolderToName() async throws {
         let (workspace, sidebar) = try await makeSidebar()

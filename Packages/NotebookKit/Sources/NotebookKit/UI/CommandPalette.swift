@@ -110,7 +110,7 @@ struct CommandPalette: View {
             workspace.paletteStart = nil
             query = start.query
         }
-        #if DEBUG && os(iOS)
+        #if DEBUG
         // palettetype <text>, palettekey down|up|return|escape: the keyboard, for the debug remote.
         .onReceive(NotificationCenter.default.publisher(for: .notebookDebug)) { notification in
             let argument = notification.userInfo?["argument"] as? String ?? ""
@@ -566,6 +566,11 @@ extension Workspace {
             paletteSearch.clear()
             focusContent()
         }
+    }
+
+    /// Search at the top of the sidebar and Go › Search (⌥⌘F): ⌘K, left open if it is.
+    func openSearch() {
+        if palette == nil { palette = .search }
     }
 
     /// The keyboard back to what is open: the note's text, after ⌘K or search.

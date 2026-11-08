@@ -80,7 +80,8 @@ struct MainView: View {
 
 // MARK: - Toolbar
 
-/// Back, forward and a new note on the left; formatting, sharing, more, search and the outline on the right.
+/// As in Notes: back, forward and a new note on the left; the note's tools in the middle; sharing, more and the outline
+/// on the right. Search is at the top of the sidebar.
 struct DocumentToolbar: ToolbarContent {
     let workspace: Workspace
 
@@ -111,7 +112,7 @@ struct DocumentToolbar: ToolbarContent {
         }
         .sharedBackgroundVisibility(.hidden)
         // The note's name, once its title has scrolled up under the toolbar. At most so wide that a long name never
-        // pushes the search field into the toolbar's overflow menu.
+        // pushes More and the outline into the toolbar's overflow menu in a window of the usual size.
         ToolbarItem(placement: .navigation) {
             Text(workspace.currentTitle)
                 .font(.system(size: 13, weight: .semibold))
@@ -124,45 +125,58 @@ struct DocumentToolbar: ToolbarContent {
         }
         .sharedBackgroundVisibility(.hidden)
 
+        // The note's tools in the middle, over the note, as in Notes: Format, Checklist, Table, Attach and Drawing; a
+        // PDF's pen there too. (Between two flexible spaces instead, they would sit off the middle by the width of the
+        // title before it, which is there while it doesn't show.)
+        if workspace.currentURL != nil, let note = workspace.note {
+            ToolbarItemGroup(placement: .principal) {
+                FormatMenu()
+                    .disabled(!note.isLoaded)
+                Button { workspace.editor.beginEditing(then: .checklist) } label: { Label("Checklist", systemImage: "checklist") }
+                    .help("Checklist (⇧⌘L)")
+                    .disabled(!note.isLoaded)
+                Button { workspace.editor.beginEditing(then: .table) } label: { Label("Table", systemImage: "tablecells") }
+                    .help(workspace.editor.syntax == .markdown ? "Table (⌥⌘T)" : "Tables in AsciiDoc notes are typed")
+                    .disabled(!note.isLoaded || workspace.editor.syntax != .markdown)
+                Button {
+                    // As in Notes: at the end of a note you haven't put the caret in.
+                    workspace.editor.placeCaretForToolbar()
+                    workspace.attachFiles()
+                } label: {
+                    Label("Attach", systemImage: "paperclip")
+                }
+                .help("Attach file (⇧⌘A)")
+                .disabled(!note.isLoaded)
+                DrawingToggle(workspace: workspace)
+                    .disabled(!note.isLoaded)
+            }
+        } else if workspace.currentPDF != nil {
+            // As on the iPad: on, the pages are drawn on right there; off again, what was drawn is in the PDF.
+            ToolbarItem(placement: .principal) {
+                DrawingToggle(workspace: workspace)
+            }
+        }
+
         ToolbarSpacer(.flexible)
         if let url = workspace.currentURL {
-            if let note = workspace.note {
-                ToolbarItemGroup {
-                    FormatMenu().disabled(!note.isLoaded)
-                    DrawingToggle(workspace: workspace).disabled(!note.isLoaded)
-                }
-                ToolbarSpacer(.fixed)
-            } else {
+            if workspace.note == nil {
                 ToolbarItem {
                     Button("Open in \(workspace.appName(opening: url) ?? "App")") { workspace.openOnItsOwn(url) }
                 }
                 ToolbarSpacer(.fixed)
             }
             ToolbarItemGroup {
-                // As on the iPad: on, the pages are drawn on right there; off again, what was drawn is in the PDF.
-                if workspace.currentPDF != nil {
-                    DrawingToggle(workspace: workspace)
-                }
                 ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
                     .help("Share")
                 MoreMenu(workspace: workspace, url: url)
             }
-            ToolbarSpacer(.fixed)
         }
         if workspace.showsTodos {
             ToolbarItem {
                 Button { workspace.newTodoRequest += 1 } label: { Label("New To-do", systemImage: "plus") }
                     .help("New to-do for today")
             }
-            ToolbarSpacer(.fixed)
-        }
-        ToolbarItem {
-            SearchFieldItem(controller: workspace.search)
-                .frame(width: 190, height: 36)
-                .padding(.horizontal, 6)
-                .help("Search notes, files and pictures (⌥⌘F)")
-        }
-        if !workspace.showsTodos {
+        } else {
             ToolbarSpacer(.fixed)
             ToolbarItem {
                 Button {
@@ -200,6 +214,8 @@ struct FormatMenu: View {
         } label: {
             Label("Format", systemImage: "textformat")
         }
+        // Without its arrow, in one capsule with the tools after it, as Notes' Aa is.
+        .menuIndicator(.hidden)
         .help("Format")
     }
 
