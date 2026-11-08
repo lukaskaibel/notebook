@@ -1,26 +1,39 @@
 #!/usr/bin/env python3
-"""Draws Notebook's app icon: a leather notebook with an elastic band and a ribbon, lying on a ground.
+"""Draws Notebook's app icon: the cover of a leather notebook filling the icon, with its elastic band and a ribbon
+hanging from the top, the way Apple's book icons (Contacts, Dictionary, Font Book) fill theirs.
 
-  notebook.py icon <out dir>     <out dir>/AppIcon.icon, the oxblood notebook in light and dark (the app's own icon)
-  notebook.py passes <out dir>   the neutral passes behind Settings › App Icon (see NotebookIcon.swift)
-  notebook.py leather <out>      the cover's grain alone as a seamless tile, for the website's leather buttons
-                                 (Website/images/leather.webp; needs only NumPy and Pillow)
+  notebook.py icon <out dir>       <out dir>/AppIcon.icon, the oxblood notebook in light, dark and tinted (the app's own)
+  notebook.py passes <out dir>     the neutral passes behind Settings › App Icon (see NotebookIcon.swift)
+  notebook.py leather <out>        the cover's grain alone as a seamless tile, for the website's leather buttons
+                                   (Website/images/leather.webp; needs only NumPy and Pillow)
+  notebook.py framed <in> <out> <size>
+                                   an ictool render on Apple's icon grid with the Dock's shadow, for the README and the
+                                   website
+  notebook.py touch <AppIcon.icon> <out> <size>
+                                   the icon's layers flat and square, for the website's apple-touch-icon
 
-Tools/AppIcon/make.sh runs all three and renders the passes with Apple's ictool. Needs Python 3 with NumPy and Pillow,
+Tools/AppIcon/make.sh runs them and renders the passes with Apple's ictool. Needs Python 3 with NumPy and Pillow,
 and rsvg-convert (brew install librsvg).
 
 The layers are drawn as SVG, the leather grain is added to the cover with NumPy, and Icon Composer's file format puts
-them together, so the system adds the glass, the shadows and the tinted and clear looks.
+them together, so the system adds the glass and the shadows. The tinted and clear looks get images of their own: a
+near-black cover with a white ribbon and a grey band, so the notebook still shows when the system recolours the icon.
 """
 import colorsys, json, os, subprocess, sys
 import numpy as np
 from PIL import Image
 
-# The cover on the 1024 canvas.
-X, Y, W, H, R = 232, 122, 560, 772, 64
+# On the 1024 canvas: the cover fills it; the band runs from top to bottom near the right edge, the hinge is a line
+# near the left, and the ribbon hangs from the top edge with a swallowtail end.
+BAND_X, BAND_W = 794, 58
+HINGE_X, HINGE_W = 78, 12
+RIBBON_X, RIBBON_W, RIBBON_END, RIBBON_NOTCH = 212, 72, 236, 30
 
 # The notebook the app ships with. Keep in step with NotebookLook.standard in NotebookIcon.swift.
-STANDARD = {"leather": "#A8403F", "ribbon": "#E9B04A", "band": "leather", "ground": "#EFEAE2"}
+STANDARD = {"leather": "#A8403F", "ribbon": "#E9B04A", "band": "leather"}
+
+# The tinted and clear looks: the system keeps only how light each part is.
+TINTED = {"cover": "#141414", "band": "#5C5C5C", "ribbon": "#FFFFFF"}
 
 # The albedo a part gets in its pass; below white so the grain's highlights never clip.
 PASS_GREY = "#B4B4B4"
@@ -39,14 +52,10 @@ def scaled(hex_colour, saturation, brightness):
     return hex_(colorsys.hsv_to_rgb(h, min(s * saturation, 1), min(v * brightness, 1)))
 
 def leather_shades(c):
-    """Cover gradient (top, bottom) in light and in dark, and the elastic band's tone."""
-    return {"light": (c, scaled(c, 1.18, 0.64)), "dark": (scaled(c, 0.88, 1.16), scaled(c, 1.08, 0.79)),
+    """Cover gradient (top, bottom) in light and in dark, a little deeper in dark to sit with the other dark icons,
+    and the elastic band's tone."""
+    return {"light": (c, scaled(c, 1.18, 0.64)), "dark": (scaled(c, 1.0, 0.9), scaled(c, 1.2, 0.55)),
             "band": scaled(c, 1.25, 0.45)}
-
-def ground_shades(c):
-    h, s, v = colorsys.rgb_to_hsv(*rgb(c))
-    dark_top = hex_(colorsys.hsv_to_rgb(h, s * 0.6, max(v * 0.30, 0.18)))
-    return {"light": (c, scaled(c, 1.1, 0.88)), "dark": (dark_top, scaled(dark_top, 1.0, 0.55))}
 
 
 # Drawing.
@@ -57,17 +66,17 @@ def rect(x, y, w, h, r, fill):
 def faded(colour, opacity):
     return f'{colour}" fill-opacity="{opacity}'
 
-def cover(fill): return rect(X, Y, W, H, R, fill)
-def band(fill): return rect(X + W - 100, Y - 3, 40, H + 6, 6, fill)
-def hinge(opacity): return rect(X + 46, Y + 10, 8, H - 20, 4, faded("#000000", opacity))
-def pages(fill): return rect(X + 22, Y + 16, W, H - 32, 50, fill)
+# The parts run past the canvas, so the icon's rounded corners are the only edges.
+def cover(fill): return rect(-60, -60, 1144, 1144, 0, fill)
+def band(fill): return rect(BAND_X, -10, BAND_W, 1044, 0, fill)
+def hinge(opacity): return rect(HINGE_X, -10, HINGE_W, 1044, 0, faded("#000000", opacity))
 
-def ribbon(fill, drop=54, width=46):
-    x, top, bottom = X + 140, Y + H - 40, Y + H + drop
-    return f'<path d="M{x},{top} H{x + width} V{bottom} L{x + width / 2},{bottom - 22} L{x},{bottom} Z" fill="{fill}"/>'
+def ribbon(fill):
+    x, w, end = RIBBON_X, RIBBON_W, RIBBON_END
+    return f'<path d="M{x},-40 H{x + w} V{end} L{x + w / 2},{end - RIBBON_NOTCH} L{x},{end} Z" fill="{fill}"/>'
 
 def linear_gradient(id_, top, bottom):
-    return (f'<linearGradient id="{id_}" gradientUnits="userSpaceOnUse" x1="0" y1="{Y}" x2="0" y2="{Y + H}">'
+    return (f'<linearGradient id="{id_}" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="1024">'
             f'<stop offset="0" stop-color="{top}"/><stop offset="1" stop-color="{bottom}"/></linearGradient>')
 
 def write_png(path, body, defs=""):
@@ -145,22 +154,27 @@ def fill(top, bottom):
     return {"linear-gradient": [srgb(top), srgb(bottom)],
             "orientation": {"start": {"x": 0.5, "y": 0}, "stop": {"x": 0.5, "y": 1}}}
 
-def document(path, grounds, layers, defs="", grained=()):
-    """grounds: {"light": (top, bottom), "dark": (top, bottom)}.
-    layers: [(group, [(layer, light svg, dark svg, glass)], shadow opacity)], front first."""
+def document(path, grounds, layers, defs="", grained=(), tinted=None):
+    """grounds: {"light": (top, bottom), "dark": (top, bottom)}, behind everything.
+    layers: [(group, [(layer, light svg, dark svg, glass)], shadow opacity)], front first.
+    tinted: {layer: svg} for the tinted and clear looks; a layer without one shows its light image there."""
     assets = os.path.join(path, "Assets")
     os.makedirs(assets, exist_ok=True)
+    tinted = tinted or {}
     groups = []
     for group, group_layers, shadow in layers:
         out = []
         for name, light, dark, glass in group_layers:
-            for look, body in (("light", light), ("dark", dark)):
+            looks = [("light", light), ("dark", dark)] + ([("tinted", tinted[name])] if name in tinted else [])
+            for look, body in looks:
                 png = os.path.join(assets, f"{name}-{look}.png")
                 write_png(png, body, defs)
-                if name in grained:
+                if name in grained and look != "tinted":
                     add_grain(png)
-            out.append({"name": name, "glass": glass, "image-name-specializations": [
-                {"value": f"{name}-light.png"}, {"value": f"{name}-dark.png", "appearance": "dark"}]})
+            specializations = [{"value": f"{name}-light.png"}, {"value": f"{name}-dark.png", "appearance": "dark"}]
+            if name in tinted:
+                specializations.append({"value": f"{name}-tinted.png", "appearance": "tinted"})
+            out.append({"name": name, "glass": glass, "image-name-specializations": specializations})
         groups.append({"name": group, "layers": out,
                        "shadow": {"kind": "neutral" if shadow else "none", "opacity": shadow or 0.5},
                        "translucency": {"enabled": False, "value": 0.4}})
@@ -170,33 +184,34 @@ def document(path, grounds, layers, defs="", grained=()):
     with open(os.path.join(path, "icon.json"), "w") as f:
         json.dump(doc, f, indent=2)
 
-def notebook(path, leather, ribbon_colour, band_colours, grounds, pages_colours=("#F1EEE8", "#C9C5BD")):
+def notebook(path, leather, ribbon_colour, band_colour, tinted=False):
     """leather: {"light": (top, bottom), "dark": (top, bottom)} or one flat colour for a pass."""
     if isinstance(leather, str):
-        defs, covers = "", (cover(leather), cover(leather))
+        defs, covers, ground = "", (cover(leather), cover(leather)), (leather, leather)
+        grounds = {"light": ground, "dark": ground}
     else:
         defs = linear_gradient("light", *leather["light"]) + linear_gradient("dark", *leather["dark"])
         covers = (cover("url(#light)"), cover("url(#dark)"))
+        grounds = {"light": leather["light"], "dark": leather["dark"]}
     document(path, grounds, [
-        ("Band", [("band", band(band_colours[0]), band(band_colours[1]), True)], 0.35),
-        ("Cover", [("cover-detail", hinge(0.16), hinge(0.22), False), ("cover", *covers, True)], 0.55),
-        ("Ribbon", [("ribbon", ribbon(ribbon_colour), ribbon(ribbon_colour), True)], 0.3),
-        ("Pages", [("pages", pages(pages_colours[0]), pages(pages_colours[1]), True)], None),
-    ], defs, grained=("cover",))
+        ("Ribbon", [("ribbon", ribbon(ribbon_colour), ribbon(ribbon_colour), True)], 0.45),
+        ("Band", [("band", band(band_colour), band(band_colour), True)], 0.35),
+        ("Cover", [("cover-detail", hinge(0.18), hinge(0.24), False), ("cover", *covers, True)], 0.55),
+    ], defs, grained=("cover",), tinted={
+        "ribbon": ribbon(TINTED["ribbon"]), "band": band(TINTED["band"]), "cover": cover(TINTED["cover"]),
+    } if tinted else None)
 
 
 def standard_icon(out):
     leather = leather_shades(STANDARD["leather"])
     tone = leather["band"] if STANDARD["band"] == "leather" else "#FFFFFF"
-    notebook(os.path.join(out, "AppIcon.icon"), leather, STANDARD["ribbon"], (tone, tone), ground_shades(STANDARD["ground"]))
+    notebook(os.path.join(out, "AppIcon.icon"), leather, STANDARD["ribbon"], tone, tinted=True)
 
 def passes(out):
     """One document per part: that part in grey, the rest black. The app adds them up in linear light."""
-    for part in ("base", "ground", "cover", "band", "ribbon"):
+    for part in ("base", "cover", "band", "ribbon"):
         def colour(p): return PASS_GREY if p == part else "#000000"
-        ground = (colour("ground"), colour("ground"))
-        notebook(os.path.join(out, f"pass-{part}.icon"), colour("cover"), colour("ribbon"),
-                 (colour("band"), colour("band")), {"light": ground, "dark": ground})
+        notebook(os.path.join(out, f"pass-{part}.icon"), colour("cover"), colour("ribbon"), colour("band"))
 
 def leather(out):
     """The grain at half its contrast, lifted so that its highlights just reach white: the website multiplies it
@@ -207,6 +222,34 @@ def leather(out):
     Image.fromarray((g * 255).round().astype(np.uint8), "L").save(out, quality=82, method=6)
 
 
+def framed(source, out, size):
+    """The icon as the Dock shows it: on Apple's icon grid (824 of 1024) with the Dock's soft shadow, as
+    NotebookRenderer.dockImage draws it."""
+    from PIL import ImageFilter
+    size = int(size)
+    icon = Image.open(source).convert("RGBA")
+    content = round(size * 824 / 1024)
+    k = content / 824
+    icon = icon.resize((content, content), Image.LANCZOS)
+    at = (size - content) // 2
+    shadow = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    alpha = Image.new("L", (size, size), 0)
+    alpha.paste(icon.split()[3], (at, at + round(10 * k)))
+    shadow.putalpha(alpha.point(lambda v: round(v * 0.28)).filter(ImageFilter.GaussianBlur(12 * k)))
+    shadow.alpha_composite(icon, (at, at))
+    shadow.save(out, optimize=True)
+
+def touch(icon, out, size):
+    """The light layers stacked, square and opaque: a web page's apple-touch-icon is rounded by iOS itself, so an
+    ictool render, rounded already, would show its rim inside iOS's corners."""
+    doc = json.load(open(os.path.join(icon, "icon.json")))
+    flat = Image.new("RGBA", (1024, 1024), (0, 0, 0, 255))
+    for group in reversed(doc["groups"]):
+        for layer in reversed(group["layers"]):
+            flat.alpha_composite(Image.open(os.path.join(icon, "Assets", f"{layer['name']}-light.png")).convert("RGBA"))
+    flat.convert("RGB").resize((int(size), int(size)), Image.LANCZOS).save(out, optimize=True)
+
+
 if __name__ == "__main__":
-    what, out = sys.argv[1], sys.argv[2]
-    {"icon": standard_icon, "passes": passes, "leather": leather}[what](out)
+    what, args = sys.argv[1], sys.argv[2:]
+    {"icon": standard_icon, "passes": passes, "leather": leather, "framed": framed, "touch": touch}[what](*args)

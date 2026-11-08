@@ -450,9 +450,9 @@ menu and, on a folder, + for a new note in it; a location's name has the same tw
 location. The inspector shows a note's outline, with the section you're reading marked and a word count; a click on
 a heading scrolls there. In Settings › Text you pick the typeface (San Francisco, New York, Rounded or Monospaced,
 each shown in itself), the size, the line spacing and the line width; on iPhone and iPad the system's text size makes
-notes larger or smaller on top of that, as it does the text of other apps (not in a PDF or printout). The icon is a leather notebook, and Settings › App Icon makes it yours:
-pick the leather, the elastic band, the ribbon and the background, and the Dock shows your notebook while the app is
-open. Links, the caret, folders and the icons of files are in ink blue to go with it, or in the accent colour you chose
+notes larger or smaller on top of that, as it does the text of other apps (not in a PDF or printout). The icon is the cover of a leather notebook, filling the icon with its elastic band and
+a ribbon hanging from the top, and Settings › App Icon makes it yours: pick the leather, the band and the ribbon, and
+the Dock shows your notebook while the app is open. Links, the caret, folders and the icons of files are in ink blue to go with it, or in the accent colour you chose
 in System Settings. Press Space on a note in the Finder, or tap one in the Files app on an iPhone or iPad, and Quick
 Look shows it in the same look, with its title on top. The icons of notes in the Finder and the Files app show the top
 of each note that way too.
@@ -1032,8 +1032,9 @@ Tools/readme-images.sh
 
 The app icon is drawn by `Tools/AppIcon/notebook.py`. After changing it, run the script below: it writes
 `Notebook/AppIcon.icon` and renders, with Icon Composer's `ictool`, the grey passes that Settings › App Icon colours in
-any leather, the icon on the New Note widget, and the cover's grain for the website's button (it needs Python 3 with NumPy and Pillow, and
-`brew install librsvg`):
+any leather, the icon on the New Note widget, the icon at the top of this README, the website's icons and the cover's
+grain for its button (it needs Python 3 with NumPy and Pillow, and `brew install librsvg`). Then run
+`Tools/readme-images.sh` for the social preview, which shows the icon too:
 
 ```bash
 Tools/AppIcon/make.sh

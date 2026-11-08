@@ -12,12 +12,9 @@ final class NotebookIconTests: XCTestCase {
         let look = NotebookLook.standard
         XCTAssertEqual(look.cover(dark: false).0, hex(0xA8403F))
         XCTAssertEqual(look.cover(dark: false).1, hex(0x6C1D1C))
-        XCTAssertEqual(look.cover(dark: true).0, hex(0xC35958))
-        XCTAssertEqual(look.cover(dark: true).1, hex(0x852C2B))
+        XCTAssertEqual(look.cover(dark: true).0, hex(0x973A39), "a little deeper in dark mode")
+        XCTAssertEqual(look.cover(dark: true).1, hex(0x5C1817))
         XCTAssertEqual(look.bandColor, hex(0x4C1111))
-        XCTAssertEqual(look.ground(dark: false).1, hex(0xD2CDC6))
-        XCTAssertEqual(look.ground(dark: true).0, hex(0x484745), "dark mode lies on a warm dark grey, not black")
-        XCTAssertEqual(look.ground(dark: true).1, hex(0x282726))
 
         var navy = look
         navy.leather = hex(0x405E9E)
@@ -27,17 +24,21 @@ final class NotebookIconTests: XCTestCase {
     }
 
     func testStandardNotebookLooksLikeTheAppIcon() throws {
-        // ictool's own render of Notebook/AppIcon.icon at 512 px, at the middle of the cover and on the ground.
+        // ictool's own render of Notebook/AppIcon.icon at 512 px: the cover at its middle, near its top and near its
+        // bottom, the ribbon and the band.
         let light = try XCTUnwrap(NotebookRenderer.shared.image(.standard, dark: false))
         XCTAssertEqual(light.width, 512)
-        assertPixel(light, 256, 256, near: [147, 60, 56])
-        assertPixel(light, 384, 100, near: [188, 83, 78])
-        assertPixel(light, 40, 40, near: [255, 255, 255], "the stone ground's top is lit by the glass rim")
+        assertPixel(light, 256, 256, near: [147, 60, 55])
+        assertPixel(light, 384, 100, near: [179, 79, 74])
+        assertPixel(light, 256, 480, near: [83, 29, 26])
+        assertPixel(light, 120, 40, near: [224, 178, 92], "the ribbon hangs from the top")
+        assertPixel(light, 411, 256, near: [69, 21, 19], "the band")
         XCTAssertEqual(pixel(light, 0, 0)[3], 0, "outside the rounded square is clear")
 
         let dark = try XCTUnwrap(NotebookRenderer.shared.image(.standard, dark: true))
-        assertPixel(dark, 256, 256, near: [176, 83, 79])
-        assertPixel(dark, 384, 100, near: [221, 113, 108])
+        assertPixel(dark, 256, 256, near: [128, 53, 49])
+        assertPixel(dark, 384, 100, near: [159, 70, 66])
+        assertPixel(dark, 120, 40, near: [224, 178, 92])
     }
 
     func testAnyLeatherColours() throws {
@@ -46,7 +47,7 @@ final class NotebookIconTests: XCTestCase {
         let navy = try XCTUnwrap(NotebookRenderer.shared.image(look, dark: false))
         let p = pixel(navy, 256, 256)
         XCTAssertGreaterThan(p[2], p[0] + 40, "a navy cover is blue")
-        assertPixel(navy, 40, 40, near: [255, 255, 255], "the ground stays as it was")
+        assertPixel(navy, 120, 40, near: [224, 178, 92], "the ribbon stays as it was")
     }
 
     func testDockImageSitsOnTheIconGrid() throws {
@@ -58,9 +59,13 @@ final class NotebookIconTests: XCTestCase {
     }
 
     func testLookIsSaved() throws {
-        let look = NotebookLook(leather: hex(0x3F7D5D), ribbon: hex(0xF3E3C8), band: .white, ground: hex(0xE1E9F2))
+        let look = NotebookLook(leather: hex(0x3F7D5D), ribbon: hex(0xF3E3C8), band: .white)
         let decoded = try JSONDecoder().decode(NotebookLook.self, from: JSONEncoder().encode(look))
         XCTAssertEqual(decoded, look)
+
+        // Saved when the notebook still lay on a background: the leather, band and ribbon stay.
+        let old = Data(#"{"leather":{"red":63,"green":125,"blue":93},"ribbon":{"red":243,"green":227,"blue":200},"band":"white","ground":{"red":225,"green":233,"blue":242}}"#.utf8)
+        XCTAssertEqual(try JSONDecoder().decode(NotebookLook.self, from: old), look)
         XCTAssertEqual(NotebookColor(hex(0xE9B04A).nsColor), hex(0xE9B04A), "colours survive the colour panel")
     }
 

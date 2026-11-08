@@ -73,6 +73,10 @@ versions follow [semantic versioning](https://semver.org).
   Attach in the toolbar work at the end of a note you haven't clicked into, as on the iPad.
 - On the Mac, search moved from the toolbar to the top of the sidebar: Search, above To-dos, opens ⌘K, which finds all
   the search field found, and ⌥⌘F opens it too. The toolbar's search field is gone, so the note's tools have room.
+- The app icon fills its square, as Apple's own book icons do: the leather cover is the whole icon, with the elastic
+  band near its edge and the gold ribbon hanging from the top. It keeps its band and ribbon in the tinted and clear
+  looks too. Settings › App Icon colours the leather, the band and the ribbon as before; with nothing showing around
+  the notebook, its Background row is gone.
 - Quick Look and thumbnails take next to no room: they show notes with the editor the app carries, instead of each
   bringing a copy of it, so with them the app is about 15 MB to download on the Mac and 20 MB on iPhone and iPad, not
   35 and 40 MB.
