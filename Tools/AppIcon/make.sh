@@ -1,8 +1,9 @@
 #!/bin/bash
 # Builds Notebook's app icon (Notebook/AppIcon.icon), the passes Settings › App Icon colours at runtime
 # (Packages/NotebookKit/Sources/NotebookKit/Resources/NotebookIcon), the icon on the New Note widget
-# (NotebookWidgets/Assets.xcassets/NotebookIcon.imageset) and the leather of the website's button
-# (Website/images/leather.webp). Run it after changing Tools/AppIcon/notebook.py.
+# (NotebookWidgets/Assets.xcassets/NotebookIcon.imageset), the icon at the top of the README (Design/icon.png), the
+# website's icons and the leather of its button (Website/images). Run it after changing Tools/AppIcon/notebook.py.
+# The README's social preview takes Design/icon.png too: run Tools/readme-images.sh afterwards.
 #   Tools/AppIcon/make.sh
 # Needs Xcode (for Icon Composer's ictool), Python 3 with NumPy and Pillow, and rsvg-convert (brew install librsvg).
 set -euo pipefail
@@ -17,12 +18,13 @@ command -v rsvg-convert >/dev/null || { echo "Needs rsvg-convert: brew install l
 
 rm -rf Notebook/AppIcon.icon "$work"
 mkdir -p "$work" "$passes"
+rm -f "$passes"/*.png
 python3 Tools/AppIcon/notebook.py icon Notebook
 python3 Tools/AppIcon/notebook.py passes "$work"
 python3 Tools/AppIcon/notebook.py leather Website/images/leather.webp
 
 # Each pass at 512 px, light and dark, in 8 bits: plenty for the Dock and the preview in Settings.
-for part in base ground cover band ribbon; do
+for part in base cover band ribbon; do
   for look in Default Dark; do
     name=$([ $look = Default ] && echo light || echo dark)-$part
     "$ictool" "$work/pass-$part.icon" --export-image --output-file "$work/$name.png" \
@@ -51,6 +53,21 @@ Image.open(sys.argv[1]).convert("RGBA").save(sys.argv[2], optimize=True, icc_pro
 EOF2
   done
 done
+# The icon on Apple's grid with the Dock's shadow: the README's and the website's, and the website's favicons and
+# apple-touch-icon.
+for look in Default Dark; do
+  "$ictool" Notebook/AppIcon.icon --export-image --output-file "$work/macOS-$look.png" \
+    --platform macOS --rendition $look --width 1024 --height 1024 --scale 1 >/dev/null
+done
+python3 Tools/AppIcon/notebook.py framed "$work/macOS-Default.png" Design/icon.png 256
+for look in light dark; do
+  rendition=$([ $look = light ] && echo Default || echo Dark)
+  python3 Tools/AppIcon/notebook.py framed "$work/macOS-$rendition.png" Website/images/icon-$look.png 288
+  python3 Tools/AppIcon/notebook.py framed "$work/macOS-$rendition.png" Website/images/favicon-$look.png 64
+done
+python3 Tools/AppIcon/notebook.py touch Notebook/AppIcon.icon Website/images/apple-touch-icon.png 180
+
 echo "Wrote Notebook/AppIcon.icon and $(ls "$passes" | wc -l | tr -d ' ') passes to $passes"
 echo "Wrote the widget's icon to $widget"
-echo "Wrote Website/images/leather.webp"
+echo "Wrote Design/icon.png, the website's icons and Website/images/leather.webp"
+echo "Now run Tools/readme-images.sh for the social preview"
