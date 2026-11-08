@@ -3,7 +3,7 @@ import AppKit
 import SwiftUI
 import TipKit
 
-/// Settings › App Icon: the notebook on the app's icon, in the leather, ribbon and background you like.
+/// Settings › App Icon: the notebook on the app's icon, in the leather, band and ribbon you like.
 struct AppIconSettings: View {
     @Bindable private var store = AppIconStore.shared
 
@@ -26,9 +26,6 @@ struct AppIconSettings: View {
                 .pickerStyle(.segmented)
                 LabeledContent("Ribbon") {
                     SwatchRow(swatches: NotebookLook.ribbons, color: $store.look.ribbon)
-                }
-                LabeledContent("Background") {
-                    SwatchRow(swatches: NotebookLook.grounds, color: $store.look.ground)
                 }
             } footer: {
                 HStack(alignment: .firstTextBaseline) {
@@ -107,7 +104,7 @@ private struct SwatchRow: View {
 /// Settings › App Icon.
 struct AppIconTip: Tip {
     var title: Text { Text("Make the icon yours") }
-    var message: Text? { Text("Pick the notebook’s leather, ribbon and background.") }
+    var message: Text? { Text("Pick the notebook’s leather, band and ribbon.") }
     var image: Image? { Image(systemName: "book.closed") }
     var actions: [Action] { [Action(id: "open", title: "Open Settings")] }
 

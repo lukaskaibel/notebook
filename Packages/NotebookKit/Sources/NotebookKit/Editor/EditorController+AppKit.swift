@@ -73,6 +73,8 @@ extension EditorController: NSTextViewDelegate, NSTextFieldDelegate {
     var scrollTop: CGFloat { scrollView.contentView.bounds.minY }
     /// The room the toolbar takes at the top.
     var topInset: CGFloat { scrollView.contentInsets.top }
+    /// The room something over the bottom of the note takes: none in a window of its own.
+    var bottomInset: CGFloat { scrollView.contentInsets.bottom }
     var visibleRect: NSRect { scrollView.contentView.bounds }
     var maxScrollTop: CGFloat { max(-topInset, textView.frame.height - scrollView.contentView.bounds.height) }
 

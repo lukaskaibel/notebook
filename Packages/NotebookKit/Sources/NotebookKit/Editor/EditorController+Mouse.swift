@@ -284,6 +284,7 @@ extension MarkdownTextView {
     @objc func makeNumberedList(_ sender: Any?) { controller?.setLineFormat(.numbered) }
     @objc func makeChecklist(_ sender: Any?) { controller?.setLineFormat(.checklist) }
     @objc func makeQuote(_ sender: Any?) { controller?.setLineFormat(.quote) }
+    @objc func insertTable(_ sender: Any?) { controller?.insertTable() }
     @objc func markChecked(_ sender: Any?) { controller?.toggleChecked() }
     @objc func addLink(_ sender: Any?) { controller?.insertLink() }
     @objc func indentLines(_ sender: Any?) { controller?.indent(by: 1) }

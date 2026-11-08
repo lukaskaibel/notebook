@@ -377,9 +377,11 @@ enum DebugRemote {
             let onScreen = editor.textView.convert(CGPoint(x: rect.midX, y: rect.midY), to: nil)
             editor.debugTap(at: CGPoint(x: rect.midX, y: rect.midY))
             editor.debugTap(at: editor.textView.convert(onScreen, from: nil))
-        case "format":
+        case "format", "toolbarformat":
+            // format <name>: as its shortcut does, at the caret; toolbarformat <name>: as the bar's button does
+            // (Checklist, Table), at the end of a note you haven't put the caret in.
             if let format = FormatCommand.allCases.first(where: { $0.name.lowercased().replacingOccurrences(of: " ", with: "") == argument.lowercased() }) {
-                editor.perform(format)
+                if command == "format" { editor.perform(format) } else { editor.beginEditing(then: format) }
             }
         case "pictures", "selectpicture", "movepicture", "deletepicture":
             // The pictures of the note, by their order: `selectpicture 0`, `movepicture 0 <offset>`.
@@ -663,6 +665,10 @@ enum DebugRemote {
         case "caretinfo":
             // caretinfo: the caret UIKit proposes and the one drawn, next to the baseline and font of the text there.
             caretInfo(editor)
+        case "scrollinfo":
+            // scrollinfo: where the caret is on the screen, next to the bar above the keyboard and the insets the note
+            // scrolls with, in window points.
+            scrollInfo(editor)
         case "autocorrect":
             // The keyboard putting a word right: `autocorrect teh the` replaces the last "teh" through UITextInput.
             let words = argument.split(separator: " ").map(String.init)
@@ -790,6 +796,19 @@ enum DebugRemote {
             log(String(format: "caretinfo \(index): text '%@' %@ %.1f pt, ascender %.2f descender %.2f offset %.2f, line \(inWindow(CGRect(x: 0, y: origin.y + line.minY, width: 1, height: line.height))), ascender–descender \(inWindow(CGRect(x: 0, y: baseline - font.ascender, width: 1, height: font.ascender - font.descender)))",
                        text.substring(with: NSRange(location: character, length: 1)), font.fontName, font.pointSize, font.ascender, font.descender, offset))
         }
+    }
+
+    private static func scrollInfo(_ editor: EditorController) {
+        let view = editor.textView
+        guard let range = view.selectedTextRange else { return log("scrollinfo: no selection") }
+        let caret = view.convert(view.caretRect(for: range.end), to: nil)
+        let shown = view.convert(view.bounds, to: nil)
+        let bar = view.inputAccessoryView.flatMap { $0.window == nil ? nil : $0.convert($0.bounds, to: nil) }
+        let inset = view.contentInset, adjusted = view.adjustedContentInset, safe = view.safeAreaInsets
+        log(String(format: "scrollinfo: offset %.1f of max %.1f, view y %.1f–%.1f, caret y %.1f–%.1f, bar y %@, room under caret %.1f, inset top %.1f bottom %.1f, adjusted top %.1f bottom %.1f, safe top %.1f bottom %.1f, content height %.1f",
+                   view.contentOffset.y, editor.maxScrollTop, shown.minY, shown.maxY, caret.minY, caret.maxY,
+                   bar.map { String(format: "%.1f–%.1f", $0.minY, $0.maxY) } ?? "none",
+                   shown.maxY - adjusted.bottom - caret.maxY, inset.top, inset.bottom, adjusted.top, adjusted.bottom, safe.top, safe.bottom, view.contentSize.height))
     }
 
     private static func describe(_ view: UIView, depth: Int, limit: Int) -> String {

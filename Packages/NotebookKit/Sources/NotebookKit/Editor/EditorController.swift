@@ -137,6 +137,12 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     private var isApplyingStyle = false
     /// True while the editor changes the text itself, so its own changes aren't taken for typing.
     var isPerformingEdit = false
+    /// How many changes that keep the note where it is on the screen are being made (`preservingScroll`): the caret
+    /// they move isn't brought into view.
+    private var keepingScroll = 0
+    /// Whether a change the editor makes now brings the caret into view: one made where you write, not one that keeps
+    /// the note where it is (a link renamed elsewhere, a version put back).
+    var revealsCaretAfterEdit: Bool { keepingScroll == 0 && isFocused }
     /// True while the editor selects something exactly, which isn't grown to take Markdown whole (what a typing rule
     /// selected).
     var selectsExactly = false
@@ -906,6 +912,8 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     /// Keeps what is at `anchor` (or the caret, or the first line in view) where it is on the screen through `change`;
     /// with `movedTo`, where that is once the change is made.
     func preservingScroll(anchor: Int? = nil, movedTo: Int? = nil, _ change: () -> Void) {
+        keepingScroll += 1
+        defer { keepingScroll -= 1 }
         guard isInWindow, storage.length > 0 else { change(); return }
         let visible = visibleRect
         var index = anchor ?? selection.location
@@ -926,6 +934,44 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         if abs(delta) > 0.5 {
             setScrollTop(max(-topInset, visible.minY + delta))
         }
+    }
+
+    /// The room kept between the line being written and the bars over the note, the keyboard's on iPhone and iPad.
+    static let caretRoom: CGFloat = 8
+
+    /// Scrolls as little as it takes for the caret's line to show, clear of the bars above and below the note: on iPhone
+    /// and iPad, of the keyboard and the bar over it. What the editor writes where you type (Return, the next bullet,
+    /// what is pasted) comes into view as the text view's own typing does.
+    func scrollCaretIntoView() {
+        guard isInWindow, !isLoading, let line = lineRect(at: selection.upperBound) else { return }
+        let visible = visibleRect
+        let top = visible.minY + topInset + Self.caretRoom
+        let bottom = visible.maxY - bottomInset - Self.caretRoom
+        var target = visible.minY
+        if line.maxY > bottom {
+            // A line taller than the room (a picture, a table) shows its end, where the caret is.
+            target += line.maxY - bottom
+        } else if line.minY < top {
+            target -= top - line.minY
+        } else {
+            return
+        }
+        target = min(max(-topInset, target), maxScrollTop)
+        if abs(target - visible.minY) > 0.5 { setScrollTop(target) }
+    }
+
+    /// The text of the line a character is on (or the empty line after a last line break), laid out up to there.
+    private func lineRect(at index: Int) -> CGRect? {
+        let index = min(index, storage.length)
+        layoutManager.ensureLayout(forCharacterRange: NSRange(location: 0, length: min(storage.length, index + 1)))
+        let origin = textOrigin
+        if index >= storage.length, layoutManager.extraLineFragmentTextContainer != nil {
+            return layoutManager.extraLineFragmentUsedRect.offsetBy(dx: origin.x, dy: origin.y)
+        }
+        guard storage.length > 0 else { return nil }
+        let glyph = layoutManager.glyphIndexForCharacter(at: min(index, storage.length - 1))
+        guard glyph < layoutManager.numberOfGlyphs else { return nil }
+        return layoutManager.lineFragmentUsedRect(forGlyphAt: glyph, effectiveRange: nil).offsetBy(dx: origin.x, dy: origin.y)
     }
 
     func yPosition(of index: Int) -> CGFloat {

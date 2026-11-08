@@ -2,16 +2,21 @@
 import AppKit
 import SwiftUI
 
-/// A row in the sidebar that isn't a file in a tree: a section title, a favourite, To-dos at the top.
+/// A row in the sidebar that isn't a file in a tree: a section title, Search, and the iPhone's first screen at the top,
+/// To-dos and Favorites as tiles and what you opened last as cards.
 final class SidebarEntry: NSObject {
     enum Kind {
         case header(String, location: UUID?)
-        case favorite(URL)
-        case todos
+        /// Opens ⌘K, as Search does at the top of Notion's sidebar; never selected.
+        case search
+        /// To-dos and Favorites as tiles (`HomeTileGrid`), as Reminders has its lists at the top of its sidebar.
+        case tiles
+        /// What you opened last as cards in a row (`RecentCardRow`), under the header Recent.
+        case recent
     }
 
     let kind: Kind
-    /// What a section shows: favourites, recent notes or a location's files.
+    /// What a section shows: the cards of Recent or a location's files.
     var children: [AnyObject] = []
     init(_ kind: Kind, children: [AnyObject] = []) {
         self.kind = kind
@@ -23,8 +28,16 @@ final class SidebarEntry: NSObject {
         return false
     }
 
-    var isTodos: Bool {
-        if case .todos = kind { return true }
+    /// The tiles or the cards: SwiftUI in the row, never selected, nothing to drop on.
+    var isHosted: Bool {
+        switch kind {
+        case .tiles, .recent: true
+        case .header, .search: false
+        }
+    }
+
+    var isSearch: Bool {
+        if case .search = kind { return true }
         return false
     }
 
@@ -34,15 +47,11 @@ final class SidebarEntry: NSObject {
         return location?.uuidString ?? title
     }
 
-    var url: URL? {
-        switch kind {
-        case .favorite(let url): url
-        case .header, .todos: nil
-        }
-    }
+    var url: URL? { nil }
 }
 
-/// The sidebar: To-dos, favourites and a tree for every location, each a section you can close. A source list
+/// The sidebar: Search, the tiles of To-dos and Favorites, Recent, and a tree for every location, each a section you
+/// can close. A source list
 /// like the Finder's, so arrow keys, type-to-select, drag and drop and renaming in place work as there.
 @MainActor
 final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate, NSMenuDelegate, NSTextFieldDelegate {
@@ -120,7 +129,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
 
     /// The main window opened again (it had been closed): what is open shows selected, as when the window closed.
     private func revealCurrent() {
-        if workspace.showsTodos { return selectTodos() }
+        if workspace.showsTodos || workspace.showsFavorites { return selectNoRow() }
         guard let url = workspace.selectedFolder ?? workspace.currentURL else { return }
         reveal(url, select: true)
         // Scrolled to once the sidebar has its size in the window.
@@ -169,16 +178,17 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         reload(shown)
     }
 
-    /// The To-dos row, first of all.
-    private let todosEntry = SidebarEntry(.todos)
+    /// Search, first of all, then the tiles and the cards of Recent.
+    private let searchEntry = SidebarEntry(.search)
+    private let tilesEntry = SidebarEntry(.tiles)
+    private let recentEntry = SidebarEntry(.recent)
 
     private func rebuildTop() {
         visible = [:]
-        var items: [AnyObject] = NotebookSettings.shared.showsTodos ? [todosEntry] : []
-        let favorites = workspace.favoriteURLs
-        if !favorites.isEmpty {
-            items.append(SidebarEntry(.header("Favorites", location: nil), children: favorites.map { SidebarEntry(.favorite($0)) }))
-        }
+        var items: [AnyObject] = [searchEntry]
+        if NotebookSettings.shared.showsTodos || !workspace.favoriteURLs.isEmpty { items.append(tilesEntry) }
+        hasRecents = !workspace.recentURLs(includingOpen: true).isEmpty
+        if hasRecents { items.append(SidebarEntry(.header("Recent", location: nil), children: [recentEntry])) }
         for location in workspace.locations {
             let files = workspace.root(for: location).map { visibleChildren(of: $0) } ?? []
             items.append(SidebarEntry(.header(location.name, location: location.id), children: files))
@@ -218,6 +228,21 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         guard renaming == nil else { heldAll = true; return }
         guard outline.numberOfRows > 0 else { return }
         outline.reloadData(forRowIndexes: IndexSet(integersIn: 0..<outline.numberOfRows), columnIndexes: [0])
+    }
+
+    /// Whether Recent is there: it comes with the first file you open.
+    private var hasRecents = false
+
+    /// The tiles and the cards, each made once and kept: a reload of the sidebar hands the row the same view, so the
+    /// cards keep their places and where they are scrolled to, and slide when what you opened last changes.
+    private lazy var tilesCell = SidebarHostedCell(SidebarHostedCell.tiles, HomeTileGrid(workspace: workspace),
+                                                   insets: NSEdgeInsets(top: 4, left: 2, bottom: 6, right: 6))
+    private lazy var recentCell = SidebarHostedCell(SidebarHostedCell.recent, RecentCardRow(workspace: workspace, leadingInset: 2),
+                                                    insets: NSEdgeInsets(top: 2, left: -14, bottom: 6, right: 0))
+
+    /// A file opened: Recent's cards follow by themselves, and the section comes with the first.
+    func recentsChanged() {
+        if !hasRecents, !workspace.recentURLs(includingOpen: true).isEmpty { reloadSections() }
     }
 
     func reloadSections() {
@@ -433,27 +458,20 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         outline.scrollRowToVisible(row)
     }
 
-    /// The folder you selected, or else the open file, or To-dos, scrolled to unless `scrolling` is false.
+    /// The folder you selected, or else the open file, scrolled to unless `scrolling` is false; with To-dos or Favorites
+    /// shown, their tile is selected, and no row.
     private func selectCurrent(scrolling: Bool = true) {
-        if workspace.showsTodos { return selectTodos(scrolling: scrolling) }
+        if workspace.showsTodos || workspace.showsFavorites { return selectNoRow() }
         guard let current = workspace.selectedFolder ?? workspace.currentURL, let node = workspace.node(for: current, reading: false) else { return }
         selectRow(for: node, scrolling: scrolling)
     }
 
-    func selectTodos(scrolling: Bool = true) {
-        let row = outline.row(forItem: todosEntry)
-        guard row >= 0, outline.selectedRow != row else { return }
+    /// To-dos or Favorites is shown: its tile is selected (it watches the workspace), and no row.
+    func selectNoRow() {
+        guard outline.selectedRow >= 0 else { return }
         isSelectingProgrammatically = true
-        outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-        if scrolling { outline.scrollRowToVisible(row) }
+        outline.deselectAll(nil)
         isSelectingProgrammatically = false
-    }
-
-    /// The count next to To-dos changed.
-    func refreshTodosRow() {
-        let row = outline.row(forItem: todosEntry)
-        guard row >= 0, renaming == nil else { return }
-        outline.reloadData(forRowIndexes: IndexSet(integer: row), columnIndexes: [0])
     }
 
     private func selectRow(for node: FileNode, scrolling: Bool = true) {
@@ -507,7 +525,18 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     }
 
     func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
-        !((item as? SidebarEntry)?.isHeader ?? false)
+        guard let entry = item as? SidebarEntry else { return true }
+        return !entry.isHeader && !entry.isSearch && !entry.isHosted
+    }
+
+    /// The tiles and the cards as tall as they are; every other row as tall as the source list makes them.
+    func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
+        guard let entry = item as? SidebarEntry else { return outlineView.rowHeight }
+        switch entry.kind {
+        case .tiles: return 74
+        case .recent: return 140
+        case .header, .search: return outlineView.rowHeight
+        }
     }
 
     func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
@@ -535,10 +564,14 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             }
             return cell
         }
+        if let entry = item as? SidebarEntry, entry.isHosted {
+            if case .tiles = entry.kind { return tilesCell }
+            return recentCell
+        }
         let cell = outlineView.makeView(withIdentifier: SidebarFileCell.identifier, owner: nil) as? SidebarFileCell ?? SidebarFileCell()
         cell.label.delegate = self
-        if (item as? SidebarEntry)?.isTodos == true {
-            cell.configureTodos(count: workspace.dueTodoCount)
+        if (item as? SidebarEntry)?.isSearch == true {
+            cell.configureSearch { [weak self] in self?.workspace.openSearch() }
             cell.setButtons(more: nil, add: nil)
             return cell
         }
@@ -554,15 +587,8 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             // Hidden folders show dimmed while their location shows them, as hidden files in the Finder.
             let dimmed = NotebookSettings.shared.dimsOtherFiles && !node.isFolder && node.kind != .note || node.isFolder && workspace.isHidden(node.url)
             cell.configure(name: workspace.newName(for: node.url) ?? node.name, kind: node.kind, inCloud: node.isInCloud, url: node.url, icon: node.icon, nested: nested,
-                           dimmed: dimmed, reminder: node.kind == .note ? workspace.reminder(for: node.url) : nil)
-        } else if let entry = item as? SidebarEntry, let url = entry.url {
-            let kind = FileKind(url: url, isDirectory: (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false)
-            let name = workspace.newName(for: url) ?? (kind == .note ? url.deletingPathExtension().lastPathComponent : kind == .folder ? workspace.folderName(url) : url.lastPathComponent)
-            // A favourite folder shows the look you gave it, else a star.
-            let icon = kind == .folder ? workspace.folderIcon(for: url) : nil
-            cell.configure(name: name, kind: kind, inCloud: false, url: url, icon: icon,
-                           symbol: { if case .favorite = entry.kind, kind == .folder, icon == nil { return "star" } else { return nil } }(),
-                           nested: nested, reminder: kind == .note ? workspace.reminder(for: url) : nil)
+                           dimmed: dimmed, reminder: node.kind == .note ? workspace.reminder(for: node.url) : nil,
+                           items: node.isFolder ? workspace.shownCount(of: node.url) : nil)
         }
         return cell
     }
@@ -611,11 +637,6 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             } else {
                 open(node.url)
             }
-        } else if let entry = item as? SidebarEntry, entry.isTodos {
-            pendingOpen = nil
-            workspace.showTodos()
-        } else if let entry = item as? SidebarEntry, let url = entry.url {
-            open(url)
         }
     }
 
@@ -785,7 +806,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     func fill(_ menu: NSMenu, row: Int) {
         menu.removeAllItems()
         let item = row >= 0 ? outline.item(atRow: row) : nil
-        if (item as? SidebarEntry)?.isTodos == true { return }
+        if let entry = item as? SidebarEntry, entry.isHosted || entry.isSearch { return }
         if let entry = item as? SidebarEntry, case .header(_, let locationID) = entry.kind, let locationID,
            let location = workspace.locations.first(where: { $0.id == locationID }) {
             add(menu, "New Note", "square.and.pencil") { [weak self] in self?.workspace.newNote(in: location.url) }
@@ -897,7 +918,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             outlineView.setDropItem(nil, dropChildIndex: NSOutlineViewDropOnItemIndex)
             return info.draggingSourceOperationMask.contains(.link) ? .link : .generic
         }
-        if (item as? SidebarEntry)?.isTodos == true { return [] }
+        if let entry = item as? SidebarEntry, entry.isHosted || entry.isSearch { return [] }
         guard let folder = dropFolder(for: item) else { return [] }
         guard !urls.isEmpty, !urls.contains(where: { folder.path == $0.path || folder.path.hasPrefix($0.path + "/") }) else { return [] }
         if let node = folderNode(for: item) { outlineView.setDropItem(node, dropChildIndex: NSOutlineViewDropOnItemIndex) }
@@ -970,6 +991,11 @@ final class SidebarOutlineView: NSOutlineView {
         }
         if row >= 0, let entry = item(atRow: row) as? SidebarEntry, entry.isHeader {
             controller?.toggle(section: entry)
+            return
+        }
+        // Search opens ⌘K and is never selected: what is open stays selected below it.
+        if row >= 0, let entry = item(atRow: row) as? SidebarEntry, entry.isSearch {
+            controller?.workspace.openSearch()
             return
         }
         if row >= 0, let node = item(atRow: row) as? FileNode, node.isFolder,
@@ -1349,12 +1375,42 @@ final class SidebarHeaderCell: NSTableCellView {
     }
 }
 
+/// A row of SwiftUI in the sidebar: the tiles of To-dos and Favorites, or Recent's cards. They watch the workspace
+/// themselves, so counts and cards change without the row being reloaded.
+final class SidebarHostedCell: NSTableCellView {
+    static let tiles = NSUserInterfaceItemIdentifier("tiles")
+    static let recent = NSUserInterfaceItemIdentifier("recent")
+
+    init<Content: View>(_ identifier: NSUserInterfaceItemIdentifier, _ content: Content, insets: NSEdgeInsets) {
+        super.init(frame: .zero)
+        self.identifier = identifier
+        let host = OpaqueHostingView(rootView: content)
+        host.translatesAutoresizingMaskIntoConstraints = false
+        // The row has its height (`heightOfRowByItem`): the view fills it rather than asking for its own.
+        host.sizingOptions = []
+        addSubview(host)
+        NSLayoutConstraint.activate([
+            host.leadingAnchor.constraint(equalTo: leadingAnchor, constant: insets.left),
+            host.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -insets.right),
+            host.topAnchor.constraint(equalTo: topAnchor, constant: insets.top),
+            host.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -insets.bottom),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+}
+
+/// The tiles and cards bring their own fills and colours, which the sidebar's vibrancy would otherwise blend.
+private final class OpaqueHostingView<Content: View>: NSHostingView<Content> {
+    override var allowsVibrancy: Bool { false }
+}
+
 final class SidebarFileCell: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("file")
     let icon = NSImageView()
     let label = NSTextField(labelWithString: "")
     let accessory = NSImageView()
-    /// How many to-dos are due, next to To-dos, as Mail counts unread mail.
+    /// How many files a folder holds, as Notes counts a folder's notes, or Search's shortcut.
     let count = NSTextField(labelWithString: "")
     /// The row's right-click menu, there while the pointer is on the row, as in Notion.
     let moreButton = hoverButton("ellipsis", action: #selector(SidebarFileCell.moreClicked(_:)))
@@ -1365,6 +1421,9 @@ final class SidebarFileCell: NSTableCellView {
     /// The name ends before ••• and + while they show, and runs on to the bell or cloud otherwise.
     private var labelBeforeButtons: NSLayoutConstraint!
     private var addEnd: NSLayoutConstraint!
+    /// ••• before + on a folder, and in +'s place on a file, which never has one.
+    private var moreBeforeAdd: NSLayoutConstraint!
+    private var moreInAddsPlace: NSLayoutConstraint!
     var isHovered = false {
         didSet { updateButtons() }
     }
@@ -1402,6 +1461,8 @@ final class SidebarFileCell: NSTableCellView {
         addButton.toolTip = "New Note"
         labelBeforeButtons = label.trailingAnchor.constraint(lessThanOrEqualTo: moreButton.leadingAnchor, constant: -4)
         addEnd = addButton.trailingAnchor.constraint(equalTo: trailingAnchor)
+        moreBeforeAdd = moreButton.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -HoverButtons.moreBeforeAdd)
+        moreInAddsPlace = moreButton.trailingAnchor.constraint(equalTo: addButton.trailingAnchor)
         // 9 pt from a folder's arrow, which AppKit puts just before the cell, to the icon, and 9 pt from the icon to the
         // name, as in Notion; Notes has them closer, which looked cramped. The icon keeps its own size, centred on its
         // column.
@@ -1417,7 +1478,7 @@ final class SidebarFileCell: NSTableCellView {
             count.centerYAnchor.constraint(equalTo: centerYAnchor),
             addEnd,
             addButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            moreButton.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -HoverButtons.moreBeforeAdd),
+            moreBeforeAdd,
             moreButton.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
     }
@@ -1426,10 +1487,15 @@ final class SidebarFileCell: NSTableCellView {
 
     private var tint: NSColor = .secondaryLabelColor
 
-    /// `add` only for a folder; neither for To-dos. ••• stays where it is when there's no +, so names end alike.
+    /// `add` only for a folder; neither for To-dos. Without +, ••• moves to the row's end, so a file's name runs on
+    /// further.
     func setButtons(more: ((NSView) -> Void)?, add: (() -> Void)?) {
         self.more = more
         self.add = add
+        // Deactivate before activating, so the two never pull ••• at once.
+        moreBeforeAdd.isActive = false
+        moreInAddsPlace.isActive = false
+        (add == nil ? moreInAddsPlace : moreBeforeAdd).isActive = true
         updateButtons()
     }
 
@@ -1464,32 +1530,57 @@ final class SidebarFileCell: NSTableCellView {
     override func prepareForReuse() {
         super.prepareForReuse()
         isHovered = false
+        press = nil
     }
 
-    /// To-dos: the checklist, and how many are due today or overdue.
-    func configureTodos(count due: Int) {
-        label.stringValue = "To-dos"
+    /// What a row that isn't selected does when VoiceOver presses it: Search's.
+    private var press: (() -> Void)?
+
+    override func accessibilityRole() -> NSAccessibility.Role? {
+        press == nil ? super.accessibilityRole() : .button
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        guard let press else { return super.accessibilityPerformPress() }
+        press()
+        return true
+    }
+
+    /// The count's colour: To-dos' count, or Search's shortcut, a step quieter.
+    private var countColor: NSColor = .secondaryLabelColor
+
+    /// Search: the magnifying glass, and ⌘K where a folder has its count. `press` opens it.
+    func configureSearch(press: @escaping () -> Void) {
+        label.stringValue = "Search"
         label.textColor = .labelColor
         icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular, scale: .large)
         icon.alphaValue = 1
-        icon.image = NSImage(systemSymbolName: "checklist", accessibilityDescription: nil)
+        icon.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: nil)
         tint = .controlAccentColor
         accessory.image = nil
         isOverdue = false
-        count.stringValue = due > 0 ? "\(due)" : ""
-        shownCount = due > 0
-        count.isHidden = due == 0
+        self.press = press
+        count.font = .systemFont(ofSize: 12)
+        countColor = .tertiaryLabelColor
+        count.stringValue = "⌘K"
+        shownCount = true
+        count.isHidden = false
         updateTint()
-        toolTip = nil
-        setAccessibilityLabel(due > 0 ? "To-dos, \(due) due" : "To-dos")
+        toolTip = "Search notes, files and pictures (⌘K)"
+        setAccessibilityLabel("Search")
         updateButtons()
     }
 
-    /// `look` is a folder's symbol or emoji and colour, if you chose any (Customize Folder).
+    /// `look` is a folder's symbol or emoji and colour, if you chose any (Customize Folder); `items` how many files and
+    /// folders it holds, once it has been read.
     func configure(name: String, kind: FileKind, inCloud: Bool, url: URL, icon look: FolderIcon? = nil, symbol: String? = nil, nested: Bool, dimmed: Bool = false,
-                   reminder: Reminder? = nil) {
-        shownCount = false
-        count.isHidden = true
+                   reminder: Reminder? = nil, items: Int? = nil) {
+        count.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        countColor = .secondaryLabelColor
+        count.stringValue = items.map { "\($0)" } ?? ""
+        shownCount = items != nil
+        count.isHidden = items == nil
+        press = nil
         label.stringValue = name
         label.textColor = dimmed ? .tertiaryLabelColor : inCloud ? .secondaryLabelColor : .labelColor
         // As in Notes: large icons on a section's own rows, smaller ones inside a folder.
@@ -1544,7 +1635,7 @@ final class SidebarFileCell: NSTableCellView {
     private func updateTint() {
         let emphasized = backgroundStyle == .emphasized
         icon.contentTintColor = emphasized ? .alternateSelectedControlTextColor : tint
-        count.textColor = emphasized ? .alternateSelectedControlTextColor : .secondaryLabelColor
+        count.textColor = emphasized ? .alternateSelectedControlTextColor : countColor
         for button in [moreButton, addButton] { button.contentTintColor = emphasized ? .alternateSelectedControlTextColor : .secondaryLabelColor }
         accessory.contentTintColor = emphasized ? .alternateSelectedControlTextColor : isOverdue ? .systemRed : .tertiaryLabelColor
     }

@@ -3,8 +3,8 @@
     {
       "value": {
         "linear-gradient": [
-          "srgb:0.93725,0.91765,0.88627,1.00000",
-          "srgb:0.82353,0.80392,0.77647,1.00000"
+          "srgb:0.65882,0.25098,0.24706,1.00000",
+          "srgb:0.42353,0.11373,0.10980,1.00000"
         ],
         "orientation": {
           "start": {
@@ -22,8 +22,8 @@
       "appearance": "dark",
       "value": {
         "linear-gradient": [
-          "srgb:0.28235,0.27843,0.27059,1.00000",
-          "srgb:0.15686,0.15294,0.14902,1.00000"
+          "srgb:0.59216,0.22745,0.22353,1.00000",
+          "srgb:0.36078,0.09412,0.09020,1.00000"
         ],
         "orientation": {
           "start": {
@@ -40,6 +40,36 @@
   ],
   "groups": [
     {
+      "name": "Ribbon",
+      "layers": [
+        {
+          "name": "ribbon",
+          "glass": true,
+          "image-name-specializations": [
+            {
+              "value": "ribbon-light.png"
+            },
+            {
+              "value": "ribbon-dark.png",
+              "appearance": "dark"
+            },
+            {
+              "value": "ribbon-tinted.png",
+              "appearance": "tinted"
+            }
+          ]
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.45
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0.4
+      }
+    },
+    {
       "name": "Band",
       "layers": [
         {
@@ -52,6 +82,10 @@
             {
               "value": "band-dark.png",
               "appearance": "dark"
+            },
+            {
+              "value": "band-tinted.png",
+              "appearance": "tinted"
             }
           ]
         }
@@ -91,6 +125,10 @@
             {
               "value": "cover-dark.png",
               "appearance": "dark"
+            },
+            {
+              "value": "cover-tinted.png",
+              "appearance": "tinted"
             }
           ]
         }
@@ -98,58 +136,6 @@
       "shadow": {
         "kind": "neutral",
         "opacity": 0.55
-      },
-      "translucency": {
-        "enabled": false,
-        "value": 0.4
-      }
-    },
-    {
-      "name": "Ribbon",
-      "layers": [
-        {
-          "name": "ribbon",
-          "glass": true,
-          "image-name-specializations": [
-            {
-              "value": "ribbon-light.png"
-            },
-            {
-              "value": "ribbon-dark.png",
-              "appearance": "dark"
-            }
-          ]
-        }
-      ],
-      "shadow": {
-        "kind": "neutral",
-        "opacity": 0.3
-      },
-      "translucency": {
-        "enabled": false,
-        "value": 0.4
-      }
-    },
-    {
-      "name": "Pages",
-      "layers": [
-        {
-          "name": "pages",
-          "glass": true,
-          "image-name-specializations": [
-            {
-              "value": "pages-light.png"
-            },
-            {
-              "value": "pages-dark.png",
-              "appearance": "dark"
-            }
-          ]
-        }
-      ],
-      "shadow": {
-        "kind": "none",
-        "opacity": 0.5
       },
       "translucency": {
         "enabled": false,

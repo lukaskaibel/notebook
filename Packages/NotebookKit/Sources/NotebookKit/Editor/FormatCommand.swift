@@ -7,6 +7,7 @@ enum FormatCommand: CaseIterable, Identifiable {
     case bold, italic, strikethrough, highlight, code, link
     case checklist, bulletedList, numberedList, quote
     case indent, outdent
+    case table
 
     var id: Self { self }
 
@@ -28,6 +29,7 @@ enum FormatCommand: CaseIterable, Identifiable {
         case .quote: "Block Quote"
         case .indent: "Indent"
         case .outdent: "Outdent"
+        case .table: "Table"
         }
     }
 
@@ -49,6 +51,7 @@ enum FormatCommand: CaseIterable, Identifiable {
         case .quote: "text.quote"
         case .indent: "increase.indent"
         case .outdent: "decrease.indent"
+        case .table: "tablecells"
         }
     }
 
@@ -76,6 +79,7 @@ extension EditorController {
         case .quote: setLineFormat(.quote)
         case .indent: indent(by: 1)
         case .outdent: indent(by: -1)
+        case .table: insertTable()
         }
     }
 
@@ -150,6 +154,7 @@ struct FormatShortcut {
             FormatShortcut(.bulletedList, "7", [.command, .shift]),
             FormatShortcut(.numberedList, "9", [.command, .shift]),
             FormatShortcut(.quote, "'"),
+            FormatShortcut(.table, "t", [.command, .option]),
         ],
         [
             FormatShortcut(.indent, "]", [.command, .option]),

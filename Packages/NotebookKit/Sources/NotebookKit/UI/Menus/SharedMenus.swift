@@ -23,6 +23,7 @@ extension FormatCommand {
         case .bulletedList: MenuKeys.text("7", shift: true)
         case .numberedList: MenuKeys.text("9", shift: true)
         case .quote: MenuKeys.text("'")
+        case .table: MenuKeys.text("T", option: true)
         case .indent: MenuKeys.text("]", option: true)
         case .outdent: MenuKeys.text("[", option: true)
         }

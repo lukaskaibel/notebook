@@ -7,6 +7,10 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- Table, in the toolbar and in Format › Table (⌥⌘T, also on an iPad with a keyboard), puts an empty table of two
+  columns in a note, a header and one row, with the caret in its first cell, as in Notes: on an empty line, or under
+  the line you're on, with empty lines around it so other apps read it as a table too. In a note you haven't clicked
+  into, it goes at the end, as Checklist does. AsciiDoc notes don't have it; their tables are typed.
 - Notebook asks for a rating on the App Store, with the system's own prompt, once you have used it on three days: only
   as you finish something, when you leave a note you wrote in or a to-do you ticked in To-dos has gone, never as it
   opens or as you start a new note, and at most once a version and two months apart (the system shows it at most three
@@ -65,6 +69,23 @@ versions follow [semantic versioning](https://semver.org).
   and hold a file and its menu opens under it, the file marked, with a tap of the phone; move on and you drag the file
   instead. A submenu opens beside the menu on the iPad and in its place on the iPhone, and the iPad shows the keys
   while a keyboard is attached.
+- The first screen on the iPhone and the sidebar on the iPad and the Mac are laid out alike, as Reminders and Notes do
+  on each device. To-dos and Favorites are tiles at the top, each with its count, and a tap or click shows the list:
+  on the iPhone on a screen of its own, on the iPad and the Mac in the note's place, as To-dos is shown. Favorites shows
+  once you have starred something, and no longer has a section of its own in the sidebar. Under the tiles, Recent is a
+  row of cards you swipe through, each with a picture of the top of a note, PDF or picture you opened last, its name
+  and its folder. Every folder says how many files are in it. On the iPhone, a folder with folders in it has an arrow
+  that unfolds them below it, greyed, so University › Linear algebra is one tap.
+- The toolbar is laid out as in Notes. On the Mac and the iPad, Aa, Checklist, Table, Attach and the pencil sit
+  together in the middle, over the note; Back, Forward and New Note are on the left, and Share, ••• and the outline on
+  the right. On the iPad, New Note is in the note's toolbar too while the sidebar is hidden. On the Mac, Checklist and
+  Attach in the toolbar work at the end of a note you haven't clicked into, as on the iPad.
+- On the Mac, search moved from the toolbar to the top of the sidebar: Search, above To-dos, opens ⌘K, which finds all
+  the search field found, and ⌥⌘F opens it too. The toolbar's search field is gone, so the note's tools have room.
+- The app icon fills its square, as Apple's own book icons do: the leather cover is the whole icon, with the elastic
+  band near its edge and the gold ribbon hanging from the top. It keeps its band and ribbon in the tinted and clear
+  looks too. Settings › App Icon colours the leather, the band and the ribbon as before; with nothing showing around
+  the notebook, its Background row is gone.
 - Quick Look and thumbnails take next to no room: they show notes with the editor the app carries, instead of each
   bringing a copy of it, so with them the app is about 15 MB to download on the Mac and 20 MB on iPhone and iPad, not
   35 and 40 MB.
@@ -75,12 +96,17 @@ versions follow [semantic versioning](https://semver.org).
 - The Mac sidebar has more room and borrows some of Notion's manners while keeping the Mac's look. A folder's icon no
   longer touches its arrow, which is a little quieter; names sit further from their icons; and what is inside a folder
   steps further in. The row under the pointer gets a soft fill and ••• for its right-click menu, and a folder also +
-  for a new note in it. A location's name has ••• and + too: ••• holds New Folder, Show Hidden Folders, Show in Finder
-  and Remove from Sidebar, + makes a note at its top, and a click on the name folds the location. The eye shows by the
-  name only while hidden folders show, and hides them again.
+  for a new note in it; on a note or other file, which has no +, ••• sits at the row's end, so its name has more room.
+  A location's name has ••• and + too: ••• holds New Folder, Show Hidden Folders, Show in Finder and Remove from
+  Sidebar, + makes a note at its top, and a click on the name folds the location. The eye shows by the name only while
+  hidden folders show, and hides them again.
 
 ### Fixed
 
+- Writing at the bottom of what shows keeps the line you write on in view, without scrolling by hand. On iPhone and
+  iPad, a new bullet point, a sentence running on to the next line, Return, a to-do, a quote, a table's next row and
+  lines you paste could go under the keyboard; now the note moves up with them and the line stays just above the bar
+  over the keyboard. On the Mac, lines pasted at the bottom of the window could leave the caret below it.
 - On iPhone, New Note set to ask which kind showed the typed note and the papers side by side, as on the iPad, so they
   ran off both sides of the screen and couldn't be scrolled to. They are now one above the other, and where the papers
   still don't fit, with Display Zoom or very large text, they scroll.

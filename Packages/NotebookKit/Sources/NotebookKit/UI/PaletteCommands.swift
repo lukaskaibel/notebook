@@ -182,11 +182,6 @@ extension Workspace {
         if canGoForward {
             list.append(PaletteCommand(id: "forward", title: "Forward", symbol: "chevron.forward", section: go, keys: ["⌘", "]"]) { [self] in goForward() })
         }
-        #if os(macOS)
-        list.append(PaletteCommand(id: "search", title: "Search in the Toolbar", symbol: "magnifyingglass", section: go, keys: ["⌥", "⌘", "F"], keywords: ["find"]) { [self] in
-            search.focus()
-        })
-        #endif
 
         let view = "View"
         #if os(iOS)

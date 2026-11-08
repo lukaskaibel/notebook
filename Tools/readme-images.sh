@@ -6,9 +6,8 @@
 #   Tools/readme-images.sh mac        only the Mac's pictures, laid out with the iPhone and iPad captures of the last run
 # The Mac app runs in the background on a fresh copy of the sample notes (Files/DemoLibrary.swift), under a bundle
 # identifier of its own so your Notebook's settings stay as they are. It never comes to the front and leaves keyboard
-# and mouse alone; only the search suggestions show on screen for a moment. The iPhone and iPad pictures come from two
-# simulators of the script's own ("Notebook README iPhone" and "… iPad"), which run without the Simulator app's
-# window.
+# and mouse alone. The iPhone and iPad pictures come from two simulators of the script's own ("Notebook README iPhone"
+# and "… iPad"), which run without the Simulator app's window.
 # Takes about three minutes. Needs Screen Recording permission for the terminal, a Retina display, Python 3 with
 # Pillow and NumPy, ffmpeg and img2webp (brew install ffmpeg webp), and the iOS Simulator runtime of Xcode.
 set -euo pipefail
@@ -68,7 +67,8 @@ launch() {
   for _ in $(seq 40); do
     say "open Travel/Kyoto trip.md" "dump"
     sleep 0.5
-    grep -q "Kyoto trip.md" "$work/cmd.log" 2>/dev/null && return 0
+    # Two favourites, so the sidebar's tiles show To-dos and Favorites side by side.
+    grep -q "Kyoto trip.md" "$work/cmd.log" 2>/dev/null && { say "favorite Projects" "favorite Travel/Kyoto trip.md"; sleep 0.5; return 0; }
   done
   echo "The app didn't open the sample notes." >&2
   exit 1
@@ -148,10 +148,9 @@ for theme in dark light; do
   say "open Travel/Kyoto trip.md" "wait 1" "palette"; sleep 1.5; shot "palette-$theme"
   say "key escape"; sleep 0.5
 
-  # Last, since the suggestions menu shows on screen even though the app is in the background. The reading of the
-  # pictures has had time by now, so the receipt in Budget is found too.
-  say "searchfocus" "wait 0.4" "type kyoto"; sleep 2
-  "$work/capture" all "$pid" "$raw/search-$theme.png" > "$raw/search-$theme.txt"
+  # Search at the top of the sidebar, clicked: ⌘K with kyoto typed in it. Last, so the reading of the pictures has had
+  # time and the receipt in Budget is found too.
+  say "clickrow Search" "wait 0.6" "palettetype kyoto"; sleep 2; shot "search-$theme"
   say "key escape"
 
   kill "$pid"

@@ -176,7 +176,8 @@ Tables are drawn as tables, Mermaid diagrams as diagrams (natively, without a we
 about forty languages, and LaTeX maths as typeset formulas. Click into one and its source appears, with a live preview
 for diagrams and formulas. Tables grow as you type them: Return after a first row like `| Day | Area |` puts the
 `| --- |` row under it, Tab goes from cell to cell and makes a new row after the last, Return makes a new row under
-the one you're in, and Return in an empty last row leaves the table. Point at a code block and a button in its corner
+the one you're in, and Return in an empty last row leaves the table. Table in the toolbar, or Format › Table (⌥⌘T),
+puts in an empty one of two columns to type in, as in Notes. Point at a code block and a button in its corner
 copies the code. Callouts in GitHub's and Obsidian's `> [!note]` style get their colour and symbol.
 
 <picture>
@@ -214,7 +215,8 @@ a folder of mostly AsciiDoc files is one too; elsewhere new notes are Markdown.
 
 ### Find anything
 
-The search field in the toolbar (⌥⌘F) finds notes, files and folders by name, the headings in notes, and words in notes
+Search, at the top of the sidebar on the Mac (⌘K or ⌥⌘F) and the search field on iPhone and iPad, finds notes, files
+and folders by name, the headings in notes, and words in notes
 and PDFs, with the page they're on. It also reads the words in pictures, in scanned PDFs and in the handwriting of
 drawings, so a photographed receipt or a scanned letter turns up too. Type several words in any order; notes that have
 them together come first. Names are found loosely too, best first: by the first letters of their words ("kytr" for
@@ -237,12 +239,13 @@ hidden folders stay out of Spotlight, and it follows as you write, rename, move 
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/search-dark.webp">
-  <img alt="The search field with kyoto typed in: the note Kyoto trip under Files, and under In Notes and PDFs a match on page 1 of Flight tickets.pdf and one in the note Budget, then New Note kyoto" src="Design/screenshots/search-light.webp">
+  <img alt="Search clicked at the top of the sidebar: ⌘K over the note Kyoto trip with kyoto typed in, the note Kyoto trip under Files, matches in Budget, Getting to the ryokan and page 1 of Flight tickets.pdf under In Notes and PDFs, the receipt in Budget under In Pictures and Drawings, then New Note kyoto" src="Design/screenshots/search-light.webp">
 </picture>
 
 ### Everything with ⌘K
 
-⌘K opens a field over the window, as Spotlight does. It finds everything search finds, and runs what the menus do:
+⌘K opens a field over the window, as Spotlight does; on the Mac it is what Search at the top of the sidebar opens. It
+finds everything search finds, and runs what the menus do:
 for the note that is open (rename it, move it, duplicate it, set a reminder, draw, export, print, move it to the
 Trash), the text styles, a new note or folder, back and forward, the sidebar and outline, the text size, the typeface,
 and Settings, each with the keys that do it without ⌘K. Type a few letters of a command, or `>` first to see only
@@ -254,7 +257,7 @@ with a keyboard, ⌘K works the same.
 Every open checkbox in your notes is a to-do, and To-dos at the top of the sidebar shows them all in one list, as
 Reminders does: what is overdue, then today's, tomorrow's, the next seven days', later ones, and those without a date,
 each with the lines indented under it (its sub-to-dos, points and notes) and the note it is in. Notes with a reminder
-are in the list too, and the number next to To-dos counts what is due today or overdue. Tick a to-do off in the list,
+are in the list too, and the number on To-dos counts what is due today or overdue. Tick a to-do off in the list,
 or a sub-to-do under it, and it is ticked in its note; a to-do stays three seconds, ticked, before it fades away, in case
 you want to untick it, and it stays in its place meanwhile. Click the note's name to open the note at it. Drag a to-do
 into another group, or choose Today, Tomorrow, This Weekend or Next Week in its menu, and its date moves; Undo (⌘Z, or
@@ -437,21 +440,24 @@ lists each kind of file has a symbol of its own, in the accent colour as folders
 
 ### A Mac app, made of the Mac's parts
 
-The window is built from the system's own pieces: a source-list sidebar, a toolbar with the system's search field and
-share menu, an inspector, Settings, alerts, PDFKit, AVKit and Quick Look. It follows the system's light or dark
+The window is built from the system's own pieces: a source-list sidebar, a toolbar laid out as Notes' is, with Aa,
+Checklist, Table, Attach and the pencil in the middle and the share menu on the right, an inspector, Settings, alerts, PDFKit, AVKit and Quick Look. It follows the system's light or dark
 appearance. Menus are the exception, drawn as Linear draws them: right-click anything, or open Aa or ⋯ in the toolbar,
 and a glass panel opens with a symbol and the keys beside each entry and, in a longer menu, a field on top. Type in it
 and it finds any entry, also inside a submenu: "pdf" in the ⋯ menu finds Export As › PDF…. A submenu opens as the
 pointer rests on its row and stays while the pointer heads for it across other rows. Move To lists your folders with
 their own symbols and colours; type a folder's name and press Return. The right-click menu of a note's text has Format
-too. The menu bar stays the Mac's. Some of the sidebar's manners come from Notion: the row under the pointer gets a soft fill, with ••• for its
+too. The menu bar stays the Mac's. The sidebar starts as the iPhone's first screen does, as Reminders' does on each device: To-dos and
+Favorites as tiles with their counts, a click showing the list in the note's place; Recent, cards with a picture of the
+top of each note you opened last; and every folder with how many files are in it. Some of the sidebar's manners come
+from Notion: the row under the pointer gets a soft fill, with ••• for its
 menu and, on a folder, + for a new note in it; a location's name has the same two, and a click on it folds the
 location. The inspector shows a note's outline, with the section you're reading marked and a word count; a click on
 a heading scrolls there. In Settings › Text you pick the typeface (San Francisco, New York, Rounded or Monospaced,
 each shown in itself), the size, the line spacing and the line width; on iPhone and iPad the system's text size makes
-notes larger or smaller on top of that, as it does the text of other apps (not in a PDF or printout). The icon is a leather notebook, and Settings › App Icon makes it yours:
-pick the leather, the elastic band, the ribbon and the background, and the Dock shows your notebook while the app is
-open. Links, the caret, folders and the icons of files are in ink blue to go with it, or in the accent colour you chose
+notes larger or smaller on top of that, as it does the text of other apps (not in a PDF or printout). The icon is the cover of a leather notebook, filling the icon with its elastic band and
+a ribbon hanging from the top, and Settings › App Icon makes it yours: pick the leather, the band and the ribbon, and
+the Dock shows your notebook while the app is open. Links, the caret, folders and the icons of files are in ink blue to go with it, or in the accent colour you chose
 in System Settings. Press Space on a note in the Finder, or tap one in the Files app on an iPhone or iPad, and Quick
 Look shows it in the same look, with its title on top. The icons of notes in the Finder and the Files app show the top
 of each note that way too.
@@ -459,8 +465,11 @@ of each note that way too.
 ### On iPhone and iPad
 
 The same notes in the same editor, laid out the way each device works. On the iPhone you go into one folder per screen,
-as in the Files app, and a note opens on a screen of its own; swipe from the edge to go back. The first screen has your
-favourites, what you opened last and the folders of each location. New Folder, search and a new note sit at the bottom,
+as in the Files app, and a note opens on a screen of its own; swipe from the edge to go back. The first screen starts
+as Reminders' does, with To-dos and Favorites as tiles, each with its count; then Recent, a row of cards you swipe
+through, each with a picture of the top of a note you opened last, its name and its folder; then the folders of each
+location, each with how many files are in it. A folder with folders in it has an arrow that unfolds them below it,
+greyed, so a folder in a folder is one tap away. New Folder, search and a new note sit at the bottom,
 as in Notes, and search finds everything it finds on the Mac. While you write, a bar floats above the keyboard with
 Aa, a checklist, attachments, a link, undo and the formatting, a page of tools at a time. On its left, up to two
 buttons for where the caret is come and go: opening the link you are on, a to-do's bell, the style you are in, tinted,
@@ -476,11 +485,14 @@ hold it for everything else: its menu opens under it in the same glass panel as 
 tap of the phone, and moving on drags the file instead. Long menus have a field to type in, which brings up the
 keyboard only when you tap it. A submenu such as Move To opens in the menu's place, with a way back at its top.
 
-The iPad has the Mac's layout: the sidebar with its folders opening in place, the note next to it, and the outline in
-an inspector. Its menus open their submenus beside them, as on the Mac, show the keys while a keyboard is attached, and
-open with a right-click on a trackpad or mouse too. New Note at the top of the sidebar asks whether to type or write by hand. In portrait the sidebar steps aside once you have picked a note. With a keyboard, the Mac's shortcuts
+The iPad has the Mac's layout: the sidebar, with the iPhone's first screen at its top and its folders opening in
+place, the note next to it, and the outline in an inspector. To-dos and Favorites show next to the sidebar, in the
+note's place. Its menus open their submenus beside them, as on the Mac, show the keys while a keyboard is attached, and
+open with a right-click on a trackpad or mouse too. New Note at the top of the sidebar, or in the note's toolbar while the sidebar is hidden, asks whether
+to type or write by hand. In portrait the sidebar steps aside once you have picked a note. With a keyboard, the Mac's shortcuts
 work, the menu bar has the Mac's File, View, Go and Format menus, the marks show next to the caret as on the Mac, and
-the bar above the keyboard steps aside, as in Notes: Aa, attachments and the pencil are in the toolbar at the top. Drag
+the bar above the keyboard steps aside, as in Notes: Aa, Checklist, Table, attachments and the pencil are in the
+middle of the toolbar at the top, as on the Mac. Drag
 pictures from Photos into a note, or files onto a folder in the sidebar. A window as narrow as a phone gets the iPhone's
 screens.
 
@@ -521,7 +533,8 @@ screens.
   Option-drag copies. New Folder in the ••• next to a location's name makes a folder at its top, New Folder in a
   folder's menu one inside it, named in place as in the Finder; the + next to a location's or folder's name makes a
   note there. Deleting moves to the Trash, never further, and Undo
-  (⌘Z) puts it back, as it takes back a rename, a move or a new file. Favourites sit at the top of the sidebar.
+  (⌘Z) puts it back, as it takes back a rename, a move or a new file. Favourites have a tile at the top of the
+  sidebar, next to To-dos, that lists them; every folder says how many files are in it.
 - **Sorted by name or by date.** View › Sort By, or Sort By in the ⋯ menu on iPhone and iPad, sorts every folder's
   notes and files by name, as the Finder does, or newest first by when they were last edited or made, as Notes does.
   Sorted by date, the note you write in moves to the top of its folder once it is saved, still selected; Keep Folders
@@ -795,7 +808,7 @@ exported it rather than when you wrote it.
 | ⌘V in the sidebar | Paste in the selected folder, or the selected file's: copied files as copies, copied text as a new note named by its `# Heading` |
 | ⌘Z, ⇧⌘Z | Undo and redo: typing, and changes to files (the Trash, a rename, a move, a new note or folder), newest first |
 | ⌘F, ⇧⌘F | Find in the note, find and replace; ⌘G and ⇧⌘G for the next and previous |
-| ⌥⌘F | Search every note, as Notes searches its list |
+| ⌥⌘F | Search every note in ⌘K, as Search at the top of the sidebar does, and as Notes searches its list |
 | ⌘K | Search and run commands; `>` for commands only |
 | ⇧⌘R | To-dos |
 | ⌘[ and ⌘], or swipe between pages | Back and forward; the swipe follows System Settings, as in Safari |
@@ -823,6 +836,7 @@ While writing:
 | ⇧⌘7, ⇧⌘9 | Bulleted list, numbered list |
 | ⇧⌘A | Attach a file: pictures, PDFs and other files go in at the caret; notes and files from your folders as links |
 | ⌘' | Block quote |
+| ⌥⌘T | Table: two columns, a header and a row, the caret in the first cell |
 | Tab, ⇧Tab | Nest or un-nest a list item (in code: indent) |
 | ⌥⌘] and ⌥⌘[ | Increase and decrease indent |
 | `*`, `_`, `` ` ``, `~` or `=` with text selected | Wrap the selection in that mark |
@@ -1026,8 +1040,9 @@ Tools/readme-images.sh
 
 The app icon is drawn by `Tools/AppIcon/notebook.py`. After changing it, run the script below: it writes
 `Notebook/AppIcon.icon` and renders, with Icon Composer's `ictool`, the grey passes that Settings › App Icon colours in
-any leather, the icon on the New Note widget, and the cover's grain for the website's button (it needs Python 3 with NumPy and Pillow, and
-`brew install librsvg`):
+any leather, the icon on the New Note widget, the icon at the top of this README, the website's icons and the cover's
+grain for its button (it needs Python 3 with NumPy and Pillow, and `brew install librsvg`). Then run
+`Tools/readme-images.sh` for the social preview, which shows the icon too:
 
 ```bash
 Tools/AppIcon/make.sh

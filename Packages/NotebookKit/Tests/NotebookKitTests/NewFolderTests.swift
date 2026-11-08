@@ -114,6 +114,31 @@ final class NewFolderTests: XCTestCase {
         }
     }
 
+    /// Under the pointer a folder shows ••• before +; a file, which never has +, shows ••• at the row's end, where a
+    /// folder's + is, so its name has more room.
+    func testAFilesMoreButtonSitsWhereAFoldersPlusIs() async throws {
+        let (_, sidebar) = try await makeSidebar()
+        let outline = sidebar.outline
+        let folderRow = try XCTUnwrap(row("Papers", under: drive, in: sidebar))
+        outline.expandItem(outline.item(atRow: folderRow))
+        func fileRow() -> Int? {
+            (0..<outline.numberOfRows).first { (outline.item(atRow: $0) as? FileNode)?.url.lastPathComponent == "Draft.md" }
+        }
+        try await until("Draft in Papers") { fileRow() != nil }
+        func cell(_ row: Int) throws -> SidebarFileCell {
+            try XCTUnwrap(outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? SidebarFileCell)
+        }
+        let folder = try cell(folderRow), file = try cell(XCTUnwrap(fileRow()))
+        for cell in [folder, file] { cell.isHovered = true }
+        window.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertFalse(folder.addButton.isHidden)
+        XCTAssertTrue(file.addButton.isHidden)
+        XCTAssertFalse(file.moreButton.isHidden)
+        func frame(_ button: NSButton) -> NSRect { button.convert(button.bounds, to: nil) }
+        XCTAssertEqual(frame(file.moreButton).maxX, frame(folder.addButton).maxX, accuracy: 0.5, "in +'s place")
+        XCTAssertLessThan(frame(folder.moreButton).maxX, frame(folder.addButton).minX, "before +")
+    }
+
     /// A click on a section's header folds it and opens it again, as in Notion; a click on its buttons doesn't.
     func testAClickOnASectionsHeaderFoldsIt() async throws {
         let (_, sidebar) = try await makeSidebar()
@@ -143,6 +168,34 @@ final class NewFolderTests: XCTestCase {
         click(at: outline.convert(NSPoint(x: header.moreButton.frame.midX, y: header.moreButton.frame.midY), from: header))
         try await Task.sleep(for: .milliseconds(300))
         XCTAssertTrue(outline.isItemExpanded(entry))
+    }
+
+    /// Search, first in the sidebar, opens ⌘K and is never selected: the row of what is open stays selected.
+    func testSearchAtTheTopOpensThePalette() async throws {
+        let (workspace, sidebar) = try await makeSidebar()
+        let outline = sidebar.outline
+        let entry = try XCTUnwrap(outline.item(atRow: 0) as? SidebarEntry)
+        XCTAssertTrue(entry.isSearch, "above To-dos")
+        let cell = try XCTUnwrap(outline.view(atColumn: 0, row: 0, makeIfNecessary: true) as? SidebarFileCell)
+        XCTAssertEqual(cell.label.stringValue, "Search")
+        XCTAssertEqual(cell.accessibilityRole(), .button)
+        let papers = try XCTUnwrap(row("Papers", under: drive, in: sidebar))
+        outline.selectRowIndexes(IndexSet(integer: papers), byExtendingSelection: false)
+
+        let point = NSPoint(x: outline.rect(ofRow: 0).minX + 60, y: outline.rect(ofRow: 0).midY)
+        let event = NSEvent.mouseEvent(with: .leftMouseDown, location: outline.convert(point, to: nil), modifierFlags: [], timestamp: 0,
+                                       windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+        outline.mouseDown(with: event)
+        XCTAssertEqual(workspace.palette, .search)
+        XCTAssertEqual(outline.selectedRow, papers, "Papers stays selected")
+        XCTAssertEqual(outline.delegate?.outlineView?(outline, shouldSelectItem: entry), false)
+
+        // A second click leaves it open, as does VoiceOver's press.
+        outline.mouseDown(with: event)
+        XCTAssertEqual(workspace.palette, .search)
+        workspace.palette = nil
+        XCTAssertTrue(cell.accessibilityPerformPress())
+        XCTAssertEqual(workspace.palette, .search)
     }
 
     /// New Folder is in the header's •••, its right-click menu.

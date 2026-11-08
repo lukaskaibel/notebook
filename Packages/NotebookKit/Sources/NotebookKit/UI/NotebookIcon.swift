@@ -35,10 +35,10 @@ public struct NotebookColor: Codable, Hashable, Sendable {
     }
 
     /// The same hue with its saturation and brightness scaled, as Tools/AppIcon/notebook.py does it.
-    func scaled(saturation: Double, brightness: Double, minimumBrightness: Double = 0) -> NotebookColor {
+    func scaled(saturation: Double, brightness: Double) -> NotebookColor {
         var (h, s, v) = hsv
         s = min(s * saturation, 1)
-        v = min(max(v * brightness, minimumBrightness), 1)
+        v = min(v * brightness, 1)
         return NotebookColor(Self.rgb(h: h, s: s, v: v))
     }
 
@@ -69,7 +69,8 @@ public struct NotebookColor: Codable, Hashable, Sendable {
     }
 }
 
-/// The notebook on the app's icon: its leather, the ribbon, the elastic band and what it lies on.
+/// The notebook on the app's icon: its leather, the ribbon and the elastic band. The cover fills the icon, so there is
+/// nothing it lies on; a look saved when there was (its `ground`) still reads, without it.
 public struct NotebookLook: Codable, Hashable, Sendable {
     public enum Band: String, Codable, CaseIterable, Identifiable, Sendable {
         /// The band in a dark shade of the leather, like a real notebook's.
@@ -82,18 +83,16 @@ public struct NotebookLook: Codable, Hashable, Sendable {
     public var leather: NotebookColor
     public var ribbon: NotebookColor
     public var band: Band
-    public var ground: NotebookColor
 
-    public init(leather: NotebookColor, ribbon: NotebookColor, band: Band, ground: NotebookColor) {
+    public init(leather: NotebookColor, ribbon: NotebookColor, band: Band) {
         self.leather = leather
         self.ribbon = ribbon
         self.band = band
-        self.ground = ground
     }
 
     /// The notebook the app ships with. Notebook/AppIcon.icon is drawn from the same colours (Tools/AppIcon/notebook.py).
     public static let standard = NotebookLook(leather: NotebookColor(hex: 0xA8403F), ribbon: NotebookColor(hex: 0xE9B04A),
-                                              band: .leather, ground: NotebookColor(hex: 0xEFEAE2))
+                                              band: .leather)
 
     public struct Swatch: Identifiable, Sendable {
         public let name: String
@@ -110,26 +109,15 @@ public struct NotebookLook: Codable, Hashable, Sendable {
         Swatch("Gold", 0xE9B04A), Swatch("Wine", 0x7E1D22), Swatch("Red", 0xD9443C), Swatch("Cream", 0xF3E3C8),
         Swatch("Navy", 0x2B3E73), Swatch("Green", 0x2E6B4A),
     ]
-    public static let grounds = [
-        Swatch("Stone", 0xEFEAE2), Swatch("Mist", 0xECEDF0), Swatch("Sage", 0xE3E9DE), Swatch("Sky", 0xE1E9F2),
-        Swatch("Blush", 0xF2E3DF), Swatch("Slate", 0xBDC1C8), Swatch("Graphite", 0x70747C), Swatch("White", 0xFFFFFF),
-    ]
 
-    /// The cover's gradient from top to bottom: in dark mode the leather is lighter, as on Apple's dark icons.
+    /// The cover's gradient from top to bottom: in dark mode a little deeper, to sit with the other dark icons.
     func cover(dark: Bool) -> (NotebookColor, NotebookColor) {
-        dark ? (leather.scaled(saturation: 0.88, brightness: 1.16), leather.scaled(saturation: 1.08, brightness: 0.79))
+        dark ? (leather.scaled(saturation: 1.0, brightness: 0.9), leather.scaled(saturation: 1.2, brightness: 0.55))
              : (leather, leather.scaled(saturation: 1.18, brightness: 0.64))
     }
 
     var bandColor: NotebookColor {
         band == .white ? NotebookColor(hex: 0xFFFFFF) : leather.scaled(saturation: 1.25, brightness: 0.45)
-    }
-
-    /// The ground's gradient from top to bottom: a dark grey of the same tint in dark mode, never black.
-    func ground(dark: Bool) -> (NotebookColor, NotebookColor) {
-        guard dark else { return (ground, ground.scaled(saturation: 1.1, brightness: 0.88)) }
-        let top = ground.scaled(saturation: 0.6, brightness: 0.30, minimumBrightness: 0.18)
-        return (top, top.scaled(saturation: 1, brightness: 0.55))
     }
 }
 
@@ -142,12 +130,10 @@ final class NotebookRenderer {
 
     /// The passes' size, in pixels: enough for the Dock at its largest.
     static let size = 512
-    /// Where the cover sits on the 1024 canvas of Tools/AppIcon/notebook.py, for its gradient.
-    private static let coverTop = 122.0, coverHeight = 772.0
     /// The albedo each part has in its pass (#B4B4B4), in linear light.
     private static let passGrey = Float(decode(Double(0xB4) / 255))
 
-    private enum Part: String, CaseIterable { case ground, cover, band, ribbon }
+    private enum Part: String, CaseIterable { case cover, band, ribbon }
 
     /// Planar linear-light channels of one look's passes: the base, its alpha and each part's difference to the base.
     private struct Passes {
@@ -165,8 +151,7 @@ final class NotebookRenderer {
         let n = Self.size
         var channels = passes.base
         let rows: [Part: [SIMD3<Float>]] = [
-            .ground: gradient(look.ground(dark: dark), from: 0, height: 1024),
-            .cover: gradient(look.cover(dark: dark), from: Self.coverTop, height: Self.coverHeight),
+            .cover: gradient(look.cover(dark: dark), from: 0, height: 1024),
             .band: gradient((look.bandColor, look.bandColor), from: 0, height: 1024),
             .ribbon: gradient((look.ribbon, look.ribbon), from: 0, height: 1024),
         ]
