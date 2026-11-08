@@ -11,16 +11,23 @@ import UIKit
 extension EditorController {
     // MARK: - Changing text
 
-    /// Replaces text the way typing does, so it can be undone, and puts the selection where asked.
+    /// Replaces text the way typing does, so it can be undone, and puts the selection where asked. A change where you
+    /// write keeps the caret in view, as typing does: Return on the last line that shows, the next bullet of a list,
+    /// lines pasted at the bottom of the window or above the keyboard.
     @discardableResult
     func replace(_ range: NSRange, with string: String, select selection: NSRange? = nil, actionName: String? = nil) -> Bool {
         guard range.upperBound <= storage.length, !isWaitingForText else { return false }
+        let before = self.selection
         isPerformingEdit = true
         defer { isPerformingEdit = false }
         guard performEdit(range, with: string) else { return false }
         if let actionName { textView.undoManager?.setActionName(actionName) }
         if let selection {
             setSelection(NSRange(location: min(selection.location, storage.length), length: min(selection.length, storage.length - min(selection.location, storage.length))))
+        }
+        // Where you write: at the caret or over the selection, not a to-do ticked or a link changed elsewhere.
+        if range.location <= before.upperBound, range.upperBound >= before.location, revealsCaretAfterEdit {
+            scrollCaretIntoView()
         }
         return true
     }
