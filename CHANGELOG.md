@@ -83,6 +83,10 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- Writing at the bottom of what shows keeps the line you write on in view, without scrolling by hand. On iPhone and
+  iPad, a new bullet point, a sentence running on to the next line, Return, a to-do, a quote, a table's next row and
+  lines you paste could go under the keyboard; now the note moves up with them and the line stays just above the bar
+  over the keyboard. On the Mac, lines pasted at the bottom of the window could leave the caret below it.
 - On iPhone, New Note set to ask which kind showed the typed note and the papers side by side, as on the iPad, so they
   ran off both sides of the screen and couldn't be scrolled to. They are now one above the other, and where the papers
   still don't fit, with Display Zoom or very large text, they scroll.

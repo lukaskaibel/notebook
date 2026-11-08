@@ -84,6 +84,8 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     var scrollTop: CGFloat { textView.contentOffset.y }
     /// The room the navigation bar takes at the top.
     var topInset: CGFloat { textView.adjustedContentInset.top }
+    /// The room the keyboard and the bar over it take at the bottom, with where the note fades out under the bar.
+    var bottomInset: CGFloat { textView.adjustedContentInset.bottom }
     var visibleRect: CGRect { textView.bounds }
     /// From the layout rather than the content size, which UIKit updates only when it next lays the view out:
     /// right after a note is loaded it is still the last note's.
@@ -289,6 +291,9 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     public func textViewDidChange(_ textView: UITextView) {
         textChanged()
         formatState.update(from: self)
+        // What the keyboard typed stays in view too: words that run on to the next line take the caret down with
+        // them, which the text view didn't follow on an iPhone (iOS 27.2) in a list item.
+        if revealsCaretAfterEdit { scrollCaretIntoView() }
     }
 
     public func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
@@ -467,17 +472,10 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         guard textView.contentInset.bottom != overlap + fade else { return }
         textView.contentInset.bottom = overlap + fade
         textView.verticalScrollIndicatorInsets.bottom = overlap
+        // The line with the caret stays above the keyboard.
         if overlap > 0, isFocused {
             DispatchQueue.main.async { [weak self] in self?.scrollCaretIntoView() }
         }
-    }
-
-    /// Keeps the line with the caret above the keyboard.
-    func scrollCaretIntoView() {
-        guard let range = textView.selectedTextRange else { return }
-        let caret = textView.caretRect(for: range.end)
-        let bottom = textView.contentOffset.y + textView.bounds.height - textView.adjustedContentInset.bottom - 12
-        if caret.maxY > bottom { setScrollTop(min(maxScrollTop, textView.contentOffset.y + caret.maxY - bottom)) }
     }
 
     // MARK: - Links
