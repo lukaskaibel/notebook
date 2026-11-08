@@ -151,8 +151,9 @@ public struct NotebookScene: Scene {
                     .keyboardShortcut("0", modifiers: .command)
             }
             CommandMenu("Go") {
-                // ⌘F finds in the note, as in Notes, whose search of its list is ⌥⌘F too.
-                Button { workspace.inMainWindow { workspace.search.focus() } } label: { Label("Search…", systemImage: "magnifyingglass") }
+                // ⌘F finds in the note, as in Notes, whose search of its list is ⌥⌘F too. Search is ⌘K's, as Search at
+                // the top of the sidebar is.
+                Button { workspace.inMainWindow { workspace.openSearch() } } label: { Label("Search…", systemImage: "magnifyingglass") }
                     .keyboardShortcut("f", modifiers: [.command, .option])
                 Button { workspace.inMainWindow { workspace.togglePalette() } } label: { Label("Command Palette…", systemImage: "command") }
                     .keyboardShortcut("k", modifiers: .command)
@@ -195,6 +196,8 @@ public struct NotebookScene: Scene {
                 formatButton(.bulletedList, #selector(MarkdownTextView.makeBulletedList(_:)), "7", [.command, .shift])
                 formatButton(.numberedList, #selector(MarkdownTextView.makeNumberedList(_:)), "9", [.command, .shift])
                 formatButton(.quote, #selector(MarkdownTextView.makeQuote(_:)), "'", .command)
+                // As in Notes.
+                formatButton(.table, #selector(MarkdownTextView.insertTable(_:)), "t", [.command, .option])
                 Divider()
                 Button { workspace.toggleDrawing() } label: {
                     Label(workspace.isDrawingInFront ? "Stop Drawing" : "Drawing", systemImage: "pencil.tip.crop.circle")

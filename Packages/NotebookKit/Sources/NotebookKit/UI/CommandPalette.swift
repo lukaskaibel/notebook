@@ -568,6 +568,11 @@ extension Workspace {
         }
     }
 
+    /// Search at the top of the sidebar and Go › Search (⌥⌘F): ⌘K, left open if it is.
+    func openSearch() {
+        if palette == nil { palette = .search }
+    }
+
     /// The keyboard back to what is open: the note's text, after ⌘K or search.
     func focusContent() {
         guard note?.isLoaded == true else { return }

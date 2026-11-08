@@ -176,7 +176,8 @@ Tables are drawn as tables, Mermaid diagrams as diagrams (natively, without a we
 about forty languages, and LaTeX maths as typeset formulas. Click into one and its source appears, with a live preview
 for diagrams and formulas. Tables grow as you type them: Return after a first row like `| Day | Area |` puts the
 `| --- |` row under it, Tab goes from cell to cell and makes a new row after the last, Return makes a new row under
-the one you're in, and Return in an empty last row leaves the table. Point at a code block and a button in its corner
+the one you're in, and Return in an empty last row leaves the table. Table in the toolbar, or Format › Table (⌥⌘T),
+puts in an empty one of two columns to type in, as in Notes. Point at a code block and a button in its corner
 copies the code. Callouts in GitHub's and Obsidian's `> [!note]` style get their colour and symbol.
 
 <picture>
@@ -214,7 +215,8 @@ a folder of mostly AsciiDoc files is one too; elsewhere new notes are Markdown.
 
 ### Find anything
 
-The search field in the toolbar (⌥⌘F) finds notes, files and folders by name, the headings in notes, and words in notes
+Search, at the top of the sidebar on the Mac (⌘K or ⌥⌘F) and the search field on iPhone and iPad, finds notes, files
+and folders by name, the headings in notes, and words in notes
 and PDFs, with the page they're on. It also reads the words in pictures, in scanned PDFs and in the handwriting of
 drawings, so a photographed receipt or a scanned letter turns up too. Type several words in any order; notes that have
 them together come first. Names are found loosely too, best first: by the first letters of their words ("kytr" for
@@ -242,7 +244,8 @@ hidden folders stay out of Spotlight, and it follows as you write, rename, move 
 
 ### Everything with ⌘K
 
-⌘K opens a field over the window, as Spotlight does. It finds everything search finds, and runs what the menus do:
+⌘K opens a field over the window, as Spotlight does; on the Mac it is what Search at the top of the sidebar opens. It
+finds everything search finds, and runs what the menus do:
 for the note that is open (rename it, move it, duplicate it, set a reminder, draw, export, print, move it to the
 Trash), the text styles, a new note or folder, back and forward, the sidebar and outline, the text size, the typeface,
 and Settings, each with the keys that do it without ⌘K. Type a few letters of a command, or `>` first to see only
@@ -437,8 +440,8 @@ lists each kind of file has a symbol of its own, in the accent colour as folders
 
 ### A Mac app, made of the Mac's parts
 
-The window is built from the system's own pieces: a source-list sidebar, a toolbar with the system's search field and
-share menu, an inspector, Settings, alerts, PDFKit, AVKit and Quick Look. It follows the system's light or dark
+The window is built from the system's own pieces: a source-list sidebar, a toolbar laid out as Notes' is, with Aa,
+Checklist, Table, Attach and the pencil in the middle and the share menu on the right, an inspector, Settings, alerts, PDFKit, AVKit and Quick Look. It follows the system's light or dark
 appearance. Some of the sidebar's manners come from Notion: the row under the pointer gets a soft fill, with ••• for its
 menu and, on a folder, + for a new note in it; a location's name has the same two, and a click on it folds the
 location. The inspector shows a note's outline, with the section you're reading marked and a word count; a click on
@@ -470,9 +473,11 @@ note, or let go to copy, share or delete it. Swipe a file to move or delete it, 
 hold it for everything else.
 
 The iPad has the Mac's layout: the sidebar with its folders opening in place, the note next to it, and the outline in
-an inspector. New Note at the top of the sidebar asks whether to type or write by hand. In portrait the sidebar steps aside once you have picked a note. With a keyboard, the Mac's shortcuts
+an inspector. New Note at the top of the sidebar, or in the note's toolbar while the sidebar is hidden, asks whether
+to type or write by hand. In portrait the sidebar steps aside once you have picked a note. With a keyboard, the Mac's shortcuts
 work, the menu bar has the Mac's File, View, Go and Format menus, the marks show next to the caret as on the Mac, and
-the bar above the keyboard steps aside, as in Notes: Aa, attachments and the pencil are in the toolbar at the top. Drag
+the bar above the keyboard steps aside, as in Notes: Aa, Checklist, Table, attachments and the pencil are in the
+middle of the toolbar at the top, as on the Mac. Drag
 pictures from Photos into a note, or files onto a folder in the sidebar. A window as narrow as a phone gets the iPhone's
 screens.
 
@@ -787,7 +792,7 @@ exported it rather than when you wrote it.
 | ⌘V in the sidebar | Paste in the selected folder, or the selected file's: copied files as copies, copied text as a new note named by its `# Heading` |
 | ⌘Z, ⇧⌘Z | Undo and redo: typing, and changes to files (the Trash, a rename, a move, a new note or folder), newest first |
 | ⌘F, ⇧⌘F | Find in the note, find and replace; ⌘G and ⇧⌘G for the next and previous |
-| ⌥⌘F | Search every note, as Notes searches its list |
+| ⌥⌘F | Search every note in ⌘K, as Search at the top of the sidebar does, and as Notes searches its list |
 | ⌘K | Search and run commands; `>` for commands only |
 | ⇧⌘R | To-dos |
 | ⌘[ and ⌘], or swipe between pages | Back and forward; the swipe follows System Settings, as in Safari |
@@ -815,6 +820,7 @@ While writing:
 | ⇧⌘7, ⇧⌘9 | Bulleted list, numbered list |
 | ⇧⌘A | Attach a file: pictures, PDFs and other files go in at the caret; notes and files from your folders as links |
 | ⌘' | Block quote |
+| ⌥⌘T | Table: two columns, a header and a row, the caret in the first cell |
 | Tab, ⇧Tab | Nest or un-nest a list item (in code: indent) |
 | ⌥⌘] and ⌥⌘[ | Increase and decrease indent |
 | `*`, `_`, `` ` ``, `~` or `=` with text selected | Wrap the selection in that mark |

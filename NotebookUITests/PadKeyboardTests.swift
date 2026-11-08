@@ -39,6 +39,11 @@ final class PadKeyboardTests: XCTestCase {
         app.typeKey("b", modifierFlags: [.command, .shift])
         waitForValue(note, containing: "\nGroceries")
         waitForValue(note, lacking: "- Groceries")
+        // Format › Table, as in Notes: under the line, the caret in its first cell.
+        app.typeKey("t", modifierFlags: [.command, .option])
+        waitForValue(note, containing: "Groceries\n\n|     |     |\n| --- | --- |\n|     |     |")
+        note.typeText("Day")
+        waitForValue(note, containing: "| Day    |     |")
     }
 
     /// What ⌘K shows next to its commands works from the keyboard too: the outline, a new folder.

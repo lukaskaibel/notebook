@@ -377,9 +377,11 @@ enum DebugRemote {
             let onScreen = editor.textView.convert(CGPoint(x: rect.midX, y: rect.midY), to: nil)
             editor.debugTap(at: CGPoint(x: rect.midX, y: rect.midY))
             editor.debugTap(at: editor.textView.convert(onScreen, from: nil))
-        case "format":
+        case "format", "toolbarformat":
+            // format <name>: as its shortcut does, at the caret; toolbarformat <name>: as the bar's button does
+            // (Checklist, Table), at the end of a note you haven't put the caret in.
             if let format = FormatCommand.allCases.first(where: { $0.name.lowercased().replacingOccurrences(of: " ", with: "") == argument.lowercased() }) {
-                editor.perform(format)
+                if command == "format" { editor.perform(format) } else { editor.beginEditing(then: format) }
             }
         case "pictures", "selectpicture", "movepicture", "deletepicture":
             // The pictures of the note, by their order: `selectpicture 0`, `movepicture 0 <offset>`.

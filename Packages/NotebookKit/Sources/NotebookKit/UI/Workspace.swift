@@ -83,11 +83,8 @@ public final class Workspace: NSObject {
     @ObservationIgnored var unscheduledReminders = Set<UUID>()
     #endif
 
-    #if os(macOS)
-    /// The search field in the toolbar.
-    @ObservationIgnored lazy var search = SearchController(workspace: self)
-    #else
-    /// Search on iPhone and iPad: one field is out at a time.
+    #if os(iOS)
+    /// Search on iPhone and iPad: one field is out at a time. The Mac searches in ⌘K.
     @ObservationIgnored lazy var searchSession = SearchSession(workspace: self)
     #endif
     /// Reads the text in pictures, scans and drawings for search.

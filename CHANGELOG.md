@@ -7,6 +7,10 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- Table, in the toolbar and in Format › Table (⌥⌘T, also on an iPad with a keyboard), puts an empty table of two
+  columns in a note, a header and one row, with the caret in its first cell, as in Notes: on an empty line, or under
+  the line you're on, with empty lines around it so other apps read it as a table too. In a note you haven't clicked
+  into, it goes at the end, as Checklist does. AsciiDoc notes don't have it; their tables are typed.
 - Notebook asks for a rating on the App Store, with the system's own prompt, once you have used it on three days: only
   as you finish something, when you leave a note you wrote in or a to-do you ticked in To-dos has gone, never as it
   opens or as you start a new note, and at most once a version and two months apart (the system shows it at most three
@@ -56,6 +60,12 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Changed
 
+- The toolbar is laid out as in Notes. On the Mac and the iPad, Aa, Checklist, Table, Attach and the pencil sit
+  together in the middle, over the note; Back, Forward and New Note are on the left, and Share, ••• and the outline on
+  the right. On the iPad, New Note is in the note's toolbar too while the sidebar is hidden. On the Mac, Checklist and
+  Attach in the toolbar work at the end of a note you haven't clicked into, as on the iPad.
+- On the Mac, search moved from the toolbar to the top of the sidebar: Search, above To-dos, opens ⌘K, which finds all
+  the search field found, and ⌥⌘F opens it too. The toolbar's search field is gone, so the note's tools have room.
 - Quick Look and thumbnails take next to no room: they show notes with the editor the app carries, instead of each
   bringing a copy of it, so with them the app is about 15 MB to download on the Mac and 20 MB on iPhone and iPad, not
   35 and 40 MB.

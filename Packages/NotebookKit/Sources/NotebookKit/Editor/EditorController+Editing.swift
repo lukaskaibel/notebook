@@ -407,6 +407,71 @@ extension EditorController {
         return true
     }
 
+    /// Format › Table (⌥⌘T) and the toolbar's Table, as in Notes: a table of two columns, its header and one row, with
+    /// the caret in its first cell. An empty line becomes the table; otherwise it goes in under the caret's line, or
+    /// under the table, code or quote the caret is in. Empty lines around it end what is above and below, so other apps
+    /// read it as a table too. Markdown only: false in an AsciiDoc note, whose tables are typed.
+    @discardableResult
+    func insertTable() -> Bool {
+        guard syntax == .markdown, !isWaitingForText else { return false }
+        let table = "|     |     |\n| --- | --- |\n|     |     |"
+        let firstCell = 2
+        guard !document.lines.isEmpty else {
+            return replace(NSRange(location: 0, length: storage.length), with: table, select: NSRange(location: firstCell, length: 0), actionName: "Table")
+        }
+        var index = document.lineIndex(containing: selection.location)
+        if let block = document.lines[index].block { index = document.blocks[block].lines.upperBound }
+        let line = document.lines[index]
+        let isBlank = { (index: Int) in self.nsText.substring(with: self.document.lines[index].range).allSatisfy(\.isWhitespace) }
+        let hasTextBelow = index + 1 < document.lines.count && !isBlank(index + 1)
+        if line.block == nil, isBlank(index) {
+            let above = index > 0 && !isBlank(index - 1) ? "\n" : ""
+            let text = above + table + (hasTextBelow ? "\n" : "")
+            let start = line.range.location + (above as NSString).length
+            return replace(line.range, with: text, select: NSRange(location: start + firstCell, length: 0), actionName: "Table")
+        }
+        let end = line.range.upperBound
+        let text = "\n\n" + table + (hasTextBelow ? "\n" : "")
+        return replace(NSRange(location: end, length: 0), with: text, select: NSRange(location: end + 2 + firstCell, length: 0), actionName: "Table")
+    }
+
+    /// Puts the caret back where it was and does something there, from a button of a toolbar: on the iPhone and iPad
+    /// the keyboard comes up as it would for a tap in the text. In a note you haven't put the caret in, a checklist
+    /// starts on a new line at its end, as in Notes, rather than making its first line a to-do, and a table goes in at
+    /// its end.
+    func beginEditing(then command: FormatCommand? = nil) {
+        if !isFocused {
+            if command == .checklist, !hasPlacedCaret {
+                startChecklistAtEnd()
+                makeTextFirstResponder()
+                return
+            }
+            if command == .table { placeCaretForToolbar() }
+            makeTextFirstResponder()
+        }
+        if let command { perform(command) }
+    }
+
+    /// The caret is somewhere you put it, also at the very start, or where Back took you: not just where the note
+    /// opened.
+    var hasPlacedCaret: Bool { isFocused || caretWasPlaced }
+
+    /// What a toolbar button adds goes at the end of a note you haven't put the caret in, as in Notes: a picture
+    /// from Attach, say, rather than above the note's first line.
+    func placeCaretForToolbar() {
+        guard !hasPlacedCaret, storage.length > 0 else { return }
+        setSelection(NSRange(location: storage.length, length: 0))
+    }
+
+    /// A new to-do on a line of its own after the note's last line, with the caret in it, as one step of Undo.
+    private func startChecklistAtEnd() {
+        let end = storage.length
+        let endsOnEmptyLine = end == 0 || (text as NSString).substring(from: end - 1) == "\n"
+        let added = (endsOnEmptyLine ? "" : "\n") + "- [ ] "
+        replace(NSRange(location: end, length: 0), with: added, select: NSRange(location: end + (added as NSString).length, length: 0),
+                actionName: "Checklist")
+    }
+
     /// Tab and ⇧Tab in a table go to the next or the previous cell, its text selected, as in Numbers and Notes; from a
     /// row's last cell Tab goes on to the next row, and past the last row it makes a new one. The delimiter row is passed
     /// over. False outside a table, where Tab nests list items.

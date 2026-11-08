@@ -2,12 +2,14 @@
 import AppKit
 import SwiftUI
 
-/// A row in the sidebar that isn't a file in a tree: a section title, a favourite, To-dos at the top.
+/// A row in the sidebar that isn't a file in a tree: a section title, a favourite, Search and To-dos at the top.
 final class SidebarEntry: NSObject {
     enum Kind {
         case header(String, location: UUID?)
         case favorite(URL)
         case todos
+        /// Opens ⌘K, as Search does at the top of Notion's sidebar; never selected.
+        case search
     }
 
     let kind: Kind
@@ -28,6 +30,11 @@ final class SidebarEntry: NSObject {
         return false
     }
 
+    var isSearch: Bool {
+        if case .search = kind { return true }
+        return false
+    }
+
     /// Names a section across reloads, to remember which ones you closed.
     var sectionKey: String? {
         guard case .header(let title, let location) = kind else { return nil }
@@ -37,12 +44,12 @@ final class SidebarEntry: NSObject {
     var url: URL? {
         switch kind {
         case .favorite(let url): url
-        case .header, .todos: nil
+        case .header, .todos, .search: nil
         }
     }
 }
 
-/// The sidebar: To-dos, favourites and a tree for every location, each a section you can close. A source list
+/// The sidebar: Search, To-dos, favourites and a tree for every location, each a section you can close. A source list
 /// like the Finder's, so arrow keys, type-to-select, drag and drop and renaming in place work as there.
 @MainActor
 final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate, NSMenuDelegate, NSTextFieldDelegate {
@@ -169,12 +176,14 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         reload(shown)
     }
 
-    /// The To-dos row, first of all.
+    /// Search, first of all, then To-dos.
+    private let searchEntry = SidebarEntry(.search)
     private let todosEntry = SidebarEntry(.todos)
 
     private func rebuildTop() {
         visible = [:]
-        var items: [AnyObject] = NotebookSettings.shared.showsTodos ? [todosEntry] : []
+        var items: [AnyObject] = [searchEntry]
+        if NotebookSettings.shared.showsTodos { items.append(todosEntry) }
         let favorites = workspace.favoriteURLs
         if !favorites.isEmpty {
             items.append(SidebarEntry(.header("Favorites", location: nil), children: favorites.map { SidebarEntry(.favorite($0)) }))
@@ -507,7 +516,8 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     }
 
     func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
-        !((item as? SidebarEntry)?.isHeader ?? false)
+        guard let entry = item as? SidebarEntry else { return true }
+        return !entry.isHeader && !entry.isSearch
     }
 
     func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
@@ -539,6 +549,11 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         cell.label.delegate = self
         if (item as? SidebarEntry)?.isTodos == true {
             cell.configureTodos(count: workspace.dueTodoCount)
+            cell.setButtons(more: nil, add: nil)
+            return cell
+        }
+        if (item as? SidebarEntry)?.isSearch == true {
+            cell.configureSearch { [weak self] in self?.workspace.openSearch() }
             cell.setButtons(more: nil, add: nil)
             return cell
         }
@@ -766,7 +781,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     func fill(_ menu: NSMenu, row: Int) {
         menu.removeAllItems()
         let item = row >= 0 ? outline.item(atRow: row) : nil
-        if (item as? SidebarEntry)?.isTodos == true { return }
+        if let entry = item as? SidebarEntry, entry.isTodos || entry.isSearch { return }
         if let entry = item as? SidebarEntry, case .header(_, let locationID) = entry.kind, let locationID,
            let location = workspace.locations.first(where: { $0.id == locationID }) {
             add(menu, "New Note", "square.and.pencil") { [weak self] in self?.workspace.newNote(in: location.url) }
@@ -875,7 +890,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             outlineView.setDropItem(nil, dropChildIndex: NSOutlineViewDropOnItemIndex)
             return info.draggingSourceOperationMask.contains(.link) ? .link : .generic
         }
-        if (item as? SidebarEntry)?.isTodos == true { return [] }
+        if let entry = item as? SidebarEntry, entry.isTodos || entry.isSearch { return [] }
         guard let folder = dropFolder(for: item) else { return [] }
         guard !urls.isEmpty, !urls.contains(where: { folder.path == $0.path || folder.path.hasPrefix($0.path + "/") }) else { return [] }
         if let node = folderNode(for: item) { outlineView.setDropItem(node, dropChildIndex: NSOutlineViewDropOnItemIndex) }
@@ -948,6 +963,11 @@ final class SidebarOutlineView: NSOutlineView {
         }
         if row >= 0, let entry = item(atRow: row) as? SidebarEntry, entry.isHeader {
             controller?.toggle(section: entry)
+            return
+        }
+        // Search opens ⌘K and is never selected: what is open stays selected below it.
+        if row >= 0, let entry = item(atRow: row) as? SidebarEntry, entry.isSearch {
+            controller?.workspace.openSearch()
             return
         }
         if row >= 0, let node = item(atRow: row) as? FileNode, node.isFolder,
@@ -1420,7 +1440,24 @@ final class SidebarFileCell: NSTableCellView {
     override func prepareForReuse() {
         super.prepareForReuse()
         isHovered = false
+        press = nil
     }
+
+    /// What a row that isn't selected does when VoiceOver presses it: Search's.
+    private var press: (() -> Void)?
+
+    override func accessibilityRole() -> NSAccessibility.Role? {
+        press == nil ? super.accessibilityRole() : .button
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        guard let press else { return super.accessibilityPerformPress() }
+        press()
+        return true
+    }
+
+    /// The count's colour: To-dos' count, or Search's shortcut, a step quieter.
+    private var countColor: NSColor = .secondaryLabelColor
 
     /// To-dos: the checklist, and how many are due today or overdue.
     func configureTodos(count due: Int) {
@@ -1432,6 +1469,9 @@ final class SidebarFileCell: NSTableCellView {
         tint = .controlAccentColor
         accessory.image = nil
         isOverdue = false
+        press = nil
+        count.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        countColor = .secondaryLabelColor
         count.stringValue = due > 0 ? "\(due)" : ""
         shownCount = due > 0
         count.isHidden = due == 0
@@ -1441,11 +1481,34 @@ final class SidebarFileCell: NSTableCellView {
         updateButtons()
     }
 
+    /// Search: the magnifying glass, and ⌘K where To-dos has its count. `press` opens it.
+    func configureSearch(press: @escaping () -> Void) {
+        label.stringValue = "Search"
+        label.textColor = .labelColor
+        icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular, scale: .large)
+        icon.alphaValue = 1
+        icon.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: nil)
+        tint = .controlAccentColor
+        accessory.image = nil
+        isOverdue = false
+        self.press = press
+        count.font = .systemFont(ofSize: 12)
+        countColor = .tertiaryLabelColor
+        count.stringValue = "⌘K"
+        shownCount = true
+        count.isHidden = false
+        updateTint()
+        toolTip = "Search notes, files and pictures (⌘K)"
+        setAccessibilityLabel("Search")
+        updateButtons()
+    }
+
     /// `look` is a folder's symbol or emoji and colour, if you chose any (Customize Folder).
     func configure(name: String, kind: FileKind, inCloud: Bool, url: URL, icon look: FolderIcon? = nil, symbol: String? = nil, nested: Bool, dimmed: Bool = false,
                    reminder: Reminder? = nil) {
         shownCount = false
         count.isHidden = true
+        press = nil
         label.stringValue = name
         label.textColor = dimmed ? .tertiaryLabelColor : inCloud ? .secondaryLabelColor : .labelColor
         // As in Notes: large icons on a section's own rows, smaller ones inside a folder.
@@ -1500,7 +1563,7 @@ final class SidebarFileCell: NSTableCellView {
     private func updateTint() {
         let emphasized = backgroundStyle == .emphasized
         icon.contentTintColor = emphasized ? .alternateSelectedControlTextColor : tint
-        count.textColor = emphasized ? .alternateSelectedControlTextColor : .secondaryLabelColor
+        count.textColor = emphasized ? .alternateSelectedControlTextColor : countColor
         for button in [moreButton, addButton] { button.contentTintColor = emphasized ? .alternateSelectedControlTextColor : .secondaryLabelColor }
         accessory.contentTintColor = emphasized ? .alternateSelectedControlTextColor : isOverdue ? .systemRed : .tertiaryLabelColor
     }

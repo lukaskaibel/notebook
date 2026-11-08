@@ -8,6 +8,8 @@ struct NewNoteButton: View {
     let workspace: Workspace
     /// Where the note goes; none for the folder new notes go to.
     var folder: URL?
+    /// Plain, as the buttons around it, in the iPad's note bar next to Back and Forward.
+    var isProminent = true
     @State private var asks = false
     /// The window too narrow for the choices side by side: the iPhone's, or an iPad's beside another app.
     @State private var isNarrow = false
@@ -26,7 +28,7 @@ struct NewNoteButton: View {
         } label: {
             Label("New Note", systemImage: "square.and.pencil")
         }
-        .buttonStyle(.glassProminent)
+        .modifier(Prominent(isOn: isProminent))
         .popover(isPresented: $asks) {
             NewNoteChooser(isCompact: isNarrow) { kind, paper in
                 asks = false
@@ -43,6 +45,15 @@ struct NewNoteButton: View {
             }
         }
         #endif
+    }
+}
+
+/// The accent colour's glass, or the bar's own look.
+private struct Prominent: ViewModifier {
+    let isOn: Bool
+
+    func body(content: Content) -> some View {
+        if isOn { content.buttonStyle(.glassProminent) } else { content }
     }
 }
 
