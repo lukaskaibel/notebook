@@ -60,6 +60,13 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Changed
 
+- The first screen on the iPhone and the sidebar on the iPad and the Mac are laid out alike, as Reminders and Notes do
+  on each device. To-dos and Favorites are tiles at the top, each with its count, and a tap or click shows the list:
+  on the iPhone on a screen of its own, on the iPad and the Mac in the note's place, as To-dos is shown. Favorites shows
+  once you have starred something, and no longer has a section of its own in the sidebar. Under the tiles, Recent is a
+  row of cards you swipe through, each with a picture of the top of a note, PDF or picture you opened last, its name
+  and its folder. Every folder says how many files are in it. On the iPhone, a folder with folders in it has an arrow
+  that unfolds them below it, greyed, so University › Linear algebra is one tap.
 - The toolbar is laid out as in Notes. On the Mac and the iPad, Aa, Checklist, Table, Attach and the pencil sit
   together in the middle, over the note; Back, Forward and New Note are on the left, and Share, ••• and the outline on
   the right. On the iPad, New Note is in the note's toolbar too while the sidebar is hidden. On the Mac, Checklist and

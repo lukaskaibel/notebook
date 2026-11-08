@@ -21,6 +21,10 @@ struct FileRow: View {
     var date: Date?
     /// A hidden folder, there while its location shows hidden folders.
     var isHidden = false
+    /// A folder unfolded under another on the first screen: its name greyed, as the one it is in leads.
+    var isQuiet = false
+    /// How many files and folders a folder holds, at the row's end, as Notes counts a folder's notes.
+    var count: Int?
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
@@ -33,7 +37,7 @@ struct FileRow: View {
                     // middle.
                     .lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
                     .truncationMode(.middle)
-                    .foregroundStyle(dimmed || isInCloud ? .secondary : .primary)
+                    .foregroundStyle(dimmed || isInCloud || isQuiet ? .secondary : .primary)
                 if showsDetail, let detail {
                     Text(detail)
                         .font(.subheadline)
@@ -64,6 +68,7 @@ struct FileRow: View {
 
     /// A reminder's bell, red once its time has passed, before the cloud of a file still in iCloud.
     private var badge: Text? {
+        if kind == .folder, let count { return Text(count, format: .number) }
         if let reminder { return Text(Image(systemName: reminder.date == nil ? "location.fill" : "bell.fill")).foregroundStyle(reminder.isOverdue ? Color.red : Color.secondary) }
         return isInCloud ? Text(Image(systemName: "icloud.and.arrow.down")) : nil
     }
@@ -123,12 +128,12 @@ struct FileRow: View {
 extension FileNode {
     /// A row for this file in a list.
     @MainActor
-    func row(in workspace: Workspace, showsDetail: Bool = false) -> FileRow {
+    func row(in workspace: Workspace, showsDetail: Bool = false, isQuiet: Bool = false, count: Int? = nil) -> FileRow {
         // The dates came with the folder's files, so they show at once, and say what the list is sorted by.
         let byCreation = showsDetail && NotebookSettings.shared.fileOrders.order(of: url.deletingLastPathComponent()) == .dateCreated
         return FileRow(workspace: workspace, url: url, name: isLinked ? name : workspace.newName(for: url) ?? (kind == .folder ? workspace.folderName(url) : name),
                        kind: kind, isInCloud: isInCloud, icon: icon, showsDetail: showsDetail, date: byCreation ? created : modified,
-                       isHidden: isFolder && workspace.isHidden(url))
+                       isHidden: isFolder && workspace.isHidden(url), isQuiet: isQuiet, count: count)
     }
 }
 

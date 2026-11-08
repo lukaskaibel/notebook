@@ -257,7 +257,7 @@ with a keyboard, ⌘K works the same.
 Every open checkbox in your notes is a to-do, and To-dos at the top of the sidebar shows them all in one list, as
 Reminders does: what is overdue, then today's, tomorrow's, the next seven days', later ones, and those without a date,
 each with the lines indented under it (its sub-to-dos, points and notes) and the note it is in. Notes with a reminder
-are in the list too, and the number next to To-dos counts what is due today or overdue. Tick a to-do off in the list,
+are in the list too, and the number on To-dos counts what is due today or overdue. Tick a to-do off in the list,
 or a sub-to-do under it, and it is ticked in its note; a to-do stays three seconds, ticked, before it fades away, in case
 you want to untick it, and it stays in its place meanwhile. Click the note's name to open the note at it. Drag a to-do
 into another group, or choose Today, Tomorrow, This Weekend or Next Week in its menu, and its date moves; Undo (⌘Z, or
@@ -442,7 +442,10 @@ lists each kind of file has a symbol of its own, in the accent colour as folders
 
 The window is built from the system's own pieces: a source-list sidebar, a toolbar laid out as Notes' is, with Aa,
 Checklist, Table, Attach and the pencil in the middle and the share menu on the right, an inspector, Settings, alerts, PDFKit, AVKit and Quick Look. It follows the system's light or dark
-appearance. Some of the sidebar's manners come from Notion: the row under the pointer gets a soft fill, with ••• for its
+appearance. The sidebar starts as the iPhone's first screen does, as Reminders' does on each device: To-dos and
+Favorites as tiles with their counts, a click showing the list in the note's place; Recent, cards with a picture of the
+top of each note you opened last; and every folder with how many files are in it. Some of the sidebar's manners come
+from Notion: the row under the pointer gets a soft fill, with ••• for its
 menu and, on a folder, + for a new note in it; a location's name has the same two, and a click on it folds the
 location. The inspector shows a note's outline, with the section you're reading marked and a word count; a click on
 a heading scrolls there. In Settings › Text you pick the typeface (San Francisco, New York, Rounded or Monospaced,
@@ -457,8 +460,11 @@ of each note that way too.
 ### On iPhone and iPad
 
 The same notes in the same editor, laid out the way each device works. On the iPhone you go into one folder per screen,
-as in the Files app, and a note opens on a screen of its own; swipe from the edge to go back. The first screen has your
-favourites, what you opened last and the folders of each location. New Folder, search and a new note sit at the bottom,
+as in the Files app, and a note opens on a screen of its own; swipe from the edge to go back. The first screen starts
+as Reminders' does, with To-dos and Favorites as tiles, each with its count; then Recent, a row of cards you swipe
+through, each with a picture of the top of a note you opened last, its name and its folder; then the folders of each
+location, each with how many files are in it. A folder with folders in it has an arrow that unfolds them below it,
+greyed, so a folder in a folder is one tap away. New Folder, search and a new note sit at the bottom,
 as in Notes, and search finds everything it finds on the Mac. While you write, a bar floats above the keyboard with
 Aa, a checklist, attachments, a link, undo and the formatting, a page of tools at a time. On its left, up to two
 buttons for where the caret is come and go: opening the link you are on, a to-do's bell, the style you are in, tinted,
@@ -472,8 +478,9 @@ follow it, a picture to look at it, a drawing to draw in it; touch and hold a pi
 note, or let go to copy, share or delete it. Swipe a file to move or delete it, or to make it a favourite; touch and
 hold it for everything else.
 
-The iPad has the Mac's layout: the sidebar with its folders opening in place, the note next to it, and the outline in
-an inspector. New Note at the top of the sidebar, or in the note's toolbar while the sidebar is hidden, asks whether
+The iPad has the Mac's layout: the sidebar, with the iPhone's first screen at its top and its folders opening in
+place, the note next to it, and the outline in an inspector. To-dos and Favorites show next to the sidebar, in the
+note's place. New Note at the top of the sidebar, or in the note's toolbar while the sidebar is hidden, asks whether
 to type or write by hand. In portrait the sidebar steps aside once you have picked a note. With a keyboard, the Mac's shortcuts
 work, the menu bar has the Mac's File, View, Go and Format menus, the marks show next to the caret as on the Mac, and
 the bar above the keyboard steps aside, as in Notes: Aa, Checklist, Table, attachments and the pencil are in the
@@ -518,7 +525,8 @@ screens.
   Option-drag copies. New Folder in the ••• next to a location's name makes a folder at its top, New Folder in a
   folder's menu one inside it, named in place as in the Finder; the + next to a location's or folder's name makes a
   note there. Deleting moves to the Trash, never further, and Undo
-  (⌘Z) puts it back, as it takes back a rename, a move or a new file. Favourites sit at the top of the sidebar.
+  (⌘Z) puts it back, as it takes back a rename, a move or a new file. Favourites have a tile at the top of the
+  sidebar, next to To-dos, that lists them; every folder says how many files are in it.
 - **Sorted by name or by date.** View › Sort By, or Sort By in the ⋯ menu on iPhone and iPad, sorts every folder's
   notes and files by name, as the Finder does, or newest first by when they were last edited or made, as Notes does.
   Sorted by date, the note you write in moves to the top of its folder once it is saved, still selected; Keep Folders

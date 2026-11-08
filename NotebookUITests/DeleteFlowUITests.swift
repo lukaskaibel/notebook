@@ -365,7 +365,7 @@ final class DeleteFlowUITests: XCTestCase {
     /// The row is gone from every list on screen within `seconds`. A list keeps the text of a row it took away for a
     /// while, out of sight: only one on screen counts.
     private func assertGone(_ name: String, within seconds: Double, file: StaticString = #filePath, line: UInt = #line) {
-        let rows = app.staticTexts.matching(NSPredicate(format: "label == %@", name))
+        let rows = named(name)
         let end = Date().addingTimeInterval(seconds)
         func shown() -> Bool { rows.allElementsBoundByIndex.contains(where: isOnScreen) }
         while shown(), Date() < end { Thread.sleep(forTimeInterval: 0.05) }
@@ -381,7 +381,7 @@ final class DeleteFlowUITests: XCTestCase {
 
     /// The row is in a list on screen within `seconds`.
     private func assertShown(_ name: String, within seconds: Double, file: StaticString = #filePath, line: UInt = #line) {
-        let rows = app.staticTexts.matching(NSPredicate(format: "label == %@", name))
+        let rows = named(name)
         let end = Date().addingTimeInterval(seconds)
         func shown() -> Bool { rows.allElementsBoundByIndex.contains(where: isOnScreen) }
         while !shown(), Date() < end { Thread.sleep(forTimeInterval: 0.05) }
@@ -389,6 +389,12 @@ final class DeleteFlowUITests: XCTestCase {
     }
 
     /// A row, a button or anything else, by its name.
+    /// A row's name, or a card of Recent on the first screen, which is a button by the note's name.
+    private func named(_ name: String) -> XCUIElementQuery {
+        app.descendants(matching: .any).matching(NSPredicate(format: "label == %@ AND (elementType == %d OR elementType == %d)", name,
+                                                             XCUIElement.ElementType.staticText.rawValue, XCUIElement.ElementType.button.rawValue))
+    }
+
     private func tap(_ label: String, file: StaticString = #filePath, line: UInt = #line) {
         let element = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label)).firstMatch
         XCTAssertTrue(element.waitForExistence(timeout: 10), app.debugDescription, file: file, line: line)
