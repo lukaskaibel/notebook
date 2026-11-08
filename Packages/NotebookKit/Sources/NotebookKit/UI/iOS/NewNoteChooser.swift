@@ -11,17 +11,11 @@ struct NewNoteButton: View {
     /// Plain, as the buttons around it, in the iPad's note bar next to Back and Forward.
     var isProminent = true
     @State private var asks = false
-    /// The window too narrow for the choices side by side: the iPhone's, or an iPad's beside another app.
-    @State private var isNarrow = false
 
     var body: some View {
         Button {
             switch NotebookSettings.shared.newNoteKind {
-            case .ask:
-                // A sidebar is compact on the iPad too: the window's width says whether there is room.
-                let window = UIApplication.shared.connectedScenes.lazy.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first
-                isNarrow = (window?.bounds.width ?? 0) < 600
-                asks = true
+            case .ask: asks = true
             case .typed: workspace.newNote(in: folder)
             case .handwritten: workspace.newHandwrittenNote(in: folder)
             }
@@ -30,7 +24,9 @@ struct NewNoteButton: View {
         }
         .modifier(Prominent(isOn: isProminent))
         .popover(isPresented: $asks) {
-            NewNoteChooser(isCompact: isNarrow) { kind, paper in
+            // Worked out as it opens, not kept in state by the button's action: a popover of a toolbar item is built
+            // with the state's first value, so on the iPhone it came out side by side and ran off the screen.
+            NewNoteChooser(isCompact: Self.isWindowNarrow) { kind, paper in
                 asks = false
                 if kind == .typed { workspace.newNote(in: folder) } else { workspace.newHandwrittenNote(in: folder, paper: paper) }
             }
@@ -40,11 +36,17 @@ struct NewNoteButton: View {
         // newnoteask: the iPhone's popover (the iPad shows two New Notes, and two popovers at once show neither).
         .onReceive(NotificationCenter.default.publisher(for: .notebookDebug)) { notification in
             if notification.userInfo?["command"] as? String == "newnoteask", UIDevice.current.userInterfaceIdiom == .phone {
-                isNarrow = true
                 asks = true
             }
         }
         #endif
+    }
+
+    /// The window too narrow for the choices side by side: the iPhone's, or an iPad's beside another app. A sidebar is
+    /// compact on the iPad too, so the window's width says whether there is room.
+    private static var isWindowNarrow: Bool {
+        let window = UIApplication.shared.connectedScenes.lazy.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first
+        return (window?.bounds.width ?? 0) < 600
     }
 }
 
@@ -80,7 +82,8 @@ struct NewNoteChooser: View {
             }
         }
         .padding(isCompact ? 16 : 18)
-        .fixedSize()
+        // As wide as the papers, or as the popover can be where they don't fit, and then they scroll.
+        .fixedSize(horizontal: !isCompact, vertical: true)
     }
 
     private var tileWidth: CGFloat { isCompact ? 50 : 58 }
@@ -93,13 +96,26 @@ struct NewNoteChooser: View {
 
     private var handwritten: some View {
         Section(NoteKind.handwritten.name) {
-            HStack(alignment: .top, spacing: isCompact ? 10 : 12) {
-                ForEach(PaperStyle.allCases) { paper in
-                    ChoiceTile(caption: paper.name, accessibility: "Handwritten Note, \(paper.name)", width: tileWidth) {
-                        PaperPreview(paper: paper)
-                    } action: {
-                        choose(.handwritten, paper)
-                    }
+            if isCompact {
+                // The iPhone's screen holds them all, but not with Display Zoom or large text: then they scroll, under
+                // the popover's edge rather than its margin.
+                ScrollView(.horizontal) { papers }
+                    .scrollIndicators(.hidden)
+                    .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+                    .scrollClipDisabled()
+            } else {
+                papers
+            }
+        }
+    }
+
+    private var papers: some View {
+        HStack(alignment: .top, spacing: isCompact ? 10 : 12) {
+            ForEach(PaperStyle.allCases) { paper in
+                ChoiceTile(caption: paper.name, accessibility: "Handwritten Note, \(paper.name)", width: tileWidth) {
+                    PaperPreview(paper: paper)
+                } action: {
+                    choose(.handwritten, paper)
                 }
             }
         }

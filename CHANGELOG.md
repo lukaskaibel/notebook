@@ -82,6 +82,9 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- On iPhone, New Note set to ask which kind showed the typed note and the papers side by side, as on the iPad, so they
+  ran off both sides of the screen and couldn't be scrolled to. They are now one above the other, and where the papers
+  still don't fit, with Display Zoom or very large text, they scroll.
 - A picture dragged to another place in its note no longer goes into a table, code block, quote or callout and breaks
   it in two: it goes before or after the whole of it. Dropped on the right of another picture, a file card or a table,
   it goes after it rather than before, and a file dropped there from the Finder no longer goes into a table's Markdown.
