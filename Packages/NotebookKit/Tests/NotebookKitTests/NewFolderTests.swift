@@ -114,6 +114,31 @@ final class NewFolderTests: XCTestCase {
         }
     }
 
+    /// Under the pointer a folder shows ••• before +; a file, which never has +, shows ••• at the row's end, where a
+    /// folder's + is, so its name has more room.
+    func testAFilesMoreButtonSitsWhereAFoldersPlusIs() async throws {
+        let (_, sidebar) = try await makeSidebar()
+        let outline = sidebar.outline
+        let folderRow = try XCTUnwrap(row("Papers", under: drive, in: sidebar))
+        outline.expandItem(outline.item(atRow: folderRow))
+        func fileRow() -> Int? {
+            (0..<outline.numberOfRows).first { (outline.item(atRow: $0) as? FileNode)?.url.lastPathComponent == "Draft.md" }
+        }
+        try await until("Draft in Papers") { fileRow() != nil }
+        func cell(_ row: Int) throws -> SidebarFileCell {
+            try XCTUnwrap(outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? SidebarFileCell)
+        }
+        let folder = try cell(folderRow), file = try cell(XCTUnwrap(fileRow()))
+        for cell in [folder, file] { cell.isHovered = true }
+        window.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertFalse(folder.addButton.isHidden)
+        XCTAssertTrue(file.addButton.isHidden)
+        XCTAssertFalse(file.moreButton.isHidden)
+        func frame(_ button: NSButton) -> NSRect { button.convert(button.bounds, to: nil) }
+        XCTAssertEqual(frame(file.moreButton).maxX, frame(folder.addButton).maxX, accuracy: 0.5, "in +'s place")
+        XCTAssertLessThan(frame(folder.moreButton).maxX, frame(folder.addButton).minX, "before +")
+    }
+
     /// A click on a section's header folds it and opens it again, as in Notion; a click on its buttons doesn't.
     func testAClickOnASectionsHeaderFoldsIt() async throws {
         let (_, sidebar) = try await makeSidebar()
