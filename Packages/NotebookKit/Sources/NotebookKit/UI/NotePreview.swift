@@ -28,6 +28,8 @@ public final class NotePreview: EditorControllerDelegate {
     /// it could be. Without the folder, its pictures show by their names and links as links
     /// (EditorController.isFolderOutOfReach).
     let isThumbnail: Bool
+    /// A thumbnail for the app's own cards, which reads the note's folder after all, so the pictures in the note show.
+    let readsFolder: Bool
     /// The note's folder once what is in it could be read; nil before, and when it can't be.
     private var folder: URL?
     /// What is in the note's folder and its `.assets`, by path in lower case.
@@ -35,8 +37,9 @@ public final class NotePreview: EditorControllerDelegate {
 
     public convenience init() { self.init(thumbnail: false) }
 
-    init(thumbnail: Bool) {
+    init(thumbnail: Bool, readsFolder: Bool = false) {
         isThumbnail = thumbnail
+        self.readsFolder = readsFolder
         // The typeface and heading marks set in Notebook now, before the editor takes them.
         NotebookSettings.shared.followAppLook()
         editor = EditorController()
@@ -66,7 +69,10 @@ public final class NotePreview: EditorControllerDelegate {
         }.value
         let title = url.deletingPathExtension().lastPathComponent
         let meta = Workspace.meta(modified: modified)
-        if isThumbnail { return show(NoteThumbnail.top(of: text), title: title, meta: meta, files: nil, from: url) }
+        if isThumbnail {
+            let files = readsFolder ? await Task.detached(priority: .userInitiated) { Self.files(nextTo: url) }.value : nil
+            return show(NoteThumbnail.top(of: text), title: title, meta: meta, files: files, from: url)
+        }
         let group = NotebookSettings.groupDefaults
         let reading = Task.detached(priority: .userInitiated) { () -> [String: String]? in
             #if os(macOS)

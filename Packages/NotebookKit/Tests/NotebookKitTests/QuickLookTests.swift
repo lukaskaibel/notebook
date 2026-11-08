@@ -284,6 +284,29 @@ final class QuickLookTests: XCTestCase {
         }
     }
 
+    /// The app's own cards of notes (Recent, Favorites) read the note's folder, which the app can, so the pictures in
+    /// the note show in its picture, not their names.
+    func testTheAppsCardsShowTheNotesPictures() async throws {
+        let url = folder.appendingPathComponent("Ikea.md")
+        try "Lamps.\n\n![](.assets/torii.png)\n\n![[torii.png]]\n".write(to: url, atomically: true, encoding: .utf8)
+        try FileManager.default.createDirectory(at: folder.appendingPathComponent(".assets"), withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: EditorHarness("").folder.appendingPathComponent(".assets/torii.png"),
+                                         to: folder.appendingPathComponent(".assets/torii.png"))
+        let size = CGSize(width: 104, height: 135)
+
+        let (card, editor) = try await NoteThumbnail.page(of: url, size: size, scale: 2, withPictures: true)
+        XCTAssertEqual(editor.folder?.standardizedFileURL, folder.standardizedFileURL)
+        var pictures: [URL?] = []
+        editor.storage.enumerateAttribute(.notebookObject, in: NSRange(location: 0, length: editor.storage.length)) { value, _, _ in
+            if case .image(let url, _, _) = (value as? EditorObject)?.kind { pictures.append(url) }
+        }
+        XCTAssertEqual(pictures.map { $0?.lastPathComponent }, ["torii.png", "torii.png"], "found next to the note")
+
+        // Drawn: the Finder's thumbnail of the same note has a grey box with the name where the card has the picture.
+        let (finder, _) = try await NoteThumbnail.page(of: url, size: size, scale: 2)
+        XCTAssertNotEqual(try bitmap(card).tiffRepresentation, try bitmap(finder).tiffRepresentation)
+    }
+
     /// A long note isn't laid out to its end for its thumbnail: only what is more than enough for its top.
     func testTheThumbnailReadsTheTopOfALongNote() async throws {
         let url = folder.appendingPathComponent("Diary.md")

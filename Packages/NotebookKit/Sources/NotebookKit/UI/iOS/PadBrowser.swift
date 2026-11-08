@@ -230,13 +230,11 @@ struct PadSidebar: View {
                 if isSearching {
                     SearchResultsList(workspace: workspace, query: query) { workspace.open($0) }
                 } else {
-                    if NotebookSettings.shared.showsTodos || !workspace.favoriteURLs.isEmpty {
-                        HomeTileGrid(workspace: workspace)
-                            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
-                            .listRowBackground(Color.clear)
-                            .selectionDisabled()
-                    }
-                    if !workspace.recentURLs(includingOpen: true).isEmpty {
+                    HomeTileGrid(workspace: workspace)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                        .listRowBackground(Color.clear)
+                        .selectionDisabled()
+                    if !workspace.recentCardURLs.isEmpty {
                         Section("Recent", isExpanded: sectionBinding("Recent")) {
                             RecentCardRow(workspace: workspace) { newFolderIn = $0 }
                                 .scrollClipDisabled()

@@ -32,14 +32,15 @@ public enum NoteThumbnail {
     }
 
     /// The thumbnail of the note at `url`, `size` points big (`size(fitting:)`) with `scale` pixels to the point.
-    /// Throws when the note can't be read.
-    public static func image(of url: URL, size: CGSize, scale: CGFloat) async throws -> CGImage {
-        try await page(of: url, size: size, scale: scale).image
+    /// `withPictures` reads the note's folder too, so its pictures show: for the app's own cards of notes (Recent,
+    /// Favorites), not for the Finder, which asks for thumbnails as you scroll by. Throws when the note can't be read.
+    public static func image(of url: URL, size: CGSize, scale: CGFloat, withPictures: Bool = false) async throws -> CGImage {
+        try await page(of: url, size: size, scale: scale, withPictures: withPictures).image
     }
 
     /// The thumbnail, with the copy of the editor that drew it.
-    static func page(of url: URL, size: CGSize, scale: CGFloat) async throws -> (image: CGImage, editor: EditorController) {
-        let preview = NotePreview(thumbnail: true)
+    static func page(of url: URL, size: CGSize, scale: CGFloat, withPictures: Bool = false) async throws -> (image: CGImage, editor: EditorController) {
+        let preview = NotePreview(thumbnail: true, readsFolder: withPictures)
         try await preview.show(url)
         guard let top = await NoteExporter.top(of: preview.editor, title: preview.editor.titleText, size: size, scale: scale) else {
             throw CocoaError(.fileReadUnknown)

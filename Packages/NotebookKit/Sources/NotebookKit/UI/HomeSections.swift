@@ -13,11 +13,19 @@ import AppKit
 enum HomeStyle {
     #if os(macOS)
     static let cardFill = Color.primary.opacity(0.06)
+    /// Under a tile or card under the pointer, its own fill and this one make it a shade darker, as a sidebar row under
+    /// the pointer is.
+    static let cardHoverFill = Color.primary.opacity(0.05)
     static let tileRadius: CGFloat = 10
     static let cardRadius: CGFloat = 12
     static let pictureRadius: CGFloat = 6
+    /// A card's picture where the card has a width of its own (Favorites on the Mac); in Recent it is as wide as a tile.
     static let picture = CGSize(width: 104, height: 78)
+    /// Inside a tile or card, from its edge to what is in it: on the Mac's sidebar the tiles' symbols and the cards'
+    /// pictures are then in line with Search's magnifying glass and the folders' chevrons.
     static let cardPadding: CGFloat = 6
+    /// The pictures of files are made this wide and drawn at the card's width, which follows the sidebar's.
+    static let thumbnailSize = CGSize(width: 160, height: 120)
     #else
     static let cardFill = Color(.secondarySystemGroupedBackground)
     static let tileRadius: CGFloat = 20
@@ -25,16 +33,43 @@ enum HomeStyle {
     static let pictureRadius: CGFloat = 12
     static let picture = CGSize(width: 128, height: 96)
     static let cardPadding: CGFloat = 8
+    static let thumbnailSize = CGSize(width: 200, height: 150)
     #endif
     /// Favorites' orange, the star's colour where you swipe to add one.
     static let favoritesColor = Color.theme(.systemOrange)
+    /// Between the tiles, and between Recent's cards, which are as wide as the tiles: the second card under Favorites.
     static let spacing: CGFloat = {
         #if os(macOS)
-        8
+        6
         #else
         12
         #endif
     }()
+}
+
+/// A tile or card under the pointer shows it by itself, not the row it is in: on the Mac a darker fill, while the window
+/// is in front, as other hover effects on the Mac; on iPad the pointer takes its shape.
+private struct HomeHover: ViewModifier {
+    let shape: RoundedRectangle
+    var isSelected = false
+    #if os(macOS)
+    @State private var isHovered = false
+    @Environment(\.controlActiveState) private var activeState
+    #endif
+
+    func body(content: Content) -> some View {
+        #if os(macOS)
+        content
+            .background {
+                if isHovered, !isSelected, activeState == .key { shape.fill(HomeStyle.cardHoverFill) }
+            }
+            .onHover { isHovered = $0 }
+        #else
+        content
+            .contentShape(.hoverEffect, shape)
+            .hoverEffect(.highlight)
+        #endif
+    }
 }
 
 /// A tile: its symbol in a circle of its colour, the count across from it, the name below. Selected, on iPad and Mac
@@ -51,13 +86,13 @@ struct HomeTileLabel: View {
     private static let symbolSize: CGFloat = 12
     private static let countFont = Font.system(.title3, design: .rounded, weight: .bold)
     private static let titleFont = Font.callout.weight(.semibold)
-    private static let padding: CGFloat = 8
+    private static let padding = EdgeInsets(top: 8, leading: HomeStyle.cardPadding, bottom: 8, trailing: HomeStyle.cardPadding)
     #else
     private static let circle: CGFloat = 30
     private static let symbolSize: CGFloat = 15
     private static let countFont = Font.system(.title2, design: .rounded, weight: .bold)
     private static let titleFont = Font.subheadline.weight(.semibold)
-    private static let padding: CGFloat = 12
+    private static let padding = EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)
     #endif
 
     var body: some View {
@@ -82,6 +117,7 @@ struct HomeTileLabel: View {
         .padding(Self.padding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(isSelected ? color : HomeStyle.cardFill, in: shape)
+        .modifier(HomeHover(shape: shape, isSelected: isSelected))
         .contentShape(shape)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
@@ -91,43 +127,39 @@ struct HomeTileLabel: View {
 }
 
 /// The two tiles side by side, as the iPad and the Mac show them at the top of the sidebar: a click shows To-dos or
-/// your favourites next to it. Favorites only once something is starred.
+/// your favourites next to it. Favorites is there before anything is starred too, and says how to star something.
 struct HomeTileGrid: View {
     let workspace: Workspace
 
     var body: some View {
         let showsTodos = NotebookSettings.shared.showsTodos
-        let favorites = workspace.favoriteURLs.count
-        if showsTodos || favorites > 0 {
-            Grid(horizontalSpacing: HomeStyle.spacing) {
-                GridRow {
-                    if showsTodos {
-                        Button { workspace.showTodos() } label: {
-                            HomeTileLabel(title: "To-dos", symbol: "checklist", color: .accentColor, count: workspace.dueTodoCount,
-                                          isSelected: workspace.showsTodos)
-                        }
-                        .buttonStyle(.plain)
+        Grid(horizontalSpacing: HomeStyle.spacing) {
+            GridRow {
+                if showsTodos {
+                    Button { workspace.showTodos() } label: {
+                        HomeTileLabel(title: "To-dos", symbol: "checklist", color: .accentColor, count: workspace.dueTodoCount,
+                                      isSelected: workspace.showsTodos)
                     }
-                    if favorites > 0 {
-                        Button { workspace.showFavorites() } label: {
-                            HomeTileLabel(title: "Favorites", symbol: "star.fill", color: HomeStyle.favoritesColor, count: favorites,
-                                          isSelected: workspace.showsFavorites)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    // One tile takes half the row, as one of two would.
-                    if !showsTodos || favorites == 0 { Color.clear.gridCellUnsizedAxes(.vertical) }
+                    .buttonStyle(.plain)
                 }
+                Button { workspace.showFavorites() } label: {
+                    HomeTileLabel(title: "Favorites", symbol: "star.fill", color: HomeStyle.favoritesColor, count: workspace.favoriteURLs.count,
+                                  isSelected: workspace.showsFavorites)
+                }
+                .buttonStyle(.plain)
+                // One tile takes half the row, as one of two would.
+                if !showsTodos { Color.clear.gridCellUnsizedAxes(.vertical) }
             }
         }
     }
 }
 
 /// A card of Recent: a picture of the file's top, so you see what you were working on, its name, and the folder it is
-/// in, quieter.
+/// in, quieter. `width` is the whole card's; the picture keeps its shape.
 struct RecentCardLabel: View {
     let workspace: Workspace
     let url: URL
+    var width: CGFloat = HomeStyle.picture.width + 2 * HomeStyle.cardPadding
     @Environment(\.displayScale) private var scale
 
     #if os(macOS)
@@ -142,8 +174,9 @@ struct RecentCardLabel: View {
         let folder = workspace.folderName(url.deletingLastPathComponent())
         let shape = RoundedRectangle(cornerRadius: HomeStyle.cardRadius, style: .continuous)
         VStack(alignment: .leading, spacing: 1) {
-            FileThumbnailView(workspace: workspace, url: url, size: HomeStyle.picture, scale: scale)
-                .frame(width: HomeStyle.picture.width, height: HomeStyle.picture.height)
+            let picture = HomeStyle.picture(width: width - 2 * HomeStyle.cardPadding)
+            FileThumbnailView(workspace: workspace, url: url, shownSize: picture, scale: scale)
+                .frame(width: picture.width, height: picture.height)
                 .padding(.bottom, 6)
             Text(name)
                 .font(Self.nameFont)
@@ -153,9 +186,10 @@ struct RecentCardLabel: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
-        .frame(width: HomeStyle.picture.width, alignment: .leading)
+        .frame(width: width - 2 * HomeStyle.cardPadding, alignment: .leading)
         .padding(HomeStyle.cardPadding)
         .background(HomeStyle.cardFill, in: shape)
+        .modifier(HomeHover(shape: shape))
         .contentShape(shape)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(name)
@@ -165,30 +199,43 @@ struct RecentCardLabel: View {
 }
 
 /// What you opened last, as cards in a row that scrolls sideways, as the iPad and the Mac show them in the sidebar: a
-/// click opens one next to it.
+/// click opens one next to it, and the card stays where it is until a moment after the pointer has left the row. Each
+/// card is as wide as a tile, so two sit under To-dos and Favorites and the third peeks in at the edge; the row stops
+/// at a card each time it is scrolled.
 struct RecentCardRow: View {
     let workspace: Workspace
-    var leadingInset: CGFloat = 0
+    /// From the row's edges to the tiles' column, where the cards stop: the Mac's row runs the sidebar's whole width.
+    var margin: CGFloat = 0
     /// Asks for the name of a new folder, from a card's menu.
     var newFolder: ((URL) -> Void)?
+    /// The row's width, which the cards' follows.
+    @State private var rowWidth = HomeStyle.likelyRowWidth
 
     var body: some View {
-        let recents = Array(workspace.recentURLs(includingOpen: true).prefix(RecentCardRow.limit))
+        let recents = Array(workspace.recentCardURLs.prefix(RecentCardRow.limit))
+        let cardWidth = HomeStyle.tileWidth(in: rowWidth - 2 * margin)
         ScrollView(.horizontal) {
             // Not lazy: eight cards at most, and each keeps its view as the row reorders, so it slides to its place.
             HStack(alignment: .top, spacing: HomeStyle.spacing) {
                 ForEach(recents, id: \.self) { url in
-                    Button { workspace.open(url) } label: { RecentCardLabel(workspace: workspace, url: url) }
+                    Button { workspace.open(url) } label: { RecentCardLabel(workspace: workspace, url: url, width: cardWidth) }
                         .buttonStyle(.plain)
+                        .clearsCardsBeneath()
                         .glassContextMenu { RecentCardMenu.entries(workspace, url, newFolder: newFolder) }
+                        .zIndex(HomeStyle.zIndex(of: url, in: recents))
                 }
             }
-            .padding(.horizontal, leadingInset)
             .scrollTargetLayout()
+            .cardsClearEachOther()
             .animation(HomeStyle.reordering, value: recents)
         }
+        .contentMargins(.horizontal, margin, for: .scrollContent)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
         .scrollIndicators(.hidden)
         .scrollTargetBehavior(.viewAligned)
+        // The cards keep their order while the pointer is on them (`Workspace.holdRecentCards`).
+        .onHover { workspace.holdRecentCards($0) }
+        .onDisappear { workspace.holdRecentCards(false) }
     }
 
     /// As many as a few swipes go through.
@@ -196,8 +243,60 @@ struct RecentCardRow: View {
 }
 
 extension HomeStyle {
-    /// A file you open moves to the front of Recent, and the cards before it slide along, rather than jumping.
-    static let reordering = Animation.smooth(duration: 0.4)
+    /// A file you opened moves to the front of Recent a moment later: its card slides there over the others, which make
+    /// way for it, as two cards trading places would.
+    static let reordering = Animation.spring(duration: 0.6, bounce: 0.15)
+
+    /// Recent's row before it has been measured: about as wide as the Mac's sidebar or an iPhone's list.
+    static let likelyRowWidth: CGFloat = {
+        #if os(macOS)
+        250
+        #else
+        370
+        #endif
+    }()
+
+    /// A tile's width, and so a card's of Recent, in a row `width` wide: half of it less half the space between.
+    static func tileWidth(in width: CGFloat) -> CGFloat {
+        max(60, (width - spacing) / 2)
+    }
+
+    /// A card's picture `width` wide, in the shape of the pictures everywhere (4 : 3).
+    static func picture(width: CGFloat) -> CGSize {
+        CGSize(width: width, height: (width * picture.height / picture.width).rounded())
+    }
+
+    /// The front card above the others, so the one going there passes over them.
+    static func zIndex(of url: URL, in cards: [URL]) -> Double {
+        url == cards.first ? 1 : 0
+    }
+}
+
+extension View {
+    /// On the Mac a card's fill lets the sidebar through, and would let the card it passes over through as Recent
+    /// reorders: the card first clears what is under it in its row (`cardsClearEachOther`), so it covers the other as
+    /// an iPhone's or iPad's card, which is opaque, does.
+    func clearsCardsBeneath() -> some View {
+        #if os(macOS)
+        background {
+            RoundedRectangle(cornerRadius: HomeStyle.cardRadius, style: .continuous)
+                .fill(.black)
+                .blendMode(.destinationOut)
+        }
+        #else
+        self
+        #endif
+    }
+
+    /// The row in which cards clear what is under them: drawn as one layer, so a card clears only the cards before it,
+    /// not the sidebar.
+    func cardsClearEachOther() -> some View {
+        #if os(macOS)
+        compositingGroup()
+        #else
+        self
+        #endif
+    }
 }
 
 /// A card's menu: the file's own, as its row has it.
@@ -215,13 +314,16 @@ private enum RecentCardMenu {
     }
 }
 
-/// A file's picture, filling its frame from the top: until it is made, a white page with the file's symbol.
+/// A file's picture, filling its frame from the top: until it is made, a white page with the file's symbol. Made at
+/// one size (`HomeStyle.thumbnailSize`) and drawn at the frame's, so resizing the sidebar doesn't make it again.
 struct FileThumbnailView: View {
     let workspace: Workspace
     let url: URL
-    let size: CGSize
+    /// The frame it fills.
+    let shownSize: CGSize
     let scale: CGFloat
     @State private var image: CGImage?
+    private var size: CGSize { HomeStyle.thumbnailSize }
 
     var body: some View {
         let isFolder = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
@@ -257,7 +359,7 @@ struct FileThumbnailView: View {
                 Image(decorative: image, scale: scale)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: size.width, height: size.height, alignment: .top)
+                    .frame(width: shownSize.width, height: shownSize.height, alignment: .top)
             } else {
                 Image(systemName: FileKind(url: url, isDirectory: false).symbol)
                     .font(.title2)
@@ -324,7 +426,8 @@ final class FileThumbnails {
         if FileKind(url: url, isDirectory: false) == .note {
             // The page is as wide as the card, and as tall as a page that wide.
             let page = CGSize(width: size.width, height: (size.width * 1.3).rounded())
-            return try? await NoteThumbnail.image(of: url, size: page, scale: scale)
+            // The app can read what is next to the note, as the Finder's thumbnails don't: its pictures show.
+            return try? await NoteThumbnail.image(of: url, size: page, scale: scale, withPictures: true)
         }
         let request = QLThumbnailGenerator.Request(fileAt: url, size: CGSize(width: size.width, height: size.width * 1.4), scale: scale,
                                                    representationTypes: .thumbnail)

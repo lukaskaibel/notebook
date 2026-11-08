@@ -2,27 +2,29 @@
 import SwiftUI
 
 /// To-dos and Favorites at the top of the iPhone's first screen, as Reminders shows its lists that gather things from
-/// all the others: side by side, each with its count, each opening its own screen. Favorites only once something is
-/// starred.
+/// all the others: side by side, each with its count, each opening its own screen. Favorites is there before anything
+/// is starred too, and its screen says how to star something.
 struct HomeTiles: View {
     let workspace: Workspace
+    /// Where the list sets the tiles in from the screen's edge, for Recent's cards to line up with.
+    @Binding var inset: CGFloat
+
+    static let listSpace = "home"
 
     var body: some View {
         let showsTodos = NotebookSettings.shared.showsTodos
-        let favorites = workspace.favoriteURLs.count
-        if showsTodos || favorites > 0 {
-            Section {
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                    if showsTodos {
-                        tile(.todos()) { HomeTileLabel(title: "To-dos", symbol: "checklist", color: .accentColor, count: workspace.dueTodoCount) }
-                    }
-                    if favorites > 0 {
-                        tile(.favorites()) { HomeTileLabel(title: "Favorites", symbol: "star.fill", color: HomeStyle.favoritesColor, count: favorites) }
-                    }
+        Section {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                if showsTodos {
+                    tile(.todos()) { HomeTileLabel(title: "To-dos", symbol: "checklist", color: .accentColor, count: workspace.dueTodoCount) }
                 }
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
+                tile(.favorites()) {
+                    HomeTileLabel(title: "Favorites", symbol: "star.fill", color: HomeStyle.favoritesColor, count: workspace.favoriteURLs.count)
+                }
             }
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.listSpace)).minX } action: { inset = $0 }
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
         }
     }
 
@@ -35,37 +37,55 @@ struct HomeTiles: View {
 }
 
 /// What you opened last, as cards in a row that scrolls sideways (`RecentCardLabel`), each opening its file's screen.
+/// Each is as wide as a tile, so two sit under To-dos and Favorites. The row runs from one edge of the screen to the
+/// other, its section without the list's margins, so the next card peeks in at the edge and the row plainly scrolls;
+/// it stops at a card each time, in line with the tiles.
 struct RecentCards: View {
     let workspace: Workspace
     @Binding var newFolderIn: URL?
+    /// The tiles' inset from the screen's edges (`HomeTiles.inset`).
+    let inset: CGFloat
+    /// The row's width, the screen's, which the cards' follows.
+    @State private var rowWidth = HomeStyle.likelyRowWidth + 32
 
     var body: some View {
         // With the note you are in: going back to this screen doesn't put its card in at the start and push the others
-        // along.
-        let recents = Array(workspace.recentURLs(includingOpen: true).prefix(RecentCardRow.limit))
+        // along, unless you come back within a moment of opening it (`Workspace.recentCardURLs`).
+        let recents = Array(workspace.recentCardURLs.prefix(RecentCardRow.limit))
         if !recents.isEmpty {
-            Section("Recent") {
+            Section {
                 ScrollView(.horizontal) {
                     // Not lazy: each card keeps its view as the row reorders, so it slides to its place.
                     HStack(alignment: .top, spacing: HomeStyle.spacing) {
                         ForEach(recents, id: \.self) { url in
+                            // As wide as a tile: two under To-dos and Favorites, and the next one peeking in.
                             NavigationLink(value: Page(url: url, isFolder: false)) {
-                                RecentCardLabel(workspace: workspace, url: url)
+                                RecentCardLabel(workspace: workspace, url: url, width: HomeStyle.tileWidth(in: rowWidth - 2 * inset))
                             }
                             .buttonStyle(.plain)
                             .navigationLinkIndicatorVisibility(.hidden)
                             .glassContextMenu { FileActions.entries(workspace, url) { newFolderIn = $0 } }
+                            .zIndex(HomeStyle.zIndex(of: url, in: recents))
                         }
                     }
                     .scrollTargetLayout()
                     .animation(HomeStyle.reordering, value: recents)
                 }
+                .contentMargins(.horizontal, inset, for: .scrollContent)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
                 .scrollIndicators(.hidden)
                 .scrollTargetBehavior(.viewAligned)
                 .scrollClipDisabled()
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
+            } header: {
+                // Where the other sections' titles are, which the list sets in by the margins this one goes without.
+                Text("Recent").padding(.leading, inset)
             }
+            .listSectionMargins(.horizontal, 0)
+            // Going edge to edge, the section would get the hairlines a list draws above and below such a section.
+            .listSectionSeparator(.hidden)
+            .listRowSeparator(.hidden)
         }
     }
 }
@@ -199,7 +219,7 @@ struct FavoritesScreen: View {
                 ContentUnavailableView {
                     Label("No Favorites", systemImage: "star")
                 } description: {
-                    Text("Swipe right on a note or folder to add it to your favorites.")
+                    Text("Touch and hold a note or folder and choose Add to Favorites.")
                 }
             }
         }

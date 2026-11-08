@@ -37,6 +37,11 @@ public final class Workspace: NSObject {
     @ObservationIgnored private var places: [URL: EditorController.Place] = [:]
     private(set) var favorites: [String] = []
     private(set) var recents: [String] = []
+    /// `recents` in the order Recent's cards show them: a file you open moves to the front of the cards a moment later,
+    /// and not while the pointer is on them (`holdRecentCards`), so the card you click stays where you clicked it.
+    private(set) var recentCards: [String] = []
+    @ObservationIgnored private var recentCardsHeld = false
+    @ObservationIgnored private var recentCardsUpdate: Task<Void, Never>?
     /// The folder chosen in Settings for new notes made outside a folder, by its path. Without one they go to the Inbox.
     private(set) var chosenDefaultFolder: String?
     /// The folders hidden from the sidebar: kept in iCloud, or only for this run with locations given on the command line.
@@ -360,6 +365,7 @@ public final class Workspace: NSObject {
         #endif
         favorites = UserDefaults.standard.stringArray(forKey: "favorites") ?? []
         recents = UserDefaults.standard.stringArray(forKey: "recents") ?? []
+        recentCards = recents
         chosenDefaultFolder = UserDefaults.standard.string(forKey: "defaultFolder")
         if let path = UserDefaults.standard.string(forKey: "NotebookLibrary") {
             // A folder given on the command line (tests, screenshots): used for this run, not remembered.
@@ -395,6 +401,7 @@ public final class Workspace: NSObject {
             locations = [Location(id: Location.id(for: url.path), name: UserDefaults.standard.string(forKey: "NotebookLibraryName") ?? url.lastPathComponent, path: url.path, bookmark: nil)]
             favorites = []
             recents = []
+            recentCards = []
             chosenDefaultFolder = nil
         } else {
             locations = LocationStore.load()
@@ -1036,6 +1043,7 @@ public final class Workspace: NSObject {
         recents.removeAll { $0 == target.path }
         recents.insert(target.path, at: 0)
         recents = Array(recents.prefix(8))
+        updateRecentCards()
         if !temporaryLocations {
             UserDefaults.standard.set(recents, forKey: "recents")
             UserDefaults.standard.set(target.path, forKey: "lastOpened")
@@ -1251,6 +1259,7 @@ public final class Workspace: NSObject {
         }
         if recents.contains(where: { moved($0) != $0 }) {
             recents = recents.map(moved)
+            recentCards = recentCards.map(moved)
             UserDefaults.standard.set(recents, forKey: "recents")
         }
         if let folder = chosenDefaultFolder, moved(folder) != folder {
@@ -1573,28 +1582,74 @@ public final class Workspace: NSObject {
     }
 
     var favoriteURLs: [URL] {
-        favorites.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) && !isLeaving($0) }
+        favorites.map { URL(fileURLWithPath: $0) }.filter(isListable)
     }
 
     /// The files opened last, newest first, without the one that is open: for File › Open Recent and search.
     var recentURLs: [URL] { recentURLs(includingOpen: false) }
 
     /// What you opened last, newest first. Without the open note, which a menu or search has no need to offer, unless
-    /// it is `includingOpen`: the iPhone's first screen shows it while you are in it, so the screen you go back to has
-    /// its row already, rather than putting it in once you are there.
+    /// it is `includingOpen`.
     func recentURLs(includingOpen: Bool) -> [URL] {
-        recents.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) && (includingOpen || $0 != currentURL) && !isLeaving($0) }
+        recents.map { URL(fileURLWithPath: $0) }.filter { isListable($0) && (includingOpen || $0 != currentURL) }
+    }
+
+    /// Recent's cards, the open file's among them: the iPhone's first screen shows it while you are in it, so the screen
+    /// you go back to has its card already. A file you open joins them, or moves to their front, a moment later.
+    var recentCardURLs: [URL] {
+        recentCards.map { URL(fileURLWithPath: $0) }.filter(isListable)
+    }
+
+    /// A favourite or recent file that is still there to open: in one of the locations, which Notebook can read. One
+    /// from a location you took out stays on the list, and comes back if you add the folder again, but the app can no
+    /// longer read it (on the Mac the sandbox lets it see that the file is there, not what is in it).
+    private func isListable(_ url: URL) -> Bool {
+        location(containing: url) != nil && FileManager.default.fileExists(atPath: url.path) && !isLeaving(url)
     }
 
     func clearRecents() {
         recents = []
+        recentCardsUpdate?.cancel()
+        recentCards = []
         if !temporaryLocations { UserDefaults.standard.set(recents, forKey: "recents") }
     }
 
     /// A new note thrown away again leaves the files opened last, which the iPhone shows without looking again.
     private func forgetRecent(_ url: URL) {
         recents.removeAll { FileNode.samePath(URL(fileURLWithPath: $0), url) }
+        recentCards.removeAll { FileNode.samePath(URL(fileURLWithPath: $0), url) }
         if !temporaryLocations { UserDefaults.standard.set(recents, forKey: "recents") }
+    }
+
+    /// How long a file you opened waits to move to the front of Recent's cards, after you opened it or the pointer left
+    /// them: long enough that clicking through cards doesn't shuffle them under the pointer. Shorter in tests.
+    static var recentCardsDelay = Duration.seconds(2)
+
+    /// The files opened last changed: the cards follow in a moment. The first card shows at once, as Recent comes with it.
+    private func updateRecentCards() {
+        guard !recentCardURLs.isEmpty else {
+            recentCards = recents
+            return
+        }
+        scheduleRecentCards()
+    }
+
+    private func scheduleRecentCards() {
+        recentCardsUpdate?.cancel()
+        guard recentCards != recents else { return }
+        recentCardsUpdate = Task { [weak self] in
+            try? await Task.sleep(for: Self.recentCardsDelay)
+            guard let self, !Task.isCancelled, !self.recentCardsHeld else { return }
+            self.recentCards = self.recents
+        }
+    }
+
+    /// The pointer is on Recent's cards (`true`) or left them: while it is there they keep their order, and they take the
+    /// new one a moment after it leaves.
+    func holdRecentCards(_ hold: Bool) {
+        guard hold != recentCardsHeld else { return }
+        recentCardsHeld = hold
+        if hold { recentCardsUpdate?.cancel() } else { scheduleRecentCards() }
     }
 
     private func replacePath(_ old: URL, with new: URL) {
@@ -1606,6 +1661,7 @@ public final class Workspace: NSObject {
         widgetNoteMoved(from: old, to: new)
         favorites = favorites.map(fix)
         recents = recents.map(fix)
+        recentCards = recentCards.map(fix)
         history = history.map(fix)
         relocation = (old.standardizedFileURL, new.standardizedFileURL, UUID())
         if let current = currentURL { currentURL = fix(current) }

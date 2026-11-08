@@ -163,6 +163,8 @@ struct HomeScreen: View {
     @State private var isSearching = false
     @State private var showsSettings = false
     @State private var addsLocation = false
+    /// From the screen's edges to the tiles, as the list sets its sections in: Recent's cards line up with them.
+    @State private var tilesInset: CGFloat = 16
     @Bindable private var settings = NotebookSettings.shared
 
     var body: some View {
@@ -170,8 +172,8 @@ struct HomeScreen: View {
             if isSearching {
                 SearchResultsList(workspace: workspace, query: query) { open($0) }
             } else {
-                HomeTiles(workspace: workspace)
-                RecentCards(workspace: workspace, newFolderIn: $newFolderIn)
+                HomeTiles(workspace: workspace, inset: $tilesInset)
+                RecentCards(workspace: workspace, newFolderIn: $newFolderIn, inset: tilesInset)
                 ForEach(workspace.locations) { location in
                     Section {
                         let children = workspace.visibleChildren(of: location.url)
@@ -190,6 +192,7 @@ struct HomeScreen: View {
                 }
             }
         }
+        .coordinateSpace(.named(HomeTiles.listSpace))
         .navigationTitle("Notebook")
         .searchable(text: $query, isPresented: $isSearching, prompt: "Search")
         .onChange(of: query, initial: true) { _, query in workspace.searchSession.update(query) }

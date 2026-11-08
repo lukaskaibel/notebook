@@ -71,11 +71,15 @@ versions follow [semantic versioning](https://semver.org).
   while a keyboard is attached.
 - The first screen on the iPhone and the sidebar on the iPad and the Mac are laid out alike, as Reminders and Notes do
   on each device. To-dos and Favorites are tiles at the top, each with its count, and a tap or click shows the list:
-  on the iPhone on a screen of its own, on the iPad and the Mac in the note's place, as To-dos is shown. Favorites shows
-  once you have starred something, and no longer has a section of its own in the sidebar. Under the tiles, Recent is a
-  row of cards you swipe through, each with a picture of the top of a note, PDF or picture you opened last, its name
-  and its folder. Every folder says how many files are in it. On the iPhone, a folder with folders in it has an arrow
-  that unfolds them below it, greyed, so University › Linear algebra is one tap.
+  on the iPhone on a screen of its own, on the iPad and the Mac in the note's place, as To-dos is shown. Favorites is
+  there before you have starred anything, and says how to, and no longer has a section of its own in the sidebar. Under
+  the tiles, Recent is a row of cards you swipe through, each with a picture of the top of a note, PDF or picture you
+  opened last, the note's pictures in it, its name and its folder. The cards are as wide as the tiles, two under
+  To-dos and Favorites, and the next one peeks in at the edge, so you see that the row scrolls; it stops at a card each
+  time. A card you click stays where it is: a moment after the pointer has left the row, the file you opened slides to
+  the front over the others, which make way. On the Mac, the tile or card under the pointer is shaded, not its whole
+  row, and Search's magnifying glass and ⌘K line up with the tiles' symbols and counts. Every folder says how many files are in it. On the iPhone, a folder with folders in it has an
+  arrow that unfolds them below it, greyed, so University › Linear algebra is one tap.
 - The toolbar is laid out as in Notes. On the Mac and the iPad, Aa, Checklist, Table, Attach and the pencil sit
   together in the middle, over the note; Back, Forward and New Note are on the left, and Share, ••• and the outline on
   the right. On the iPad, New Note is in the note's toolbar too while the sidebar is hidden. On the Mac, Checklist and
@@ -103,6 +107,9 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- A note from a folder you took out of the sidebar no longer stays in File › Open Recent, ⌘K's recent notes, Recent
+  and Favorites, where it could open as an empty page: Notebook can no longer read it. It comes back if you add the
+  folder again.
 - Writing at the bottom of what shows keeps the line you write on in view, without scrolling by hand. On iPhone and
   iPad, a new bullet point, a sentence running on to the next line, Return, a to-do, a quote, a table's next row and
   lines you paste could go under the keyboard; now the note moves up with them and the line stays just above the bar
