@@ -233,6 +233,13 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     /// Whether Recent is there: it comes with the first file you open.
     private var hasRecents = false
 
+    /// The tiles and the cards, each made once and kept: a reload of the sidebar hands the row the same view, so the
+    /// cards keep their places and where they are scrolled to, and slide when what you opened last changes.
+    private lazy var tilesCell = SidebarHostedCell(SidebarHostedCell.tiles, HomeTileGrid(workspace: workspace),
+                                                   insets: NSEdgeInsets(top: 4, left: 2, bottom: 6, right: 6))
+    private lazy var recentCell = SidebarHostedCell(SidebarHostedCell.recent, RecentCardRow(workspace: workspace, leadingInset: 2),
+                                                    insets: NSEdgeInsets(top: 2, left: -14, bottom: 6, right: 0))
+
     /// A file opened: Recent's cards follow by themselves, and the section comes with the first.
     func recentsChanged() {
         if !hasRecents, !workspace.recentURLs(includingOpen: true).isEmpty { reloadSections() }
@@ -558,12 +565,8 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             return cell
         }
         if let entry = item as? SidebarEntry, entry.isHosted {
-            if case .tiles = entry.kind {
-                let cell = outlineView.makeView(withIdentifier: SidebarHostedCell.tiles, owner: nil) as? SidebarHostedCell
-                return cell ?? SidebarHostedCell(SidebarHostedCell.tiles, HomeTileGrid(workspace: workspace), insets: NSEdgeInsets(top: 4, left: 2, bottom: 6, right: 6))
-            }
-            let cell = outlineView.makeView(withIdentifier: SidebarHostedCell.recent, owner: nil) as? SidebarHostedCell
-            return cell ?? SidebarHostedCell(SidebarHostedCell.recent, RecentCardRow(workspace: workspace, leadingInset: 2), insets: NSEdgeInsets(top: 2, left: -14, bottom: 6, right: 0))
+            if case .tiles = entry.kind { return tilesCell }
+            return recentCell
         }
         let cell = outlineView.makeView(withIdentifier: SidebarFileCell.identifier, owner: nil) as? SidebarFileCell ?? SidebarFileCell()
         cell.label.delegate = self

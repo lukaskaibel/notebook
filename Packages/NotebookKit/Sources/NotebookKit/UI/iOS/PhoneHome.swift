@@ -46,7 +46,8 @@ struct RecentCards: View {
         if !recents.isEmpty {
             Section("Recent") {
                 ScrollView(.horizontal) {
-                    LazyHStack(alignment: .top, spacing: HomeStyle.spacing) {
+                    // Not lazy: each card keeps its view as the row reorders, so it slides to its place.
+                    HStack(alignment: .top, spacing: HomeStyle.spacing) {
                         ForEach(recents, id: \.self) { url in
                             NavigationLink(value: Page(url: url, isFolder: false)) {
                                 RecentCardLabel(workspace: workspace, url: url)
@@ -57,6 +58,7 @@ struct RecentCards: View {
                         }
                     }
                     .scrollTargetLayout()
+                    .animation(HomeStyle.reordering, value: recents)
                 }
                 .scrollIndicators(.hidden)
                 .scrollTargetBehavior(.viewAligned)

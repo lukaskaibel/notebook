@@ -173,9 +173,11 @@ struct RecentCardRow: View {
     var newFolder: ((URL) -> Void)?
 
     var body: some View {
+        let recents = Array(workspace.recentURLs(includingOpen: true).prefix(RecentCardRow.limit))
         ScrollView(.horizontal) {
-            LazyHStack(alignment: .top, spacing: HomeStyle.spacing) {
-                ForEach(Array(workspace.recentURLs(includingOpen: true).prefix(RecentCardRow.limit)), id: \.self) { url in
+            // Not lazy: eight cards at most, and each keeps its view as the row reorders, so it slides to its place.
+            HStack(alignment: .top, spacing: HomeStyle.spacing) {
+                ForEach(recents, id: \.self) { url in
                     Button { workspace.open(url) } label: { RecentCardLabel(workspace: workspace, url: url) }
                         .buttonStyle(.plain)
                         .contextMenu { RecentCardMenu(workspace: workspace, url: url, newFolder: newFolder) }
@@ -183,6 +185,7 @@ struct RecentCardRow: View {
             }
             .padding(.horizontal, leadingInset)
             .scrollTargetLayout()
+            .animation(HomeStyle.reordering, value: recents)
         }
         .scrollIndicators(.hidden)
         .scrollTargetBehavior(.viewAligned)
@@ -190,6 +193,11 @@ struct RecentCardRow: View {
 
     /// As many as a few swipes go through.
     static let limit = 8
+}
+
+extension HomeStyle {
+    /// A file you open moves to the front of Recent, and the cards before it slide along, rather than jumping.
+    static let reordering = Animation.smooth(duration: 0.4)
 }
 
 /// A card's menu: the file's own, as its row has it.
