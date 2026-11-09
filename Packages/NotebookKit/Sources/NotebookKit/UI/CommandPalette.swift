@@ -390,7 +390,7 @@ struct CommandPalette: View {
             }
         }
         var rows = workspace.locations.filter { allowed($0.url) }.map {
-            row($0.url, name: $0.name, place: "Top level", symbol: $0.isICloudDrive ? "icloud" : "externaldrive", section: "Locations")
+            row($0.url, name: $0.name, place: "Top level", symbol: $0.isICloudDrive ? "icloud" : "externaldrive")
         }
         var seen = Set<String>()
         for recent in workspace.recentURLs {

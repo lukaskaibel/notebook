@@ -244,6 +244,12 @@ enum DebugRemote {
                 log("selected row \(row) \(argument)")
                 break
             }
+        case "sidebartop":
+            // sidebartop: the sidebar scrolled back to Search at its top, with the tiles under it, as opening a file
+            // further down leaves it scrolled.
+            guard let outline = workspace?.sidebar?.outline, outline.numberOfRows > 0 else { break }
+            outline.scrollRowToVisible(0)
+            log("sidebartop")
         case "clickrow":
             // clickrow <name>: the sidebar row showing that name.
             if let point = sidebarRowPoint(named: argument) { click(at: point) } else { log("no row \(argument)") }

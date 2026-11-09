@@ -7,7 +7,7 @@ advertising, and it collects nothing about you.
 
 - **Your notes** are the Markdown files in your own folders. Notebook reads and writes them in place. Pictures and files
   you add to a note go into a hidden `.assets` folder next to it.
-- **The folders you add** as locations are remembered on your device, with the permission to open them again (a
+- **The folders you open** in Notebook are remembered on your device, with the permission to open them again (a
   security-scoped bookmark). On iPhone and iPad, notes you keep on the device are in Notebook's own folder, which the
   Files app shows under On My iPhone › Notebook.
 - **Favourites, recently opened files, the folders open in the sidebar and your settings** (typeface, text size,
@@ -55,12 +55,13 @@ advertising, and it collects nothing about you.
 - **The search index** of file names, the text of notes and PDFs, and the words Notebook reads in pictures, scanned
   pages and handwriting is kept in the app's caches on each device, so search is ready the moment the app opens. Each
   device builds its own from your files, and it never leaves the device.
-- **Spotlight** gets the name, the first lines, the folder and the text of every note in your locations, except those in
-  hidden folders, so the system's search finds them. Spotlight keeps its index on your Mac, iPhone or iPad, as it does
-  for Mail or Notes, and it never leaves the device. Notebook keeps a list of the notes it gave Spotlight, by their
-  places in your folders, in the app's own folder on that device. A note leaves Spotlight when you delete it, hide its
-  folder or remove its location. To leave Notebook's notes out of Spotlight, turn Notebook off in System Settings ›
-  Spotlight on the Mac, or in Notebook's search settings in Settings on iPhone and iPad.
+- **Spotlight** gets the name, the first lines, the folder and the text of every note in the folders you open in
+  Notebook, except those in hidden folders, so the system's search finds them. Spotlight keeps its index on your Mac,
+  iPhone or iPad, as it does for Mail or Notes, and it never leaves the device. Notebook keeps a list of the notes it
+  gave Spotlight, by their places in your folders, in the app's own folder on that device. A note leaves Spotlight when
+  you delete it, hide its folder or remove the folder it's in from Notebook. To leave Notebook's notes out of Spotlight,
+  turn Notebook off in System Settings › Spotlight on the Mac, or in Notebook's search settings in Settings on iPhone
+  and iPad.
 - **The camera** on iPhone and iPad is used only when you take a photo or scan a document into a note, and only after
   you have allowed it. **Photos** are chosen in the system's photo picker: Notebook receives only the pictures you pick.
   Either is saved next to the note, like any other picture.

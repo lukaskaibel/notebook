@@ -335,7 +335,7 @@ in To-dos to mark it in progress or cancelled.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/todos-dark.webp">
-  <img alt="To-dos selected at the top of the sidebar, with 4 next to it. The list shows Overdue with Return the library books from yesterday in red; Today with Water the plants, every week, Pick up the dry cleaning at a time later in the day, its two notes under it, and Send the map to Mia later still; Tomorrow with Book a table for Saturday, in no note, the note Questions for Dr. Weber and Market shopping, with its sub-to-dos Tomatoes and basil, Burrata and Bags, ticked, under it; then Next 7 Days and Later. Each row has a circle to tick it and the note it is in, and each group but Overdue ends with New To-do" src="Design/screenshots/todos-light.webp">
+  <img alt="The To-dos tile selected at the top of the sidebar, with 4 on it, next to Favorites and above Recent's cards. The list shows Overdue with Return the library books from yesterday in red; Today with Water the plants, every week, Pick up the dry cleaning at a time later in the day, its two notes under it, and Send the map to Mia later still, then New To-do; Tomorrow with Book a table for Saturday, in no note, the note Questions for Dr. Weber and Market shopping, with its sub-to-dos Tomatoes and basil, Burrata and Bags, ticked, under it. Each row has a circle to tick it and the note it is in" src="Design/screenshots/todos-light.webp">
 </picture>
 
 <picture>
@@ -452,8 +452,8 @@ Favorites as tiles with their counts, a click showing the list in the note's pla
 top of each note you opened last, pictures and all, which keep their places while the pointer is on them; and every
 folder with how many files are in it. Some of the sidebar's manners come
 from Notion: the row under the pointer gets a soft fill, with ••• for its
-menu and, on a folder, + for a new note in it; a location's name has the same two, and a click on it folds the
-location. The inspector shows a note's outline, with the section you're reading marked and a word count; a click on
+menu and, on a folder, + for a new note in it; a section's name has the same two, and a click on it folds the
+section. The inspector shows a note's outline, with the section you're reading marked and a word count; a click on
 a heading scrolls there. In Settings › Text you pick the typeface (San Francisco, New York, Rounded or Monospaced,
 each shown in itself), the size, the line spacing and the line width; on iPhone and iPad the system's text size makes
 notes larger or smaller on top of that, as it does the text of other apps (not in a PDF or printout). The icon is the cover of a leather notebook, filling the icon with its elastic band and
@@ -468,9 +468,9 @@ of each note that way too.
 The same notes in the same editor, laid out the way each device works. On the iPhone you go into one folder per screen,
 as in the Files app, and a note opens on a screen of its own; swipe from the edge to go back. The first screen starts
 as Reminders' does, with To-dos and Favorites as tiles, each with its count; then Recent, a row of cards you swipe
-through, each with a picture of the top of a note you opened last, its name and its folder; then the folders of each
-location, each with how many files are in it. A folder with folders in it has an arrow that unfolds them below it,
-greyed, so a folder in a folder is one tap away. New Folder, search and a new note sit at the bottom,
+through, each with a picture of the top of a note you opened last, its name and its folder; then the folders in each
+folder you opened, each with how many files are in it. A folder with folders in it has an arrow that unfolds
+them below it, greyed, so a folder in a folder is one tap away. New Folder, search and a new note sit at the bottom,
 as in Notes, and search finds everything it finds on the Mac. While you write, a bar floats above the keyboard with
 Aa, a checklist, attachments, a link, undo and the formatting, a page of tools at a time. On its left, up to two
 buttons for where the caret is come and go: opening the link you are on, a to-do's bell, the style you are in, tinted,
@@ -504,8 +504,8 @@ screens.
 
 - **Notes are files.** The title is the file name: rename a note by editing its title, and links to it in other notes
   follow, as they do when you move it or rename or move its folder. New notes go into the folder you're in; made
-  anywhere else, they go to the default folder you choose in Settings, an Inbox at the top of your first location
-  until you do. One you leave empty goes away again.
+  anywhere else, they go to the default folder you choose in Settings, an Inbox at the top of the first folder you
+  opened until you do. One you leave empty goes away again.
 - **Markdown and AsciiDoc.** A `.md` note is Markdown and a `.adoc` note AsciiDoc, each shown and typed in its own
   marks, with its to-dos in To-dos, its headings in search and the outline, and its links following moves. See
   [AsciiDoc too](#asciidoc-too).
@@ -524,16 +524,16 @@ screens.
   folder, named after the page or the first line, or go at the end of the note you opened last. Pictures and files go
   into `.assets` next to the note. The share sheet hands them to Notebook, which writes them as soon as it's open, with
   the same care as everything else it saves.
-- **Folders as they are.** Add iCloud Drive or any folder as a location with Add Location at the bottom of the
-  sidebar, or drop the folder from the Finder below the sidebar's sections. iCloud Drive shows what the Finder shows
-  in it: Desktop and Documents when they are kept in iCloud, and the folders of apps such as Pages or Obsidian.
-  Folders are read and changes to files written in the background, so even a large iCloud Drive shows at once and
-  nothing waits for it. Create, rename, duplicate and move notes and folders, by drag and drop or with Move To;
-  Option-drag copies. New Folder in the ••• next to a location's name makes a folder at its top, New Folder in a
-  folder's menu one inside it, named in place as in the Finder; the + next to a location's or folder's name makes a
-  note there. Deleting moves to the Trash, never further, and Undo
-  (⌘Z) puts it back, as it takes back a rename, a move or a new file. Favourites have a tile at the top of the
-  sidebar, next to To-dos, that lists them; every folder says how many files are in it.
+- **Folders as they are.** Open iCloud Drive or any folder with Open Folder at the bottom of the sidebar, or drop the
+  folder from the Finder below the sidebar's sections; each is a section of the sidebar. iCloud Drive shows what the
+  Finder shows in it: Desktop and Documents when they are kept in iCloud, and the folders of apps such as Pages or
+  Obsidian. Folders are read and changes to files written in the background, so even a large iCloud Drive shows at once
+  and nothing waits for it. Create, rename, duplicate and move notes and folders, by drag and drop or with Move To;
+  Option-drag copies. New Folder in the ••• next to a section's name makes a folder at its top, New Folder in a folder's
+  menu one inside it, named in place as in the Finder; the + next to a section's or folder's name makes a note there.
+  Deleting moves to the Trash, never further, and Undo (⌘Z) puts it back, as it takes back a rename, a move or a new
+  file. Favourites have a tile at the top of the sidebar, next to To-dos, that lists them; every folder says how many
+  files are in it.
 - **Sorted by name or by date.** View › Sort By, or Sort By in the ⋯ menu on iPhone and iPad, sorts every folder's
   notes and files by name, as the Finder does, or newest first by when they were last edited or made, as Notes does.
   Sorted by date, the note you write in moves to the top of its folder once it is saved, still selected; Keep Folders
@@ -549,7 +549,7 @@ screens.
   a new note, folder, copy or import that you have changed since asks first too.
 - **Hidden folders.** Right-click a folder you don't want to see, such as one another app keeps in iCloud Drive, and
   choose Hide Folder, or on iPhone and iPad touch and hold it. It leaves the sidebar, search and Move To, and stays
-  hidden on your other Macs, iPhones and iPads through iCloud. Show Hidden Folders in the ••• next to the location's
+  hidden on your other Macs, iPhones and iPads through iCloud. Show Hidden Folders in the ••• next to the section's
   name, or ⇧⌘., shows hidden folders again, dimmed, with an eye by the name that hides them again; on iPhone and iPad,
   Show Hidden Folders is in the ⋯ menu.
 - **Folders with a symbol and a colour.** Customize Folder… gives a folder a colour and a symbol or an emoji, found in
@@ -596,8 +596,8 @@ screens.
   Notebook. It gets what search has already read, in the background, and after a launch only what changed.
 - **Quick Look** shows a note as Notebook does, not its Markdown, in the typeface and size you chose: press Space on it
   in the Finder, or look at it in the Finder's column view or Get Info. If another app's preview comes up, turn it off
-  in System Settings › General › Login Items & Extensions › Quick Look. On iPhone and iPad, tap a note in the Files
-  app, or one attached in another app that shows files with Quick Look. On the Mac a note in one of your locations
+  in System Settings › General › Login Items & Extensions › Quick Look. On iPhone and iPad, tap a note in the Files app,
+  or one attached in another app that shows files with Quick Look. On the Mac a note in a folder you opened in Notebook
   shows its pictures and drawings too; elsewhere, and on iPhone and iPad, they show by their names, as Quick Look lets
   Notebook read only the note itself.
 - **Thumbnails** of notes in the Finder's icon and gallery views, in Open panels and in the Files app on iPhone and
@@ -610,8 +610,8 @@ screens.
   Undo takes back. The versions of notes in iCloud reach your other devices through Notebook's own iCloud folder.
 - **Export** a note as a PDF or a PNG image, or print it (on iPhone and iPad: as a PDF to share, or print).
 - **Notes in windows of their own.** Double-click a note in the sidebar, or open any Markdown file from the Finder or
-  with ⌘O, and it gets a plain window of its own; more of them join it as tabs. A note from your locations links to
-  every note there, as in the main window.
+  with ⌘O, and it gets a plain window of its own; more of them join it as tabs. A note from a folder you opened in
+  Notebook links to every note there, as in the main window.
 
 ## How notes are stored
 
@@ -746,21 +746,22 @@ Simulator have; in other builds the share sheet says it can't keep anything and 
 
 ### Adding your notes
 
-On first launch, Notebook asks for a folder: **Open iCloud Drive**, or **Choose another folder…**. Add more later with
-**Add Location** at the bottom of the sidebar, by dropping a folder on the sidebar or on Notebook in the Dock, or with
-File › Open… (⌘O), File › Add Location… and Settings › General. Notebook works on the files in place; nothing is
-copied or imported. A new location shows in the sidebar straight away, and its files a moment later, however many
+On first launch, Notebook asks for a folder: **Open iCloud Drive**, or **Choose another folder…**. Open more later with
+**Open Folder** at the bottom of the sidebar, by dropping a folder on the sidebar or on Notebook in the Dock, or with
+File › Open… (⌘O), File › Open Folder… and Settings › General. Notebook works on the files in place; nothing is
+copied or imported. A folder you open shows in the sidebar straight away, and its files a moment later, however many
 there are.
 
 On iPhone and iPad, **Choose a Folder** opens the Files app's picker: pick iCloud Drive itself to have everything you
 write on the Mac, or any folder in it or on the device. **Keep Notes on This iPhone** (or iPad) uses Notebook's own
-folder, which the Files app shows under On My iPhone › Notebook and Notebook calls On My iPhone. Add more in Settings,
-from the ⋯ menu. Folders of other apps in the picker work when the app gives other apps its folders; some, such as
-Nextcloud, give only single files, and Notebook says so instead of adding a folder that would stay empty.
+folder, which the Files app shows under On My iPhone › Notebook and Notebook calls On My iPhone. Open more
+with **Open Folder** in the ⋯ menu or in Settings. Folders of other apps in the picker work when the app gives other
+apps its folders; some, such as Nextcloud, give only single files, and Notebook says so instead of adding a folder
+that would stay empty.
 
 To look around without your own notes, choose **Try Sample Notes…** on the first screen. It writes made-up notes, a
 drawing, pictures and PDFs to a new folder Sample Notes, in the folder you pick on the Mac and in Notebook's own folder
-on iPhone and iPad, and adds it as a location. Remove it in Settings when you're done; the files stay where they are.
+on iPhone and iPad, and opens it in Notebook. Remove it in Settings when you're done; the files stay where they are.
 
 For development, a Debug build run with the arguments `-NotebookLibrary /tmp/NotebookSample -NotebookDemo YES`
 (Product › Scheme › Edit Scheme › Arguments) writes the same notes to that folder and shows only them, for that run,
@@ -887,8 +888,9 @@ Return renames, ⌘⌫ moves to the Trash and opens the next file, Space opens a
 note. Right-click a file or folder for everything else, including Open in New Window, New Folder, Copy Link, which
 copies a `[[link]]` to it, Remind Me…, Customize Folder… and Hide Folder. In a note, right-click a to-do for Remind Me…,
 or click the bell that comes up after it as you point at it; in To-dos, right-click a row to move it to another day,
-mark it in progress or cancelled, open its note or move one in no note into a note, or delete it. As you point at a location's name, a folder with a plus
-comes up next to it for a new folder at its top, and, when the location has hidden folders, an eye that shows them.
+mark it in progress or cancelled, open its note or move one in no note into a note, or delete it. As you point at a
+section's name, a folder with a plus comes up next to it for a new folder at its top, and, when the folder has hidden
+folders, an eye that shows them.
 
 On an iPad with a keyboard, ⌘N, ⌥⌘N for a handwritten note, ⇧⌘N, ⌘Z and ⇧⌘Z, ⌘K, ⇧⌘R, ⌘[ and ⌘], ⌃⌘S, ⌃⌘I, ⇧⌘., ⌘+, ⌘− and ⌘0, ⌘P and the
 shortcuts for writing work as on the Mac. While you type in a note, ⌘F finds in it and ⌥⌘F is the system's Find and
@@ -899,7 +901,7 @@ Replace; otherwise ⌥⌘F searches. On iPhone and iPad:
 | Swipe from the left edge | Back to the folder or the note you came from (iPhone) |
 | Swipe a file to the left or right | Move or delete it, add it to your favourites, or hide a folder |
 | Touch and hold a file or folder | Set a reminder, rename, move, duplicate, copy a link, customize or hide a folder, share and more |
-| Tap a location's name | New note or folder at its top, add to favourites, share, show hidden folders, remove from Notebook |
+| Tap a section's name | New note or folder at its top, add to favourites, share, show hidden folders, remove from Notebook |
 | Pull a list down | Read the folder again |
 | Tap a checkbox, a link or a picture | Tick it, follow it, or look at it in Quick Look |
 | Tap a to-do's pill | Its date or its place, to type or tap, as in To-dos |
@@ -940,8 +942,8 @@ Planned, and not built yet:
 - On iPhone and iPad there is no Settings › App Icon (iOS only switches between icons built into the app), no PNG
   export, no window of its own for a single file and no Paste into a folder in the list (#298). Before iOS 27.2,
   Quick Look there may show a note's Markdown instead.
-- **Pictures in Quick Look on iPhone and iPad,** and on the Mac for notes outside your locations: Quick Look lets
-  Notebook read only the note itself, so a note's pictures and drawings show by their names there (#318).
+- **Pictures in Quick Look on iPhone and iPad,** and on the Mac for notes outside the folders you opened: Quick Look
+  lets Notebook read only the note itself, so a note's pictures and drawings show by their names there (#318).
 - **Sketches** as files of their own, next to your notes rather than in one.
 - **Handwritten notes on the Mac:** you write on their pages there as on any PDF, but new handwritten notes, new pages,
   pictures on pages and All Pages are on iPhone and iPad only. Text boxes and shapes aren't offered: the PDF couldn't

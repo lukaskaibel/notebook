@@ -300,11 +300,11 @@ struct TouchSettings: View {
                                 .tint(.red)
                         }
                     }
-                    Button { addsLocation = true } label: { Label("Add Location", systemImage: "plus") }
+                    Button { addsLocation = true } label: { Label("Open Folder", systemImage: "plus") }
                 } header: {
-                    Text("Locations")
+                    Text("Folders")
                 } footer: {
-                    Text("Notebook shows the folders you add here and works on their files in place. Removing one leaves its files where they are.")
+                    Text("Notebook shows the folders you open here and works on their files in place. Removing one leaves its files where they are.")
                 }
                 Section {
                     NavigationLink { TextSettings().navigationTitle("Text") } label: { Label("Text", systemImage: "textformat") }

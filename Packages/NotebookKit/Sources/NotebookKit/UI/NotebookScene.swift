@@ -74,6 +74,8 @@ public struct NotebookScene: Scene {
                     .disabled(workspace.locations.isEmpty)
                 Button { FileWindows.shared.choose() } label: { Label("Open…", systemImage: "arrow.up.forward.square") }
                     .keyboardShortcut("o", modifiers: .command)
+                // Shows another folder in the sidebar, next to Open… as in other apps that open folders.
+                Button { workspace.chooseLocation(iCloud: false) } label: { Label("Open Folder…", systemImage: "plus.rectangle.on.folder") }
                 Menu {
                     ForEach(workspace.recentURLs.prefix(10), id: \.self) { url in
                         let kind = FileKind(url: url, isDirectory: false)
@@ -111,8 +113,6 @@ public struct NotebookScene: Scene {
                         Label("Revert To", systemImage: "clock.arrow.circlepath")
                     }
                 }
-                Divider()
-                Button { workspace.chooseLocation(iCloud: false) } label: { Label("Add Location…", systemImage: "plus.rectangle.on.folder") }
             }
             // The window's own sidebar item, bound to the same state as the toolbar button.
             CommandGroup(replacing: .sidebar) {
@@ -313,7 +313,7 @@ struct GeneralSettings: View {
 
     var body: some View {
         Form {
-            Section("Locations") {
+            Section("Folders") {
                 ForEach(workspace.locations) { location in
                     HStack {
                         Image(systemName: location.isICloudDrive ? "icloud" : "folder")
@@ -326,7 +326,7 @@ struct GeneralSettings: View {
                         Button("Remove") { workspace.removeLocation(location.id) }
                     }
                 }
-                Button("Add Location…") { workspace.chooseLocation(iCloud: false) }
+                Button("Open Folder…") { workspace.chooseLocation(iCloud: false) }
             }
             Section("New notes") {
                 let folder = workspace.defaultFolder
@@ -335,7 +335,7 @@ struct GeneralSettings: View {
                         DefaultFolderPopUp(workspace: workspace, folder: folder)
                             .fixedSize()
                     } else {
-                        Text("Add a location first").foregroundStyle(.secondary)
+                        Text("Open a folder first").foregroundStyle(.secondary)
                     }
                 }
                 Text("Notes made with ⌘N go next to the note you have open, or into the folder you selected in the sidebar. Without either, they go to \(folder.map(workspace.place(of:)) ?? "the default folder").")

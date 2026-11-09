@@ -853,14 +853,14 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
                 }
             }
             menu.addItem(.separator())
-            add(menu, "Add Location…", "plus.rectangle.on.folder") { [weak self] in self?.workspace.chooseLocation(iCloud: false) }
+            add(menu, "Open Folder…", "plus.rectangle.on.folder") { [weak self] in self?.workspace.chooseLocation(iCloud: false) }
             add(menu, "Remove from Sidebar", "minus.circle") { [weak self] in self?.workspace.removeLocation(locationID) }
             return
         }
         guard let url = url(at: row) else {
             // The empty part of the sidebar.
             add(menu, "New Note", "square.and.pencil") { [weak self] in self?.workspace.newNote() }
-            add(menu, "Add Location…", "plus.rectangle.on.folder") { [weak self] in self?.workspace.chooseLocation(iCloud: false) }
+            add(menu, "Open Folder…", "plus.rectangle.on.folder") { [weak self] in self?.workspace.chooseLocation(iCloud: false) }
             return
         }
         let isFolder = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
@@ -1759,7 +1759,7 @@ struct AddLocationButton: View {
 
     var body: some View {
         Button { workspace.chooseLocation(iCloud: false) } label: {
-            Label("Add Location", systemImage: "plus.circle")
+            Label("Open Folder", systemImage: "plus.circle")
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
                 .frame(maxWidth: .infinity, alignment: .leading)
