@@ -39,7 +39,6 @@ struct MainView: View {
             VStack(spacing: 0) {
                 SidebarOutline(workspace: workspace)
                 SidebarTips()
-                AddLocationButton(workspace: workspace)
             }
             .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 400)
         } detail: {
@@ -354,7 +353,7 @@ struct WelcomeView: View {
                 .foregroundStyle(Color.theme(Theme.textSecondary))
                 .padding(.top, 8)
             Spacer()
-            Text("You can open more folders later with Open Folder at the bottom of the sidebar. Notebook only sees the folders you choose.")
+            Text("You can open more folders later with Open Folder at the end of the sidebar. Notebook only sees the folders you choose.")
                 .font(.system(size: 12))
                 .foregroundStyle(Color.theme(Theme.textTertiary))
                 .padding(.bottom, 22)

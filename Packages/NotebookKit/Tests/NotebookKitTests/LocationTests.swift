@@ -263,7 +263,11 @@ final class LocationTests: XCTestCase {
         window.contentView!.addSubview(sidebar.scrollView)
         window.layoutIfNeeded()
         let outline = sidebar.outline
-        XCTAssertEqual(outline.numberOfRows, 8, "Search and To-dos, then two sections, iCloud Drive’s open")
+        XCTAssertEqual(outline.numberOfRows, 9, "Search and To-dos, then two sections, iCloud Drive’s open, then Open Folder")
+        let openFolderRow = outline.numberOfRows - 1
+        let openFolder = try XCTUnwrap(outline.item(atRow: openFolderRow) as? SidebarEntry)
+        XCTAssertTrue(openFolder.isOpenFolder, "Open Folder last of all, after the files")
+        XCTAssertFalse(sidebar.outlineView(outline, shouldSelectItem: openFolder))
 
         let elsewhere = base.appendingPathComponent("Elsewhere")
         try make(elsewhere)
@@ -277,6 +281,11 @@ final class LocationTests: XCTestCase {
         XCTAssertEqual(validate([elsewhere], at: onPapers, proposing: papers, NSOutlineViewDropOnItemIndex), .copy, "into Papers, as before")
         XCTAssertEqual(validate([elsewhere], at: below, proposing: nil, 1), .link)
         XCTAssertEqual(validate([elsewhere], at: below, proposing: papers, 0), .link, "below the last row")
+        let onOpenFolder = outline.convert(NSPoint(x: 100, y: outline.rect(ofRow: openFolderRow).midY), to: nil)
+        let lastSection = try XCTUnwrap((0..<openFolderRow).compactMap { outline.item(atRow: $0) as? SidebarEntry }.last { $0.isHeader })
+        XCTAssertEqual(validate([elsewhere], at: onOpenFolder, proposing: openFolder, NSOutlineViewDropOnItemIndex), .link, "on Open Folder")
+        XCTAssertEqual(validate([elsewhere], at: onOpenFolder, proposing: lastSection, outline.numberOfChildren(ofItem: lastSection)), .link,
+                       "on Open Folder, which the outline takes for the end of the section above it")
         let file = base.appendingPathComponent("Loose.md")
         try "# Loose\n".write(to: file, atomically: true, encoding: .utf8)
         XCTAssertEqual(validate([file], at: below, proposing: nil, 1), [], "a file isn't a location")

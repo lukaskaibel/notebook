@@ -524,7 +524,7 @@ screens.
   folder, named after the page or the first line, or go at the end of the note you opened last. Pictures and files go
   into `.assets` next to the note. The share sheet hands them to Notebook, which writes them as soon as it's open, with
   the same care as everything else it saves.
-- **Folders as they are.** Open iCloud Drive or any folder with Open Folder at the bottom of the sidebar, or drop the
+- **Folders as they are.** Open iCloud Drive or any folder with Open Folder at the end of the sidebar, or drop the
   folder from the Finder below the sidebar's sections; each is a section of the sidebar. iCloud Drive shows what the
   Finder shows in it: Desktop and Documents when they are kept in iCloud, and the folders of apps such as Pages or
   Obsidian. Folders are read and changes to files written in the background, so even a large iCloud Drive shows at once
@@ -747,7 +747,7 @@ Simulator have; in other builds the share sheet says it can't keep anything and 
 ### Adding your notes
 
 On first launch, Notebook asks for a folder: **Open iCloud Drive**, or **Choose another folder…**. Open more later with
-**Open Folder** at the bottom of the sidebar, by dropping a folder on the sidebar or on Notebook in the Dock, or with
+**Open Folder** at the end of the sidebar, by dropping a folder on the sidebar or on Notebook in the Dock, or with
 File › Open… (⌘O), File › Open Folder… and Settings › General. Notebook works on the files in place; nothing is
 copied or imported. A folder you open shows in the sidebar straight away, and its files a moment later, however many
 there are.
