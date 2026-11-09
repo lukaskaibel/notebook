@@ -172,7 +172,7 @@ struct AttachmentMenu: View {
     let editor: EditorController
 
     var body: some View {
-        GlassMenuButton {
+        AppMenuButton {
             Self.entries(editor)
         } label: {
             Label("Attach", systemImage: "paperclip")

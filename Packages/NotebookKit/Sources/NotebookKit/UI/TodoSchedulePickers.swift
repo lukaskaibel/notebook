@@ -819,7 +819,7 @@ struct TypedPicker<Below: View>: View {
             rowButton(row, isLit: isLit)
         } else {
             rowButton(row, isLit: isLit)
-                .glassContextMenu {
+                .appContextMenu {
                     row.menu.map { item in MenuEntry(item.title, item.symbol, destructive: item.isDestructive, action: item.action) }
                 }
         }

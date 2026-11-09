@@ -67,7 +67,7 @@ struct DrawingPalette: View {
     }
 
     private var widthMenu: some View {
-        GlassMenuButton {
+        AppMenuButton {
             for (level, name) in ["Fine", "Medium", "Bold"].enumerated() {
                 MenuEntry(name, checked: tools.widthLevel == level) { tools.widthLevel = level }
             }

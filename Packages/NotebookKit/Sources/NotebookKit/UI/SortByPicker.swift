@@ -33,7 +33,7 @@ struct SortByPicker: View {
 }
 
 extension SortByPicker {
-    /// Sort By in a glass menu: a submenu of the orders, the one chosen ticked.
+    /// Sort By in the app's menus: a submenu of the orders, the one chosen ticked and named under it.
     @MainActor
     static func entry(folder: URL?) -> MenuEntry {
         let orders = NotebookSettings.shared.fileOrders

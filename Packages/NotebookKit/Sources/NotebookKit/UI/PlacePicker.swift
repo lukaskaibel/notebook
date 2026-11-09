@@ -88,7 +88,7 @@ struct PlacePicker: View {
             ForEach(SavedPlaces.Kind.allCases) { kind in
                 if let known = saved.saved[kind] {
                     row(kind.name, detail: known.address, symbol: kind.symbol) { place = saved.place(kind) }
-                        .glassContextMenu {
+                        .appContextMenu {
                             MenuEntry("Change Address…", "pencil") { choose(kind) }
                             MenuEntry("Forget " + kind.name, "trash", destructive: true) { saved.set(kind, to: nil) }
                         }

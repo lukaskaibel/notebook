@@ -1,12 +1,8 @@
-#if DEBUG
-#if os(macOS)
+#if DEBUG && os(macOS)
 import AppKit
-#else
-import UIKit
-#endif
 import SwiftUI
 
-/// The debug remote's commands for the glass menus.
+/// The debug remote's commands for the Mac's glass menus.
 ///
 ///     glassrow <name>          right-clicks the sidebar row showing that name: its menu in glass at the pointer
 ///     glassmore <name>         the ••• of that sidebar row
@@ -21,7 +17,6 @@ import SwiftUI
 enum DebugMenus {
     static func run(_ command: String, _ argument: String, workspace: Workspace, log: @escaping (String) -> Void) -> Bool {
         switch command {
-        #if os(macOS)
         case "glassrow", "glassmore":
             guard let sidebar = workspace.sidebar else { log("\(command): no sidebar"); break }
             let outline = sidebar.outline
@@ -116,30 +111,16 @@ enum DebugMenus {
         case "glasstrace":
             Dropdown.trace = { log("  dropdown: \($0)") }
             log("glasstrace on")
-        #else
-        case "glassmenu":
-            log("glassmenu:\n" + TouchMenus.shared.debugDescription)
-        case "glasstype":
-            TouchMenus.shared.debugType(argument)
-            log("glasstype \(argument)")
-        case "glasspick":
-            log("glasspick \(argument): \(TouchMenus.shared.debugPick(argument) ? "picked" : "no such entry")")
-        case "glassclose":
-            TouchMenus.shared.close()
-            log("glassclose")
-        #endif
         default:
             return false
         }
         return true
     }
 
-    #if os(macOS)
     private static func rightClick(at point: NSPoint, in window: NSWindow?) -> NSEvent? {
         guard let window else { return nil }
         return NSEvent.mouseEvent(with: .rightMouseDown, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
                                   windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)
     }
-    #endif
 }
 #endif

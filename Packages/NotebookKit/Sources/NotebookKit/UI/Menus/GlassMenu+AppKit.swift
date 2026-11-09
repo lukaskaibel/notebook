@@ -602,7 +602,8 @@ private struct MenuWindowReader: NSViewRepresentable {
 extension View {
     /// The view's right-click menu, drawn in glass like every other menu of the app. The entries are made when it
     /// opens, from what the view shows then.
-    func glassContextMenu(@MenuContent _ entries: @escaping () -> [MenuEntry]) -> some View {
+    /// `cornerRadius` is for the iPhone's and the iPad's, which lift the view out as its menu opens.
+    func appContextMenu(cornerRadius: CGFloat? = nil, @MenuContent _ entries: @escaping () -> [MenuEntry]) -> some View {
         background(ContextMenuRegion(entries: entries))
     }
 }
@@ -694,7 +695,7 @@ enum ContextMenuRegions {
 }
 
 /// A button that opens a menu in glass under it, as the toolbar's Aa and ••• do.
-struct GlassMenuButton<Label: View>: View {
+struct AppMenuButton<Label: View>: View {
     @MenuContent var entries: () -> [MenuEntry]
     @ViewBuilder var label: Label
     @State private var open = false
