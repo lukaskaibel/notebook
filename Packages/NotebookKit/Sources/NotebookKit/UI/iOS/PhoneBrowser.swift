@@ -200,7 +200,7 @@ struct HomeScreen: View {
         .refreshable { workspace.refresh(thoroughly: true) }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                GlassMenuButton {
+                AppMenuButton {
                     MenuEntry("Open Folder", "plus.rectangle.on.folder") { addsLocation = true }
                     if let folder = workspace.defaultFolder {
                         MenuEntry("Import from Apple Notes", "square.and.arrow.down.on.square") { workspace.appleNotesImportFolder = folder }
@@ -262,7 +262,7 @@ struct HomeScreen: View {
         if workspace.locations.count == 1, let location = workspace.locations.first {
             Button { newFolderIn = location.url } label: { label }
         } else {
-            GlassMenuButton {
+            AppMenuButton {
                 MenuEntry.section("New Folder In")
                 for location in workspace.locations {
                     MenuEntry(location.name, location.isICloudDrive ? "icloud" : "folder") { newFolderIn = location.url }
@@ -302,7 +302,7 @@ struct FolderScreen: View {
                         node.row(in: workspace, showsDetail: true)
                     }
                     .fileDragAndDrop(node.url, isFolder: node.isFolder, workspace: workspace)
-                    .glassContextMenu { FileActions.entries(workspace, node.url) { newFolderIn = $0 } }
+                    .appContextMenu { FileActions.entries(workspace, node.url) { newFolderIn = $0 } }
                     .swipeActions(edge: .trailing) {
                         if !node.isLinked {
                             // Red as in Notes and Mail: a destructive swipe would take the app's ink instead.
@@ -362,7 +362,7 @@ struct FolderScreen: View {
         .onAppear { workspace.selectedFolder = page.url }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                GlassMenuButton {
+                AppMenuButton {
                     MenuEntry.submenu("New Handwritten Note", "pencil.and.scribble") {
                         for paper in PaperStyle.allCases {
                             MenuEntry(paper.name, paper.symbol) { workspace.newHandwrittenNote(in: page.url, paper: paper) }

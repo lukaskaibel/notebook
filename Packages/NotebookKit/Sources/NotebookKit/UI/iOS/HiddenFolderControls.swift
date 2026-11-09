@@ -57,7 +57,7 @@ struct LocationHeader: View {
         HStack {
             // A menu of its own, opened with a tap: a list's context menus come only from its rows, and its long press
             // never reaches a section's header, not even a menu's.
-            GlassMenuButton {
+            AppMenuButton {
                 FileActions.entries(workspace, location.url, newFolder: newFolder)
             } label: {
                 Text(location.name)

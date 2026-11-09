@@ -23,7 +23,7 @@ struct FavoritesPage: View {
                                 .frame(width: HomeStyle.picture.width + 2 * HomeStyle.cardPadding)
                         }
                         .buttonStyle(.plain)
-                        .glassContextMenu {
+                        .appContextMenu {
                             MenuEntry("Open", "arrow.up.forward.app") { workspace.open(url) }
                             MenuEntry("Show in Finder", "folder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
                             MenuEntry.divider

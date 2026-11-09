@@ -62,10 +62,15 @@ enum SharedMenus {
     /// Move To, as a folder picker: every folder of every location, indented under its location, the one the file is
     /// in ticked; typing a folder's name finds it, with the folders it is in beside it.
     static func moveTo(_ url: URL, workspace: Workspace) -> MenuEntry {
-        .submenu("Move To", "folder", placeholder: "Move to…") { [weak workspace] in
+        var entry = MenuEntry.submenu("Move To", "folder", placeholder: "Move to…") { [weak workspace] in
             guard let workspace else { return [] }
             return folders(for: url, workspace: workspace)
         }
+        #if os(iOS)
+        // A whole iCloud Drive has thousands of folders, too many for the system's menu to list.
+        entry.insteadOfSubmenu = { [weak workspace] in workspace?.moving = MovingFile(url: url) }
+        #endif
+        return entry
     }
 
     static func folders(for url: URL, workspace: Workspace) -> [MenuEntry] {

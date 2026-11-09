@@ -33,10 +33,10 @@ versions follow [semantic versioning](https://semver.org).
 - Quick Look shows a note as Notebook does: press Space on a note in the Finder, or look at it in the Finder's column
   view or Get Info, and you see its headings, to-dos, tables, maths and diagrams, with its title and when it was last
   edited on top, instead of its Markdown. It is set in the typeface, size, line spacing and width chosen in Settings ›
-  Text, in Notebook's ink blue. Its text can be selected and copied. A note in one of the locations in Notebook's
-  sidebar shows its pictures and drawings too, once Notebook has been opened since the Mac started; a note elsewhere
-  shows them by their names, and links as links. A tip at the bottom of the sidebar shows the way, with a button to
-  Quick Look's settings, where another app that previews Markdown can be turned off.
+  Text, in Notebook's ink blue. Its text can be selected and copied. A note in a folder you opened in Notebook shows its
+  pictures and drawings too, once Notebook has been opened since the Mac started; a note elsewhere shows them by their
+  names, and links as links. A tip at the bottom of the sidebar shows the way, with a button to Quick Look's settings,
+  where another app that previews Markdown can be turned off.
 - Quick Look on iPhone and iPad shows a note as Notebook does too: tap a note in the Files app, or one attached in
   another app that shows files with Quick Look, and you see its headings, to-dos, tables and maths in your typeface
   and size instead of its Markdown. iOS lets Quick Look read only the note itself, so its pictures show by their
@@ -63,15 +63,13 @@ versions follow [semantic versioning](https://semver.org).
 - Add Location is now Open Folder, and Settings lists your Folders instead of Locations: what Notebook shows are
   folders, and Location means only a to-do's or reminder's place, as in Reminders. On the Mac, File › Open Folder… sits
   under Open….
-- Menus are one glass panel, as in Linear and Issues, on the Mac, iPhone and iPad: a symbol beside each entry, its keys
-  on the right, a soft highlight, and in longer menus a field on top to type in, which finds any entry, also inside a
-  submenu (typing "pdf" in the ⋯ menu finds Export As › PDF…). On the Mac every right-click menu (the sidebar's, the
-  note's with Format added, To-dos', a PDF's) and the toolbar's Aa and ⋯ open this way, and the symbols show again,
-  which macOS menus no longer draw; the menu bar stays as it was. Move To is a list of your folders with their own
-  symbols and colours, the one the file is in ticked: type a folder's name and press Return. On iPhone and iPad, touch
-  and hold a file and its menu opens under it, the file marked, with a tap of the phone; move on and you drag the file
-  instead. A submenu opens beside the menu on the iPad and in its place on the iPhone, and the iPad shows the keys
-  while a keyboard is attached.
+- Menus on the Mac are one glass panel, as in Linear and Issues: a symbol beside each entry, its keys on the right and a
+  soft highlight. Every right-click menu (the sidebar's, the note's with Format added, To-dos', a PDF's) and the
+  toolbar's Aa and ⋯ open this way, and the symbols show again, which macOS menus no longer draw; the menu bar stays as
+  it was. Longer menus have a field on top to type in, which finds any entry, also inside a submenu (typing "pdf" in the
+  ⋯ menu finds Export As › PDF…). Move To is a list of your folders with their own symbols and colours, the one the
+  file is in ticked: type a folder's name and press Return. On iPhone and iPad every menu stays the system's own, with a
+  symbol beside each entry.
 - The first screen on the iPhone and the sidebar on the iPad and the Mac are laid out alike, as Reminders and Notes do
   on each device. To-dos and Favorites are tiles at the top, each with its count, and a tap or click shows the list:
   on the iPhone on a screen of its own, on the iPad and the Mac in the note's place, as To-dos is shown. Favorites is
@@ -102,16 +100,21 @@ versions follow [semantic versioning](https://semver.org).
   typed by hand from its first `|` replaces the empty one.
 - The Mac sidebar has more room and borrows some of Notion's manners while keeping the Mac's look. A folder's icon no
   longer touches its arrow, which is a little quieter; names sit further from their icons; and what is inside a folder
-  steps further in. The row under the pointer gets a soft fill and ••• for its right-click menu, and a folder also +
-  for a new note in it; on a note or other file, which has no +, ••• sits at the row's end, so its name has more room.
-  A location's name has ••• and + too: ••• holds New Folder, Show Hidden Folders, Show in Finder and Remove from
-  Sidebar, + makes a note at its top, and a click on the name folds the location. The eye shows by the name only while
-  hidden folders show, and hides them again.
+  steps further in. The row under the pointer gets a soft fill and ••• for its right-click menu, and a folder also + for
+  a new note in it; on a note or other file, which has no +, ••• sits at the row's end, so its name has more room. A
+  section's name, such as iCloud Drive, has ••• and + too: ••• holds New Folder, Show Hidden Folders, Show in Finder and
+  Remove from Sidebar, + makes a note at its top, and a click on the name folds the section. The eye shows by the name
+  only while hidden folders show, and hides them again.
 
 ### Fixed
 
+- On the Mac, Notebook could stop with the spinning wait cursor as you added a note, and had to be forced to quit. It
+  happened with scroll bars that take room (a mouse attached, or scroll bars set to show always) once the sidebar's
+  files reached the bottom of the window: Recent's cards made room for the scroll bar, which made the files short
+  enough for it to go, which made the cards wider again, without end. Recent now keeps its height whether the scroll
+  bar shows or not.
 - A note from a folder you took out of the sidebar no longer stays in File › Open Recent, ⌘K's recent notes, Recent
-  and Favorites, where it could open as an empty page: Notebook can no longer read it. It comes back if you add the
+  and Favorites, where it could open as an empty page: Notebook can no longer read it. It comes back if you open the
   folder again.
 - Writing at the bottom of what shows keeps the line you write on in view, without scrolling by hand. On iPhone and
   iPad, a new bullet point, a sentence running on to the next line, Return, a to-do, a quote, a table's next row and
@@ -123,7 +126,7 @@ versions follow [semantic versioning](https://semver.org).
 - A picture dragged to another place in its note no longer goes into a table, code block, quote or callout and breaks
   it in two: it goes before or after the whole of it. Dropped on the right of another picture, a file card or a table,
   it goes after it rather than before, and a file dropped there from the Finder no longer goes into a table's Markdown.
-- On iPhone and iPad, a Nextcloud folder chosen with Add Location showed in the sidebar but stayed empty. Nextcloud
+- On iPhone and iPad, a Nextcloud folder chosen with Open Folder showed in the sidebar but stayed empty. Nextcloud
   gives other apps only single files, not its folders, so Notebook can't show what's in them; it now says so instead of
   adding the folder. A folder like this added before is pointed out once, with how to remove it.
 - Pictures that only a note with the `.markdown` extension shows are no longer taken for unused and put in the Trash

@@ -885,6 +885,9 @@ struct TodoRowView: View {
     @State private var isHovered = false
     @State private var isPicking = false
     @State private var titleWidth: CGFloat = 0
+    #if os(iOS)
+    @State private var rowWidth: CGFloat = 0
+    #endif
 
     /// At most this many lines under a to-do show while it isn't edited.
     static let shownLines = 6
@@ -952,10 +955,32 @@ struct TodoRowView: View {
         .contentShape(.rect)
         #if os(macOS)
         .onHover { isHovered = $0 }
+        .appContextMenu { menuEntries }
+        #else
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
+        .appContextMenu { menuEntries } preview: { preview }
         #endif
-        .glassContextMenu { menuEntries }
         .accessibilityElement(children: .contain)
     }
+
+    #if os(iOS)
+    /// Touched and held, the row lifts on a card of its own, as a reminder does, rather than its words alone over the
+    /// list.
+    private var preview: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            TodoCircle(mark: isTicked ? .done : mark)
+            VStack(alignment: .leading, spacing: 3) {
+                titleText
+                lines
+                meta
+            }
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 14)
+        .frame(width: rowWidth + 28, alignment: .leading)
+        .background(Color.theme(Theme.panel))
+    }
+    #endif
 
     private var mark: TaskMark {
         if case .todo(let item) = row { item.todo.mark } else { .open }

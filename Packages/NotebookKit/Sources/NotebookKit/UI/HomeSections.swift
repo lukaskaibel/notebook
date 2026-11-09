@@ -221,7 +221,7 @@ struct RecentCardRow: View {
                     Button { workspace.open(url) } label: { RecentCardLabel(workspace: workspace, url: url, width: cardWidth) }
                         .buttonStyle(.plain)
                         .clearsCardsBeneath()
-                        .glassContextMenu { RecentCardMenu.entries(workspace, url, newFolder: newFolder) }
+                        .appContextMenu(cornerRadius: HomeStyle.cardRadius) { RecentCardMenu.entries(workspace, url, newFolder: newFolder) }
                         .zIndex(HomeStyle.zIndex(of: url, in: recents))
                 }
             }

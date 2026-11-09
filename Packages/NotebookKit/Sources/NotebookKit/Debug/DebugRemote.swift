@@ -547,6 +547,15 @@ enum DebugRemote {
             for window in NSApp.windows where !(window is NSPanel) && (window.isVisible || window.isMiniaturized) {
                 log("windowstate \"\(window.title)\" miniaturized=\(window.isMiniaturized) visible=\(window.isVisible) main=\(window.isMainWindow)")
             }
+        case "scrollers":
+            // scrollers legacy|overlay: the sidebar's scroll bar takes room beside the files, as with a mouse attached
+            // or scroll bars set to show always, or floats over them. Says which, and how big the sidebar and its files are.
+            if let scrollView = workspace?.sidebar?.scrollView {
+                if argument == "legacy" { scrollView.scrollerStyle = .legacy }
+                if argument == "overlay" { scrollView.scrollerStyle = .overlay }
+                let outline = workspace?.sidebar?.outline
+                log("scrollers \(scrollView.scrollerStyle == .legacy ? "legacy" : "overlay") sidebar=\(scrollView.frame.size) files=\(outline?.frame.size ?? .zero)")
+            }
         case "closemain":
             // closemain: closes the main window, as its close button does.
             window?.performClose(nil)

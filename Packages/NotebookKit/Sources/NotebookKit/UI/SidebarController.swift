@@ -119,8 +119,8 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
                                                name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
         workspace.sidebar = self
         // Recent's cards are as wide as the tiles, which follow the sidebar's width; so does the row's height.
-        outline.postsFrameChangedNotifications = true
-        NotificationCenter.default.addObserver(self, selector: #selector(outlineResized), name: NSView.frameDidChangeNotification, object: outline)
+        scrollView.postsFrameChangedNotifications = true
+        NotificationCenter.default.addObserver(self, selector: #selector(sidebarResized), name: NSView.frameDidChangeNotification, object: scrollView)
         NotificationCenter.default.addObserver(self, selector: #selector(optionsChanged), name: .notebookSidebarOptionsChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(orderChanged), name: .notebookFileOrderChanged, object: nil)
         rebuildTop()
@@ -169,8 +169,8 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     }
 
     /// The sidebar was made wider or narrower: Recent's row takes the height of its cards at once, unanimated.
-    @objc private func outlineResized() {
-        let width = outline.bounds.width
+    @objc private func sidebarResized() {
+        let width = recentRowWidth
         guard width != laidOutWidth else { return }
         laidOutWidth = width
         let row = outline.row(forItem: recentEntry)
@@ -258,8 +258,20 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     private lazy var recentCell = SidebarHostedCell(SidebarHostedCell.recent,
                                                     RecentCardRow(workspace: workspace, margin: SidebarOutlineView.tilesFromEdge),
                                                     insets: NSEdgeInsets(top: 2, left: 0, bottom: 6, right: 0))
-    /// The sidebar's width when Recent's row last took its height (`outlineResized`).
+    /// The sidebar's width when Recent's row last took its height (`sidebarResized`).
     private var laidOutWidth: CGFloat = 0
+
+    /// The width Recent's row takes its height from: the sidebar's, as if no scroll bar took room in it. A scroll bar
+    /// that takes room (with a mouse attached, or set to show always) comes as the files grow past the window and goes
+    /// as they fit again. Taken from the files' own width, the row was a few points shorter with the scroll bar than
+    /// without, so files just past the edge made room for it, fitted, lost it, grew past the edge again, and so on
+    /// without end: a new note that brought them there stopped the app. With the scroll bar there the cards are a little
+    /// narrower, and the row a few points taller than they are; they sit in its middle, as they do in its slack anyway.
+    var recentRowWidth: CGFloat {
+        NSScrollView.contentSize(forFrameSize: scrollView.frame.size, horizontalScrollerClass: nil, verticalScrollerClass: nil,
+                                 borderType: scrollView.borderType, controlSize: .regular, scrollerStyle: scrollView.scrollerStyle).width
+            - scrollView.contentInsets.left - scrollView.contentInsets.right
+    }
 
     /// A file opened: Recent's cards follow by themselves, and the section comes with the first.
     func recentsChanged() {
@@ -555,7 +567,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         guard let entry = item as? SidebarEntry else { return outlineView.rowHeight }
         switch entry.kind {
         case .tiles: return 74
-        case .recent: return SidebarOutlineView.recentRowHeight(width: outlineView.bounds.width)
+        case .recent: return SidebarOutlineView.recentRowHeight(width: recentRowWidth)
         case .header, .search: return outlineView.rowHeight
         }
     }
@@ -1160,6 +1172,7 @@ final class SidebarOutlineView: NSOutlineView {
 
     /// Recent's row as tall as its cards, which are as wide as the tiles: their pictures keep their shape as the
     /// sidebar is made wider or narrower. The rest of a card, its name and folder, and the row's margins take 62 pt.
+    /// `width` is the sidebar's, not the files' (`SidebarController.recentRowWidth`).
     static func recentRowHeight(width: CGFloat) -> CGFloat {
         let card = (width - 2 * tilesFromEdge - HomeStyle.spacing) / 2
         let picture = (card - 2 * HomeStyle.cardPadding) * HomeStyle.picture.height / HomeStyle.picture.width

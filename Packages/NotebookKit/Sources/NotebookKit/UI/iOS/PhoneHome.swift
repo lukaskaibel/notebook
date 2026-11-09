@@ -64,7 +64,7 @@ struct RecentCards: View {
                             }
                             .buttonStyle(.plain)
                             .navigationLinkIndicatorVisibility(.hidden)
-                            .glassContextMenu { FileActions.entries(workspace, url) { newFolderIn = $0 } }
+                            .appContextMenu(cornerRadius: HomeStyle.cardRadius) { FileActions.entries(workspace, url) { newFolderIn = $0 } }
                             .zIndex(HomeStyle.zIndex(of: url, in: recents))
                         }
                     }
@@ -116,7 +116,7 @@ struct HomeFileRows: View {
             } else {
                 NavigationLink(value: Page(url: row.node.url, isFolder: false)) { row.node.row(in: workspace) }
                     .fileDragAndDrop(row.node.url, isFolder: false, workspace: workspace)
-                    .glassContextMenu { FileActions.entries(workspace, row.node.url) { newFolderIn = $0 } }
+                    .appContextMenu { FileActions.entries(workspace, row.node.url) { newFolderIn = $0 } }
             }
         }
     }
@@ -153,7 +153,7 @@ struct HomeFileRows: View {
         // The arrow says it folds; the row's own chevron would say it opens, twice.
         .navigationLinkIndicatorVisibility(canFold ? .hidden : .automatic)
         .fileDragAndDrop(url, isFolder: true, workspace: workspace)
-        .glassContextMenu { FileActions.entries(workspace, url) { newFolderIn = $0 } }
+        .appContextMenu { FileActions.entries(workspace, url) { newFolderIn = $0 } }
         .accessibilityValue(count.map { "\($0) items" } ?? "")
         .accessibilityActions {
             if canFold {
@@ -205,7 +205,7 @@ struct FavoritesScreen: View {
                         NavigationLink(value: Page(url: url, isFolder: row.kind == .folder)) { row }
                     }
                 }
-                .glassContextMenu { FileActions.entries(workspace, url) { newFolderIn = $0 } }
+                .appContextMenu { FileActions.entries(workspace, url) { newFolderIn = $0 } }
                 .swipeActions(edge: .trailing) {
                     Button { withAnimation { workspace.toggleFavorite(url) } } label: {
                         Label("Unfavorite", systemImage: "star.slash")

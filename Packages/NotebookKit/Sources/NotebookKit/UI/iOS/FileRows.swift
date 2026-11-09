@@ -225,7 +225,7 @@ extension View {
     }
 }
 
-/// Everything you can do with a file or folder, for its menu and the ⋯ menu of an open file, in glass.
+/// Everything you can do with a file or folder, for its menu and the ⋯ menu of an open file.
 @MainActor
 enum FileActions {
     /// `newFolder` asks for the name of a new folder in this one.
@@ -279,7 +279,7 @@ enum FileActions {
         if !isFolder {
             MenuEntry("Copy Link", "link") { workspace.copyLink(url) }
         }
-        MenuEntry("Share", "square.and.arrow.up") { MenuShare.share([url], from: TouchMenus.shared.lastWindow, at: TouchMenus.shared.lastAnchor) }
+        MenuEntry.share([url])
         if isLocation, let location = workspace.locations.first(where: { $0.url == url.standardizedFileURL }) {
             if workspace.hasHiddenFolders(in: location) {
                 MenuEntry.divider
@@ -359,7 +359,7 @@ struct SearchResultsList: View {
                     ForEach(items) { item in
                         Button { open(item.result) } label: { row(item) }
                             .buttonStyle(.plain)
-                            .glassContextMenu {
+                            .appContextMenu {
                                 if let url = item.result.url { FileActions.entries(workspace, url) }
                             }
                     }
