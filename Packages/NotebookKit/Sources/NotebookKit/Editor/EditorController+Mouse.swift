@@ -15,10 +15,17 @@ extension EditorController {
         case editLink(range: NSRange)
         case headingLevel(line: Int)
         case todo(line: Int, part: TodoPart)
+        /// A table's handle, or a + along its edge.
+        case table(TableControl)
     }
 
     func hitTest(_ point: NSPoint) -> Hit? {
         guard storage.length > 0 else { return nil }
+        #if os(macOS)
+        if let control = tableControl(at: point, slop: 3) { return .table(control) }
+        #else
+        if let control = tableControl(at: point, slop: 12) { return .table(control) }
+        #endif
         let origin = textOrigin
         // The level tag in the margin next to the heading the caret is on.
         if point.x < origin.x, let (_, marker) = headingMarkLevel,
@@ -47,12 +54,9 @@ extension EditorController {
                 return .link(.note(target))
             case .table(let model):
                 guard let blockIndex = document.line(containing: index)?.block else { return nil }
-                let objectRect = rect.offsetBy(dx: origin.x, dy: origin.y)
-                var caret = document.blocks[blockIndex].range.location
-                if let cell = model.cell(at: point, in: objectRect), let ranges = model.cellRanges[safe: cell.row] {
-                    caret = ranges[safe: cell.column]?.upperBound ?? ranges.last?.upperBound ?? caret
-                }
-                return .block(index: blockIndex, caret: caret)
+                let objectRect = layoutManager.blockObjectRect(at: index, origin: origin).map { NSRect(x: $0.minX, y: $0.minY, width: $0.width - 1, height: $0.height) }
+                    ?? rect.offsetBy(dx: origin.x, dy: origin.y)
+                return .block(index: blockIndex, caret: tableCaret(at: point, block: blockIndex, model: model, objectRect: objectRect))
             case .mermaid, .mathBlock, .frontmatter:
                 guard let blockIndex = document.line(containing: index)?.block else { return nil }
                 let block = document.blocks[blockIndex]
@@ -83,6 +87,11 @@ extension EditorController {
     func openBlock(caret: Int, at point: NSPoint) {
         let clickOffset = point.y - scrollTop
         makeTextFirstResponder()
+        // A table typed in as a grid keeps its size: nothing moves.
+        if gridTable(at: caret) != nil {
+            setSelection(NSRange(location: caret, length: 0))
+            return
+        }
         setSelection(NSRange(location: caret, length: 0))
         layoutManager.ensureLayout(forCharacterRange: NSRange(location: 0, length: min(storage.length, caret + 1)))
         let lineTop = yPosition(of: caret)
@@ -102,6 +111,7 @@ extension EditorController {
         // Clicks with a modifier key are the text view's, but for Option-dragging a picture, which copies it.
         var allowed: NSEvent.ModifierFlags = []
         if case .picture = hit { allowed = .option }
+        if case .block(_, let caret) = hit, gridTable(at: caret) != nil { allowed = .shift }
         if !modifiers.subtracting(allowed).isEmpty { return false }
         switch hit {
         case .checkbox(let line):
@@ -137,8 +147,71 @@ extension EditorController {
             showTodoReminder(line: line, part: part)
             return true
         case .block(_, let caret):
-            openBlock(caret: caret, at: point)
+            if let grid = gridTable(at: caret) {
+                selectInGrid(grid, from: caret, with: event)
+            } else {
+                openBlock(caret: caret, at: point)
+            }
             return true
+        case .table(let control):
+            useTableControl(control)
+            return true
+        }
+    }
+
+    /// A click in a cell of a table typed in as a grid: the caret at the letter clicked; a drag selects in the cell, a
+    /// double-click a word, a triple-click the cell's text.
+    private func selectInGrid(_ grid: GridTable, from caret: Int, with event: NSEvent) {
+        textView.window?.makeFirstResponder(textView)
+        guard let (row, column) = grid.cell(at: caret) else { return }
+        let content = grid.contents[row][column]
+        if event.modifierFlags.contains(.shift), selection.location >= content.location, selection.location <= max(content.upperBound, grid.slots[row][column].upperBound) {
+            let anchor = selection.location
+            setSelection(NSRange(location: min(anchor, caret), length: abs(caret - anchor)))
+            return
+        }
+        switch event.clickCount {
+        case 2:
+            let word = textView.selectionRange(forProposedRange: NSRange(location: caret, length: 0), granularity: .selectByWord)
+            setSelection(NSIntersectionRange(word, content).length > 0 ? NSIntersectionRange(word, content) : NSRange(location: caret, length: 0))
+            return
+        case 3...:
+            setSelection(content)
+            return
+        default:
+            setSelection(NSRange(location: caret, length: 0))
+        }
+        // Dragging: the selection grows from the click, within its cell.
+        textView.isTrackingMouse = true
+        defer {
+            textView.isTrackingMouse = false
+            mouseTrackingEnded()
+        }
+        while let next = textView.window?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]), next.type == .leftMouseDragged {
+            let point = textView.convert(next.locationInWindow, from: nil)
+            textView.autoscroll(with: next)
+            guard let table = gridTable(at: caret), let index = gridIndex(at: point, in: table, cell: (row, column)) else { continue }
+            setSelection(NSRange(location: min(caret, index), length: abs(index - caret)))
+        }
+    }
+
+    /// A table's handle opens its menu, the row or column it is for picked while it is open; a + adds at the edge.
+    private func useTableControl(_ control: TableControl) {
+        switch control {
+        case .columnHandle(let block, let column):
+            guard let start = document.blocks[safe: block]?.range.location, let grid = gridTable(at: start), let drawn = gridDrawing(grid),
+                  let handle = drawn.model.columnHandleRect(in: drawn.rect) else { return }
+            showTableBand(.column(column), block: block)
+            GlassMenu.show(tableColumnEntries(column: column), at: handle, in: textView) { [weak self] in self?.showTableBand(nil, block: nil) }
+        case .rowHandle(let block, let row):
+            guard let start = document.blocks[safe: block]?.range.location, let grid = gridTable(at: start), let drawn = gridDrawing(grid),
+                  let handle = drawn.model.rowHandleRect(in: drawn.rect) else { return }
+            showTableBand(.row(row), block: block)
+            GlassMenu.show(tableRowEntries(row: row), at: handle, in: textView) { [weak self] in self?.showTableBand(nil, block: nil) }
+        case .addColumn(let block):
+            addAtEdge(of: block, column: true)
+        case .addRow(let block):
+            addAtEdge(of: block, column: false)
         }
     }
 
@@ -149,7 +222,9 @@ extension EditorController {
         if !textView.todoBell.isHidden, textView.todoBell.frame.contains(point) { return NSCursor.arrow.set() }
         switch hitTest(point) {
         case .checkbox, .link, .editLink, .headingLevel, .todo: NSCursor.pointingHand.set()
-        case .picture, .block: NSCursor.arrow.set()
+        case .table: NSCursor.arrow.set()
+        case .picture: NSCursor.arrow.set()
+        case .block(_, let caret): if gridTable(at: caret) != nil { NSCursor.iBeam.set() } else { NSCursor.arrow.set() }
         case nil: break
         }
     }
@@ -210,8 +285,35 @@ extension EditorController {
         if let base {
             addCopyCode(to: base, at: point)
             addTodoReminder(to: base, at: point)
+            addTableItems(to: base, at: point)
         }
         return base
+    }
+
+    /// Right-clicked in a cell of a table typed in as a grid: the caret goes there, and the table's menu comes after the
+    /// rest.
+    private func addTableItems(to menu: NSMenu, at point: NSPoint) {
+        guard case .block(_, let caret) = hitTest(point), gridTable(at: caret) != nil else { return }
+        if !NSLocationInRange(caret, NSRange(location: selection.location, length: selection.length + 1)) { setSelection(NSRange(location: caret, length: 0)) }
+        let table = NSMenu(title: "Table")
+        for entry in tableEntries() {
+            switch entry.kind {
+            case .divider:
+                table.addItem(.separator())
+            case .action(let action):
+                let item = ClosureMenuItem(title: entry.title) { action() }
+                if case .symbol(let name) = entry.icon { item.image = NSImage(systemSymbolName: name, accessibilityDescription: nil) }
+                item.isDestructive = entry.isDestructive
+                table.addItem(item)
+            default:
+                break
+            }
+        }
+        let item = NSMenuItem(title: "Table", action: nil, keyEquivalent: "")
+        item.image = NSImage(systemSymbolName: "tablecells", accessibilityDescription: nil)
+        item.submenu = table
+        menu.addItem(.separator())
+        menu.addItem(item)
     }
     #endif
 }
@@ -285,6 +387,13 @@ extension MarkdownTextView {
     @objc func makeChecklist(_ sender: Any?) { controller?.setLineFormat(.checklist) }
     @objc func makeQuote(_ sender: Any?) { controller?.setLineFormat(.quote) }
     @objc func insertTable(_ sender: Any?) { controller?.insertTable() }
+    @objc func addTableRowAbove(_ sender: Any?) { controller?.editTable(.addRow(above: true)) }
+    @objc func addTableRowBelow(_ sender: Any?) { controller?.editTable(.addRow(above: false)) }
+    @objc func addTableColumnLeft(_ sender: Any?) { controller?.editTable(.addColumn(left: true)) }
+    @objc func addTableColumnRight(_ sender: Any?) { controller?.editTable(.addColumn(left: false)) }
+    @objc func deleteTableRow(_ sender: Any?) { controller?.editTable(.deleteRow) }
+    @objc func deleteTableColumn(_ sender: Any?) { controller?.editTable(.deleteColumn) }
+    @objc func deleteTable(_ sender: Any?) { controller?.editTable(.deleteTable) }
     @objc func markChecked(_ sender: Any?) { controller?.toggleChecked() }
     @objc func addLink(_ sender: Any?) { controller?.insertLink() }
     @objc func indentLines(_ sender: Any?) { controller?.indent(by: 1) }

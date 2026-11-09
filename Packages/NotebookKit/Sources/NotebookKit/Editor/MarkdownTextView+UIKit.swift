@@ -16,6 +16,9 @@ final class MarkdownTextView: UITextView {
     /// The level of the heading the caret is on, in the margin, as on the Mac; a tap on it changes the level. Only
     /// where the margin is wide enough for it (iPad), since the iPhone's is too narrow.
     let headingButton = UIButton(configuration: .plain())
+    /// The handle of the row the caret is in, in a table typed in as a grid: half of it is in the margin, which the text
+    /// isn't drawn again in.
+    let tableRowHandle = TableRowHandleView()
 
     /// As tall as the title's font needs.
     private var titleHeight: CGFloat { ceil(titleField.font?.lineHeight ?? 40) + 2 }
@@ -66,6 +69,8 @@ final class MarkdownTextView: UITextView {
         headingButton.isHidden = true
         headingButton.accessibilityLabel = "Text Style"
         addSubview(headingButton)
+        tableRowHandle.isHidden = true
+        addSubview(tableRowHandle)
         applyTypography()
         // The note's text follows the system's text size, on top of the size chosen in Settings › Text.
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (view: MarkdownTextView, _: UITraitCollection) in
@@ -207,14 +212,34 @@ final class MarkdownTextView: UITextView {
     func proposedCaretRect(for position: UITextPosition) -> CGRect { super.caretRect(for: position) }
     #endif
 
-    /// A picture selected whole shows the ring the layout manager draws around it, not the text's selection.
+    /// A picture selected whole shows the ring the layout manager draws around it, not the text's selection; in a
+    /// table typed in as a grid, the selection is where the cell's letters are drawn.
     override func selectionRects(for range: UITextRange) -> [UITextSelectionRect] {
         if let controller {
             let start = offset(from: beginningOfDocument, to: range.start)
             let length = offset(from: range.start, to: range.end)
             if controller.isWholeObject(NSRange(location: start, length: length)) { return [] }
+            if let boxes = controller.gridSelectionRects(NSRange(location: start, length: length)), !boxes.isEmpty {
+                return boxes.enumerated().map { TableSelectionRect(box: $1, starts: $0 == 0, ends: $0 == boxes.count - 1) }
+            }
         }
         return super.selectionRects(for: range)
+    }
+
+    /// A finger over a table typed in as a grid (the loupe, a selection's handle) is at the letter of the cell under it.
+    override func closestPosition(to point: CGPoint) -> UITextPosition? {
+        if let index = controller?.gridIndex(near: point) { return position(from: beginningOfDocument, offset: index) }
+        return super.closestPosition(to: point)
+    }
+
+    override func firstRect(for range: UITextRange) -> CGRect {
+        if let controller {
+            let start = offset(from: beginningOfDocument, to: range.start)
+            let length = offset(from: range.start, to: range.end)
+            if length == 0, let caret = controller.tableCaretRect(at: start) { return caret }
+            if let boxes = controller.gridSelectionRects(NSRange(location: start, length: length)), let first = boxes.first { return first }
+        }
+        return super.firstRect(for: range)
     }
 
     // MARK: - Pictures
@@ -335,6 +360,15 @@ final class MarkdownTextView: UITextView {
             command(UIKeyCommand.inputDownArrow, [], #selector(suggestionDown))
             command("\t", [], #selector(acceptSuggestion))
             command(UIKeyCommand.inputEscape, [], #selector(closeSuggestions))
+        } else if isFirstResponder, controller?.activeGrid != nil {
+            // In a table typed in as a grid the arrows go through its cells, and a cell has no line breaks.
+            command("\t", .shift, #selector(outdentLines))
+            for (index, move) in Self.gridKeys.enumerated() {
+                let key = UIKeyCommand(title: "", action: #selector(moveInGrid(_:)), input: move.input, modifierFlags: move.modifiers, propertyList: index)
+                key.wantsPriorityOverSystemBehavior = true
+                commands.append(key)
+            }
+            command("\r", .shift, #selector(newTableRow))
         } else {
             // Tab arrives as text and nests list items there (or goes to the next cell of a table); Shift-Tab needs a
             // command of its own.
@@ -343,6 +377,12 @@ final class MarkdownTextView: UITextView {
             if controller?.syntax == .asciidoc { command("\r", .shift, #selector(breakAsciiDocLine)) }
             if controller?.isCaretOnFirstLine == true { command(UIKeyCommand.inputUpArrow, [], #selector(moveUpIntoTitle)) }
             if selectedRange == NSRange(location: 0, length: 0) { command(UIKeyCommand.inputLeftArrow, [], #selector(moveBackIntoTitle)) }
+        }
+        // ⌥⌘ and the arrows add rows and columns in a table, as on the Mac.
+        if isFirstResponder, controller?.activeGrid != nil {
+            for (index, edit) in Self.tableEditKeys.enumerated() {
+                commands.append(UIKeyCommand(title: edit.title, action: #selector(editTable(_:)), input: edit.input, modifierFlags: [.alternate, .command], propertyList: index))
+            }
         }
         // The Format menu's shortcuts, which its buttons don't get on iPad.
         if isEditable, isFirstResponder {
@@ -355,6 +395,34 @@ final class MarkdownTextView: UITextView {
         guard let index = sender.propertyList as? Int, let shortcut = FormatShortcut.all[safe: index] else { return }
         controller?.perform(shortcut)
     }
+
+    /// The arrows in a table typed in as a grid, with Shift to select and ⌘ to go to a cell's ends.
+    private static let gridKeys: [(input: String, modifiers: UIKeyModifierFlags, move: EditorController.TableMove, extending: Bool)] = [
+        (UIKeyCommand.inputLeftArrow, [], .left, false), (UIKeyCommand.inputRightArrow, [], .right, false),
+        (UIKeyCommand.inputUpArrow, [], .up, false), (UIKeyCommand.inputDownArrow, [], .down, false),
+        (UIKeyCommand.inputLeftArrow, .shift, .left, true), (UIKeyCommand.inputRightArrow, .shift, .right, true),
+        (UIKeyCommand.inputUpArrow, .shift, .up, true), (UIKeyCommand.inputDownArrow, .shift, .down, true),
+        (UIKeyCommand.inputLeftArrow, .alternate, .wordLeft, false), (UIKeyCommand.inputRightArrow, .alternate, .wordRight, false),
+        (UIKeyCommand.inputLeftArrow, .command, .cellStart, false), (UIKeyCommand.inputRightArrow, .command, .cellEnd, false),
+        (UIKeyCommand.inputLeftArrow, [.command, .shift], .cellStart, true), (UIKeyCommand.inputRightArrow, [.command, .shift], .cellEnd, true),
+    ]
+
+    private static let tableEditKeys: [(title: String, input: String, edit: TableEdit)] = [
+        ("Add Row Above", UIKeyCommand.inputUpArrow, .addRow(above: true)), ("Add Row Below", UIKeyCommand.inputDownArrow, .addRow(above: false)),
+        ("Add Column Left", UIKeyCommand.inputLeftArrow, .addColumn(left: true)), ("Add Column Right", UIKeyCommand.inputRightArrow, .addColumn(left: false)),
+    ]
+
+    @objc private func moveInGrid(_ sender: UIKeyCommand) {
+        guard let index = sender.propertyList as? Int, let key = Self.gridKeys[safe: index] else { return }
+        _ = controller?.moveInGrid(key.move, extending: key.extending)
+    }
+
+    @objc private func editTable(_ sender: UIKeyCommand) {
+        guard let index = sender.propertyList as? Int, let key = Self.tableEditKeys[safe: index] else { return }
+        controller?.editTable(key.edit)
+    }
+
+    @objc private func newTableRow() { _ = controller?.insertNewline() }
 
     @objc private func suggestionUp() { controller?.suggestions.move(by: -1) }
     @objc private func suggestionDown() { controller?.suggestions.move(by: 1) }
@@ -445,6 +513,45 @@ final class TitleField: UITextField {
         textView?.refusesFocus = true
         defer { textView?.refusesFocus = false }
         return super.resignFirstResponder()
+    }
+}
+/// A box of a selection in a table typed in as a grid, which UIKit draws with its handles.
+final class TableSelectionRect: UITextSelectionRect {
+    private let box: CGRect
+    private let starts: Bool
+    private let ends: Bool
+
+    init(box: CGRect, starts: Bool, ends: Bool) {
+        self.box = box
+        self.starts = starts
+        self.ends = ends
+        super.init()
+    }
+
+    override var rect: CGRect { box }
+    override var writingDirection: NSWritingDirection { .natural }
+    override var containsStart: Bool { starts }
+    override var containsEnd: Bool { ends }
+    override var isVertical: Bool { false }
+}
+/// A table row's handle, drawn as the layout manager draws the column's. Taps on it are the editor's, as on the table.
+final class TableRowHandleView: UIView {
+    var isPicked = false {
+        didSet { if isPicked != oldValue { setNeedsDisplay() } }
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isOpaque = false
+        backgroundColor = .clear
+        isUserInteractionEnabled = false
+        contentMode = .redraw
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func draw(_ rect: CGRect) {
+        TableModel.drawHandle(in: bounds.insetBy(dx: 1, dy: 1), vertical: true, picked: isPicked)
     }
 }
 #endif

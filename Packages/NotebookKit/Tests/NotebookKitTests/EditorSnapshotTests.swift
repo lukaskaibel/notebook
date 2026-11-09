@@ -70,12 +70,24 @@ final class EditorSnapshotTests: XCTestCase {
         XCTAssertEqual(harness.visibleText(in: NSRange(location: italic.location - 1, length: italic.length + 2)), "ryokan")
     }
 
-    func testCaretInTableShowsMarkdown() {
+    func testCaretInTableShowsMarkdownWhenSet() {
+        EditorHarness.withTablesAsMarkdown {
+            let harness = EditorHarness(Self.sample)
+            let cell = harness.range(of: "Fushimi")
+            harness.caret(cell.location)
+            harness.settle(0.3)
+            harness.snapshot("caret-in-table")
+            XCTAssertTrue(harness.isVisible(harness.range(of: "| --- |").location))
+        }
+    }
+
+    func testCaretInTableKeepsTheGrid() {
         let harness = EditorHarness(Self.sample)
         let cell = harness.range(of: "Fushimi")
         harness.caret(cell.location)
         harness.settle(0.3)
-        harness.snapshot("caret-in-table")
-        XCTAssertTrue(harness.isVisible(harness.range(of: "| --- |").location))
+        harness.snapshot("caret-in-table-grid")
+        XCTAssertFalse(harness.isVisible(harness.range(of: "| --- |").location))
+        XCTAssertFalse(harness.isVisible(cell.location), "the cell's text is drawn by the grid")
     }
 }

@@ -43,6 +43,15 @@ final class EditorHarness: NSObject, EditorControllerDelegate {
         MainActor.assumeIsolated { window.orderOut(nil) }
     }
 
+    /// Runs `body` with Settings › Text › Edit Tables as Markdown on: tables the caret is in show their Markdown.
+    static func withTablesAsMarkdown(_ body: () throws -> Void) rethrows {
+        let settings = NotebookSettings.shared
+        let before = settings.editsTablesAsMarkdown
+        settings.editsTablesAsMarkdown = true
+        defer { settings.editsTablesAsMarkdown = before }
+        try body()
+    }
+
     func settle(_ seconds: TimeInterval = 0.05) {
         RunLoop.main.run(until: Date().addingTimeInterval(seconds))
         editor.layoutManager.ensureLayout(for: editor.container)

@@ -173,12 +173,19 @@ any PDF does, its writing as sharp as the page, and the pencil writes on it ther
 ### Tables, diagrams, code and maths
 
 Tables are drawn as tables, Mermaid diagrams as diagrams (natively, without a web view), code with highlighting for
-about forty languages, and LaTeX maths as typeset formulas. Click into one and its source appears, with a live preview
-for diagrams and formulas. Tables grow as you type them: Return after a first row like `| Day | Area |` puts the
-`| --- |` row under it, Tab goes from cell to cell and makes a new row after the last, Return makes a new row under
-the one you're in, and Return in an empty last row leaves the table. Table in the toolbar, or Format › Table (⌥⌘T),
-puts in an empty one of two columns to type in, as in Notes. Point at a code block and a button in its corner
-copies the code. Callouts in GitHub's and Obsidian's `> [!note]` style get their colour and symbol.
+about forty languages, and LaTeX maths as typeset formulas. Click into a diagram or formula and its source appears,
+with a live preview. A table stays a table while you type in it, as in Notes: you type in its cells, the one you're in
+has a ring, and only the marks of what you write there show, next to the caret, as everywhere else in a note. A handle
+on top of the column you're in and one beside the row open their menus: add a column on either side, align it or
+delete it; add a row above or below, or delete it. With the pointer over a table, a + along its right and bottom edges
+adds a column or a row. Tab and the arrow keys go from cell to cell, Return makes a new row under the one you're in,
+and Return in an empty last row leaves the table. A `|` typed in a cell stays in it, and the file stays plain
+Markdown, the `|` written `\|`. Table in the toolbar, or Format › Table › Insert Table (⌥⌘T), puts in an empty one of
+two columns to type in; with the caret in a table, the same button and Format › Table add and delete its rows and
+columns. If you'd rather see a table's Markdown, the bars between cells and the dashes under the header, turn on Edit
+tables as Markdown in Settings › Text. A table with a row of more cells than its header has, and an AsciiDoc table,
+show their source when you click into them. Point at a code block and a button in its corner copies the code. Callouts
+in GitHub's and Obsidian's `> [!note]` style get their colour and symbol.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/blocks-dark.webp">
@@ -472,10 +479,12 @@ through, each with a picture of the top of a note you opened last, its name and 
 folder you opened, each with how many files are in it. A folder with folders in it has an arrow that unfolds
 them below it, greyed, so a folder in a folder is one tap away. New Folder, search and a new note sit at the bottom,
 as in Notes, and search finds everything it finds on the Mac. While you write, a bar floats above the keyboard with
-Aa, a checklist, attachments, a link, undo and the formatting, a page of tools at a time. On its left, up to two
-buttons for where the caret is come and go: opening the link you are on, a to-do's bell, the style you are in, tinted,
-to take it off with a tap, and moving a list item in or out; you tick a to-do on its own checkbox. On its right, always,
-a circle of its own hides the keyboard. Which tools and in what order is yours to choose: touch and hold
+Aa, a checklist, a table, attachments, a link, undo and the formatting, a page of tools at a time. On its left, up to
+two buttons for where the caret is come and go: the next cell of a table, opening the link you are on, a to-do's bell,
+the style you are in, tinted, to take it off with a tap, and moving a list item in or out; you tick a to-do on its own
+checkbox. In a table, Table in the bar is the table's menu, and a tap on the handle of a row or column brings up the
+system's edit menu over it: Add Above and Add Below, or Add Left and Add Right, Align and Delete. On its right,
+always, a circle of its own hides the keyboard. Which tools and in what order is yours to choose: touch and hold
 the bar, or tap the sliders after its last tool, or go to Settings › Writing Bar. Aa brings up the Format panel in the
 keyboard's place, as in Notes: the text styles, bold, italic and the rest, lists, indenting and quotes. Pictures come
 from the camera, the document scanner, your photos or the Files app. The pencil, at the bottom of the screen or in the
@@ -837,6 +846,8 @@ While writing:
 | ⇧⌘A | Attach a file: pictures, PDFs and other files go in at the caret; notes and files from your folders as links |
 | ⌘' | Block quote |
 | ⌥⌘T | Table: two columns, a header and a row, the caret in the first cell |
+| ⌥⌘↑, ⌥⌘↓ in a table | Add a row above or below the one you're in |
+| ⌥⌘←, ⌥⌘→ in a table | Add a column left or right of the one you're in |
 | Tab, ⇧Tab | Nest or un-nest a list item (in code: indent) |
 | ⌥⌘] and ⌥⌘[ | Increase and decrease indent |
 | `*`, `_`, `` ` ``, `~` or `=` with text selected | Wrap the selection in that mark |
@@ -847,9 +858,12 @@ While writing:
 | `##` and then text, or `##` in front of a line | The space a heading needs goes in for you |
 | `**` (also `~~`, `==`) | The closing pair comes along, the caret between; a space next makes them plain stars |
 | Return on a heading | At its start: a line above it; on one without text: back to body text |
-| Return in a table | A new empty row under the caret's, the caret in its first cell; at the start of a row: one above it; in an empty last row: out of the table |
+| Return in a table | A new empty row under the caret's, the caret in its first cell; in an empty last row: out of the table |
 | Return after `\| Day \| Area \|` | A table: the `\| --- \|` row under it and an empty row |
 | Tab, ⇧Tab in a table | The next or previous cell, its text selected; Tab in the last cell: a new row |
+| ←, →, ↑, ↓ in a table | Through a cell's letters, then on to the next cell, the row above or below; out of the table past its first and last cell |
+| ⌘←, ⌘→ in a table | The start or end of the cell |
+| Delete at the start of a cell | Nothing: a cell's edges stay where they are |
 | `[[` | Suggestions for a link; ↑↓ and Return or Tab to pick |
 | Space on a selected picture | Quick Look |
 | Drag a picture or file in a note | Move it to another line, where the caret shows; ⌥ drops a copy. Into another note, the sidebar, the Finder or another app: a copy |

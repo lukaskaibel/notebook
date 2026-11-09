@@ -125,6 +125,21 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     private(set) var revealed: [NSRange] = []
     /// The block the caret is in, if it shows its Markdown then (tables, math, diagrams, frontmatter).
     private(set) var activeBlock: Int?
+    /// The table being typed in as a grid, by where it starts, and the cell the caret is in (`EditorController+Tables`).
+    var tableFocus: (location: Int, focus: TableModel.Focus)?
+    /// Where a selection grown with Shift and the arrow keys in a cell started.
+    var gridAnchor: Int?
+    /// Where ↑ and ↓ keep the caret across a table's rows, as they keep a column of text.
+    var gridColumnX: CGFloat?
+    /// The table under the pointer, whose + show along its edges.
+    var hoveredTable: Int?
+    /// A row or column picked by its handle while its menu is open.
+    var tableBand: (location: Int, band: TableBand)?
+    #if os(iOS)
+    /// The edit menu a handle of a table opens on iPhone and iPad, and what it holds.
+    var tableMenuInteraction: UIEditMenuInteraction?
+    var tableMenuEntries: [MenuEntry] = []
+    #endif
     private(set) var isLoading = false
     /// True while the note's text is still on its way (from iCloud): its title shows, and nothing can be typed or
     /// changed until it is loaded with its text.
@@ -301,6 +316,9 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         typedHeading = nil
         revealed = []
         activeBlock = nil
+        tableFocus = nil
+        hoveredTable = nil
+        tableBand = nil
         lineSignatures = []
         // The whole text is new, and so is every glyph.
         pendingGlyphs = IndexSet()
@@ -447,7 +465,9 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
             linksOutOfReach: isFolderOutOfReach,
             activeBlock: activeBlock,
             composing: suggestionAnchor,
-            previewHeight: { [weak self] block in self?.previewHeight(for: block) ?? 0 }
+            previewHeight: { [weak self] block in self?.previewHeight(for: block) ?? 0 },
+            tablesAsMarkdown: NotebookSettings.shared.editsTablesAsMarkdown,
+            tableFocus: tableFocus
         )
     }
 
@@ -488,6 +508,10 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
             let caret = min(editedRange.upperBound, storage.length)
             let line = document.lineIndex(containing: caret)
             if let block = document.lines[safe: line]?.block, document.blocks[block].isSwappable { activeBlock = block } else { activeBlock = nil }
+        }
+        // The table typed in moved with the text before it; its cell is worked out again once the caret is placed.
+        if let focus = tableFocus {
+            tableFocus = activeBlock.flatMap { document.blocks[safe: $0] }.map { ($0.range.location, focus.focus) }
         }
         if let typed = typedHeading, typed > editedRange.location { typedHeading = typed >= oldEnd ? typed + delta : nil }
 
@@ -836,10 +860,13 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         let target = revealTarget()
         let edited = editedMarks
         editedMarks = nil
-        guard target.ranges != revealed || target.block != activeBlock || edited != nil else { return }
+        let focus = tableFocusTarget(block: target.block)
+        let focusChanged = focus?.location != tableFocus?.location || focus?.focus != tableFocus?.focus
+        guard target.ranges != revealed || target.block != activeBlock || edited != nil || focusChanged else { return }
         preservingScroll(anchor: anchor) {
             let old = revealed
             revealed = target.ranges
+            tableFocus = focus
             if target.block != activeBlock {
                 let previous = activeBlock
                 activeBlock = target.block
@@ -847,6 +874,10 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
                 if let previous { lines += self.lines(of: previous) }
                 if let block = target.block { lines += self.lines(of: block) }
                 restyle(lines: lines)
+            } else if focusChanged, let block = target.block {
+                // Another cell of the table being typed in: its ring moves, and its marks show.
+                restyle(lines: [document.blocks[block].lines.lowerBound])
+                linesNeedDisplay([document.blocks[block].range])
             }
             let folding = foldingMarks(from: old, to: revealed, edited: edited)
             revealAnimator.animate(appearing: folding.appearing, disappearing: folding.disappearing, in: storage)
@@ -943,7 +974,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     /// and iPad, of the keyboard and the bar over it. What the editor writes where you type (Return, the next bullet,
     /// what is pasted) comes into view as the text view's own typing does.
     func scrollCaretIntoView() {
-        guard isInWindow, !isLoading, let line = lineRect(at: selection.upperBound) else { return }
+        guard isInWindow, !isLoading, let line = tableCaretRect(at: selection.upperBound)?.insetBy(dx: 0, dy: -TableModel.padding.height) ?? lineRect(at: selection.upperBound) else { return }
         let visible = visibleRect
         let top = visible.minY + topInset + Self.caretRoom
         let bottom = visible.maxY - bottomInset - Self.caretRoom
@@ -1010,6 +1041,8 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     /// names, without being read.
     var isFolderOutOfReach: Bool { layoutManager.picturesOutOfReach && folder == nil }
 
+    func tableOverlay(for location: Int) -> TableModel.Overlay { tableOverlay(at: location) }
+
     func objectNeedsDisplay(_ range: NSRange) {
         guard range.upperBound <= storage.length else { return }
         layoutManager.invalidateDisplay(forCharacterRange: range)
@@ -1036,6 +1069,9 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     func selectionChanged() {
         flushGlyphs()
         if !isLoading { caretWasPlaced = true }
+        // ↑ and ↓ in a table keep their column only while they go on.
+        gridColumnX = nil
+        if selection.length == 0 { gridAnchor = nil }
         layoutManager.selectedRanges = selectedRanges
         // The #s typed on a touch keyboard go once the caret is on another line.
         if let typed = typedHeading, document.lines.isEmpty || document.lines[document.lineIndex(containing: selection.location)].range.location != typed {
@@ -1133,6 +1169,8 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
 
     /// The caret at a character, as the text view proposed it there, such as where a drag would drop.
     func caretRect(proposed rect: NSRect, at index: Int) -> NSRect {
+        // In a table typed in as a grid, where the cell's letters are drawn.
+        if let caret = tableCaretRect(at: index) { return caret }
         guard storage.length > 0, let line = caretLine(of: index, at: rect.midY) else {
             return shortCaret(rect, line: rect, font: EditorStyle.body)
         }

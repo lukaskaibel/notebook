@@ -18,37 +18,87 @@ final class TableModel {
     /// The first row is a header, tinted. AsciiDoc tables may have none.
     let hasHeader: Bool
 
+    /// Typed in as a grid (a Markdown table whose rows all have its columns): for each drawn row and column, where
+    /// its text is in the note, or for an empty cell where typing goes, and for each place in that text the place in
+    /// what the cell shows. Empty for other tables.
+    let contents: [[NSRange]]
+    let maps: [[[Int]]]
+    /// The cell the caret is in, while the table is typed in.
+    let focus: Focus?
+
+    struct Focus: Equatable {
+        var row: Int
+        var column: Int
+        /// The spans of the cell whose marks show, relative to its text: those next to the caret, with a keyboard.
+        var revealing: [NSRange] = []
+    }
+
     static let padding = CGSize(width: 12, height: 7)
     static var font: NSFont { EditorStyle.face((EditorStyle.bodySize * 0.93).rounded()) }
     static var headerFont: NSFont { EditorStyle.face((EditorStyle.bodySize * 0.93).rounded(), weight: .semibold) }
 
-    init(text: NSString, lines: [MarkdownLine], alignments: [TableAlignment]) {
+    init(text: NSString, lines: [MarkdownLine], alignments: [TableAlignment], focus: Focus? = nil) {
         let units = text.units(of: lines)
         var rows: [[NSAttributedString]] = []
         var ranges: [[NSRange]] = []
+        var contents: [[NSRange]] = []
+        var maps: [[[Int]]] = []
         var signature = ""
+        let grid = Self.fitsGrid(units, lines: lines, columns: alignments.count)
         for line in lines where line.kind != .tableDelimiter {
+            let slots = MarkdownParser.tableSlots(units, line.range)
             let cells = MarkdownParser.tableCells(units, line.range)
             let isHeader = line.kind == .tableHeader
+            let rowIndex = rows.count
             var row: [NSAttributedString] = []
+            var rowMaps: [[Int]] = []
             for index in 0..<alignments.count {
                 let source = index < cells.count ? text.substring(with: cells[index]) : ""
-                row.append(InlineRenderer.render(
-                    source.replacingOccurrences(of: "\\|", with: "|"),
-                    font: isHeader ? Self.headerFont : Self.font,
-                    color: isHeader ? Theme.text : Theme.textBody
-                ))
+                let revealing = focus.flatMap { $0.row == rowIndex && $0.column == index ? $0.revealing : nil } ?? []
+                let rendered = InlineRenderer.renderMapped(source, font: isHeader ? Self.headerFont : Self.font,
+                                                           color: isHeader ? Theme.text : Theme.textBody, revealing: revealing)
+                row.append(rendered.shown)
+                rowMaps.append(rendered.map)
             }
             rows.append(row)
             ranges.append(cells)
+            if grid {
+                contents.append(zip(slots, cells).map { slot, cell in Self.content(of: cell, in: slot, units) })
+                maps.append(rowMaps)
+            }
             signature += text.substring(with: line.range) + "\n"
         }
         self.rows = rows
         self.alignments = alignments
         self.cellRanges = ranges
-        self.signature = signature
+        self.contents = contents
+        self.maps = maps
+        self.focus = grid ? focus : nil
+        self.signature = signature + (focus.map { "\($0.row),\($0.column),\($0.revealing)" } ?? "")
         weights = []
         hasHeader = true
+    }
+
+    /// Whether a table is typed in as a grid: every row has as many cells as the table has columns. A row with more
+    /// would lose the cells the grid can't show, one with fewer has nowhere for what is typed in the rest: such a
+    /// table shows its Markdown, as all of them do with Settings › Text › Edit tables as Markdown.
+    /// A row being written by hand, its closing pipe still to come where the header has one, shows its Markdown too.
+    nonisolated static func fitsGrid(_ units: [UInt16], lines: [MarkdownLine], columns: Int) -> Bool {
+        func closes(_ range: NSRange) -> Bool {
+            var end = range.upperBound
+            while end > range.location, units[end - 1] == 32 || units[end - 1] == 9 { end -= 1 }
+            return end > range.location && units[end - 1] == 124 && (end - 2 < range.location || units[end - 2] != 92)
+        }
+        guard let first = lines.first else { return false }
+        let closed = closes(first.range)
+        return lines.allSatisfy { MarkdownParser.tableSlots(units, $0.range).count == columns && closes($0.range) == closed }
+    }
+
+    /// Where a cell's text is, or in an empty cell where typing goes: after the space that follows the pipe, as Tab
+    /// leaves it.
+    nonisolated static func content(of cell: NSRange, in slot: NSRange, _ units: [UInt16]) -> NSRange {
+        guard cell.length == 0 else { return cell }
+        return NSRange(location: slot.length > 0 && units[slot.location] == 32 ? slot.location + 1 : slot.location, length: 0)
     }
 
     /// An AsciiDoc table (`|===`), its lines from its attributes to its closing delimiter: cells may run over lines
@@ -101,6 +151,9 @@ final class TableModel {
         self.rows = rows
         self.alignments = Array((alignments + Array(repeating: .leading, count: columns)).prefix(columns))
         cellRanges = ranges
+        contents = []
+        maps = []
+        focus = nil
         signature = lines.map { text.substring(with: $0.range) }.joined(separator: "\n")
         weights = spec.weights.count == columns ? spec.weights.map { CGFloat($0) } : []
         hasHeader = header
@@ -166,7 +219,21 @@ final class TableModel {
         return layout
     }
 
-    func draw(in rect: CGRect) {
+    /// What is drawn over a table while it is typed in, beyond the cell the caret is in: the text selected in its cell
+    /// (the Mac's; UIKit draws its own), a row or column picked by its handle, and the + along its edges while the
+    /// pointer is over it.
+    struct Overlay {
+        var selection: NSRange?
+        var selectionColor: NSColor = Theme.accent.withAlphaComponent(0.25)
+        var band: TableBand?
+        var showsAdd = false
+        var showsHandles = true
+        /// The Mac's text view keeps its text from the margin, where half of the row's handle is: it draws that one
+        /// itself, over the text (`drawRowHandle`).
+        var drawsRowHandle = true
+    }
+
+    func draw(in rect: CGRect, overlay: Overlay = Overlay()) {
         let layout = layout(maxWidth: rect.width)
         let frame = CGRect(origin: rect.origin, size: layout.size)
         let outline = NSBezierPath(roundedRect: frame.insetBy(dx: 0.5, dy: 0.5), xRadius: 8, yRadius: 8)
@@ -186,6 +253,17 @@ final class TableModel {
                 CGRect(x: frame.minX, y: y, width: frame.width, height: height).fill()
             }
             y += height
+        }
+        if let band = overlay.band {
+            Theme.accent.withAlphaComponent(0.12).setFill()
+            switch band {
+            case .row(let row): if let cell = cellFrame(row: row, column: 0, in: rect) { CGRect(x: frame.minX, y: cell.minY, width: frame.width, height: cell.height).fill() }
+            case .column(let column): if let cell = cellFrame(row: 0, column: column, in: rect) { CGRect(x: cell.minX, y: frame.minY, width: cell.width, height: frame.height).fill() }
+            }
+        }
+        if let selection = overlay.selection {
+            overlay.selectionColor.setFill()
+            for box in selectionBoxes(for: selection, in: rect) { box.fill() }
         }
         Theme.cardBorder.setFill()
         var x = frame.minX
@@ -219,6 +297,186 @@ final class TableModel {
         Theme.cardBorder.setStroke()
         outline.lineWidth = 1
         outline.stroke()
+
+        if let focus, let cell = cellFrame(row: focus.row, column: focus.column, in: rect) {
+            // The cell you type in, ringed as a field you type in is; its corner rounded where the table's is.
+            let ring = NSBezierPath(roundedRect: cell.insetBy(dx: 1, dy: 1), xRadius: 4, yRadius: 4)
+            ring.lineWidth = 2
+            Theme.accent.setStroke()
+            ring.stroke()
+            if overlay.showsHandles {
+                if let handle = columnHandleRect(in: rect) { Self.drawHandle(in: handle, vertical: false, picked: overlay.band == .column(focus.column)) }
+                if overlay.drawsRowHandle { drawRowHandle(in: rect, band: overlay.band) }
+            }
+        }
+        if overlay.showsAdd {
+            for (bar, vertical) in [(addColumnRect(in: rect), true), (addRowRect(in: rect), false)] {
+                Theme.tableStripe.blended(withFraction: 0.5, of: Theme.cardBorder)?.setFill()
+                NSBezierPath(roundedRect: bar, xRadius: 4, yRadius: 4).fill()
+                let side: CGFloat = 9
+                let center = CGPoint(x: bar.midX, y: vertical ? min(bar.midY, bar.minY + 40) : bar.midY)
+                Theme.textTertiary.setFill()
+                CGRect(x: center.x - side / 2, y: center.y - 0.75, width: side, height: 1.5).fill()
+                CGRect(x: center.x - 0.75, y: center.y - side / 2, width: 1.5, height: side).fill()
+            }
+        }
+    }
+
+    /// The handle across the left edge of the row the caret is in.
+    func drawRowHandle(in rect: CGRect, band: TableBand?) {
+        guard let focus, let handle = rowHandleRect(in: rect) else { return }
+        Self.drawHandle(in: handle, vertical: true, picked: band == .row(focus.row))
+    }
+
+    /// A handle: a capsule with three dots, across a column's top edge or a row's left one.
+    static func drawHandle(in rect: CGRect, vertical: Bool, picked: Bool) {
+        let capsule = NSBezierPath(roundedRect: rect, xRadius: min(rect.width, rect.height) / 2, yRadius: min(rect.width, rect.height) / 2)
+        (picked ? Theme.accent : Theme.card).setFill()
+        capsule.fill()
+        capsule.lineWidth = 1
+        (picked ? Theme.accent : Theme.cardBorder.blended(withFraction: 0.3, of: Theme.textTertiary) ?? Theme.cardBorder).setStroke()
+        capsule.stroke()
+        (picked ? NSColor.white : Theme.textSecondary).setFill()
+        for step in -1...1 {
+            let center = vertical ? CGPoint(x: rect.midX, y: rect.midY + CGFloat(step) * 4.5) : CGPoint(x: rect.midX + CGFloat(step) * 4.5, y: rect.midY)
+            NSBezierPath(ovalIn: CGRect(x: center.x - 1.25, y: center.y - 1.25, width: 2.5, height: 2.5)).fill()
+        }
+    }
+
+    // MARK: - Typing in the grid
+
+    /// Where a cell is, in a table drawn in `rect`.
+    func cellFrame(row: Int, column: Int, in rect: CGRect) -> CGRect? {
+        let layout = layout(maxWidth: rect.width)
+        guard layout.rowHeights.indices.contains(row), layout.columnWidths.indices.contains(column) else { return nil }
+        return CGRect(x: rect.minX + layout.columnWidths[..<column].reduce(0, +), y: rect.minY + layout.rowHeights[..<row].reduce(0, +),
+                      width: layout.columnWidths[column], height: layout.rowHeights[row])
+    }
+
+    /// Where a cell's text is drawn: inside its padding, moved over as its column is aligned.
+    func textFrame(row: Int, column: Int, in rect: CGRect) -> CGRect? {
+        guard let cell = cellFrame(row: row, column: column, in: rect), let text = rows[safe: row]?[safe: column] else { return nil }
+        let width = max(10, cell.width - Self.padding.width * 2)
+        let size = text.boundingRect(with: CGSize(width: width, height: 10_000), options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil).size
+        var x = cell.minX + Self.padding.width
+        switch alignments[safe: column] ?? .leading {
+        case .center: x = cell.minX + (cell.width - min(size.width, width)) / 2
+        case .trailing: x = cell.maxX - Self.padding.width - min(size.width, width)
+        case .leading: break
+        }
+        return CGRect(x: x, y: cell.minY + Self.padding.height, width: width, height: cell.height - Self.padding.height * 2)
+    }
+
+    /// The caret at a place in what a cell shows: as tall as its text, from above the letters to below them.
+    func caretRect(row: Int, column: Int, at offset: Int, in rect: CGRect) -> CGRect? {
+        guard let frame = textFrame(row: row, column: column, in: rect), let text = rows[safe: row]?[safe: column] else { return nil }
+        let fallback = row == 0 && hasHeader ? Self.headerFont : Self.font
+        return CellText.measure(text, width: frame.width) { layout, container in
+            let length = text.length
+            let place = min(max(0, offset), length)
+            guard length > 0 else {
+                return Self.caret(x: frame.minX, baseline: frame.minY + layout.defaultBaselineOffsetFor(fallback), font: fallback)
+            }
+            let character = place < length ? place : length - 1
+            let glyph = layout.glyphIndexForCharacter(at: character)
+            let line = layout.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+            let location = layout.location(forGlyphAt: glyph)
+            var x = line.minX + location.x
+            if place == length {
+                x = layout.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: container).maxX
+            }
+            let font = (text.attribute(.font, at: character, effectiveRange: nil) as? NSFont) ?? fallback
+            return Self.caret(x: frame.minX + x, baseline: frame.minY + line.minY + location.y, font: font)
+        }
+    }
+
+    private static func caret(x: CGFloat, baseline: CGFloat, font: NSFont) -> CGRect {
+        CGRect(x: x, y: baseline - font.ascender - 1, width: 2, height: font.ascender - font.descender + 2)
+    }
+
+    /// The place in what a cell shows nearest a point, as a click puts the caret there.
+    func offset(row: Int, column: Int, at point: CGPoint, in rect: CGRect) -> Int {
+        guard let frame = textFrame(row: row, column: column, in: rect), let text = rows[safe: row]?[safe: column], text.length > 0 else { return 0 }
+        return CellText.measure(text, width: frame.width) { layout, container in
+            let local = CGPoint(x: point.x - frame.minX, y: min(max(point.y - frame.minY, 0), max(0, layout.usedRect(for: container).height - 1)))
+            var fraction: CGFloat = 0
+            let glyph = layout.glyphIndex(for: local, in: container, fractionOfDistanceThroughGlyph: &fraction)
+            let character = layout.characterIndexForGlyph(at: glyph)
+            let line = layout.lineFragmentUsedRect(forGlyphAt: glyph, effectiveRange: nil)
+            // Past the end of a line, the caret goes after its last letter.
+            if local.x >= line.maxX { return min(text.length, NSMaxRange(layout.characterRange(forGlyphRange: layout.glyphRange(forBoundingRect: line, in: container), actualGlyphRange: nil))) }
+            return min(text.length, character + (fraction > 0.5 ? 1 : 0))
+        }
+    }
+
+    /// The place on the line above or below in a cell whose text wraps, nearest `x`; nil on its first or last line.
+    func offset(row: Int, column: Int, from offset: Int, lines direction: Int, x: CGFloat, in rect: CGRect) -> Int? {
+        guard let frame = textFrame(row: row, column: column, in: rect), let text = rows[safe: row]?[safe: column], text.length > 0,
+              let caret = caretRect(row: row, column: column, at: offset, in: rect) else { return nil }
+        let lineHeight = caret.height
+        let target = CGPoint(x: x, y: direction < 0 ? caret.minY - lineHeight / 2 : caret.maxY + lineHeight / 2)
+        guard target.y >= frame.minY - 1, target.y <= frame.minY + CellText.measure(text, width: frame.width, { $0.usedRect(for: $1).height }) + 1 else { return nil }
+        return self.offset(row: row, column: column, at: target, in: rect)
+    }
+
+    /// The boxes a selection in a cell is drawn in, as the text of a note is: `range` is in the note.
+    func selectionRects(row: Int, column: Int, range: NSRange, in rect: CGRect) -> [CGRect] {
+        guard let content = contents[safe: row]?[safe: column], let map = maps[safe: row]?[safe: column],
+              let frame = textFrame(row: row, column: column, in: rect), let text = rows[safe: row]?[safe: column] else { return [] }
+        let start = max(range.location, content.location) - content.location
+        let end = min(range.upperBound, content.upperBound) - content.location
+        guard end > start, start >= 0, end < map.count else { return [] }
+        let shown = NSRange(location: map[start], length: map[end] - map[start])
+        guard shown.length > 0 else { return [] }
+        return CellText.measure(text, width: frame.width) { layout, container in
+            var rects: [CGRect] = []
+            let glyphs = layout.glyphRange(forCharacterRange: shown, actualCharacterRange: nil)
+            layout.enumerateEnclosingRects(forGlyphRange: glyphs, withinSelectedGlyphRange: glyphs, in: container) { box, _ in
+                rects.append(box.offsetBy(dx: frame.minX, dy: frame.minY))
+            }
+            return rects
+        }
+    }
+
+    /// What a selection takes in the grid: the text selected in one cell, or every cell a selection over several
+    /// of them reaches into, whole.
+    func selectionBoxes(for range: NSRange, in rect: CGRect) -> [CGRect] {
+        var touched: [(row: Int, column: Int)] = []
+        for (row, cells) in contents.enumerated() {
+            for (column, content) in cells.enumerated() {
+                if NSIntersectionRange(range, content).length > 0 || (content.length == 0 && content.location > range.location && content.location < range.upperBound) {
+                    touched.append((row, column))
+                }
+            }
+        }
+        if touched.count == 1, let only = touched.first { return selectionRects(row: only.row, column: only.column, range: range, in: rect) }
+        return touched.compactMap { cellFrame(row: $0.row, column: $0.column, in: rect)?.insetBy(dx: 1, dy: 1) }
+    }
+
+    // MARK: - Handles and the + along the edges
+
+    /// Across the top edge of the column the caret is in, as in Notes.
+    func columnHandleRect(in rect: CGRect) -> CGRect? {
+        guard let focus, let cell = cellFrame(row: 0, column: focus.column, in: rect) else { return nil }
+        return CGRect(x: cell.midX - 13, y: cell.minY - 6, width: 26, height: 12)
+    }
+
+    /// Across the left edge of the row the caret is in.
+    func rowHandleRect(in rect: CGRect) -> CGRect? {
+        guard let focus, let cell = cellFrame(row: focus.row, column: 0, in: rect) else { return nil }
+        return CGRect(x: cell.minX - 6, y: cell.midY - 13, width: 12, height: 26)
+    }
+
+    /// Along the right edge: adds a column at the end.
+    func addColumnRect(in rect: CGRect) -> CGRect {
+        let size = layout(maxWidth: rect.width).size
+        return CGRect(x: rect.minX + size.width + 5, y: rect.minY, width: 16, height: size.height)
+    }
+
+    /// Along the bottom edge: adds a row at the end.
+    func addRowRect(in rect: CGRect) -> CGRect {
+        let size = layout(maxWidth: rect.width).size
+        return CGRect(x: rect.minX, y: rect.minY + size.height + 5, width: size.width, height: 16)
     }
 
     /// Where a row is drawn, the header first, in a table drawn in `rect`.
@@ -258,5 +516,49 @@ extension NSString {
             if let base = buffer.baseAddress, end > start { getCharacters(base + start, range: NSRange(location: start, length: end - start)) }
         }
         return units
+    }
+}
+
+/// A row or a column picked by its handle, shown while its menu is open.
+enum TableBand: Equatable {
+    case row(Int)
+    case column(Int)
+}
+
+/// One TextKit stack, its text swapped for each cell measured: where the caret goes in a cell, what a click hits,
+/// what a selection covers. Laid out as `NSAttributedString` draws a cell, so the caret sits where its letters are.
+@MainActor
+enum CellText {
+    private static let storage = NSTextStorage()
+    private static let container: NSTextContainer = {
+        let container = NSTextContainer(size: CGSize(width: 100, height: 10_000))
+        container.lineFragmentPadding = 0
+        return container
+    }()
+    private static let layout: NSLayoutManager = {
+        let layout = NSLayoutManager()
+        layout.usesFontLeading = true
+        layout.addTextContainer(container)
+        storage.addLayoutManager(layout)
+        return layout
+    }()
+
+    static func measure<T>(_ text: NSAttributedString, width: CGFloat, _ body: (NSLayoutManager, NSTextContainer) -> T) -> T {
+        let layout = self.layout
+        if storage.length != text.length || !storage.isEqual(to: text) { storage.setAttributedString(text) }
+        if container.size.width != width { container.size = CGSize(width: width, height: 10_000) }
+        layout.ensureLayout(for: container)
+        return body(layout, container)
+    }
+}
+
+extension NSLayoutManager {
+    /// Where the baseline of an empty line of this font is, from its top.
+    func defaultBaselineOffsetFor(_ font: NSFont) -> CGFloat {
+        #if os(macOS)
+        defaultBaselineOffset(for: font)
+        #else
+        font.ascender
+        #endif
     }
 }

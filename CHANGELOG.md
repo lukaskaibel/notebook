@@ -7,10 +7,20 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
-- Table, in the toolbar and in Format › Table (⌥⌘T, also on an iPad with a keyboard), puts an empty table of two
-  columns in a note, a header and one row, with the caret in its first cell, as in Notes: on an empty line, or under
-  the line you're on, with empty lines around it so other apps read it as a table too. In a note you haven't clicked
-  into, it goes at the end, as Checklist does. AsciiDoc notes don't have it; their tables are typed.
+- Tables stay tables while you type in them, as in Notes, on the Mac, iPhone and iPad. You type in a table's cells:
+  the one you're in has a ring, and only the marks of what you write there show, next to the caret. A handle on top of
+  the column you're in and one beside the row open their menus, to add a column left or right of it, align it or
+  delete it, and to add a row above or below or delete it; on iPhone and iPad they are the system's edit menu. With the
+  pointer over a table, a + along its right and bottom edges adds a column or a row. ⌥⌘↑ and ⌥⌘↓ add a row, ⌥⌘← and
+  ⌥⌘→ a column, and the arrow keys go from cell to cell; Format › Table, Table in the toolbar and the right-click menu
+  have the same. On iPhone and iPad, Table is in the bar above the keyboard, and Next Cell next to it while you're in a
+  table. A `|` typed or pasted in a cell stays in it, and the file stays plain Markdown.
+- Settings › Text › Edit tables as Markdown, off unless you turn it on: a table you click into shows its Markdown, the
+  bars between its cells and the dashes under its header, as it did before.
+- Table, in the toolbar and in Format › Table › Insert Table (⌥⌘T, also on an iPad with a keyboard), puts an empty
+  table of two columns in a note, a header and one row, with the caret in its first cell, as in Notes: on an empty
+  line, or under the line you're on, with empty lines around it so other apps read it as a table too. In a note you
+  haven't clicked into, it goes at the end, as Checklist does. AsciiDoc notes don't have it; their tables are typed.
 - Notebook asks for a rating on the App Store, with the system's own prompt, once you have used it on three days: only
   as you finish something, when you leave a note you wrote in or a to-do you ticked in To-dos has gone, never as it
   opens or as you start a new note, and at most once a version and two months apart (the system shows it at most three

@@ -139,6 +139,16 @@ public final class NotebookSettings {
         }
     }
 
+    /// A table you click into shows its Markdown, the bars between its cells and the dashes under its header, rather
+    /// than its grid, which you type in as in Notes. Off unless you turn it on.
+    public var editsTablesAsMarkdown: Bool {
+        didSet {
+            guard editsTablesAsMarkdown != oldValue else { return }
+            UserDefaults.standard.set(editsTablesAsMarkdown, forKey: "editsTablesAsMarkdown")
+            NotificationCenter.default.post(name: .notebookTypographyChanged, object: nil)
+        }
+    }
+
     /// Search finds the words in pictures, scans and handwriting, which Notebook reads in the background.
     public var readsTextInPictures: Bool {
         didSet {
@@ -237,6 +247,7 @@ public final class NotebookSettings {
             if let kind = FileKind(rawValue: saved.key), kind != .folder, let color = FolderColor(rawValue: saved.value) { colors[kind] = color }
         }
         headingMarks = Self.headingMarks(in: defaults)
+        editsTablesAsMarkdown = defaults.bool(forKey: "editsTablesAsMarkdown")
         readsTextInPictures = defaults.object(forKey: "readsTextInPictures") as? Bool ?? true
         deletesEmptyNewNotes = defaults.object(forKey: "deletesEmptyNewNotes") as? Bool ?? true
         newNoteKind = NewNoteKind(rawValue: defaults.string(forKey: "newNoteKind") ?? "") ?? .standard

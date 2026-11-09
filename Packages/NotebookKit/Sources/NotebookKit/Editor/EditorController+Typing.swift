@@ -11,6 +11,8 @@ final class CaretContext {
     var link: LinkTarget.Kind?
     /// The to-do the caret is in has a date or a place.
     var hasReminder = false
+    /// The caret is in a table typed in as a grid: Table opens the table's menu, and Next Cell shows.
+    var isInTable = false
 }
 
 /// What the last press of Bold (or another style) took off, for the next press to put back.
@@ -111,6 +113,8 @@ extension EditorController {
     /// Brings the bar's buttons for where the caret is up to date. While you don't write they stay as they are, so the
     /// bar goes away with the keyboard as it was.
     func updateCaretContext() {
+        let inTable = isFocused && activeGrid != nil
+        if caretContext.isInTable != inTable { caretContext.isInTable = inTable }
         #if os(iOS)
         guard isFocused, !isWaitingForText, !isDrawing else { return }
         let context = isInProse ? MarkdownEditing.context(in: markdownState) : MarkdownEditing.Context()

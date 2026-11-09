@@ -78,6 +78,8 @@ extension EditorController {
     @discardableResult
     func paste(from pasteboard: NSPasteboard, at index: Int?) -> Bool {
         let target = index.map { NSRange(location: $0, length: 0) } ?? selection
+        let fragment = pasteboard.data(forType: Self.fragmentType).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: String] }?["markdown"]
+        if pasteIntoGrid(pasteboard.string(forType: .string) ?? fragment, at: target) { return true }
 
         if let data = pasteboard.data(forType: Self.fragmentType), pasteFragment(data, at: target) { return true }
 

@@ -19,6 +19,12 @@ protocol EditorLayoutSource: AnyObject {
     var isFolderOutOfReach: Bool { get }
     /// A drawing is open in a canvas over the text, which draws it.
     func showsCanvas(for picture: URL) -> Bool
+    /// What is drawn over the table that starts here while it is typed in or the pointer is over it.
+    func tableOverlay(for location: Int) -> TableModel.Overlay
+}
+
+extension EditorLayoutSource {
+    func tableOverlay(for location: Int) -> TableModel.Overlay { TableModel.Overlay() }
 }
 
 /// TextKit 1 layout with Notebook's live preview: hidden Markdown punctuation gets no glyph at all, objects (checkboxes,
@@ -175,6 +181,8 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
         characterIndex charIndex: Int
     ) -> NSRect {
         if isSoftBreak(charIndex) {
+            // A table's line breaks while it is typed in join its lines without room.
+            if textStorage?.attribute(.notebookSoftBreak, at: charIndex, effectiveRange: nil) as? Bool == false { return .zero }
             let font = (textStorage?.attribute(.font, at: charIndex, effectiveRange: nil) as? NSFont) ?? EditorStyle.body
             return NSRect(x: 0, y: 0, width: ceil((" " as NSString).size(withAttributes: [.font: font]).width), height: 0)
         }
@@ -515,7 +523,10 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
             NSRect(x: line.minX, y: floor(baseline - font.xHeight / 2), width: line.width - 2, height: 1).fill()
 
         case .table(let model):
-            model.draw(in: NSRect(x: rect.minX, y: rect.minY, width: rect.width - 1, height: rect.height))
+            var overlay = hidesEditingControls ? TableModel.Overlay() : source?.tableOverlay(for: objectRange.location) ?? TableModel.Overlay()
+            // Half of it is in the margin, where the text system doesn't draw again: the text view has it.
+            overlay.drawsRowHandle = false
+            model.draw(in: NSRect(x: rect.minX, y: rect.minY, width: rect.width - 1, height: rect.height), overlay: overlay)
 
         case .mermaid(let source):
             switch DiagramStore.diagram(source, isDark: self.source?.isDarkAppearance ?? false, ready: { [weak self] in self?.source?.objectNeedsLayout(objectRange) }) {

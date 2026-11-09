@@ -9,7 +9,7 @@ final class MarkdownTextView: NSTextView {
 
     /// True while the mouse button is down and AppKit is tracking a click or drag. Markdown doesn't show next to the
     /// caret until the button comes up, so selecting never moves text around under the pointer.
-    private(set) var isTrackingMouse = false
+    var isTrackingMouse = false
 
     let titleField = TitleField()
     let metaLabel = NSTextField(labelWithString: "")
@@ -169,6 +169,7 @@ final class MarkdownTextView: NSTextView {
         super.mouseMoved(with: event)
         controller?.updateCopyButton(at: convert(event.locationInWindow, from: nil))
         controller?.updateTodoBell(at: convert(event.locationInWindow, from: nil))
+        controller?.updateTableHover(at: convert(event.locationInWindow, from: nil))
         controller?.updateCursor(for: event)
     }
 
@@ -176,6 +177,7 @@ final class MarkdownTextView: NSTextView {
         super.mouseExited(with: event)
         controller?.updateCopyButton(at: nil)
         controller?.updateTodoBell(at: nil)
+        controller?.updateTableHover(at: nil)
     }
 
     // AppKit puts the I-beam back on every cursor update; links and checkboxes keep the hand.
@@ -209,6 +211,7 @@ final class MarkdownTextView: NSTextView {
     @objc private func windowResignedKey() {
         controller?.updateCopyButton(at: nil)
         controller?.updateTodoBell(at: nil)
+        controller?.updateTableHover(at: nil)
     }
 
     #if DEBUG
@@ -226,12 +229,18 @@ final class MarkdownTextView: NSTextView {
             if let rects { drawnRects += (0..<count).map { rects[$0] } }
         }
         super.draw(dirtyRect)
+        controller?.drawTableRowHandle(in: dirtyRect)
         guard Self.drawsCaretAlways, selectedRange().length == 0, window?.firstResponder === self,
               let window, var rect = Optional(firstRect(forCharacterRange: selectedRange(), actualRange: nil)) else { return }
         rect = convert(window.convertFromScreen(rect), from: nil)
         let caret = controller?.caretRect(proposed: NSRect(x: rect.minX, y: rect.minY, width: 2, height: rect.height)) ?? rect
         insertionPointColor.setFill()
         NSBezierPath(roundedRect: NSRect(x: caret.minX, y: caret.minY, width: 2, height: caret.height), xRadius: 1, yRadius: 1).fill()
+    }
+    #else
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        controller?.drawTableRowHandle(in: dirtyRect)
     }
     #endif
 
