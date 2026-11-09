@@ -222,6 +222,19 @@ enum DebugRemote {
                 if let down = event(.leftMouseDown) { window.sendEvent(down) }
                 log("windowclick \(Int(numbers[0])),\(Int(numbers[1])) on \(hit.map { String(describing: type(of: $0)) } ?? "nothing")")
             }
+        case "tablecell", "tablehandle", "tablehover":
+            // tablecell <row> <column> [letter]: a click on a cell of the table the caret is in (or the first);
+            // tablehandle row|column: on a handle; tablehover <row> <column>: the pointer over a cell, so the + show.
+            guard let editor, let content = window?.contentView else { return }
+            let point: CGPoint? = command == "tablehandle" ? editor.debugTableHandle(row: argument == "row")
+                : numbers.count >= 2 ? editor.debugTablePoint(row: Int(numbers[0]), column: Int(numbers[1]), letter: numbers.count > 2 ? Int(numbers[2]) : nil) : nil
+            guard let point else { return log("no table point") }
+            if command == "tablehover" { return editor.updateTableHover(at: point) }
+            let inWindow = editor.textView.convert(point, to: nil)
+            click(at: CGPoint(x: inWindow.x, y: content.bounds.height - inWindow.y))
+            log(editor.debugTableInfo)
+        case "tableinfo":
+            if let editor { log(editor.debugTableInfo) }
         case "clicktext":
             // clicktext <character index> [fraction across the character]
             if let editor, let index = numbers.first, let point = windowPoint(ofCharacter: Int(index), fraction: numbers.count > 1 ? numbers[1] : 0.5, in: editor) {

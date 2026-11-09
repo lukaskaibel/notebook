@@ -142,8 +142,8 @@ struct DocumentScreen: View {
                     .disabled(!isLoaded)
                 Button { workspace.editor.beginEditing(then: .checklist) } label: { Label("Checklist", systemImage: "checklist") }
                     .disabled(!isLoaded)
-                Button { workspace.editor.beginEditing(then: .table) } label: { Label("Table", systemImage: "tablecells") }
-                    .disabled(!isLoaded || workspace.editor.syntax != .markdown)
+                TableButton(editor: workspace.editor)
+                    .disabled(!isLoaded)
                 AttachmentMenu(editor: workspace.editor)
                     .disabled(!isLoaded)
                 DrawingButton(workspace: workspace)

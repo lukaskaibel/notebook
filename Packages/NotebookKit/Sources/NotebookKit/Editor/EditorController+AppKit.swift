@@ -247,6 +247,30 @@ extension EditorController: NSTextViewDelegate, NSTextFieldDelegate {
         return shouldInsert(replacement, in: affectedCharRange)
     }
 
+    /// The text view's moves that go from cell to cell in a table typed in as a grid.
+    private static let gridMoves: [Selector: (move: TableMove, extending: Bool)] = [
+        #selector(NSResponder.moveLeft(_:)): (.left, false),
+        #selector(NSResponder.moveRight(_:)): (.right, false),
+        #selector(NSResponder.moveUp(_:)): (.up, false),
+        #selector(NSResponder.moveDown(_:)): (.down, false),
+        #selector(NSResponder.moveWordLeft(_:)): (.wordLeft, false),
+        #selector(NSResponder.moveWordRight(_:)): (.wordRight, false),
+        #selector(NSResponder.moveToBeginningOfLine(_:)): (.cellStart, false),
+        #selector(NSResponder.moveToEndOfLine(_:)): (.cellEnd, false),
+        #selector(NSResponder.moveToLeftEndOfLine(_:)): (.cellStart, false),
+        #selector(NSResponder.moveToRightEndOfLine(_:)): (.cellEnd, false),
+        #selector(NSResponder.moveLeftAndModifySelection(_:)): (.left, true),
+        #selector(NSResponder.moveRightAndModifySelection(_:)): (.right, true),
+        #selector(NSResponder.moveUpAndModifySelection(_:)): (.up, true),
+        #selector(NSResponder.moveDownAndModifySelection(_:)): (.down, true),
+        #selector(NSResponder.moveWordLeftAndModifySelection(_:)): (.wordLeft, true),
+        #selector(NSResponder.moveWordRightAndModifySelection(_:)): (.wordRight, true),
+        #selector(NSResponder.moveToBeginningOfLineAndModifySelection(_:)): (.cellStart, true),
+        #selector(NSResponder.moveToEndOfLineAndModifySelection(_:)): (.cellEnd, true),
+        #selector(NSResponder.moveToLeftEndOfLineAndModifySelection(_:)): (.cellStart, true),
+        #selector(NSResponder.moveToRightEndOfLineAndModifySelection(_:)): (.cellEnd, true),
+    ]
+
     /// Return, Tab, Backspace and the arrow keys, as the text view sends them.
     func handleCommand(_ selector: Selector) -> Bool {
         if suggestions.isVisible {
@@ -267,10 +291,13 @@ extension EditorController: NSTextViewDelegate, NSTextFieldDelegate {
                 break
             }
         }
+        if let move = Self.gridMoves[selector], moveInGrid(move.move, extending: move.extending) { return true }
         switch selector {
         case #selector(NSResponder.insertNewline(_:)):
             return insertNewline()
         case #selector(NSResponder.insertLineBreak(_:)), #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
+            // A cell has no line breaks: ⇧Return makes a row, as Return does.
+            if activeGrid != nil { return insertNewline() }
             if insertAsciiDocLineBreak() { return true }
             insert("\n")
             return true

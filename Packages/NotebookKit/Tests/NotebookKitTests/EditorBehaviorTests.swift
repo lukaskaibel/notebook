@@ -287,6 +287,10 @@ final class EditorBehaviorTests: XCTestCase {
     }
 
     func testATableTypedShowsItsSourceAfterTheCaretComesBack() {
+        EditorHarness.withTablesAsMarkdown { tableTypedShowsItsSourceAfterTheCaretComesBack() }
+    }
+
+    private func tableTypedShowsItsSourceAfterTheCaretComesBack() {
         let h = EditorHarness("Steps")
         h.caret(h.text.utf16.count)
         h.type("\n\n| Key | Does |\n|---|---|\n| Up | Moves |")
@@ -332,7 +336,10 @@ final class EditorBehaviorTests: XCTestCase {
         XCTAssertEqual(h.selection.location, (header as NSString).length + 2)
 
         // At the start of a row, the new one goes above it and the caret stays with the row; at the start of the
-        // header, a line goes in above the table.
+        // header, a line goes in above the table. Only where the table shows its Markdown: in the grid the caret is
+        // always in a cell.
+        NotebookSettings.shared.editsTablesAsMarkdown = true
+        defer { NotebookSettings.shared.editsTablesAsMarkdown = false }
         h = EditorHarness(header + "| 1    | 12.10. | Graphs |")
         h.caret((header as NSString).length)
         h.command(#selector(NSResponder.insertNewline(_:)))
@@ -444,7 +451,10 @@ final class EditorBehaviorTests: XCTestCase {
         XCTAssertEqual(h.selection, h.range(of: "A"), "and stays in the first cell")
         XCTAssertFalse(h.text.contains("\t"), "no tab typed")
 
-        // From the delimiter row: on into the first row, or back to the header's last cell.
+        // From the delimiter row, where the table shows its Markdown: on into the first row, or back to the header's
+        // last cell.
+        NotebookSettings.shared.editsTablesAsMarkdown = true
+        defer { NotebookSettings.shared.editsTablesAsMarkdown = false }
         h.caret(h.range(of: "| --- |").location + 3)
         h.command(tab)
         XCTAssertEqual(h.selection, h.range(of: "one"))
@@ -583,7 +593,17 @@ final class EditorBehaviorTests: XCTestCase {
         let cell = EditorHarness("| A | B |\n| --- | --- |\n| one | two |")
         cell.select(cell.range(of: "| one | two |"))
         cell.type("*")
-        XCTAssertEqual(cell.text, "| A | B |\n| --- | --- |\n*", "across cells the marker is typed, as anywhere else")
+        XCTAssertEqual(cell.text, "| A | B |\n| --- | --- |\n| * |  |", "across cells of the grid the marker goes into the first, the others are emptied")
+    }
+
+    func testTypingAMarkerOverATableRowsMarkdownTypesIt() {
+        EditorHarness.withTablesAsMarkdown {
+            let cell = EditorHarness("| A | B |\n| --- | --- |\n| one | two |")
+            cell.caret(cell.range(of: "one").location)
+            cell.select(cell.range(of: "| one | two |"))
+            cell.type("*")
+            XCTAssertEqual(cell.text, "| A | B |\n| --- | --- |\n*", "across cells of the Markdown the marker is typed, as anywhere else")
+        }
     }
 
     func testUndoAfterListContinuation() {

@@ -19,6 +19,10 @@ struct StyleEnvironment {
     var composing: Int?
     /// A rendered preview's height, for diagrams and math shown under their source while you edit them.
     var previewHeight: (MarkdownBlock) -> CGFloat = { _ in 0 }
+    /// Settings › Text › Edit tables as Markdown: a table the caret is in shows its Markdown, not its grid.
+    var tablesAsMarkdown = false
+    /// The table being typed in, by where it starts, and the cell the caret is in.
+    var tableFocus: (location: Int, focus: TableModel.Focus)?
 }
 
 /// Turns a parsed note into attributes: fonts, colours, line heights, which punctuation hides and which objects are
@@ -60,7 +64,9 @@ enum MarkdownStyler {
         let text = storage.string as NSString
         guard text.length == doc.length else { return }
         blockDecorations = [:]
-        defer { blockDecorations = [:] }
+        gridBlocks = [:]
+        isStyling = true
+        defer { blockDecorations = [:]; gridBlocks = [:]; isStyling = false }
         for index in lines where index < doc.lines.count {
             styleLine(storage, text: text, doc: doc, index: index, env: env)
         }
@@ -98,14 +104,21 @@ enum MarkdownStyler {
                 }
                 return
             case .table(let alignments):
-                if active {
+                let grid = active && typesInGrid(blockIndex, of: doc, text: text, env: env)
+                if active, !grid {
                     styleTableSource(s, text: text, line: line, index: index, block: block)
                 } else {
                     func model() -> TableModel {
                         let lines = Array(doc.lines[block.lines])
-                        return doc.syntax == .asciidoc ? TableModel(asciidoc: text, lines: lines, alignments: alignments) : TableModel(text: text, lines: lines, alignments: alignments)
+                        if doc.syntax == .asciidoc { return TableModel(asciidoc: text, lines: lines, alignments: alignments) }
+                        let focus = grid ? env.tableFocus.flatMap { $0.location == block.range.location ? $0.focus : nil } : nil
+                        return TableModel(text: text, lines: lines, alignments: alignments, focus: focus)
                     }
-                    styleSwapped(s, line: line, index: index, block: block, object: .table(model()))
+                    if grid {
+                        styleGrid(s, line: line, index: index, block: block, object: .table(model()))
+                    } else {
+                        styleSwapped(s, line: line, index: index, block: block, object: .table(model()))
+                    }
                 }
                 return
             case .math:
@@ -382,6 +395,31 @@ enum MarkdownStyler {
         if line.kind == .tableHeader { s.addAttribute(.font, value: NSFont.monospacedSystemFont(ofSize: EditorStyle.codeSize, weight: .semibold), range: line.range) }
         for i in line.range.location..<line.range.upperBound where text.character(at: i) == 124 {
             s.addAttribute(.foregroundColor, value: Theme.faint, range: NSRange(location: i, length: 1))
+        }
+    }
+
+    /// Whether a table is typed in as a grid, its Markdown hidden, when the caret is in it: a Markdown table whose rows
+    /// all have its columns, unless the settings say tables are edited as Markdown. AsciiDoc's tables are typed.
+    static func typesInGrid(_ blockIndex: Int, of doc: MarkdownDocument, text: NSString, env: StyleEnvironment) -> Bool {
+        guard doc.syntax == .markdown, !env.tablesAsMarkdown, let block = doc.blocks[safe: blockIndex], case .table(let alignments) = block.kind else { return false }
+        if isStyling, let known = gridBlocks[block.range] { return known }
+        let lines = Array(doc.lines[block.lines])
+        let fits = TableModel.fitsGrid(text.units(of: lines), lines: lines, columns: alignments.count)
+        if isStyling { gridBlocks[block.range] = fits }
+        return fits
+    }
+
+    /// Per block, while a pass styles it: whether it is typed as a grid, which all its lines ask.
+    private static var gridBlocks: [NSRange: Bool] = [:]
+    private static var isStyling = false
+
+    /// A table typed in as a grid: drawn whole, as when the caret is elsewhere, but all on one line, its line breaks
+    /// laid out as nothing, so wherever in it the caret is, the text view puts it on the table's line (and on the
+    /// Mac draws it again with that line), and the editor puts it in its cell.
+    private static func styleGrid(_ s: NSTextStorage, line: MarkdownLine, index: Int, block: MarkdownBlock, object kind: @autoclosure () -> EditorObject.Kind) {
+        styleSwapped(s, line: line, index: index, block: block, object: kind())
+        if index < block.lines.upperBound, line.breakLength > 0 {
+            s.addAttribute(.notebookSoftBreak, value: false, range: NSRange(location: line.range.upperBound, length: line.breakLength))
         }
     }
 

@@ -196,8 +196,21 @@ public struct NotebookScene: Scene {
                 formatButton(.bulletedList, #selector(MarkdownTextView.makeBulletedList(_:)), "7", [.command, .shift])
                 formatButton(.numberedList, #selector(MarkdownTextView.makeNumberedList(_:)), "9", [.command, .shift])
                 formatButton(.quote, #selector(MarkdownTextView.makeQuote(_:)), "'", .command)
-                // As in Notes.
-                formatButton(.table, #selector(MarkdownTextView.insertTable(_:)), "t", [.command, .option])
+                // As in Notes: a table, and with the caret in one, its rows and columns.
+                Menu {
+                    formatButton(.table, #selector(MarkdownTextView.insertTable(_:)), "t", [.command, .option], name: "Insert Table")
+                    Divider()
+                    tableButton("Add Row Above", "arrow.up", #selector(MarkdownTextView.addTableRowAbove(_:)), .upArrow)
+                    tableButton("Add Row Below", "arrow.down", #selector(MarkdownTextView.addTableRowBelow(_:)), .downArrow)
+                    tableButton("Add Column Left", "arrow.left", #selector(MarkdownTextView.addTableColumnLeft(_:)), .leftArrow)
+                    tableButton("Add Column Right", "arrow.right", #selector(MarkdownTextView.addTableColumnRight(_:)), .rightArrow)
+                    Divider()
+                    tableButton("Delete Row", "minus.rectangle", #selector(MarkdownTextView.deleteTableRow(_:)))
+                    tableButton("Delete Column", "minus.rectangle.portrait", #selector(MarkdownTextView.deleteTableColumn(_:)))
+                    tableButton("Delete Table", "trash", #selector(MarkdownTextView.deleteTable(_:)))
+                } label: {
+                    Label("Table", systemImage: "tablecells")
+                }
                 Divider()
                 Button { workspace.toggleDrawing() } label: {
                     Label(workspace.isDrawingInFront ? "Stop Drawing" : "Drawing", systemImage: "pencil.tip.crop.circle")
@@ -218,6 +231,15 @@ public struct NotebookScene: Scene {
         Settings {
             SettingsView(workspace: workspace)
         }
+    }
+
+    /// Format › Table's rows and columns, there while the caret is in a table typed in as a grid; ⌥⌘ and an arrow add
+    /// rows and columns, as in Notes.
+    @ViewBuilder
+    private func tableButton(_ title: String, _ symbol: String, _ action: Selector, _ key: KeyEquivalent? = nil) -> some View {
+        let button = Button { workspace.sendToNote(action) } label: { Label(title, systemImage: symbol) }
+            .disabled(workspace.activeEditor()?.editor.caretContext.isInTable != true)
+        if let key { button.keyboardShortcut(key, modifiers: [.command, .option]) } else { button }
     }
 
     private func formatButton(_ command: FormatCommand, _ action: Selector, _ key: Character, _ modifiers: EventModifiers, name: String? = nil) -> some View {

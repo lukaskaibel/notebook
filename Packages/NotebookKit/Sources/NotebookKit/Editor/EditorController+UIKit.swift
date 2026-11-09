@@ -43,6 +43,8 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         let tap = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
         tap.delegate = self
         view.addGestureRecognizer(tap)
+        // With a pointer, on an iPad, the + along a table's edges show while it is over the table, as on the Mac.
+        view.addGestureRecognizer(UIHoverGestureRecognizer(target: self, action: #selector(hovered(_:))))
 
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillChange(_:)), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillChange(_:)), name: UIResponder.keyboardWillHideNotification, object: nil)
@@ -221,6 +223,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
 
     /// The heading level in the margin: shown next to the heading the caret is on, where there is room for it.
     func marginNeedsDisplay() {
+        updateTableRowHandle()
         let button = textView.headingButton
         guard textView.sideMargin >= 44, let (level, marker) = headingMarkLevel,
               let rect = layoutManager.headingMarkRect(at: marker.location, origin: textOrigin) else {
@@ -407,6 +410,52 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         otherGestureRecognizer is UITapGestureRecognizer && otherGestureRecognizer.view?.isDescendant(of: textView) == true
     }
 
+    @objc private func hovered(_ recognizer: UIHoverGestureRecognizer) {
+        switch recognizer.state {
+        case .began, .changed: updateTableHover(at: recognizer.location(in: textView))
+        default: updateTableHover(at: nil)
+        }
+    }
+
+    /// The handle of the row the caret is in, over the margin, where the table's line isn't drawn again.
+    func updateTableRowHandle() {
+        let handle = textView.tableRowHandle
+        guard isFocused, textView.isEditable, let grid = activeGrid, let drawn = gridDrawing(grid), let rect = drawn.model.rowHandleRect(in: drawn.rect) else {
+            handle.isHidden = true
+            return
+        }
+        handle.frame = rect.insetBy(dx: -1, dy: -1)
+        handle.isPicked = tableBand.map { $0.location == grid.range.location && $0.band == drawn.model.focus.map { TableBand.row($0.row) } } ?? false
+        handle.isHidden = false
+    }
+
+    /// A handle's menu, the system's edit menu over it, as for selected text: the row or column it is for picked while
+    /// it shows.
+    func showTableMenu(_ band: TableBand, block: Int) {
+        guard let start = document.blocks[safe: block]?.range.location, let grid = gridTable(at: start), let drawn = gridDrawing(grid) else { return }
+        let handle: CGRect?
+        switch band {
+        case .row(let row):
+            handle = drawn.model.rowHandleRect(in: drawn.rect)
+            tableMenuEntries = tableRowEntries(row: row, compact: true)
+        case .column(let column):
+            handle = drawn.model.columnHandleRect(in: drawn.rect)
+            tableMenuEntries = tableColumnEntries(column: column, compact: true)
+        }
+        guard let handle else { return }
+        UISelectionFeedbackGenerator().selectionChanged()
+        showTableBand(band, block: block)
+        let interaction: UIEditMenuInteraction
+        if let existing = tableMenuInteraction {
+            interaction = existing
+        } else {
+            interaction = UIEditMenuInteraction(delegate: self)
+            textView.addInteraction(interaction)
+            tableMenuInteraction = interaction
+        }
+        interaction.presentEditMenu(with: UIEditMenuConfiguration(identifier: "table", sourcePoint: CGPoint(x: handle.midX, y: handle.minY)))
+    }
+
     @objc private func tapped(_ recognizer: UITapGestureRecognizer) {
         guard let (hit, point) = touchHit(at: recognizer.location(in: textView)) else { return }
         handleTap(hit, at: point)
@@ -441,6 +490,13 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
             editLink(at: range)
         case .block(_, let caret):
             openBlock(caret: caret, at: point)
+        case .table(let control):
+            switch control {
+            case .columnHandle(let block, let column): showTableMenu(.column(column), block: block)
+            case .rowHandle(let block, let row): showTableMenu(.row(row), block: block)
+            case .addColumn(let block): addAtEdge(of: block, column: true)
+            case .addRow(let block): addAtEdge(of: block, column: false)
+            }
         case .headingLevel:
             break
         case .todo(let line, let part):
@@ -546,6 +602,11 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     @discardableResult
     func paste(from pasteboard: UIPasteboard) -> Bool {
         let target = selection
+        // Into a cell of a table, its text only.
+        if activeGrid != nil {
+            let fragment = pasteboard.data(forPasteboardType: Self.fragmentIdentifier).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: String] }?["markdown"]
+            if pasteIntoGrid(pasteboard.string ?? fragment, at: target) { return true }
+        }
         // Where the note's folder has to be given first, what was read off the pasteboard goes in once it is: reading
         // it again then would ask to paste.
         if let data = pasteboard.data(forPasteboardType: Self.fragmentIdentifier) {
@@ -793,6 +854,44 @@ extension UIViewController {
         var top = self
         while let presented = top.presentedViewController, !presented.isBeingDismissed { top = presented }
         return top
+    }
+}
+extension EditorController: UIEditMenuInteractionDelegate {
+    public func editMenuInteraction(_ interaction: UIEditMenuInteraction, menuFor configuration: UIEditMenuConfiguration, suggestedActions: [UIMenuElement]) -> UIMenu? {
+        guard interaction === tableMenuInteraction else { return nil }
+        return UIMenu(children: MenuEntry.menuElements(tableMenuEntries))
+    }
+
+    public func editMenuInteraction(_ interaction: UIEditMenuInteraction, willDismissMenuFor configuration: UIEditMenuConfiguration, animator: any UIEditMenuInteractionAnimating) {
+        guard interaction === tableMenuInteraction else { return }
+        animator.addCompletion { [weak self] in self?.showTableBand(nil, block: nil) }
+    }
+}
+
+extension MenuEntry {
+    /// Entries as the system's menu elements, for a menu UIKit makes itself (an edit menu): their lines as groups.
+    @MainActor
+    static func menuElements(_ entries: [MenuEntry]) -> [UIMenuElement] {
+        var groups: [[UIMenuElement]] = [[]]
+        for entry in entries {
+            let image: UIImage? = if case .symbol(let name) = entry.icon { UIImage(systemName: name) } else { nil }
+            switch entry.kind {
+            case .divider:
+                groups.append([])
+            case .action(let action):
+                var attributes: UIMenuElement.Attributes = entry.isDestructive ? .destructive : []
+                if !entry.isEnabled { attributes.insert(.disabled) }
+                groups[groups.count - 1].append(UIAction(title: entry.title, image: image, attributes: attributes, state: entry.isChecked ? .on : .off) { _ in action() })
+            case .submenu(let make):
+                let menu = UIMenu(title: entry.title, image: image, children: menuElements(make()))
+                menu.subtitle = entry.value
+                groups[groups.count - 1].append(menu)
+            case .title:
+                break
+            }
+        }
+        let filled = groups.filter { !$0.isEmpty }
+        return filled.count == 1 ? filled[0] : filled.map { UIMenu(options: .displayInline, children: $0) }
     }
 }
 #endif

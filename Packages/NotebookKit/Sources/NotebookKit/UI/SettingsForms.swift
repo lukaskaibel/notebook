@@ -43,6 +43,17 @@ struct TextSettings: View {
                 Text("The text size you choose in the Settings app, under Display & Brightness, makes notes larger or smaller too, as it does in other apps.")
                 #endif
             }
+            Section {
+                Toggle("Edit tables as Markdown", isOn: $settings.editsTablesAsMarkdown)
+            } footer: {
+                #if os(iOS)
+                Text("Off, you type in a table’s cells, as in Notes. On, a table you tap into shows its Markdown: the bars between cells and the dashes under the header.")
+                #else
+                Text("Off, you type in a table’s cells, as in Notes. On, a table you click into shows its Markdown: the bars between cells and the dashes under the header.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                #endif
+            }
             Section("Preview") {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("The Rise of Rococo")

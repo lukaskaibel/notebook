@@ -134,9 +134,8 @@ struct DocumentToolbar: ToolbarContent {
                 Button { workspace.editor.beginEditing(then: .checklist) } label: { Label("Checklist", systemImage: "checklist") }
                     .help("Checklist (⇧⌘L)")
                     .disabled(!note.isLoaded)
-                Button { workspace.editor.beginEditing(then: .table) } label: { Label("Table", systemImage: "tablecells") }
-                    .help(workspace.editor.syntax == .markdown ? "Table (⌥⌘T)" : "Tables in AsciiDoc notes are typed")
-                    .disabled(!note.isLoaded || workspace.editor.syntax != .markdown)
+                TableButton(editor: workspace.editor)
+                    .disabled(!note.isLoaded)
                 Button {
                     // As in Notes: at the end of a note you haven't put the caret in.
                     workspace.editor.placeCaretForToolbar()

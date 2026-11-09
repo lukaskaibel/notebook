@@ -31,6 +31,8 @@ extension EditorController {
 
     func snapCaret(_ location: Int, from old: NSRange) -> Int {
         guard !document.lines.isEmpty, location <= storage.length else { return location }
+        // In a table typed in as a grid the caret is always in a cell.
+        if let snapped = snapIntoGrid(location) { return snapped }
         let lineIndex = document.lineIndex(containing: location)
         let line = document.lines[lineIndex]
         // Where the caret comes from: arrow keys move it by one character.

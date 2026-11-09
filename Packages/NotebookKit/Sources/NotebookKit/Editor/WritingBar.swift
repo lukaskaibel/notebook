@@ -55,7 +55,7 @@ import UIKit
 /// What the bar above the keyboard can hold. Which ones and in what order is yours to choose, in Settings › Writing
 /// Bar.
 enum WritingTool: String, CaseIterable, Identifiable {
-    case format, checklist, attach, drawing, link, undo, redo
+    case format, checklist, table, attach, drawing, link, undo, redo
     case bold, italic, strikethrough, highlight, code, quote
     case bulletedList, numberedList, outdent, indent
     case camera, scanner, photos, files
@@ -65,7 +65,7 @@ enum WritingTool: String, CaseIterable, Identifiable {
 
     /// The bar as it comes: what Notes has first, then the formatting, then lists and pictures.
     static let standard: [WritingTool] = [
-        .format, .checklist, .attach, .drawing, .link, .undo, .redo,
+        .format, .checklist, .table, .attach, .drawing, .link, .undo, .redo,
         .bold, .italic, .strikethrough, .highlight, .code, .quote,
         .bulletedList, .numberedList, .outdent, .indent, .camera, .scanner,
     ]
@@ -73,6 +73,7 @@ enum WritingTool: String, CaseIterable, Identifiable {
     var command: FormatCommand? {
         switch self {
         case .checklist: .checklist
+        case .table: .table
         case .link: .link
         case .bold: .bold
         case .italic: .italic
@@ -132,7 +133,7 @@ enum WritingTool: String, CaseIterable, Identifiable {
 /// off), the to-do's reminder, moving its list item out or in, and opening the link it is on. As in Issues. A to-do is
 /// ticked on its own checkbox, in the note.
 enum CaretTool: CaseIterable, Identifiable {
-    case bold, italic, strikethrough, highlight, code, remind, outdent, indent, openLink
+    case nextCell, bold, italic, strikethrough, highlight, code, remind, outdent, indent, openLink
 
     var id: Self { self }
 
@@ -158,6 +159,7 @@ enum CaretTool: CaseIterable, Identifiable {
         case .outdent: "Outdent"
         case .indent: "Indent"
         case .openLink: "Open Link"
+        case .nextCell: "Next Cell"
         }
     }
 
@@ -172,6 +174,7 @@ enum CaretTool: CaseIterable, Identifiable {
         case .outdent: "decrease.indent"
         case .indent: "increase.indent"
         case .openLink: "arrow.up.right.square"
+        case .nextCell: "arrow.right.to.line"
         }
     }
 
@@ -184,6 +187,8 @@ enum CaretTool: CaseIterable, Identifiable {
     static func tools(for caret: CaretContext) -> [CaretTool] {
         let context = caret.context
         var wanted: [CaretTool] = []
+        // A touch keyboard has no Tab to go to the next cell of a table.
+        if caret.isInTable { wanted.append(.nextCell) }
         if caret.link != nil { wanted.append(.openLink) }
         if context.isChecklist, NotebookSettings.shared.showsTodos { wanted.append(.remind) }
         wanted += allCases.filter { $0.style.map(context.styles.contains) ?? false }
@@ -430,6 +435,7 @@ struct WritingBarView: View {
         case .outdent: editor.indent(by: -1)
         case .indent: editor.indent(by: 1)
         case .openLink: if let link = editor.caretContext.link { editor.delegate?.editor(editor, open: link) }
+        case .nextCell: _ = editor.moveToTableCell(by: 1)
         default: break
         }
     }
@@ -453,6 +459,14 @@ struct WritingBarView: View {
         if tool == .attach {
             AppMenuButton {
                 AttachmentMenu.entries(editor)
+            } label: {
+                icon(tool)
+            }
+            .buttonStyle(.plain)
+        } else if tool == .table, editor.caretContext.isInTable {
+            // In a table, Table is its menu: rows and columns to add and delete.
+            AppMenuButton {
+                editor.tableEntries()
             } label: {
                 icon(tool)
             }

@@ -356,6 +356,18 @@ enum DebugRemote {
             // Puts the caret at the start of some text in the note.
             let range = (editor.text as NSString).range(of: argument)
             if range.location != NSNotFound { editor.setSelection(NSRange(location: range.location, length: 0)) }
+        case "tablecell":
+            // tablecell <row> <column> [letter]: a tap on a cell of the table the caret is in (or the first), at a letter.
+            guard numbers.count >= 2, let point = editor.debugTablePoint(row: Int(numbers[0]), column: Int(numbers[1]), letter: numbers.count > 2 ? Int(numbers[2]) : nil) else { return log("no table cell") }
+            editor.debugTap(at: point)
+            log(editor.debugTableInfo)
+        case "tablehandle":
+            // tablehandle row|column: a tap on a handle of the table the caret is in.
+            guard let point = editor.debugTableHandle(row: argument == "row") else { return log("no handle") }
+            editor.debugTap(at: point)
+        case "tableinfo":
+            log(editor.debugTableInfo)
+            log("caret tools: \(CaretTool.tools(for: editor.caretContext).map(\.name))")
         case "tapobject":
             // A tap on whatever is drawn at the start of some text (a checkbox, a link, a picture).
             let range = (editor.text as NSString).range(of: argument)

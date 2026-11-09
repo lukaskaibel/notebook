@@ -164,6 +164,10 @@ extension EditorController {
     // MARK: - Return
 
     func insertNewline() -> Bool {
+        // Return over text selected in a cell: a new row under it, as from its end.
+        if self.selection.length > 0, let grid = activeGrid, self.selection.location >= grid.range.location, self.selection.upperBound <= grid.range.upperBound {
+            setSelection(NSRange(location: self.selection.upperBound, length: 0))
+        }
         let selection = self.selection
         guard !document.lines.isEmpty else { return false }
         let index = document.lineIndex(containing: selection.location)
@@ -368,7 +372,7 @@ extension EditorController {
 
     /// A row like the one given with its cells emptied, so its pipes stay where they are, and where its first cell
     /// starts: after the opening pipe and a space.
-    private static func emptyTableRow(like units: [UInt16]) -> (row: String, start: Int) {
+    static func emptyTableRow(like units: [UInt16]) -> (row: String, start: Int) {
         var blank = units
         for cell in MarkdownParser.tableCells(units, NSRange(location: 0, length: units.count)) {
             blank.replaceSubrange(cell.location..<cell.upperBound, with: repeatElement(32, count: cell.length))
@@ -665,6 +669,7 @@ extension EditorController {
     func deleteBackward() -> Bool {
         let selection = self.selection
         guard !document.lines.isEmpty, !hasMarkedText else { return false }
+        if let handled = deleteInGrid(forward: false) { return handled }
         // A selection that holds one of a style's marks takes the other one too.
         guard selection.length == 0 else { return deleteByRules(forward: false) }
         guard selection.location > 0 else { return deleteBackIntoTitle() }
@@ -762,6 +767,7 @@ extension EditorController {
     func deleteForward() -> Bool {
         let selection = self.selection
         guard !document.lines.isEmpty, !hasMarkedText else { return false }
+        if let handled = deleteInGrid(forward: true) { return handled }
         guard selection.length == 0 else { return deleteByRules(forward: true) }
         guard selection.location < storage.length else { return false }
         let line = document.lines[document.lineIndex(containing: selection.location)]
@@ -884,6 +890,8 @@ extension EditorController {
 
     func shouldInsert(_ replacement: String, in range: NSRange) -> Bool {
         guard !isPerformingEdit, !hasMarkedText else { return true }
+        // In a table typed in as a grid: a `|` stays in its cell, and nothing typed over several cells takes their pipes.
+        if let handled = insertInGrid(replacement, in: range) { return handled }
         let text = nsText
         let selection = self.selection
 
