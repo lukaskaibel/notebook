@@ -13,6 +13,10 @@ final class SidebarEntry: NSObject {
         case tiles
         /// What you opened last as cards in a row (`RecentCardRow`), under the header Recent.
         case recent
+        /// Open Folder, the last row: it scrolls with the files, so it shows once you reach the end of them, as at the
+        /// end of the iPhone's list, rather than staying at the bottom of the window. Never selected; a folder dropped
+        /// on it is opened, as below the sections.
+        case openFolder
     }
 
     let kind: Kind
@@ -32,12 +36,17 @@ final class SidebarEntry: NSObject {
     var isHosted: Bool {
         switch kind {
         case .tiles, .recent: true
-        case .header, .search: false
+        case .header, .search, .openFolder: false
         }
     }
 
     var isSearch: Bool {
         if case .search = kind { return true }
+        return false
+    }
+
+    var isOpenFolder: Bool {
+        if case .openFolder = kind { return true }
         return false
     }
 
@@ -194,10 +203,11 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         reload(shown)
     }
 
-    /// Search, first of all, then the tiles and the cards of Recent.
+    /// Search, first of all, then the tiles and the cards of Recent; Open Folder last of all.
     private let searchEntry = SidebarEntry(.search)
     private let tilesEntry = SidebarEntry(.tiles)
     private let recentEntry = SidebarEntry(.recent)
+    private let openFolderEntry = SidebarEntry(.openFolder)
 
     private func rebuildTop() {
         visible = [:]
@@ -209,6 +219,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             let files = workspace.root(for: location).map { visibleChildren(of: $0) } ?? []
             items.append(SidebarEntry(.header(location.name, location: location.id), children: files))
         }
+        items.append(openFolderEntry)
         topItems = items
     }
 
@@ -559,7 +570,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
 
     func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
         guard let entry = item as? SidebarEntry else { return true }
-        return !entry.isHeader && !entry.isSearch && !entry.isHosted
+        return !entry.isHeader && !entry.isSearch && !entry.isHosted && !entry.isOpenFolder
     }
 
     /// The tiles and the cards as tall as they are; every other row as tall as the source list makes them.
@@ -569,11 +580,14 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         case .tiles: return 74
         case .recent: return SidebarOutlineView.recentRowHeight(width: recentRowWidth)
         case .header, .search: return outlineView.rowHeight
+        case .openFolder: return outlineView.rowHeight + SidebarOutlineView.openFolderGap
         }
     }
 
     func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
-        outlineView.makeView(withIdentifier: SidebarRowView.identifier, owner: nil) as? SidebarRowView ?? SidebarRowView()
+        let rowView = outlineView.makeView(withIdentifier: SidebarRowView.identifier, owner: nil) as? SidebarRowView ?? SidebarRowView()
+        rowView.gap = (item as? SidebarEntry)?.isOpenFolder == true ? SidebarOutlineView.openFolderGap : 0
+        return rowView
     }
 
     func outlineView(_ outlineView: NSOutlineView, didAdd rowView: NSTableRowView, forRow row: Int) {
@@ -605,6 +619,11 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         cell.label.delegate = self
         if (item as? SidebarEntry)?.isSearch == true {
             cell.configureSearch { [weak self] in self?.workspace.openSearch() }
+            cell.setButtons(more: nil, add: nil)
+            return cell
+        }
+        if (item as? SidebarEntry)?.isOpenFolder == true {
+            cell.configureOpenFolder { [weak self] in self?.workspace.chooseLocation(iCloud: false) }
             cell.setButtons(more: nil, add: nil)
             return cell
         }
@@ -839,7 +858,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     func fill(_ menu: NSMenu, row: Int) {
         menu.removeAllItems()
         let item = row >= 0 ? outline.item(atRow: row) : nil
-        if let entry = item as? SidebarEntry, entry.isHosted || entry.isSearch { return }
+        if let entry = item as? SidebarEntry, entry.isHosted || entry.isSearch || entry.isOpenFolder { return }
         if let entry = item as? SidebarEntry, case .header(_, let locationID) = entry.kind, let locationID,
            let location = workspace.locations.first(where: { $0.id == locationID }) {
             add(menu, "New Note", "square.and.pencil") { [weak self] in self?.workspace.newNote(in: location.url) }
@@ -951,7 +970,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             outlineView.setDropItem(nil, dropChildIndex: NSOutlineViewDropOnItemIndex)
             return info.draggingSourceOperationMask.contains(.link) ? .link : .generic
         }
-        if let entry = item as? SidebarEntry, entry.isHosted || entry.isSearch { return [] }
+        if let entry = item as? SidebarEntry, entry.isHosted || entry.isSearch || entry.isOpenFolder { return [] }
         guard let folder = dropFolder(for: item) else { return [] }
         guard !urls.isEmpty, !urls.contains(where: { folder.path == $0.path || folder.path.hasPrefix($0.path + "/") }) else { return [] }
         if let node = folderNode(for: item) { outlineView.setDropItem(node, dropChildIndex: NSOutlineViewDropOnItemIndex) }
@@ -973,10 +992,11 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         return true
     }
 
-    /// Between two sections, above the first or in the empty space below the last. Below the last the outline
-    /// proposes the end of whatever is open there, so that is told by where the pointer is.
+    /// Between two sections, above the first, on Open Folder or in the empty space below it. Below the last section
+    /// the outline proposes the end of whatever is open there, so that is told by where the pointer is.
     private func isBetweenSections(_ info: NSDraggingInfo, proposedItem item: Any?) -> Bool {
-        item == nil || outline.row(at: outline.convert(info.draggingLocation, from: nil)) < 0
+        let row = outline.row(at: outline.convert(info.draggingLocation, from: nil))
+        return item == nil || row < 0 || (outline.item(atRow: row) as? SidebarEntry)?.isOpenFolder == true
     }
 
     private func folderNode(for item: Any?) -> FileNode? {
@@ -1029,6 +1049,11 @@ final class SidebarOutlineView: NSOutlineView {
         // Search opens ⌘K and is never selected: what is open stays selected below it.
         if row >= 0, let entry = item(atRow: row) as? SidebarEntry, entry.isSearch {
             controller?.workspace.openSearch()
+            return
+        }
+        // So does Open Folder, which asks for a folder to show.
+        if row >= 0, let entry = item(atRow: row) as? SidebarEntry, entry.isOpenFolder {
+            controller?.workspace.chooseLocation(iCloud: false)
             return
         }
         if row >= 0, let node = item(atRow: row) as? FileNode, node.isFolder,
@@ -1143,6 +1168,9 @@ final class SidebarOutlineView: NSOutlineView {
     /// How far left of the files' cells Search starts: its magnifying glass lines up with the folders' chevrons and the
     /// section titles, and with the tiles' symbols, rather than with the files' icons.
     static let searchShift: CGFloat = 15
+    /// Open Folder's row is this much taller than a file's, with the room above it: apart from the last section's files,
+    /// as a section's title is from the one before.
+    static let openFolderGap: CGFloat = 8
     /// From the sidebar's edges to the tiles and Recent's cards, about as far as a selected row's fill: what is in them,
     /// `HomeStyle.cardPadding` further in, then lines up with Search, the chevrons and the section titles.
     static let tilesFromEdge: CGFloat = 10.5
@@ -1158,6 +1186,12 @@ final class SidebarOutlineView: NSOutlineView {
         case .search:
             frame.origin.x -= Self.searchShift
             frame.size.width = rowFrame.maxX - (frame.minX - rowFrame.minX) - frame.minX
+        case .openFolder:
+            // Lined up with Search, at the bottom of its row, below the gap.
+            frame.origin.x -= Self.searchShift
+            frame.size.width = rowFrame.maxX - (frame.minX - rowFrame.minX) - frame.minX
+            frame.origin.y = rowFrame.maxY - rowHeight
+            frame.size.height = rowHeight
         case .tiles:
             frame.origin.x = rowFrame.minX + Self.tilesFromEdge
             frame.size.width = rowFrame.width - 2 * Self.tilesFromEdge
@@ -1261,6 +1295,9 @@ final class SidebarRowView: NSTableRowView {
         didSet { if isHovered != oldValue { needsDisplay = true } }
     }
 
+    /// Room at the top that isn't the row's: Open Folder's gap above it (`SidebarOutlineView.openFolderGap`).
+    var gap: CGFloat = 0
+
     /// Its menu is open: ringed in the accent colour, as AppKit rings the row of a right-click menu.
     var isMenuTarget = false {
         didSet { if isMenuTarget != oldValue { needsDisplay = true } }
@@ -1276,7 +1313,10 @@ final class SidebarRowView: NSTableRowView {
         }
         guard isHovered, !isSelected, !isGroupRowStyle else { return }
         Self.hoverFill.setFill()
-        NSBezierPath(roundedRect: bounds.insetBy(dx: 10, dy: 0), xRadius: 7.5, yRadius: 7.5).fill()
+        var row = bounds
+        row.origin.y += gap
+        row.size.height -= gap
+        NSBezierPath(roundedRect: row.insetBy(dx: 10, dy: 0), xRadius: 7.5, yRadius: 7.5).fill()
     }
 
     override func prepareForReuse() {
@@ -1652,6 +1692,28 @@ final class SidebarFileCell: NSTableCellView {
         updateButtons()
     }
 
+    /// Open Folder at the end of the sidebar: a grey plus in a circle and its name, as Search has its magnifying glass.
+    /// (In the sidebar's vibrancy the secondary colour comes out much lighter on a name than on a count or a symbol,
+    /// near the sections' titles.) `press` asks for a folder.
+    func configureOpenFolder(press: @escaping () -> Void) {
+        label.stringValue = "Open Folder"
+        label.textColor = .labelColor
+        icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular, scale: .large)
+        icon.alphaValue = 1
+        icon.image = NSImage(systemSymbolName: "plus.circle", accessibilityDescription: nil)
+        tint = .secondaryLabelColor
+        accessory.image = nil
+        isOverdue = false
+        self.press = press
+        count.stringValue = ""
+        shownCount = false
+        count.isHidden = true
+        updateTint()
+        toolTip = "Show another folder in the sidebar. You can also drop a folder here."
+        setAccessibilityLabel("Open Folder")
+        updateButtons()
+    }
+
     /// `look` is a folder's symbol or emoji and colour, if you chose any (Customize Folder); `items` how many files and
     /// folders it holds, once it has been read.
     func configure(name: String, kind: FileKind, inCloud: Bool, url: URL, icon look: FolderIcon? = nil, symbol: String? = nil, nested: Bool, dimmed: Bool = false,
@@ -1751,29 +1813,4 @@ struct SidebarOutline: NSViewRepresentable {
     func updateNSView(_ view: NSScrollView, context: Context) {}
 }
 
-/// At the bottom of the sidebar, where Notes has New Folder and Reminders Add List: another folder for the sidebar,
-/// picked or dropped on it.
-struct AddLocationButton: View {
-    let workspace: Workspace
-    @State private var isTargeted = false
-
-    var body: some View {
-        Button { workspace.chooseLocation(iCloud: false) } label: {
-            Label("Open Folder", systemImage: "plus.circle")
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.tint.opacity(isTargeted ? 0.18 : 0), in: .rect(cornerRadius: 6))
-                .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
-        .help("Show another folder in the sidebar. You can also drop a folder here.")
-        .dropDestination(for: URL.self) { urls, _ in
-            workspace.addLocations(urls)
-        } isTargeted: { isTargeted = $0 }
-        .padding(.horizontal, 10)
-        .padding(.bottom, 10)
-    }
-}
 #endif
