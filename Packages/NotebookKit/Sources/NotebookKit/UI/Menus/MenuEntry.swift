@@ -5,14 +5,13 @@ import UIKit
 #endif
 import SwiftUI
 
-/// One entry of the app's menus, which are drawn in glass as Issues draws them (and Linear before it), not as the
-/// system's: rows as tall as a picker's, a symbol on the left, the keys on the right, and a field on top to type in that
-/// finds any entry, also inside a submenu. The same entries make the menu on the Mac, the iPad and the iPhone.
+/// One entry of the app's menus. On the Mac they are drawn in glass as Issues draws them (and Linear before it), not as
+/// the system's: rows as tall as a picker's, a symbol on the left, the keys on the right, and a field on top to type in
+/// that finds any entry, also inside a submenu. On the iPhone and the iPad the same entries make the system's menus.
 struct MenuEntry {
     enum Kind {
         case action(@MainActor () -> Void)
-        /// Opens beside the menu (Mac, iPad) or in its place (iPhone). Its entries are made when it opens, or when
-        /// typing looks for something in it.
+        /// Opens beside the menu. Its entries are made when it opens, or when typing looks for something in it.
         case submenu(@MainActor () -> [MenuEntry])
         case divider
         /// A section's name, such as a location's over its folders.
@@ -50,6 +49,13 @@ struct MenuEntry {
     var detail: String?
     /// What a submenu has chosen, on the right of its row: Sort By's order.
     var value: String?
+    #if os(iOS)
+    /// Files to share: in the system's menus the share sheet gets them itself, and comes from where the menu was.
+    var shares: [URL] = []
+    /// In the system's menus, which can't search a long submenu: what it does instead of opening it, such as Move To
+    /// asking for the folder in a sheet, as Files and Notes do.
+    var insteadOfSubmenu: (@MainActor () -> Void)?
+    #endif
 
     /// An entry that does something.
     init(_ title: String, _ symbol: String? = nil, keys: String? = nil, checked: Bool = false, enabled: Bool = true,
@@ -216,8 +222,7 @@ final class MenuLevel {
     }
 }
 
-/// How a menu is laid out on each device: the Mac's as Issues has them, the iPad's and the iPhone's grown for fingers
-/// and set in the size the text is set in.
+/// How a glass menu is laid out: the Mac's as Issues has them.
 struct MenuMetrics {
     var width: CGFloat
     var row: CGFloat
@@ -253,22 +258,6 @@ struct MenuMetrics {
 
     static let mac = MenuMetrics(width: 272, row: 30, fontSize: 13, symbol: 13, iconColumn: 16, gap: 9, padding: 9, outer: 6,
                                  field: 32, divider: 11, keySize: 12, titleSize: 11, cornerRadius: 14, indent: 16)
-
-    #if os(iOS)
-    /// The iPad's: 15 pt, rows 40 pt tall, at the size the text is set in.
-    static func pad(_ scale: CGFloat) -> MenuMetrics {
-        MenuMetrics(width: 300 * min(scale, 1.4), row: 40 * scale, fontSize: 15 * scale, symbol: 16 * scale, iconColumn: 22 * scale, gap: 10, padding: 11,
-                    outer: 7, field: 38 * scale, divider: 13, keySize: 14 * scale, titleSize: 13 * scale,
-                    cornerRadius: 22, indent: 20)
-    }
-
-    /// The iPhone's: 17 pt, rows 44 pt tall, at the size the text is set in.
-    static func phone(_ scale: CGFloat) -> MenuMetrics {
-        MenuMetrics(width: 290 * min(scale, 1.3), row: 44 * scale, fontSize: 17 * scale, symbol: 18 * scale, iconColumn: 24 * scale, gap: 11, padding: 12,
-                    outer: 7, field: 42 * scale, divider: 15, keySize: 15 * scale, titleSize: 13 * scale,
-                    cornerRadius: 28, indent: 20)
-    }
-    #endif
 
     /// How tall the rows are, for a menu that scrolls.
     func height(of rows: [MenuLevel.Row]) -> CGFloat {

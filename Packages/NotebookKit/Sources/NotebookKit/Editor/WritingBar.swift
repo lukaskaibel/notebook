@@ -451,7 +451,7 @@ struct WritingBarView: View {
     @ViewBuilder
     private func button(_ tool: WritingTool) -> some View {
         if tool == .attach {
-            GlassMenuButton {
+            AppMenuButton {
                 AttachmentMenu.entries(editor)
             } label: {
                 icon(tool)

@@ -158,7 +158,7 @@ struct PadBrowser: View {
                 }
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
-                        GlassMenuButton {
+                        AppMenuButton {
                             MenuEntry("New Folder", "folder.badge.plus", keys: "⇧⌘N") { newFolderIn = newFolderParent }
                             MenuEntry("Add Location", "plus.rectangle.on.folder") { addsLocation = true }
                             if let folder = workspace.selectedFolder ?? workspace.folderForNewNote {
@@ -332,7 +332,7 @@ struct FolderTree: View {
                         .contentShape(Rectangle())
                         .onTapGesture { withAnimation(.snappy) { toggle(node.url.path) } }
                         .fileDragAndDrop(node.url, isFolder: true, workspace: workspace)
-                        .glassContextMenu { FileActions.entries(workspace, node.url) { newFolderIn = $0 } }
+                        .appContextMenu { FileActions.entries(workspace, node.url) { newFolderIn = $0 } }
                         // VoiceOver reads the row, arrow and all, as one: "Personal, collapsed", as Files does.
                         .accessibilityValue(expanded.contains(node.url.path) ? "expanded" : "collapsed")
                 }
@@ -342,7 +342,7 @@ struct FolderTree: View {
                     .tag(node.url)
                     .id(node.url)
                     .fileDragAndDrop(node.url, isFolder: false, workspace: workspace)
-                    .glassContextMenu { FileActions.entries(workspace, node.url) { newFolderIn = $0 } }
+                    .appContextMenu { FileActions.entries(workspace, node.url) { newFolderIn = $0 } }
             }
         }
     }

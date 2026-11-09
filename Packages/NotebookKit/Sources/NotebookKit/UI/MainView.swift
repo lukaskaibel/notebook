@@ -196,7 +196,7 @@ struct FormatMenu: View {
     let workspace: Workspace
 
     var body: some View {
-        GlassMenuButton {
+        AppMenuButton {
             SharedMenus.format(workspace.editor, styleSize: MenuMetrics.mac.fontSize)
         } label: {
             Label("Format", systemImage: "textformat")
@@ -211,7 +211,7 @@ struct MoreMenu: View {
     let url: URL
 
     var body: some View {
-        GlassMenuButton {
+        AppMenuButton {
             let favorite = workspace.isFavorite(url)
             MenuEntry(favorite ? "Remove from Favorites" : "Add to Favorites", favorite ? "star.slash" : "star") { workspace.toggleFavorite(url) }
             if workspace.note != nil {

@@ -482,14 +482,12 @@ from the camera, the document scanner, your photos or the Files app. The pencil,
 bar, draws in the note with Apple's tool picker. Tap a checkbox to tick it, a link to
 follow it, a picture to look at it, a drawing to draw in it; touch and hold a picture and drag it to move it in the
 note, or let go to copy, share or delete it. Swipe a file to move or delete it, or to make it a favourite; touch and
-hold it for everything else: its menu opens under it in the same glass panel as the Mac's, sized for a finger, with a
-tap of the phone, and moving on drags the file instead. Long menus have a field to type in, which brings up the
-keyboard only when you tap it. A submenu such as Move To opens in the menu's place, with a way back at its top.
+hold it for everything else. Its menu is the system's own, as are those of buttons such as ⋯ and Attach, with a symbol
+beside each entry; Move To in them asks for the folder in a sheet, as Files does.
 
 The iPad has the Mac's layout: the sidebar, with the iPhone's first screen at its top and its folders opening in
 place, the note next to it, and the outline in an inspector. To-dos and Favorites show next to the sidebar, in the
-note's place. Its menus open their submenus beside them, as on the Mac, show the keys while a keyboard is attached, and
-open with a right-click on a trackpad or mouse too. New Note at the top of the sidebar, or in the note's toolbar while the sidebar is hidden, asks whether
+note's place. New Note at the top of the sidebar, or in the note's toolbar while the sidebar is hidden, asks whether
 to type or write by hand. In portrait the sidebar steps aside once you have picked a note. With a keyboard, the Mac's shortcuts
 work, the menu bar has the Mac's File, View, Go and Format menus, the marks show next to the caret as on the Mac, and
 the bar above the keyboard steps aside, as in Notes: Aa, Checklist, Table, attachments and the pencil are in the

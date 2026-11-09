@@ -231,7 +231,7 @@ struct DocumentScreen: View {
     }
 
     private var moreMenu: some View {
-        GlassMenuButton {
+        AppMenuButton {
             if isNote {
                 MenuEntry("Find in Note", "magnifyingglass", keys: "⌘F", enabled: isLoaded) { workspace.editor.findInNote() }
                 if !isInSplitView {
@@ -339,7 +339,7 @@ struct PDFAddMenu: View {
     var hasPage = false
 
     var body: some View {
-        GlassMenuButton {
+        AppMenuButton {
             for source in AttachmentSource.available {
                 MenuEntry(source == .files ? "Choose File" : source.name, source == .files ? "folder" : source.symbol) { editing.addPictures(from: source) }
             }
@@ -361,7 +361,7 @@ struct PDFPageMenu: View {
     let editing: PDFEditing
 
     var body: some View {
-        GlassMenuButton {
+        AppMenuButton {
             Self.entries(editing)
         } label: {
             Label("Page", systemImage: "doc.on.doc")

@@ -60,15 +60,13 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Changed
 
-- Menus are one glass panel, as in Linear and Issues, on the Mac, iPhone and iPad: a symbol beside each entry, its keys
-  on the right, a soft highlight, and in longer menus a field on top to type in, which finds any entry, also inside a
-  submenu (typing "pdf" in the ⋯ menu finds Export As › PDF…). On the Mac every right-click menu (the sidebar's, the
-  note's with Format added, To-dos', a PDF's) and the toolbar's Aa and ⋯ open this way, and the symbols show again,
-  which macOS menus no longer draw; the menu bar stays as it was. Move To is a list of your folders with their own
-  symbols and colours, the one the file is in ticked: type a folder's name and press Return. On iPhone and iPad, touch
-  and hold a file and its menu opens under it, the file marked, with a tap of the phone; move on and you drag the file
-  instead. A submenu opens beside the menu on the iPad and in its place on the iPhone, and the iPad shows the keys
-  while a keyboard is attached.
+- Menus on the Mac are one glass panel, as in Linear and Issues: a symbol beside each entry, its keys on the right and a
+  soft highlight. Every right-click menu (the sidebar's, the note's with Format added, To-dos', a PDF's) and the
+  toolbar's Aa and ⋯ open this way, and the symbols show again, which macOS menus no longer draw; the menu bar stays as
+  it was. Longer menus have a field on top to type in, which finds any entry, also inside a submenu (typing "pdf" in the
+  ⋯ menu finds Export As › PDF…). Move To is a list of your folders with their own symbols and colours, the one the
+  file is in ticked: type a folder's name and press Return. On iPhone and iPad every menu stays the system's own, with a
+  symbol beside each entry.
 - The first screen on the iPhone and the sidebar on the iPad and the Mac are laid out alike, as Reminders and Notes do
   on each device. To-dos and Favorites are tiles at the top, each with its count, and a tap or click shows the list:
   on the iPhone on a screen of its own, on the iPad and the Mac in the note's place, as To-dos is shown. Favorites is
