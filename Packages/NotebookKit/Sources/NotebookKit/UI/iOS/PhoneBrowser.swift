@@ -187,7 +187,7 @@ struct HomeScreen: View {
                 }
                 Section {
                     Button { addsLocation = true } label: {
-                        Label("Add Location", systemImage: "plus")
+                        Label("Open Folder", systemImage: "plus")
                     }
                 }
             }
@@ -201,7 +201,7 @@ struct HomeScreen: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 GlassMenuButton {
-                    MenuEntry("Add Location", "plus.rectangle.on.folder") { addsLocation = true }
+                    MenuEntry("Open Folder", "plus.rectangle.on.folder") { addsLocation = true }
                     if let folder = workspace.defaultFolder {
                         MenuEntry("Import from Apple Notes", "square.and.arrow.down.on.square") { workspace.appleNotesImportFolder = folder }
                     }

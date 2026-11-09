@@ -60,6 +60,9 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Changed
 
+- Add Location is now Open Folder, and Settings lists your Folders instead of Locations: what Notebook shows are
+  folders, and Location means only a to-do's or reminder's place, as in Reminders. On the Mac, File › Open Folder… sits
+  under Open….
 - Menus are one glass panel, as in Linear and Issues, on the Mac, iPhone and iPad: a symbol beside each entry, its keys
   on the right, a soft highlight, and in longer menus a field on top to type in, which finds any entry, also inside a
   submenu (typing "pdf" in the ⋯ menu finds Export As › PDF…). On the Mac every right-click menu (the sidebar's, the

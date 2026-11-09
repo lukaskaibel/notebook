@@ -161,8 +161,8 @@ extension Workspace {
                 #endif
             })
         }
-        list.append(PaletteCommand(id: "add-location", title: "Add Location…", symbol: "plus.rectangle.on.folder", section: new,
-                                   keywords: ["icloud", "folder", "open"]) {
+        list.append(PaletteCommand(id: "add-location", title: "Open Folder…", symbol: "plus.rectangle.on.folder", section: new,
+                                   keywords: ["icloud", "add", "location"]) {
             actions.addLocation()
         })
         #if os(macOS)

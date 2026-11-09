@@ -102,7 +102,8 @@ for theme in dark light; do
 
   say "open Projects/Notebook roadmap.md"; sleep 1.5; shot "blocks-$theme"
   say "open University/Linear algebra/Week 3.md"; sleep 1.5; shot "math-$theme"
-  say "open Travel/Flight tickets.pdf"; sleep 2; shot "quicklook-$theme"
+  # Past the moment Recent's cards change places (2 s after a file opens, then a slide), not in the middle of it.
+  say "open Travel/Flight tickets.pdf"; sleep 3.2; shot "quicklook-$theme"
   # Further down the trip: the plan with its link, the callout, the table and the embedded PDF.
   say "open Travel/Kyoto trip.md"; sleep 1.2; say "scroll 640"; sleep 1; shot "objects-$theme"
   # Drawing in a note: the way to the ryokan, open for drawing, with the palette at the bottom.
@@ -123,8 +124,9 @@ for theme in dark light; do
   say "pickversion 2"; sleep 1.2
   say "showchanges 1"; sleep 1.5; shot "versions-$theme"
   say "closeversions"; sleep 0.5
-  # To-dos: every open to-do of the sample notes, by when it's due.
-  say "showtodos"; sleep 1.5; shot "todos-$theme"
+  # To-dos: every open to-do of the sample notes, by when it's due, with its tile at the top of the sidebar (the scenes
+  # before it leave the sidebar scrolled down to Travel).
+  say "sidebartop" "showtodos"; sleep 1.5; shot "todos-$theme"
   # The dry cleaning edited in place: the line for notes, its points, and the capsules for its day, time and place
   # under them, with the day's dropdown open below them and a day typed in it.
   say "edittodo end dry cleaning"; sleep 1.5

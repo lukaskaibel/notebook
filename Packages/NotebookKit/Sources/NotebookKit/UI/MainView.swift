@@ -354,7 +354,7 @@ struct WelcomeView: View {
                 .foregroundStyle(Color.theme(Theme.textSecondary))
                 .padding(.top, 8)
             Spacer()
-            Text("You can add more folders later with Add Location at the bottom of the sidebar. Notebook only sees the folders you choose.")
+            Text("You can open more folders later with Open Folder at the bottom of the sidebar. Notebook only sees the folders you choose.")
                 .font(.system(size: 12))
                 .foregroundStyle(Color.theme(Theme.textTertiary))
                 .padding(.bottom, 22)

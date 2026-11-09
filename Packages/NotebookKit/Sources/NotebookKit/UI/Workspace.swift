@@ -203,7 +203,7 @@ public final class Workspace: NSObject {
     /// Counts Search (⌥⌘F), which puts the caret in the search field.
     var searchRequest = 0
     #if os(iOS)
-    /// Counts the times ⌘K asked for Settings and Add Location, and ⌘K or the menu bar for New Folder, which the screens
+    /// Counts the times ⌘K asked for Settings and Open Folder, and ⌘K or the menu bar for New Folder, which the screens
     /// show.
     var settingsRequest = 0
     var locationRequest = 0
@@ -635,7 +635,7 @@ public final class Workspace: NSObject {
         if isLocation {
             reportInFront("Notebook can’t read “\(name)”.", why + " To take it out of the sidebar, \(remove).")
         } else {
-            reportInFront("“\(name)” can’t be added.", why + " Choose a folder in iCloud Drive or \(device) instead.")
+            reportInFront("Notebook can’t open “\(name)”.", why + " Choose a folder in iCloud Drive or \(device) instead.")
         }
     }
 

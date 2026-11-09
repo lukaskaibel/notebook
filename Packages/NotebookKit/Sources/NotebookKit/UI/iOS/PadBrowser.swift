@@ -160,7 +160,7 @@ struct PadBrowser: View {
                     ToolbarItem(placement: .topBarTrailing) {
                         GlassMenuButton {
                             MenuEntry("New Folder", "folder.badge.plus", keys: "⇧⌘N") { newFolderIn = newFolderParent }
-                            MenuEntry("Add Location", "plus.rectangle.on.folder") { addsLocation = true }
+                            MenuEntry("Open Folder", "plus.rectangle.on.folder") { addsLocation = true }
                             if let folder = workspace.selectedFolder ?? workspace.folderForNewNote {
                                 MenuEntry("Import from Apple Notes", "square.and.arrow.down.on.square") { workspace.appleNotesImportFolder = folder }
                             }
