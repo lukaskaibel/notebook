@@ -107,6 +107,11 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- On the Mac, Notebook could stop with the spinning wait cursor as you added a note, and had to be forced to quit. It
+  happened with scroll bars that take room (a mouse attached, or scroll bars set to show always) once the sidebar's
+  files reached the bottom of the window: Recent's cards made room for the scroll bar, which made the files short
+  enough for it to go, which made the cards wider again, without end. Recent now keeps its height whether the scroll
+  bar shows or not.
 - A note from a folder you took out of the sidebar no longer stays in File › Open Recent, ⌘K's recent notes, Recent
   and Favorites, where it could open as an empty page: Notebook can no longer read it. It comes back if you add the
   folder again.
