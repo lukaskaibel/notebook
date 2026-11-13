@@ -4,15 +4,16 @@ Notebook keeps every note as a plain Markdown file, in your own iCloud Drive or 
 
 And it writes like Notes. Headings, bold, lists and checklists look finished as you type, and their Markdown marks show only on the line you're writing. Pictures, PDFs and drawings go right into the note. On the Mac, iPhone and iPad it's an Apple app through and through: widgets, Spotlight, Shortcuts, the share sheet, Apple Pencil and the keyboard shortcuts you know.
 
-NEW IN 1.2
-• Handwritten notes on blank, lined, squared, dotted or Cornell paper, with Apple Pencil or a finger
-• All Pages: see every page at once, drag them into a new order, duplicate and delete them
-• Pictures on any page, and pages added as you write, on handwritten notes and every PDF
-• Draw on PDFs and highlight their text on the Mac too
-• VoiceOver reads a note as you see it
+NEW IN 1.3
+• Tables you type in as in Notes, with handles to add, align and delete rows and columns
+• AsciiDoc notes, right next to your Markdown ones
+• Quick Look and thumbnails show a note as Notebook does, in the Finder and the Files app
+• Paste a Markdown file, and its heading becomes the note's title
+• The toolbar and the first screen laid out as in Notes, and a new icon
 
 WRITE
 • Tables, code, maths and Mermaid diagrams, drawn right in the note
+• Handwritten notes on lined, squared, dotted or Cornell paper, with Apple Pencil or a finger, kept as PDFs
 • Pictures, PDFs and files in the note, kept in a hidden .assets folder beside it
 • Drawings with Apple Pencil, a finger, the mouse or the trackpad, in the note and right on PDFs
 • Version history: every earlier version of a note, with what changed marked

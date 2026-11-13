@@ -1,10 +1,11 @@
-Notebook 1.2 brings handwritten notes.
+Notebook 1.3 brings tables you type in as in Notes.
 
-• Handwritten notes on iPhone and iPad: write with Apple Pencil or a finger on blank, lined, squared, dotted or Cornell paper. A handwritten note is a PDF in your folder, right next to your typed notes, and every PDF app shows what you wrote. On the iPad, New Note asks whether to type or write by hand.
-• Pages as you need them: pull past the last page for a new one, give a page other paper, and see every page at once in All Pages, where you drag pages into a new order, duplicate and delete them.
-• Pictures on the page: photos, the camera, scans and pictures from Files, moved, turned and resized with the lasso, and as sharp as the handwriting however far you zoom in.
-• All of it works on any PDF, so you can write next to lecture slides and after the last one.
-• On the Mac: draw on PDFs with the mouse, the trackpad or a tablet, highlight their text with ⌃⌘H, and hold Shift for a straight line.
-• Copy File: ⇧⌘C or a file's menu copies the whole file, as the Finder does, to paste into Mail, Messages or the Finder. Pasted into a note, a file from your folders becomes a link to it, and one from elsewhere is copied in.
-• VoiceOver reads a note as you see it, line by line, and a double-tap ticks a to-do.
-• Nothing you write is lost: a note that can't be saved is tried again and kept in Unsaved Notes, and where there is no Recently Deleted, Undo asks before deleting a note you have written in.
+• Tables stay tables while you type: the cell you're in has a ring, and handles on its row and column add, align and delete rows and columns. Return adds a row, Tab goes to the next cell, and the file stays plain Markdown. Table in the toolbar puts a new one in.
+• AsciiDoc notes: an .adoc file is a note like a Markdown one, shown as it reads while you type, with its to-dos in To-dos and its headings in search.
+• Quick Look shows a note as Notebook does: press Space on a note in the Finder, or tap one in the Files app, and you see its headings, to-dos, tables and maths instead of its Markdown. Thumbnails show notes like that too.
+• Paste a whole Markdown file and its # Heading becomes the note's title. On the Mac, ⌘V in the sidebar pastes files and text into a folder, as in the Finder.
+• A look like Apple's own apps: the toolbar laid out as in Notes, To-dos and Favorites as tiles at the top, with the files you opened last as cards, and an icon that fills its square.
+• On the Mac, Search is at the top of the sidebar and opens ⌘K, menus show their symbols and find an entry as you type, and a caret shows where what you drag will go.
+• Add Location is now Open Folder.
+• Notebook is about half the size to download, typing stays light in long notes and next to pictures and tables, and notes with long tables open several times faster.
+• Fixed: lines you write at the bottom stay above the keyboard on iPhone and iPad, emoji and Chinese or Japanese characters show as soon as a note opens, and adding a note on the Mac can no longer make Notebook hang.

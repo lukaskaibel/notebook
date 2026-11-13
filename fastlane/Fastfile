@@ -62,7 +62,7 @@ SCREENSHOTS = File.join(ROOT, "Design", "screenshots", "app-store")
 # text and the description, and pictures of what it added mean nothing for an earlier version, so an upload for one
 # (Mac 1.0 sent back by App Review, say) leaves those as App Store Connect has them. Moves on with each release whose
 # texts are rewritten.
-STORE_TEXTS_VERSION = "1.2.0"
+STORE_TEXTS_VERSION = "1.3.0"
 NEWS = %w[release_notes.txt promotional_text.txt description.txt].freeze
 
 # One app on two App Store platforms: how each is built and which screenshots belong to it. Both build the AppStore
