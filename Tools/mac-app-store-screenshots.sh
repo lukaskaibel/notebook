@@ -180,6 +180,14 @@ shot 06-versions light "Every version, kept." "Go back to any earlier version, w
   "open Travel/Kyoto trip.md" "wait 1" "browseversions" "wait 1" "pickversion 2" "wait 1" "showchanges 1" "wait 1"
 say "closeversions"
 # ⌘K finding a word in notes and PDFs, in the middle of the window (the search field's menu reaches past its edge).
+# Its words in pictures come once Notebook has read the pictures, some seconds after it starts: up to half a minute.
+if wanted 07-search; then
+  for _ in $(seq 60); do
+    say "recognizer"
+    sleep 0.5
+    tail -1 "$work/cmd.log" 2>/dev/null | grep -qE "queued=0 reading=false read=[1-9]" && break
+  done
+fi
 shot 07-search light "Finds it from a few letters." "⌘K searches notes, PDFs and pictures, and runs any command." \
   "open Personal/Weekend.md" "wait 1" "palette" "wait 0.6" "type kyoto" "wait 1.5"
 say "key escape"

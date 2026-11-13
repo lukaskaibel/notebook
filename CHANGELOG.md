@@ -3,7 +3,10 @@
 Everything users would notice, newest first. The format follows [Keep a Changelog](https://keepachangelog.com), and
 versions follow [semantic versioning](https://semver.org).
 
-## [Unreleased]
+## [1.3.0] – not released yet
+
+Tables you type in as in Notes; AsciiDoc notes; Quick Look and thumbnails that show a note as Notebook does; the
+toolbar, the first screen and the icon laid out as in Apple's own apps; and typing that stays light in long notes.
 
 ### Added
 
@@ -163,7 +166,7 @@ versions follow [semantic versioning](https://semver.org).
   took. Only the lines around the edit are read, up to where they read as before, and a key in that note takes about a
   fifth of the time it did. Laying out a note's text, which looks for the marks it hides, takes a sixth of the time.
 
-## [1.2.0] – not released yet
+## [1.2.0] – 2026-11-04
 
 Handwritten notes on iPhone and iPad, with All Pages and pictures on the page; drawing and highlighting PDFs on the Mac;
 Copy File; VoiceOver reading a note as it shows; and nothing you write lost when a save fails.

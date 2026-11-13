@@ -20,7 +20,7 @@ Widgets and controls: New Note is a widget (Home Screen, Lock Screen, the Mac's 
 
 Share extension: "Notebook" in the share sheet of other apps takes text, links, pictures and PDFs into a new note in the default folder or at the end of the note opened last. The extension leaves them in the app's App Group, and the app writes them into the user's folder the next time it is open.
 
-New in 1.2: handwritten notes are PDFs in the user's folder, written in with PencilKit (iPad: New Note asks; iPhone: a folder's menu). Try Lecture 4.pdf in the sample notes: the pen writes, Add puts a photo or scan on the page, the grid shows All Pages. Copy File (⇧⌘C) copies a whole file. A note that can't be saved is kept in Notebook's folder Unsaved Notes.
+New in 1.3: Quick Look preview and thumbnail extensions show a note as the app does, reading only the previewed file; the Mac app keeps bookmarks of the user's folders in its App Group, so previews show a note's pictures. The app may ask for a rating (AppStore.requestReview). Handwritten notes are PDFs written in with PencilKit: try Lecture 4.pdf in the sample notes.
 
 Spotlight: the notes in the user's folders are indexed on the device with Core Spotlight, so system search finds them; notes in hidden folders are left out.
 
