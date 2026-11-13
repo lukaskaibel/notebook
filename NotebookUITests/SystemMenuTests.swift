@@ -70,6 +70,27 @@ final class SystemMenuTests: XCTestCase {
         keepPicture("move")
     }
 
+    /// The name over a folder's files, touched and held as a row is, brings up its menu, as a tap does: a list's section
+    /// header took the touch and hold first, so SwiftUI's menus there never opened (TestFlight, 2026-11-13: a Nextcloud
+    /// folder Notebook can't read couldn't be removed on an iPad).
+    func testHoldAFoldersName() {
+        let library = app.buttons["Library"].firstMatch
+        XCTAssertTrue(library.waitForExistence(timeout: 20), app.debugDescription)
+        library.press(forDuration: 0.8)
+        let remove = labelled("Remove from Notebook")
+        XCTAssertTrue(remove.waitForExistence(timeout: 5), "touching and holding the name opens its menu\n" + app.debugDescription)
+        XCTAssertTrue(labelled("New Note").exists, app.debugDescription)
+        keepPicture("folder-name-held")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.97)).tap()
+        XCTAssertTrue(remove.waitForNonExistence(timeout: 5), "a tap elsewhere closes the menu")
+
+        library.tap()
+        XCTAssertTrue(remove.waitForExistence(timeout: 5), "a tap opens it too\n" + app.debugDescription)
+        let handwritten = labelled("New Handwritten Note")
+        handwritten.tap()
+        XCTAssertTrue(labelled("Lined").waitForExistence(timeout: 5), "its submenus open\n" + app.debugDescription)
+    }
+
     // MARK: The bars' menus
 
     /// The ⋯ of the first screen (of the sidebar on the iPad), held: the finger slides down to Settings and lets go on it,

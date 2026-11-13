@@ -766,7 +766,8 @@ write on the Mac, or any folder in it or on the device. **Keep Notes on This iPh
 folder, which the Files app shows under On My iPhone › Notebook and Notebook calls On My iPhone. Open more
 with **Open Folder** in the ⋯ menu or in Settings. Folders of other apps in the picker work when the app gives other
 apps its folders; some, such as Nextcloud, give only single files, and Notebook says so instead of adding a folder
-that would stay empty.
+that would stay empty. A folder like this added with an earlier version is pointed out, with a button that takes it out
+of the sidebar.
 
 To look around without your own notes, choose **Try Sample Notes…** on the first screen. It writes made-up notes, a
 drawing, pictures and PDFs to a new folder Sample Notes, in the folder you pick on the Mac and in Notebook's own folder
@@ -915,7 +916,7 @@ Replace; otherwise ⌥⌘F searches. On iPhone and iPad:
 | Swipe from the left edge | Back to the folder or the note you came from (iPhone) |
 | Swipe a file to the left or right | Move or delete it, add it to your favourites, or hide a folder |
 | Touch and hold a file or folder | Set a reminder, rename, move, duplicate, copy a link, customize or hide a folder, share and more |
-| Tap a section's name | New note or folder at its top, add to favourites, share, show hidden folders, remove from Notebook |
+| Tap or touch and hold a section's name | New note or folder at its top, add to favourites, share, show hidden folders, remove from Notebook |
 | Pull a list down | Read the folder again |
 | Tap a checkbox, a link or a picture | Tick it, follow it, or look at it in Quick Look |
 | Tap a to-do's pill | Its date or its place, to type or tap, as in To-dos |

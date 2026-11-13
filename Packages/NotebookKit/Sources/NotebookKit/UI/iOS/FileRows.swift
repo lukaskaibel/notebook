@@ -480,8 +480,13 @@ struct FileAlerts: ViewModifier {
             } message: { _ in
                 Text("This place has no Recently Deleted folder, so it is deleted right away.")
             }
-            .alert(workspace.problem?.title ?? "", isPresented: Binding(get: { workspace.problem != nil }, set: { if !$0 { workspace.problem = nil } }), presenting: workspace.problem) { _ in
-                Button("OK") { workspace.problem = nil }
+            .alert(workspace.problem?.title ?? "", isPresented: Binding(get: { workspace.problem != nil }, set: { if !$0 { workspace.problem = nil } }), presenting: workspace.problem) { problem in
+                if problem.removableLocation != nil {
+                    Button("Keep", role: .cancel) { workspace.answer(problem, removing: false) }
+                    Button("Remove from Notebook", role: .destructive) { workspace.answer(problem, removing: true) }
+                } else {
+                    Button("OK") { workspace.problem = nil }
+                }
             } message: { problem in
                 Text(problem.message)
             }

@@ -535,7 +535,7 @@ public final class Workspace: NSObject {
             }
             locations[index].linked = survey.linked
             quickLookFolders[survey.id] = survey.quickLook
-            if survey.isFile, reportedFiles.insert(survey.id).inserted { reportNoFolder(locations[index].name, isLocation: true) }
+            if survey.isFile, reportedFiles.insert(survey.id).inserted { reportInFront(unreadable(locations[index])) }
             guard let root = roots[survey.id] else { continue }
             root.linked = survey.linked
             if let top = survey.top, root.apply(top) { changed.append(root) }
@@ -615,29 +615,30 @@ public final class Workspace: NSObject {
                 defer { if accessing { url.stopAccessingSecurityScopedResource() } }
                 return Location.found(at: url)
             }.value
-            if found == .folder { addLocation(url) } else { reportNoFolder(url.lastPathComponent, isLocation: false) }
+            if found == .folder { addLocation(url) } else { reportNoFolder(url.lastPathComponent) }
             done?(found == .folder)
         }
     }
 
-    /// Says why a folder from another app can't be shown: that app gave Notebook no folder for it. `isLocation` when it
-    /// is in the sidebar already, from before Notebook looked.
-    private func reportNoFolder(_ name: String, isLocation: Bool) {
-        let why = "The app it comes from gives other apps only single files, not folders, so Notebook can’t see what’s in it. "
-            + "Nextcloud is one of these apps."
+    /// Says why a folder from another app can't be shown: that app gave Notebook no folder for it.
+    private func reportNoFolder(_ name: String) {
         #if os(macOS)
         let device = "on this Mac"
-        let remove = "right-click it in the sidebar and choose Remove from Sidebar"
         #else
         let device = Location.onDeviceName
-        let remove = "touch and hold it and choose Remove from Notebook"
         #endif
-        if isLocation {
-            reportInFront("Notebook can’t read “\(name)”.", why + " To take it out of the sidebar, \(remove).")
-        } else {
-            reportInFront("Notebook can’t open “\(name)”.", why + " Choose a folder in iCloud Drive or \(device) instead.")
-        }
+        reportInFront("Notebook can’t open “\(name)”.", Self.noFolderReason + " Choose a folder in iCloud Drive or \(device) instead.")
     }
+
+    /// The same for a location in the sidebar from before Notebook looked, with a button that takes it out of the
+    /// sidebar there and then, rather than sending you to its menu.
+    func unreadable(_ location: Location) -> Problem {
+        Problem(title: "Notebook can’t read “\(location.name)”.", message: Self.noFolderReason + " Removing it from the sidebar deletes nothing.",
+                removableLocation: location.id)
+    }
+
+    private static let noFolderReason = "The app it comes from gives other apps only single files, not folders, so Notebook can’t "
+        + "see what’s in it. Nextcloud is one of these apps."
 
     /// Of folders dragged onto the sidebar, the ones it could add: folders it doesn't show yet. Nil when the drag
     /// has anything else in it, such as a file or a folder already in a location.
@@ -2609,14 +2610,31 @@ public final class Workspace: NSObject {
     /// Something that couldn't be done: an alert, on the Mac over the window, or over a note's own window when that is
     /// the one in front, where it was asked for.
     func report(_ title: String, _ message: String) {
+        report(Problem(title: title, message: message))
+    }
+
+    /// The same, with what the alert offers to do about it beside an OK.
+    func report(_ problem: Problem) {
         #if os(macOS)
         let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = message
-        present(alert)
+        alert.messageText = problem.title
+        alert.informativeText = problem.message
+        if problem.removableLocation != nil {
+            alert.addButton(withTitle: "Remove from Sidebar").hasDestructiveAction = true
+            alert.addButton(withTitle: "Keep")
+        }
+        present(alert) { [weak self] in self?.answer(problem, removing: problem.removableLocation != nil && $0 == .alertFirstButtonReturn) }
         #else
-        problem = Problem(title: title, message: message)
+        self.problem = problem
         #endif
+    }
+
+    /// The button chosen in a problem's alert: `removing` takes the location it offers to remove out of Notebook.
+    func answer(_ problem: Problem, removing: Bool) {
+        #if os(iOS)
+        if self.problem?.id == problem.id { self.problem = nil }
+        #endif
+        if removing, let id = problem.removableLocation, locations.contains(where: { $0.id == id }) { removeLocation(id) }
     }
 
     #if os(macOS)
@@ -2636,7 +2654,11 @@ public final class Workspace: NSObject {
     /// closed: told once Notebook is in front, never as an alert of its own while it runs in the background without a
     /// window, as after a launch at login.
     func reportInFront(_ title: String, _ message: String) {
-        inFront { [weak self] in self?.report(title, message) }
+        reportInFront(Problem(title: title, message: message))
+    }
+
+    func reportInFront(_ problem: Problem) {
+        inFront { [weak self] in self?.report(problem) }
     }
 
     /// Does `show` at once when Notebook is in front with a window, else once it is: not as an alert of its own before
@@ -2727,6 +2749,8 @@ public struct Problem: Identifiable, Equatable {
     public let id = UUID()
     public var title: String
     public var message: String
+    /// A location in the sidebar that the alert offers to remove, beside keeping it: one Notebook can't read.
+    public var removableLocation: UUID?
 }
 
 // MARK: - EditorControllerDelegate
