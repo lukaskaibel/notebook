@@ -73,9 +73,12 @@ final class SystemMenuTests: XCTestCase {
     /// The name over a folder's files, touched and held as a row is, brings up its menu, as a tap does: a list's section
     /// header took the touch and hold first, so SwiftUI's menus there never opened (TestFlight, 2026-11-13: a Nextcloud
     /// folder Notebook can't read couldn't be removed on an iPad).
-    func testHoldAFoldersName() {
-        let library = app.buttons["Library"].firstMatch
-        XCTAssertTrue(library.waitForExistence(timeout: 20), app.debugDescription)
+    func testHoldAFoldersName() throws {
+        // Once the sample notes are read: reading them again rebuilds the header under a finger that holds it.
+        XCTAssertTrue(labelled("Personal").waitForExistence(timeout: 20), app.debugDescription)
+        // The name itself: on the iPad the whole header is a button too, which folds the section from its arrow.
+        let library = try XCTUnwrap(app.buttons.matching(NSPredicate(format: "label == %@", "Library")).allElementsBoundByIndex.last,
+                                    app.debugDescription)
         library.press(forDuration: 0.8)
         let remove = labelled("Remove from Notebook")
         XCTAssertTrue(remove.waitForExistence(timeout: 5), "touching and holding the name opens its menu\n" + app.debugDescription)
