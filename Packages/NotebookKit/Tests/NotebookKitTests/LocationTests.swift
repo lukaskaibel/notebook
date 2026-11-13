@@ -255,6 +255,41 @@ final class LocationTests: XCTestCase {
                        "only a file is told about: a folder that's gone may come back")
     }
 
+    /// A location that turned out to be a file is pointed out with a button that removes it, rather than sending you to
+    /// its name's menu (TestFlight, 2026-11-13: the iPad's "MyData" from Nextcloud couldn't be taken out of the sidebar).
+    func testAnUnreadableLocationsAlertRemovesIt() async throws {
+        #if os(macOS)
+        _ = NSApplication.shared
+        #endif
+        let workspace = try await makeWorkspace()
+        let file = base.appendingPathComponent("MyData")
+        try Data().write(to: file)
+        workspace.addLocation(file)
+        let location = try XCTUnwrap(workspace.locations.first { $0.name == "MyData" })
+        try await settle(workspace)
+
+        let problem = workspace.unreadable(location)
+        XCTAssertEqual(problem.title, "Notebook can’t read “MyData”.")
+        XCTAssertEqual(problem.removableLocation, location.id)
+        XCTAssertTrue(problem.message.hasSuffix("Removing it from the sidebar deletes nothing."), problem.message)
+        XCTAssertNil(Problem(title: "Something", message: "else").removableLocation, "other alerts have only OK")
+
+        #if os(iOS)
+        workspace.problem = problem
+        #endif
+        workspace.answer(problem, removing: false)
+        #if os(iOS)
+        XCTAssertNil(workspace.problem)
+        #endif
+        XCTAssertEqual(workspace.locations.map(\.name), ["Library", "iCloud Drive", "MyData"], "Keep keeps it")
+
+        workspace.answer(problem, removing: true)
+        XCTAssertEqual(workspace.locations.map(\.name), ["Library", "iCloud Drive"])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path), "only the sidebar forgets it")
+        workspace.answer(problem, removing: true)
+        XCTAssertEqual(workspace.locations.map(\.name), ["Library", "iCloud Drive"], "a second answer changes nothing")
+    }
+
     func testSidebarAddsAFolderDroppedBetweenItsSections() async throws {
         let workspace = try await makeWorkspace()
         let sidebar = SidebarController(workspace: workspace)

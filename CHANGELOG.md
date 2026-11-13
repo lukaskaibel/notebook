@@ -142,7 +142,11 @@ toolbar, the first screen and the icon laid out as in Apple's own apps; and typi
   it goes after it rather than before, and a file dropped there from the Finder no longer goes into a table's Markdown.
 - On iPhone and iPad, a Nextcloud folder chosen with Open Folder showed in the sidebar but stayed empty. Nextcloud
   gives other apps only single files, not its folders, so Notebook can't show what's in them; it now says so instead of
-  adding the folder. A folder like this added before is pointed out once, with how to remove it.
+  adding the folder. A folder like this added before is pointed out once, with a button that takes it out of the
+  sidebar.
+- On iPhone and iPad, touching and holding the name over a folder's files, such as iCloud Drive or a folder you
+  opened, did nothing, though a file or folder in the list brings up its menu that way. It now brings up the same menu
+  as a tap on the name: New Note, New Folder, Add to Favorites, Share, Show Hidden Folders and Remove from Notebook.
 - Pictures that only a note with the `.markdown` extension shows are no longer taken for unused and put in the Trash
   when another note in its folder lets go of them.
 - On the Mac, Undo after typing over a selected `*`, `_`, `` ` ``, `~` or `=` wrapped what you had typed in that mark

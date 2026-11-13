@@ -18,6 +18,74 @@ struct AppMenuButton<Label: View>: View {
     }
 }
 
+/// The same menu laid over a view in a list's section header, such as a location's name, and opened with a tap or by
+/// touching and holding it. SwiftUI's `Menu` and `.contextMenu` there open with a tap at most: the header takes the touch
+/// and hold first and does nothing with it, so it has to be a UIKit button, whose own menu gets the touch first.
+struct HeaderMenuButton: UIViewRepresentable {
+    /// What VoiceOver reads for it, as the view under it is hidden from VoiceOver.
+    let label: String
+    @MenuContent var entries: () -> [MenuEntry]
+
+    func makeUIView(context: Context) -> UIButton {
+        let button = UIButton(type: .custom)
+        button.showsMenuAsPrimaryAction = true
+        return button
+    }
+
+    func updateUIView(_ button: UIButton, context: Context) {
+        button.accessibilityLabel = label
+        let entries = entries
+        // Made when it opens, so it says what is true then, such as whether the folder is a favourite.
+        button.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak button] done in
+            done(MainActor.assumeIsolated { SystemMenuElements.elements(of: entries(), from: button) })
+        }])
+    }
+}
+
+/// Entries as UIKit's menus take them, laid out as `SystemMenuItems` lays them out for SwiftUI's.
+@MainActor
+enum SystemMenuElements {
+    static func elements(of entries: [MenuEntry], from source: UIView?) -> [UIMenuElement] {
+        SystemMenuItems.groups(of: MenuEntry.tidy(entries)).map { group in
+            UIMenu(title: group.title ?? "", options: .displayInline, children: group.entries.compactMap { element($0, from: source) })
+        }
+    }
+
+    private static func element(_ entry: MenuEntry, from source: UIView?) -> UIMenuElement? {
+        let image = SystemMenuItems.image(of: entry.icon)
+        var attributes: UIMenuElement.Attributes = entry.isEnabled ? [] : .disabled
+        if entry.isDestructive { attributes.insert(.destructive) }
+        switch entry.kind {
+        case .action(let action):
+            let shares = entry.shares
+            return UIAction(title: entry.title, subtitle: entry.value, image: image, attributes: attributes, state: entry.isChecked ? .on : .off) { _ in
+                MainActor.assumeIsolated { shares.isEmpty ? action() : share(shares, from: source) }
+            }
+        case .submenu(let make):
+            if let instead = entry.insteadOfSubmenu {
+                return UIAction(title: entry.title, subtitle: entry.value, image: image, attributes: attributes) { _ in
+                    MainActor.assumeIsolated { instead() }
+                }
+            }
+            guard entry.isEnabled else { return UIAction(title: entry.title, subtitle: entry.value, image: image, attributes: attributes) { _ in } }
+            return UIMenu(title: entry.title, subtitle: entry.value, image: image, children: [UIDeferredMenuElement.uncached { done in
+                done(MainActor.assumeIsolated { elements(of: make(), from: source) })
+            }])
+        case .divider, .title:
+            return nil
+        }
+    }
+
+    /// The share sheet, coming from where the menu was, as SwiftUI's `ShareLink` brings it up.
+    private static func share(_ urls: [URL], from source: UIView?) {
+        guard let source, let presenter = source.window?.rootViewController?.topmostPresented else { return }
+        let sheet = UIActivityViewController(activityItems: urls, applicationActivities: nil)
+        sheet.popoverPresentationController?.sourceView = source
+        sheet.popoverPresentationController?.sourceRect = source.bounds
+        presenter.present(sheet, animated: true)
+    }
+}
+
 extension MenuEntry {
     /// Share, which the system's menus hand to the share sheet themselves, coming from where the menu was.
     static func share(_ urls: [URL]) -> MenuEntry {
@@ -118,6 +186,16 @@ private struct SystemMenuItems: View {
             // The system's menus draw symbols in the text's colour, unless they have their own.
             Image(uiImage: UIImage(systemName: name)?.withTintColor(UIColor(color), renderingMode: .alwaysOriginal) ?? UIImage())
         case .emoji(let emoji): Image(uiImage: Self.picture(of: emoji))
+        }
+    }
+
+    /// The symbol or emoji beside an entry, for UIKit's menus.
+    static func image(of icon: MenuEntry.Icon) -> UIImage? {
+        switch icon {
+        case .none: nil
+        case .symbol(let name): UIImage(systemName: name)
+        case .tinted(let name, let color): UIImage(systemName: name)?.withTintColor(UIColor(color), renderingMode: .alwaysOriginal)
+        case .emoji(let emoji): picture(of: emoji)
         }
     }
 
