@@ -171,7 +171,7 @@ turn, duplicate or delete. Undo goes back through strokes, pictures and pages al
 A handwritten note is a PDF like any other, and every PDF works the same way: write after the last slide of a
 lecture's PDF on a page of squared paper as large as the slides, or put a photo of the board next to them. What you
 write is saved into the PDF a moment after you stop, and every PDF app shows it: the paper's lines are part of the page,
-strokes are lines every app draws sharp, and a picture keeps the JPEG it came as. On the Mac a handwritten note opens as
+strokes are lines every app draws sharp and ink you can erase in Preview, and a picture keeps the JPEG it came as. On the Mac a handwritten note opens as
 any PDF does, its writing as sharp as the page, and the pencil writes on it there too.
 
 <picture>
@@ -437,14 +437,16 @@ shows the same in Notebook.
 ### PDFs, pictures and every other file
 
 Notebook is a browser for your folders, not only for notes. A PDF opens right in the window the way Preview shows it, its
-pages one under the other: there at once, and back where you left it when you return. Handwriting added with Markup is
-as sharp as the text, and a PDF changed in another app or on another device shows the change while it's open. The
+pages one under the other: there at once, and back where you left it when you return. Handwriting added with Markup or
+with Preview on iPhone, iPad or the Mac is as sharp as the text, and a PDF changed in another app or on another device
+shows the change while it's open. The
 pencil above a PDF lets you write and draw right on its pages, where you are: on iPhone and iPad with Apple Pencil and
 the system's tools, on the Mac with the mouse, the trackpad or a tablet and the palette from drawing in notes, while two
 fingers still scroll. On iPhone and iPad you also put pictures on the pages and add, move and duplicate pages, as in a
 handwritten note, and what you draw is saved as you go; on the Mac it is saved when you click the pencil again or press
 Escape. The strokes are in the PDF, as lines every PDF app shows sharp, and Notebook can change them later on any of
-your devices. On the Mac, select text and press ⌃⌘H, or right-click it, to highlight it in one of five colours; right-click a highlight to
+your devices. Preview, Files and Quick Look take them for their own Markup's ink, so you can go on writing and erasing in
+either app, back and forth, and the writing stays as sharp as it was. On the Mac, select text and press ⌃⌘H, or right-click it, to highlight it in one of five colours; right-click a highlight to
 change its colour or remove it. Highlights are the PDF's own, as Preview's are, and ⌘Z takes them back. The pen above a
 picture marks it up as in Files on iPhone and iPad, and saves what you add into the picture itself. A
 picture fits the window on the same grey, never larger than it is; pinch or double-click to zoom in on a spot. A video plays with the system's
@@ -661,8 +663,12 @@ PDFs and the words read in pictures, is kept in the app's caches on each device,
 The list of the notes Spotlight has is kept in the app's own folder on each device.
 
 A handwritten note is a PDF, and what Notebook adds to a PDF stays in it. The paper's lines are drawn into the page
-itself. The strokes on a page are one stamp annotation whose look is made of lines, with the PencilKit strokes in an
-entry of its own (`/NotebookDrawing`) for Notebook to change them again. Each picture is a stamp of its own whose look
+itself. The strokes on a page are one stamp annotation whose look is made of lines, with the PencilKit strokes in the
+entry Apple's Markup keeps its own in (`/AAPL:AKExtras`), next to the copy of the annotation that Apple's apps check
+before they take it for ink, and `/NotebookInk` marks it as Notebook's. Notebook before 1.4 kept the strokes in an
+entry of its own (`/NotebookDrawing`), which Notebook still reads and writes the new way with the next save. Preview's
+handwriting on iPhone and iPad, a square annotation with the same entry, stays as Preview wrote it on the pages you
+don't write on, and becomes part of Notebook's stamp on those you do. Each picture is a stamp of its own whose look
 is the picture, kept as a JPEG, with where it is and how far it is turned in `/NotebookPicture`. A hidden annotation on
 a page Notebook made says which paper it is (`/NotebookPaper`). A page moved in All Pages is the same page of the PDF in
 its new place, and a duplicate is a copy of it with everything on it. Every save writes the PDF anew with only what its pages

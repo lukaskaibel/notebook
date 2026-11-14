@@ -183,6 +183,14 @@ enum DebugRemote {
             workspace.pdfEditing.session?.debugRotateFirstPicture(by: CGFloat(numbers.first ?? 0.3))
         case "pdfsave":
             workspace.pdfEditing.session?.save()
+        case "pdfstroke":
+            // pdfstroke x y x y …: a pen stroke on the page in view, in page points from the crop box's top left.
+            let points = stride(from: 0, to: numbers.count - 1, by: 2).map { CGPoint(x: numbers[$0], y: numbers[$0 + 1]) }
+            workspace.pdfEditing.session?.debugStroke(through: points)
+        case "qlmarkup":
+            // qlmarkup [path]: the open file (or the one at path) in Quick Look's Markup, as Files and Preview have it;
+            // Done writes it over the file.
+            if let url = argument.isEmpty ? workspace.currentURL : url(argument) { Markup.open(url, workspace: workspace) }
         case "pdfdeletepicture":
             // pdfdeletepicture: the first picture on the page in view taken off, as the lasso's Delete does.
             workspace.pdfEditing.session?.debugDeletePicture()
@@ -208,6 +216,7 @@ enum DebugRemote {
             editing.update()
             var line = "pdfpages: \(editing.pageCount) pages, in view \(editing.pageIndex + 1), paper \(editing.paper?.rawValue ?? "none"), unsaved \(editing.session?.hasUnsavedChanges ?? false), undo \(editing.session?.undo.undoActionName ?? "")"
             if let url = workspace.currentURL, let document = PDFDocument(url: url) {
+                MarkupDrawings.readInk(from: CGPDFDocument(url as CFURL), into: document)
                 line += " | file: \(document.pageCount) pages, " + (0..<document.pageCount).map { index in
                     guard let page = document.page(at: index) else { return "?" }
                     let strokes = page.annotations.compactMap { MarkupDrawings.strokes(in: $0, on: page)?.drawing.strokes.count }.reduce(0, +)

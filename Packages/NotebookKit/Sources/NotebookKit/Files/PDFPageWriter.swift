@@ -94,6 +94,7 @@ enum PDFPageWriter {
     /// The PDF the plan makes of `base`.
     static func make(_ plan: PDFPlan, base: Data) throws -> Data {
         guard let document = PDFDocument(data: base), !document.isLocked else { throw CocoaError(.fileReadCorruptFile) }
+        MarkupDrawings.readInk(from: base, into: document)
         // The pictures already in the file, for those that move and for writing the file anew; and the new ones.
         var images = base.range(of: Data("NotebookPicture".utf8)) == nil ? [:]
             : CGDataProvider(data: base as CFData).flatMap(CGPDFDocument.init).map { PDFPictures.images(in: $0) } ?? [:]
@@ -102,15 +103,15 @@ enum PDFPageWriter {
         }
         let carriers = Carriers()
         try apply(plan, to: document, base: base, images: images, carriers: carriers)
+        // Strokes of earlier versions in Markup's entry, on the pages not drawn on too.
+        PDFInk.upgrade(document)
         let written = try compacted(document, images: images, carriers: carriers) ?? document
         // Entries PDFKit doesn't know are written only once read, on the Mac at least.
         for index in 0..<written.pageCount { written.page(at: index)?.annotations.forEach(keepEntries) }
-        let temporary = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("pdf")
-        defer { try? FileManager.default.removeItem(at: temporary) }
-        guard written.write(to: temporary) else { throw PDFWriteError.notWritten }
+        guard let data = try? PDFInk.written(written) else { throw PDFWriteError.notWritten }
         // Only now: the looks of the pictures carried in are still the carriers' until written.
         withExtendedLifetime(carriers) {}
-        return try Data(contentsOf: temporary)
+        return data
     }
 
     /// The file as it was changed elsewhere, as what saves start from now (`current`), with pages of the old `base`
@@ -121,6 +122,8 @@ enum PDFPageWriter {
         guard let document = PDFDocument(data: current), !document.isLocked, let old = PDFDocument(data: base) else {
             throw CocoaError(.fileReadCorruptFile)
         }
+        MarkupDrawings.readInk(from: current, into: document)
+        MarkupDrawings.readInk(from: base, into: old)
         // Taken before any goes in: a page goes from its document into the other.
         let pages = kept.compactMap { index in old.page(at: index).map { (index, $0) } }
         var places: [Int: Int] = [:]
@@ -130,12 +133,10 @@ enum PDFPageWriter {
         }
         // Written again, the file's own pages too keep only what has been read.
         for index in 0..<document.pageCount { document.page(at: index)?.annotations.forEach(keepEntries) }
-        let temporary = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("pdf")
-        defer { try? FileManager.default.removeItem(at: temporary) }
-        guard document.write(to: temporary) else { throw PDFWriteError.notWritten }
+        guard let data = try? PDFInk.written(document) else { throw PDFWriteError.notWritten }
         // Only now: what those pages have keeps reading its look from the old base until written.
         withExtendedLifetime(old) {}
-        return (try Data(contentsOf: temporary), places)
+        return (data, places)
     }
 
     /// The PDFs pictures were carried in from. A stamp moved from one keeps reading its look from it, so they stay
@@ -168,6 +169,7 @@ enum PDFPageWriter {
                 // A page of a document of its own, as a picture is carried in: what it has keeps its look until written.
                 if !copies.contains(where: { !$0.used.contains(index) }) {
                     guard let read = PDFDocument(data: base) else { throw PDFWriteError.pagesMissing(kept, document.pageCount) }
+                    MarkupDrawings.readInk(from: base, into: read)
                     carriers.documents.append(read)
                     copies.append((read, []))
                 }
@@ -282,7 +284,7 @@ enum PDFPageWriter {
     /// it has been read. Markup's only on its drawings (`MarkupDrawings.isMarkup`); on others PDFKit writes what it
     /// knows of them and leaves it out.
     static func keepEntries(of annotation: PDFAnnotation) {
-        for key in [MarkupDrawings.notebookKey, PDFPictures.key, NotebookPaper.key] {
+        for key in [MarkupDrawings.notebookKey, MarkupDrawings.inkMarker, PDFPictures.key, NotebookPaper.key] {
             _ = annotation.value(forAnnotationKey: key)
         }
         if MarkupDrawings.isMarkup(annotation) { _ = annotation.value(forAnnotationKey: MarkupDrawings.extrasKey) }
@@ -301,7 +303,7 @@ enum PDFPageWriter {
             guard let page = document.page(at: index) else { return nil }
             for annotation in page.annotations {
                 // Notebook's own, which are made again. (On the Mac, PDFKit gives every stamp Markup's entry too.)
-                if annotation.value(forAnnotationKey: MarkupDrawings.notebookKey) != nil || annotation.value(forAnnotationKey: NotebookPaper.key) != nil { continue }
+                if MarkupDrawings.isNotebookInk(annotation) || annotation.value(forAnnotationKey: NotebookPaper.key) != nil { continue }
                 if let entry = annotation.value(forAnnotationKey: PDFPictures.key) as? String {
                     guard let picture = PDFPictures.parse(entry), images[picture.id] != nil else { return nil }
                     continue

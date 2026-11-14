@@ -3,7 +3,8 @@ import PencilKit
 
 /// Writing strokes into a PDF: on every page drawn on, one annotation with all its strokes, in place of the ones it
 /// had (Markup's or Notebook's). Its look is made of lines, which every PDF app draws sharp; the strokes themselves go
-/// with it, for Notebook to show and change them again. Highlights go in the same way (`PDFHighlights`).
+/// with it, in Markup's own entry, so Notebook and Apple's apps (Preview, Files, Quick Look) both show them as ink and
+/// can change them again. Highlights go in the same way (`PDFHighlights`).
 enum PDFInk {
     /// One save after the other.
     static let queue = DispatchQueue(label: "Notebook.PDFInk")
@@ -60,6 +61,43 @@ enum PDFInk {
         }
     }
 
+    /// Strokes Notebook kept in its entry of before 1.4 (`MarkupDrawings.notebookKey`) put in Markup's entry, on every
+    /// page: Apple's apps take those for a picture, and draw it again as pixels when they save the page.
+    nonisolated static func upgrade(_ document: PDFDocument) {
+        for index in 0..<document.pageCount {
+            guard let page = document.page(at: index) else { continue }
+            let old = page.annotations.filter { $0.value(forAnnotationKey: MarkupDrawings.notebookKey) != nil && $0.value(forAnnotationKey: MarkupDrawings.inkMarker) == nil }
+            // Strokes that can't be placed (a turned page) stay as they are.
+            let read = old.compactMap { MarkupDrawings.strokes(in: $0, on: page) }
+            guard !old.isEmpty, read.count == old.count else { continue }
+            let drawing = read.reduce(into: PKDrawing()) { $0.append($1.drawing) }
+            old.forEach(page.removeAnnotation)
+            if !drawing.strokes.isEmpty { page.addAnnotation(InkAnnotation(drawing: drawing, on: page)) }
+        }
+    }
+
+    /// The PDF as PDFKit writes it, with Markup's entry on every annotation with strokes, Notebook's and Apple's, as
+    /// Apple's apps need it to take them for ink (`PDFMarkupEntries`).
+    nonisolated static func written(_ document: PDFDocument) throws -> Data {
+        var kept: [String: PDFMarkupEntries.Kept] = [:]
+        for index in 0..<document.pageCount {
+            guard let page = document.page(at: index) else { continue }
+            for annotation in page.annotations {
+                guard let archive = MarkupDrawings.entry(of: annotation) else { continue }
+                let isNotebook = MarkupDrawings.isNotebookInk(annotation)
+                // A page's copy has the same tag as the page: a tag of its own, for its own entry.
+                var tag = annotation.value(forAnnotationKey: MarkupDrawings.inkMarker) as? String ?? UUID().uuidString
+                if kept[tag] != nil { tag = UUID().uuidString }
+                annotation.setValue(tag as NSString, forAnnotationKey: MarkupDrawings.inkMarker)
+                kept[tag] = PDFMarkupEntries.Kept(archive: archive, isNotebook: isNotebook)
+            }
+        }
+        let temporary = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("pdf")
+        defer { try? FileManager.default.removeItem(at: temporary) }
+        guard document.write(to: temporary) else { throw CocoaError(.fileWriteUnknown) }
+        return PDFMarkupEntries.completed(try Data(contentsOf: temporary), kept: kept)
+    }
+
     /// Reads the PDF as it is now, changes it and writes it back, in one coordinated write.
     nonisolated static func change(_ url: URL, _ change: (PDFDocument) throws -> Void) throws {
         var failure: Error?
@@ -67,15 +105,15 @@ enum PDFInk {
         NSFileCoordinator().coordinate(writingItemAt: url, options: .forReplacing, error: &coordination) { url in
             do {
                 guard let document = PDFDocument(url: url), !document.isLocked else { throw CocoaError(.fileReadCorruptFile) }
+                MarkupDrawings.readInk(from: CGPDFDocument(url as CFURL), into: document)
                 try change(document)
-                let temporary = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("pdf")
-                defer { try? FileManager.default.removeItem(at: temporary) }
+                upgrade(document)
                 // PDFKit writes again whatever the file held, the annotations taken off too: like an incremental save,
                 // each one leaves the strokes before it in the file. A document of its own, with only what is in use,
                 // would lose Markup's strokes and the document's bookmarks, forms and structure.
-                guard document.write(to: temporary) else { throw CocoaError(.fileWriteUnknown) }
+                let data = try written(document)
                 // Written in place, so the file keeps its tags, its colour and its place in the folder.
-                try Data(contentsOf: temporary).write(to: url)
+                try data.write(to: url)
             } catch {
                 failure = error
             }
@@ -84,7 +122,9 @@ enum PDFInk {
     }
 }
 
-/// A page's strokes as a stamp. PDFKit makes its look by drawing it, as lines, when it writes the PDF.
+/// A page's strokes as a stamp. PDFKit makes its look by drawing it, as lines, when it writes the PDF. The strokes go in
+/// Markup's entry, measured from the top left of the page's crop box, which is the entry's box and canvas; once PDFKit
+/// has written the file, `PDFMarkupEntries` puts the copy of the annotation next to it that Apple's apps need.
 final class InkAnnotation: PDFAnnotation {
     private let drawing: PKDrawing
     /// The page's crop box, whose top left the strokes are measured from.
@@ -97,7 +137,12 @@ final class InkAnnotation: PDFAnnotation {
         let strokes = drawing.bounds.insetBy(dx: -2, dy: -2)
         super.init(bounds: CGRect(x: crop.minX + strokes.minX, y: crop.maxY - strokes.maxY, width: strokes.width, height: strokes.height),
                    forType: .stamp, withProperties: nil)
-        setValue(drawing.dataRepresentation().base64EncodedString() as NSString, forAnnotationKey: MarkupDrawings.notebookKey)
+        if let entry = MarkupInkArchive.encoded(drawing, on: crop) {
+            setValue([MarkupDrawings.annotationKey: entry] as NSDictionary, forAnnotationKey: MarkupDrawings.extrasKey)
+        } else {
+            setValue(drawing.dataRepresentation().base64EncodedString() as NSString, forAnnotationKey: MarkupDrawings.notebookKey)
+        }
+        setValue(UUID().uuidString as NSString, forAnnotationKey: MarkupDrawings.inkMarker)
         // Not the name of the device's owner, which PDFKit would write otherwise.
         userName = ""
         shouldPrint = true

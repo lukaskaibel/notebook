@@ -40,9 +40,20 @@ versions follow [semantic versioning](https://semver.org).
   you leave it, and the others close up; while the pointer is on the cards they wait until it has left, so the card
   you clicked stays under it. A note with a reminder or a star stays, and so does one written in on another device
   meanwhile. The switch in Settings is now Delete notes left empty, on as before.
+- What you write on a PDF in Notebook is ink in Preview, Files and Quick Look as well, as their own Markup's is: there
+  you can erase it stroke by stroke, and they draw it sharp. Before, they took it for a picture. Strokes written with
+  an earlier version become ink there with the next change you make to the PDF in Notebook.
 
 ### Fixed
 
+- Handwriting no longer gets blurrier each time a PDF goes back and forth between Notebook and Preview. When Preview
+  saved, it kept only the look of what Notebook had written and dropped the strokes, so Notebook showed that writing
+  blurry when zoomed and couldn't change it any more; and a save in Notebook could leave only a picture of what
+  Preview had written. Now Notebook keeps its strokes where Preview keeps its own, and both stay strokes on both
+  sides, on iPhone, iPad and the Mac.
+- Handwriting that Preview on iPhone and iPad adds to a PDF shows in Notebook as sharp as the text, at any zoom, and
+  can be erased and changed with the pen. Notebook showed Preview's picture of it, a little blurry, and couldn't change
+  it.
 - Adding or deleting a table's row or column no longer moves the note: deleting the last row or column with the caret
   in it scrolled the note by about the table's height, on the Mac, iPhone and iPad. The table's top now stays where it
   is on the screen.
