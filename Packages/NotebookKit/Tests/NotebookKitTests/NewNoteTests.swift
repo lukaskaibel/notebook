@@ -1,8 +1,8 @@
 import XCTest
 @testable import NotebookKit
 
-/// A new note opens with the caret in its title, to type its name at once. Left without a name or text, it goes to the
-/// Trash again, as if it had never been made, unless Settings keeps new notes left empty.
+/// A new note opens with the caret in its title, to type its name at once. Left without text, it goes to the Trash
+/// again, as if it had never been made, unless Settings keep notes left empty (`EmptyNoteTests`).
 @MainActor
 final class NewNoteTests: XCTestCase {
     private var library: URL!
@@ -25,7 +25,7 @@ final class NewNoteTests: XCTestCase {
         for key in ["NotebookLibrary", "NotebookLibraryName", "expandedFolders", "collapsedSections", "deletesEmptyNewNotes"] {
             UserDefaults.standard.removeObject(forKey: key)
         }
-        NotebookSettings.shared.deletesEmptyNewNotes = true
+        NotebookSettings.shared.deletesEmptyNotes = true
         window?.close()
         try? FileManager.default.removeItem(at: library)
     }
@@ -140,8 +140,10 @@ final class NewNoteTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: untitled, encoding: .utf8), "Milk")
     }
 
-    /// ⌘N or Back while the name is still being typed: the name counts, as it would once the title is left.
-    func testANameStillBeingTypedKeepsTheNote() async throws {
+    /// ⌘N or Back while the name is still being typed: the name counts, as it would once the title is left. Kept
+    /// without text, as Settings can keep it; with them on, it goes (`EmptyNoteTests`).
+    func testANameStillBeingTypedIsGiven() async throws {
+        NotebookSettings.shared.deletesEmptyNotes = false
         let workspace = try await makeWorkspace()
         _ = await workspace.newNote(in: papers).value
         try typeTitle("Groceries", in: workspace)
@@ -153,13 +155,13 @@ final class NewNoteTests: XCTestCase {
 
         workspace.open(draft)
         await settle(workspace)
-        XCTAssertEqual(notes(in: papers), ["Draft.md", "Groceries.md"])
+        XCTAssertEqual(notes(in: papers), ["Draft.md", "Groceries.md", "Untitled 2.md"])
         XCTAssertEqual(workspace.editor.titleText, "Draft")
         XCTAssertFalse(workspace.editor.isEditingTitle, "the next note's title isn't being typed")
     }
 
     func testSettingsCanKeepNewNotesLeftEmpty() async throws {
-        NotebookSettings.shared.deletesEmptyNewNotes = false
+        NotebookSettings.shared.deletesEmptyNotes = false
         let workspace = try await makeWorkspace()
         _ = await workspace.newNote(in: papers).value
         workspace.open(draft)
@@ -176,12 +178,23 @@ final class NewNoteTests: XCTestCase {
         XCTAssertFalse(exists(untitled))
     }
 
-    func testQuittingKeepsANewNoteWithANameBeingTyped() async throws {
+    /// Without text a name doesn't keep it, as when it is left.
+    func testQuittingThrowsAwayANewNoteWithOnlyANameBeingTyped() async throws {
         let workspace = try await makeWorkspace()
         _ = await workspace.newNote(in: papers).value
         try typeTitle("Groceries", in: workspace)
         workspace.saveAll(quitting: true)
-        XCTAssertTrue(exists(untitled))
+        XCTAssertFalse(exists(untitled))
+    }
+
+    /// Not only a new note: one open as Notebook quits, with only spaces in it.
+    func testQuittingThrowsAwayANoteLeftEmpty() async throws {
+        let blank = papers.appendingPathComponent("Blank.md")
+        try " \n\n".write(to: blank, atomically: true, encoding: .utf8)
+        let workspace = try await makeWorkspace()
+        workspace.open(blank)
+        workspace.saveAll(quitting: true)
+        XCTAssertFalse(exists(blank))
     }
 
     // MARK: - The default folder

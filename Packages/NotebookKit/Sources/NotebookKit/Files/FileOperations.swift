@@ -393,6 +393,16 @@ enum FileOperations {
         try data.write(to: url, options: .atomic)
     }
 
+    /// Whether a note has nothing in it but spaces and empty lines, as it is on the disk now: read without asking the
+    /// notes open on it to save first, which they have, and which would need the main thread.
+    static func isEmptyNote(_ url: URL) -> Bool {
+        var text: String?
+        NSFileCoordinator().coordinate(readingItemAt: url, options: .withoutChanges, error: nil) { url in
+            text = (try? Data(contentsOf: url)).flatMap(NoteDocument.decode)
+        }
+        return text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true
+    }
+
     /// Reads a note, bringing it down from iCloud first, in a coordinated read `coordinator.cancel()` calls off.
     static func read(_ url: URL, coordinator: NSFileCoordinator) -> String? {
         var error: NSError?
