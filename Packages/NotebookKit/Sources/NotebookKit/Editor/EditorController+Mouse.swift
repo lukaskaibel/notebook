@@ -212,6 +212,8 @@ extension EditorController {
             addAtEdge(of: block, column: true)
         case .addRow(let block):
             addAtEdge(of: block, column: false)
+        case .deleteMarked:
+            deleteMarkedPart()
         }
     }
 

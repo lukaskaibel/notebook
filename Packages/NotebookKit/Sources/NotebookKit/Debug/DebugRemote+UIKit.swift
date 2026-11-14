@@ -368,6 +368,17 @@ enum DebugRemote {
         case "tableinfo":
             log(editor.debugTableInfo)
             log("caret tools: \(CaretTool.tools(for: editor.caretContext).map(\.name))")
+        case "tablepick":
+            // tablepick <title>: that entry of the handle's menu that shows (else of the table's menu in the bar), as a
+            // tap on it does.
+            let entries = editor.tableMenuEntries.isEmpty ? editor.tableEntries() : editor.tableMenuEntries
+            guard let entry = entries.first(where: { $0.title == argument }), case .action(let action) = entry.kind else {
+                return log("tablepick: no \(argument) in \(entries.map(\.title))")
+            }
+            editor.tableMenuInteraction?.dismissMenu()
+            editor.tableMenuEntries = []
+            action()
+            log("tablepick \(argument): \(editor.debugTableInfo)")
         case "tapobject":
             // A tap on whatever is drawn at the start of some text (a checkbox, a link, a picture).
             let range = (editor.text as NSString).range(of: argument)

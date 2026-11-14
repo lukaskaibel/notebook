@@ -378,11 +378,13 @@ final class MarkdownTextView: UITextView {
             if controller?.isCaretOnFirstLine == true { command(UIKeyCommand.inputUpArrow, [], #selector(moveUpIntoTitle)) }
             if selectedRange == NSRange(location: 0, length: 0) { command(UIKeyCommand.inputLeftArrow, [], #selector(moveBackIntoTitle)) }
         }
-        // ⌥⌘ and the arrows add rows and columns in a table, as on the Mac.
+        // ⌥⌘ and the arrows add rows and columns in a table, as on the Mac; ⌥⌘⌫ and ⌃⌘⌫ delete them, as in Numbers.
         if isFirstResponder, controller?.activeGrid != nil {
             for (index, edit) in Self.tableEditKeys.enumerated() {
-                commands.append(UIKeyCommand(title: edit.title, action: #selector(editTable(_:)), input: edit.input, modifierFlags: [.alternate, .command], propertyList: index))
+                commands.append(UIKeyCommand(title: edit.title, action: #selector(editTable(_:)), input: edit.input, modifierFlags: edit.modifiers, propertyList: index))
             }
+            // Escape leaves a row or column Delete marked to go.
+            if controller?.tableDeletion != nil { command(UIKeyCommand.inputEscape, [], #selector(leaveTableDeletion)) }
         }
         // The Format menu's shortcuts, which its buttons don't get on iPad.
         if isEditable, isFirstResponder {
@@ -407,9 +409,13 @@ final class MarkdownTextView: UITextView {
         (UIKeyCommand.inputLeftArrow, [.command, .shift], .cellStart, true), (UIKeyCommand.inputRightArrow, [.command, .shift], .cellEnd, true),
     ]
 
-    private static let tableEditKeys: [(title: String, input: String, edit: TableEdit)] = [
-        ("Add Row Above", UIKeyCommand.inputUpArrow, .addRow(above: true)), ("Add Row Below", UIKeyCommand.inputDownArrow, .addRow(above: false)),
-        ("Add Column Left", UIKeyCommand.inputLeftArrow, .addColumn(left: true)), ("Add Column Right", UIKeyCommand.inputRightArrow, .addColumn(left: false)),
+    private static let tableEditKeys: [(title: String, input: String, modifiers: UIKeyModifierFlags, edit: TableEdit)] = [
+        ("Add Row Above", UIKeyCommand.inputUpArrow, [.alternate, .command], .addRow(above: true)),
+        ("Add Row Below", UIKeyCommand.inputDownArrow, [.alternate, .command], .addRow(above: false)),
+        ("Add Column Left", UIKeyCommand.inputLeftArrow, [.alternate, .command], .addColumn(left: true)),
+        ("Add Column Right", UIKeyCommand.inputRightArrow, [.alternate, .command], .addColumn(left: false)),
+        ("Delete Row", "\u{8}", [.alternate, .command], .deleteRow),
+        ("Delete Column", "\u{8}", [.control, .command], .deleteColumn),
     ]
 
     @objc private func moveInGrid(_ sender: UIKeyCommand) {
@@ -423,6 +429,7 @@ final class MarkdownTextView: UITextView {
     }
 
     @objc private func newTableRow() { _ = controller?.insertNewline() }
+    @objc private func leaveTableDeletion() { controller?.clearTableDeletion() }
 
     @objc private func suggestionUp() { controller?.suggestions.move(by: -1) }
     @objc private func suggestionDown() { controller?.suggestions.move(by: 1) }
@@ -539,6 +546,10 @@ final class TableRowHandleView: UIView {
     var isPicked = false {
         didSet { if isPicked != oldValue { setNeedsDisplay() } }
     }
+    /// Its row is marked to be deleted: red.
+    var isDeleting = false {
+        didSet { if isDeleting != oldValue { setNeedsDisplay() } }
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -551,7 +562,7 @@ final class TableRowHandleView: UIView {
     required init?(coder: NSCoder) { fatalError() }
 
     override func draw(_ rect: CGRect) {
-        TableModel.drawHandle(in: bounds.insetBy(dx: 1, dy: 1), vertical: true, picked: isPicked)
+        TableModel.drawHandle(in: bounds.insetBy(dx: 1, dy: 1), vertical: true, picked: isPicked, deleting: isDeleting)
     }
 }
 #endif

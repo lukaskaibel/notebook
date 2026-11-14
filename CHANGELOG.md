@@ -5,8 +5,21 @@ versions follow [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- Delete in an empty row of a table marks the row in red, with a Delete Row button in it; Delete again, or the button,
+  deletes it, and the caret goes to the end of the row above, as Delete on an empty line takes you to the line above.
+  In a row that holds something, an empty column is marked instead, and in a table with nothing in it the whole table.
+  Typing, moving the caret, a click or Escape leaves it. On the Mac, iPhone and iPad; on the Mac, holding Delete down
+  doesn't go on to delete it.
+- ⌥⌘⌫ deletes the row you're in and ⌃⌘⌫ the column, as in Numbers, on the Mac and on an iPad with a keyboard. The
+  menus of a row's and a column's handle have Clear, which empties its cells and keeps the table as it is.
+
 ### Fixed
 
+- Adding or deleting a table's row or column no longer moves the note: deleting the last row or column with the caret
+  in it scrolled the note by about the table's height, on the Mac, iPhone and iPad. The table's top now stays where it
+  is on the screen.
 - On iPhone and iPad, touching and holding a card in Recent lifts only that card for its menu, as Files and Notes do,
   and leaves the others in place behind it. Before, the whole row of cards came out with it, though the menu was the
   one card's.
