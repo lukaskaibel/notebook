@@ -63,9 +63,18 @@ enum InlineRenderer {
         let result = NSMutableAttributedString(string: text, attributes: [.font: font, .foregroundColor: color])
         let range = NSRange(location: 0, length: units.count)
         var hidden = IndexSet()
+        var signs: [(Int, String)] = []
         for span in InlineParser.spans(in: units, range: range) {
             let isPipe = span.kind == .escape && span.content.length == 1 && units[span.content.location] == 124
             let shows = !isPipe && revealing.contains(span.range)
+            if case .replacement(let shown) = span.kind {
+                // The sign in the place of its first character, what is written next to the caret.
+                if !shows, shown.utf16.count == 1, span.range.upperBound <= units.count {
+                    signs.append((span.range.location, shown))
+                    hidden.insert(integersIn: span.range.location + 1..<span.range.upperBound)
+                }
+                continue
+            }
             for marker in span.markers where marker.upperBound <= units.count {
                 if shows {
                     result.addAttribute(.foregroundColor, value: Theme.faint, range: marker)
@@ -103,6 +112,9 @@ enum InlineRenderer {
         for index in 0...units.count {
             map[index] = shown
             if index < units.count, !hidden.contains(index) { shown += 1 }
+        }
+        for (index, sign) in signs {
+            result.replaceCharacters(in: NSRange(location: index, length: 1), with: sign)
         }
         for run in hidden.rangeView.reversed() {
             result.deleteCharacters(in: NSRange(location: run.lowerBound, length: run.count))

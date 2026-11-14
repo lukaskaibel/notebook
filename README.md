@@ -82,6 +82,12 @@ tag). Return on a heading without text takes the heading
 off, and at the start of one puts a line above it. The text eases into its new look as you type: bold thickens, a
 heading grows, the marks fade in.
 
+Arrows and dashes look like what they stand for: `->` shows as →, `<-` as ←, `<->` as ↔, `-->` as a long ⟶, `=>` as ⇒,
+`--` between words as an en dash and `---` as an em dash (`--force` stays as it is), `...` as an ellipsis, and `<=`,
+`>=`, `!=` and `+-` as ≤, ≥, ≠ and ±. Only the look changes: the file keeps what you typed, other apps read it as
+before, and next to the caret it shows, so you can change it. In code, maths and links' addresses nothing changes, and
+a backslash keeps one as it is (`\->`).
+
 The title of a new note has the caret first, so you type its name straight away. Return, Tab, ↓, or → at its end go on
 into the text, and ↑, ←, or Delete at the very start of the text go back up into the title, on the Mac and on an iPad
 or iPhone with a keyboard alike. A new note you leave without a title or text is deleted again, as if you had never
@@ -860,7 +866,7 @@ While writing:
 | Return at the end of bold text | The next line, without the bold; in the middle of it, the bold goes on |
 | Delete behind `**bold**` | A star from each end: italics, then plain text; `*` there brings them back (on the touch keyboard, where the stars don't show: the last letter) |
 | `*` at either end of `*italics*` | One at the other end too: bold |
-| `-` at the start of a line | A bullet; `-[]` a checkbox, `---` a rule |
+| `-` at the start of a line | A bullet; `-[]` a checkbox, `---` a rule, `->` an arrow |
 | `##` and then text, or `##` in front of a line | The space a heading needs goes in for you |
 | `**` (also `~~`, `==`) | The closing pair comes along, the caret between; a space next makes them plain stars |
 | Return on a heading | At its start: a line above it; on one without text: back to body text |
