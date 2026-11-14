@@ -82,10 +82,18 @@ tag). Return on a heading without text takes the heading
 off, and at the start of one puts a line above it. The text eases into its new look as you type: bold thickens, a
 heading grows, the marks fade in.
 
+Arrows and dashes look like what they stand for: `->` shows as →, `<-` as ←, `<->` as ↔, `-->` as a long ⟶, `=>` as ⇒,
+`--` between words as an en dash and `---` as an em dash (`--force` stays as it is), `...` as an ellipsis, and `<=`,
+`>=`, `!=` and `+-` as ≤, ≥, ≠ and ±. Only the look changes: the file keeps what you typed, other apps read it as
+before, and next to the caret it shows, so you can change it. In code, maths and links' addresses nothing changes, and
+a backslash keeps one as it is (`\->`).
+
 The title of a new note has the caret first, so you type its name straight away. Return, Tab, ↓, or → at its end go on
 into the text, and ↑, ←, or Delete at the very start of the text go back up into the title, on the Mac and on an iPad
-or iPhone with a keyboard alike. A new note you leave without a title or text is deleted again, as if you had never
-made it; turn off Delete new notes left empty in Settings to keep such notes.
+or iPhone with a keyboard alike. A note you leave with no text in it, or only spaces, is deleted, whatever its name:
+a new one as if you had never made it, any other to the Trash (Recently Deleted on iPhone and iPad), where Undo
+brings it back from. Its card leaves Recent as you go. One with a reminder or a star stays; turn off Delete notes
+left empty in Settings to keep them all.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/typing-dark.webp">
@@ -178,9 +186,12 @@ about forty languages, and LaTeX maths as typeset formulas. Click into a diagram
 with a live preview. A table stays a table while you type in it, as in Notes: you type in its cells, the one you're in
 has a ring, and only the marks of what you write there show, next to the caret, as everywhere else in a note. A handle
 on top of the column you're in and one beside the row open their menus: add a column on either side, align it or
-delete it; add a row above or below, or delete it. With the pointer over a table, a + along its right and bottom edges
-adds a column or a row. Tab and the arrow keys go from cell to cell, Return makes a new row under the one you're in,
-and Return in an empty last row leaves the table. A `|` typed in a cell stays in it, and the file stays plain
+delete it; add a row above or below, or delete it; Clear empties a row or column and keeps it. With the pointer over a
+table, a + along its right and bottom edges adds a column or a row. Tab and the arrow keys go from cell to cell, Return
+makes a new row under the one you're in, and Return in an empty last row leaves the table. Delete in a row with nothing
+in it marks the row in red, with a Delete Row button; Delete again deletes it, and anything else leaves it. An empty
+column, or a table with nothing in it, goes the same way. ⌥⌘⌫ and ⌃⌘⌫ delete the row and the column you're in, as in
+Numbers. A `|` typed in a cell stays in it, and the file stays plain
 Markdown, the `|` written `\|`. Table in the toolbar, or Format › Table › Insert Table (⌥⌘T), puts in an empty one of
 two columns to type in; with the caret in a table, the same button and Format › Table add and delete its rows and
 columns. If you'd rather see a table's Markdown, the bars between cells and the dashes under the header, turn on Edit
@@ -484,7 +495,7 @@ Aa, a checklist, a table, attachments, a link, undo and the formatting, a page o
 two buttons for where the caret is come and go: the next cell of a table, opening the link you are on, a to-do's bell,
 the style you are in, tinted, to take it off with a tap, and moving a list item in or out; you tick a to-do on its own
 checkbox. In a table, Table in the bar is the table's menu, and a tap on the handle of a row or column brings up the
-system's edit menu over it: Add Above and Add Below, or Add Left and Add Right, Align and Delete. On its right,
+system's edit menu over it: Add Above and Add Below, or Add Left and Add Right, Align, Clear and Delete. On its right,
 always, a circle of its own hides the keyboard. Which tools and in what order is yours to choose: touch and hold
 the bar, or tap the sliders after its last tool, or go to Settings › Writing Bar. Aa brings up the Format panel in the
 keyboard's place, as in Notes: the text styles, bold, italic and the rest, lists, indenting and quotes. Pictures come
@@ -850,13 +861,14 @@ While writing:
 | ⌥⌘T | Table: two columns, a header and a row, the caret in the first cell |
 | ⌥⌘↑, ⌥⌘↓ in a table | Add a row above or below the one you're in |
 | ⌥⌘←, ⌥⌘→ in a table | Add a column left or right of the one you're in |
+| ⌥⌘⌫, ⌃⌘⌫ in a table | Delete the row or the column you're in |
 | Tab, ⇧Tab | Nest or un-nest a list item (in code: indent) |
 | ⌥⌘] and ⌥⌘[ | Increase and decrease indent |
 | `*`, `_`, `` ` ``, `~` or `=` with text selected | Wrap the selection in that mark |
 | Return at the end of bold text | The next line, without the bold; in the middle of it, the bold goes on |
 | Delete behind `**bold**` | A star from each end: italics, then plain text; `*` there brings them back (on the touch keyboard, where the stars don't show: the last letter) |
 | `*` at either end of `*italics*` | One at the other end too: bold |
-| `-` at the start of a line | A bullet; `-[]` a checkbox, `---` a rule |
+| `-` at the start of a line | A bullet; `-[]` a checkbox, `---` a rule, `->` an arrow |
 | `##` and then text, or `##` in front of a line | The space a heading needs goes in for you |
 | `**` (also `~~`, `==`) | The closing pair comes along, the caret between; a space next makes them plain stars |
 | Return on a heading | At its start: a line above it; on one without text: back to body text |
@@ -866,6 +878,7 @@ While writing:
 | ←, →, ↑, ↓ in a table | Through a cell's letters, then on to the next cell, the row above or below; out of the table past its first and last cell |
 | ⌘←, ⌘→ in a table | The start or end of the cell |
 | Delete at the start of a cell | Nothing: a cell's edges stay where they are |
+| Delete in an empty row | Marks the row, with a Delete Row button; Delete again deletes it. In a row with something in it: an empty column; in an empty table: the table |
 | `[[` | Suggestions for a link; ↑↓ and Return or Tab to pick |
 | Space on a selected picture | Quick Look |
 | Drag a picture or file in a note | Move it to another line, where the caret shows; ⌥ drops a copy. Into another note, the sidebar, the Finder or another app: a copy |

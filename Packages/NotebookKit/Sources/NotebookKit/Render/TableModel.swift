@@ -226,6 +226,9 @@ final class TableModel {
         var selection: NSRange?
         var selectionColor: NSColor = Theme.accent.withAlphaComponent(0.25)
         var band: TableBand?
+        /// What Delete, pressed again, takes: tinted red, with a button that deletes it, named by `deleteTitle`.
+        var deleting: TableDeletion?
+        var deleteTitle = ""
         var showsAdd = false
         var showsHandles = true
         /// The Mac's text view keeps its text from the margin, where half of the row's handle is: it draws that one
@@ -260,6 +263,10 @@ final class TableModel {
             case .row(let row): if let cell = cellFrame(row: row, column: 0, in: rect) { CGRect(x: frame.minX, y: cell.minY, width: frame.width, height: cell.height).fill() }
             case .column(let column): if let cell = cellFrame(row: 0, column: column, in: rect) { CGRect(x: cell.minX, y: frame.minY, width: cell.width, height: frame.height).fill() }
             }
+        }
+        if let deleting = overlay.deleting, let area = area(of: deleting, in: rect) {
+            Self.deleteColor.withAlphaComponent(0.1).setFill()
+            area.fill()
         }
         if let selection = overlay.selection {
             overlay.selectionColor.setFill()
@@ -305,9 +312,15 @@ final class TableModel {
             Theme.accent.setStroke()
             ring.stroke()
             if overlay.showsHandles {
-                if let handle = columnHandleRect(in: rect) { Self.drawHandle(in: handle, vertical: false, picked: overlay.band == .column(focus.column)) }
-                if overlay.drawsRowHandle { drawRowHandle(in: rect, band: overlay.band) }
+                if let handle = columnHandleRect(in: rect) {
+                    let marked = overlay.deleting == .column(focus.column) || overlay.deleting == .table
+                    Self.drawHandle(in: handle, vertical: false, picked: overlay.band == .column(focus.column) || marked, deleting: marked)
+                }
+                if overlay.drawsRowHandle { drawRowHandle(in: rect, band: overlay.band, deleting: overlay.deleting) }
             }
+        }
+        if let deleting = overlay.deleting, let button = deleteButtonRect(deleting, title: overlay.deleteTitle, in: rect) {
+            Self.drawDeleteButton(in: button, title: overlay.deleteTitle)
         }
         if overlay.showsAdd {
             for (bar, vertical) in [(addColumnRect(in: rect), true), (addRowRect(in: rect), false)] {
@@ -323,18 +336,21 @@ final class TableModel {
     }
 
     /// The handle across the left edge of the row the caret is in.
-    func drawRowHandle(in rect: CGRect, band: TableBand?) {
+    func drawRowHandle(in rect: CGRect, band: TableBand?, deleting: TableDeletion? = nil) {
         guard let focus, let handle = rowHandleRect(in: rect) else { return }
-        Self.drawHandle(in: handle, vertical: true, picked: band == .row(focus.row))
+        let marked = deleting == .row(focus.row) || deleting == .table
+        Self.drawHandle(in: handle, vertical: true, picked: band == .row(focus.row) || marked, deleting: marked)
     }
 
-    /// A handle: a capsule with three dots, across a column's top edge or a row's left one.
-    static func drawHandle(in rect: CGRect, vertical: Bool, picked: Bool) {
+    /// A handle: a capsule with three dots, across a column's top edge or a row's left one. Red while what it is for
+    /// is marked to be deleted.
+    static func drawHandle(in rect: CGRect, vertical: Bool, picked: Bool, deleting: Bool = false) {
         let capsule = NSBezierPath(roundedRect: rect, xRadius: min(rect.width, rect.height) / 2, yRadius: min(rect.width, rect.height) / 2)
-        (picked ? Theme.accent : Theme.card).setFill()
+        let tint = deleting ? deleteColor : Theme.accent
+        (picked ? tint : Theme.card).setFill()
         capsule.fill()
         capsule.lineWidth = 1
-        (picked ? Theme.accent : Theme.cardBorder.blended(withFraction: 0.3, of: Theme.textTertiary) ?? Theme.cardBorder).setStroke()
+        (picked ? tint : Theme.cardBorder.blended(withFraction: 0.3, of: Theme.textTertiary) ?? Theme.cardBorder).setStroke()
         capsule.stroke()
         (picked ? NSColor.white : Theme.textSecondary).setFill()
         for step in -1...1 {
@@ -479,6 +495,59 @@ final class TableModel {
         return CGRect(x: rect.minX, y: rect.minY + size.height + 5, width: size.width, height: 16)
     }
 
+    // MARK: - Deleting an empty row or column
+
+    static var deleteColor: NSColor { .systemRed }
+    private static var deleteFont: NSFont { .systemFont(ofSize: 12, weight: .semibold) }
+
+    /// The row, column or table marked to be deleted, as drawn in `rect`.
+    func area(of deletion: TableDeletion, in rect: CGRect) -> CGRect? {
+        let size = layout(maxWidth: rect.width).size
+        let frame = CGRect(origin: rect.origin, size: size)
+        switch deletion {
+        case .row(let row):
+            guard let cell = cellFrame(row: row, column: 0, in: rect) else { return nil }
+            return CGRect(x: frame.minX, y: cell.minY, width: frame.width, height: cell.height)
+        case .column(let column):
+            guard let cell = cellFrame(row: 0, column: column, in: rect) else { return nil }
+            return CGRect(x: cell.minX, y: frame.minY, width: cell.width, height: frame.height)
+        case .table:
+            return frame
+        }
+    }
+
+    /// The button that deletes what is marked: in the middle of it, which holds nothing, inside the text's width.
+    func deleteButtonRect(_ deletion: TableDeletion, title: String, in rect: CGRect) -> CGRect? {
+        guard let area = area(of: deletion, in: rect) else { return nil }
+        let text = (title as NSString).size(withAttributes: [.font: Self.deleteFont])
+        let size = CGSize(width: ceil(text.width) + 20, height: 22)
+        var x = area.midX - size.width / 2
+        x = max(rect.minX, min(x, rect.maxX - size.width))
+        return CGRect(x: x.rounded(), y: (area.midY - size.height / 2).rounded(), width: size.width, height: size.height)
+    }
+
+    /// Over a column it may lie across the text of the cells beside it: it floats over them, ringed in the table's
+    /// colour and with a shadow, as a popover would.
+    static func drawDeleteButton(in rect: CGRect, title: String) {
+        #if os(macOS)
+        let context = NSGraphicsContext.current?.cgContext
+        #else
+        let context = UIGraphicsGetCurrentContext()
+        #endif
+        let halo = rect.insetBy(dx: -2, dy: -2)
+        context?.saveGState()
+        context?.setShadow(offset: CGSize(width: 0, height: 1), blur: 4, color: NSColor.black.withAlphaComponent(0.18).cgColor)
+        Theme.card.setFill()
+        NSBezierPath(roundedRect: halo, xRadius: halo.height / 2, yRadius: halo.height / 2).fill()
+        context?.restoreGState()
+        let capsule = NSBezierPath(roundedRect: rect, xRadius: rect.height / 2, yRadius: rect.height / 2)
+        deleteColor.setFill()
+        capsule.fill()
+        let attributes: [NSAttributedString.Key: Any] = [.font: deleteFont, .foregroundColor: NSColor.white]
+        let size = (title as NSString).size(withAttributes: attributes)
+        (title as NSString).draw(at: CGPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2), withAttributes: attributes)
+    }
+
     /// Where a row is drawn, the header first, in a table drawn in `rect`.
     func rowRect(_ row: Int, in rect: CGRect) -> CGRect? {
         let heights = layout(maxWidth: rect.width).rowHeights
@@ -523,6 +592,14 @@ extension NSString {
 enum TableBand: Equatable {
     case row(Int)
     case column(Int)
+}
+
+/// What Delete pressed in an empty cell marks to go, pressed again: the cell's row when nothing is in it, else its
+/// column, or the whole table when none of its cells holds anything.
+enum TableDeletion: Equatable {
+    case row(Int)
+    case column(Int)
+    case table
 }
 
 /// One TextKit stack, its text swapped for each cell measured: where the caret goes in a cell, what a click hits,

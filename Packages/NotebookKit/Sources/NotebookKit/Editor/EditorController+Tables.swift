@@ -85,6 +85,9 @@ enum TableEdit: Equatable {
     case addColumn(left: Bool)
     case deleteRow
     case deleteColumn
+    /// Empties each cell of the row or column, as Notion's Clear Contents does; the table keeps its shape.
+    case clearRow
+    case clearColumn
     case align(TableAlignment)
     case deleteTable
 }
@@ -427,7 +430,7 @@ extension EditorController {
         }
         let place = selection.location
         if forward {
-            guard place < content.upperBound else { return true }
+            guard place < content.upperBound else { return content.length == 0 ? deleteEmptyPart(of: grid, row: row, column: column, forward: true) : true }
             if text.character(at: place) == 92, place + 1 < content.upperBound, text.character(at: place + 1) == 124 {
                 replace(NSRange(location: place, length: 2), with: "", select: NSRange(location: place, length: 0), actionName: "Delete")
                 return true
@@ -439,12 +442,101 @@ extension EditorController {
             replace(NSRange(location: place - 1, length: 1), with: "", select: NSRange(location: place - 1, length: 0), actionName: "Delete")
             return true
         }
-        guard place > content.location else { return true }
+        guard place > content.location else { return content.length == 0 ? deleteEmptyPart(of: grid, row: row, column: column, forward: false) : true }
         if text.character(at: place - 1) == 124, place - 2 >= content.location, text.character(at: place - 2) == 92 {
             replace(NSRange(location: place - 2, length: 2), with: "", select: NSRange(location: place - 2, length: 0), actionName: "Delete")
             return true
         }
         return nil
+    }
+
+    // MARK: - Deleting what is empty
+
+    /// Delete at the edge of an empty cell: nothing, as at the edge of any cell, unless its row holds nothing, or else
+    /// its column, or the whole table. Then the first press marks that, red with a button to delete it, and the second
+    /// (or the button) deletes it, as Excel's and Numbers' Delete Row would, without taking anything typed by
+    /// surprise. On the Mac, holding Delete down doesn't go on to delete it: its repeats aren't a second press.
+    private func deleteEmptyPart(of grid: GridTable, row: Int, column: Int, forward: Bool) -> Bool {
+        let part: TableDeletion
+        if grid.contents.joined().allSatisfy({ $0.length == 0 }) {
+            part = .table
+        } else if grid.contents[row].allSatisfy({ $0.length == 0 }) {
+            part = .row(row)
+        } else if grid.contents.allSatisfy({ $0[column].length == 0 }) {
+            part = .column(column)
+        } else {
+            return true
+        }
+        if let marked = tableDeletion, marked.location == grid.range.location, marked.part == part {
+            #if os(macOS)
+            if let event = NSApp.currentEvent, event.type == .keyDown, event.isARepeat { return true }
+            #endif
+            deleteMarkedPart(forward: forward)
+        } else {
+            markForDeletion(part, in: grid)
+        }
+        return true
+    }
+
+    private func markForDeletion(_ part: TableDeletion, in grid: GridTable) {
+        clearTableDeletion()
+        tableDeletion = (grid.range.location, part)
+        linesNeedDisplay([NSRange(location: grid.range.location, length: 1)])
+        marginNeedsDisplay()
+        let title = deletionTitle(part, in: grid)
+        let announcement = "\(title)? Press Delete again to delete it."
+        #if os(macOS)
+        NSAccessibility.post(element: textView, notification: .announcementRequested,
+                             userInfo: [.announcement: announcement, .priority: NSAccessibilityPriorityLevel.high.rawValue])
+        #else
+        UISelectionFeedbackGenerator().selectionChanged()
+        UIAccessibility.post(notification: .announcement, argument: announcement)
+        #endif
+    }
+
+    /// What the button over a marked row or column says: deleting the last row or column deletes the table.
+    func deletionTitle(_ part: TableDeletion, in grid: GridTable) -> String {
+        switch part {
+        case .row: grid.rows.count > 1 ? "Delete Row" : "Delete Table"
+        case .column: grid.columns > 1 ? "Delete Column" : "Delete Table"
+        case .table: "Delete Table"
+        }
+    }
+
+    /// The button's title, with the key that does it too.
+    func deleteButtonTitle(_ part: TableDeletion, in grid: GridTable) -> String {
+        deletionTitle(part, in: grid) + "  ⌫"
+    }
+
+    /// The row, column or table no longer marked: something else was typed, clicked or pressed.
+    func clearTableDeletion() {
+        guard let mark = tableDeletion else { return }
+        tableDeletion = nil
+        if mark.location < storage.length { linesNeedDisplay([NSRange(location: mark.location, length: 1)]) }
+        marginNeedsDisplay()
+    }
+
+    /// Deletes what Delete marked, as one step of Undo. The caret goes where Delete takes it from an empty line: to
+    /// the end of the row above, or of the cell on the left; with forward Delete, into what takes its place.
+    func deleteMarkedPart(forward: Bool = false) {
+        guard let mark = tableDeletion, let grid = gridTable(at: mark.location), let (_, caretRow, _) = gridCaretCell else { return clearTableDeletion() }
+        clearTableDeletion()
+        let start = grid.range.location
+        var before: (row: Int, column: Int)?
+        switch mark.part {
+        case .table:
+            editTable(.deleteTable)
+            return
+        case .row(let row):
+            guard editTable(.deleteRow, row: row) else { return }
+            if !forward, row > 0 { before = (row - 1, grid.columns - 1) }
+        case .column(let column):
+            guard editTable(.deleteColumn, column: column) else { return }
+            if !forward, column > 0 { before = (caretRow, column - 1) }
+        }
+        if let before, let table = gridTable(at: start), let content = table.contents[safe: before.row]?[safe: before.column] {
+            setSelection(NSRange(location: content.upperBound, length: 0))
+        }
     }
 
     // MARK: - Rows and columns
@@ -521,6 +613,10 @@ extension EditorController {
                 }
             }
             next = (row, min(column, grid.columns - 2))
+        case .clearRow, .clearColumn:
+            let cells = edit == .clearRow ? grid.contents[row] : grid.contents.map { $0[column] }
+            changes = cells.filter { $0.length > 0 }.map { ($0, "") }
+            guard !changes.isEmpty else { return true }
         case .align(let alignment):
             let units = Array(text.substring(with: grid.delimiter).utf16)
             guard let cell = MarkdownParser.tableCells(units, NSRange(location: 0, length: units.count))[safe: column] else { return false }
@@ -533,7 +629,10 @@ extension EditorController {
             if range.upperBound < storage.length { range.length += 1 } else if range.location > 0 { range = NSRange(location: range.location - 1, length: range.length + 1) }
             return replace(range, with: "", select: NSRange(location: range.location, length: 0), actionName: "Delete Table")
         }
-        guard replace(changes, actionName: edit.actionName) else { return false }
+        // The note stays where it is: the table's top, which no change moves, keeps its place on the screen. The
+        // caret's place would do for typing, but a row or column deleted under it takes it elsewhere, often below the
+        // table, and the note would jump by the table's height.
+        guard replace(changes, actionName: edit.actionName, anchor: start) else { return false }
         if let table = gridTable(at: start), table.contents.indices.contains(next.row), table.contents[next.row].indices.contains(next.column) {
             let content = table.contents[next.row][next.column]
             setSelection(NSRange(location: content.upperBound, length: 0))
@@ -579,7 +678,8 @@ extension EditorController {
             .divider,
             align,
             .divider,
-            MenuEntry(compact ? "Delete" : "Delete Column", "trash", destructive: true) { [weak self] in self?.editTable(.deleteColumn, column: column) },
+            MenuEntry(compact ? "Clear" : "Clear Column", "eraser") { [weak self] in self?.editTable(.clearColumn, column: column) },
+            MenuEntry(compact ? "Delete" : "Delete Column", "trash", keys: "⌃⌘⌫", destructive: true) { [weak self] in self?.editTable(.deleteColumn, column: column) },
         ]
     }
 
@@ -589,7 +689,8 @@ extension EditorController {
             MenuEntry(compact ? "Add Above" : "Add Row Above", "arrow.up", keys: "⌥⌘↑") { [weak self] in self?.editTable(.addRow(above: true), row: row) },
             MenuEntry(compact ? "Add Below" : "Add Row Below", "arrow.down", keys: "⌥⌘↓") { [weak self] in self?.editTable(.addRow(above: false), row: row) },
             .divider,
-            MenuEntry(compact ? "Delete" : "Delete Row", "trash", destructive: true) { [weak self] in self?.editTable(.deleteRow, row: row) },
+            MenuEntry(compact ? "Clear" : "Clear Row", "eraser") { [weak self] in self?.editTable(.clearRow, row: row) },
+            MenuEntry(compact ? "Delete" : "Delete Row", "trash", keys: "⌥⌘⌫", destructive: true) { [weak self] in self?.editTable(.deleteRow, row: row) },
         ]
     }
 
@@ -601,8 +702,8 @@ extension EditorController {
             MenuEntry("Add Column Left", "arrow.left", keys: "⌥⌘←") { [weak self] in self?.editTable(.addColumn(left: true)) },
             MenuEntry("Add Column Right", "arrow.right", keys: "⌥⌘→") { [weak self] in self?.editTable(.addColumn(left: false)) },
             .divider,
-            MenuEntry("Delete Row", "minus.rectangle") { [weak self] in self?.editTable(.deleteRow) },
-            MenuEntry("Delete Column", "minus.rectangle.portrait") { [weak self] in self?.editTable(.deleteColumn) },
+            MenuEntry("Delete Row", "minus.rectangle", keys: "⌥⌘⌫") { [weak self] in self?.editTable(.deleteRow) },
+            MenuEntry("Delete Column", "minus.rectangle.portrait", keys: "⌃⌘⌫") { [weak self] in self?.editTable(.deleteColumn) },
             MenuEntry("Delete Table", "trash", destructive: true) { [weak self] in self?.editTable(.deleteTable) },
         ]
     }
@@ -628,11 +729,18 @@ extension EditorController {
         case rowHandle(block: Int, row: Int)
         case addColumn(block: Int)
         case addRow(block: Int)
+        /// The button over a row or column Delete marked to go.
+        case deleteMarked(block: Int)
     }
 
     /// The handle or + at a point, of the table being typed in or of the one under the pointer. A finger gets more
     /// room round them than the pointer.
     func tableControl(at point: NSPoint, slop: CGFloat) -> TableControl? {
+        if let grid = activeGrid, let mark = tableDeletion, mark.location == grid.range.location, let drawn = gridDrawing(grid),
+           let button = drawn.model.deleteButtonRect(mark.part, title: deleteButtonTitle(mark.part, in: grid), in: drawn.rect),
+           button.insetBy(dx: -slop / 2, dy: -slop / 2).contains(point) {
+            return .deleteMarked(block: grid.block)
+        }
         if let grid = activeGrid, let drawn = gridDrawing(grid), let focus = drawn.model.focus {
             if let rect = drawn.model.columnHandleRect(in: drawn.rect), rect.insetBy(dx: -slop, dy: -slop).contains(point) {
                 return .columnHandle(block: grid.block, column: focus.column)
@@ -679,6 +787,10 @@ extension EditorController {
         overlay.showsAdd = block != nil && block == hoveredTable && textView.isEditable
         overlay.showsHandles = isFocused && textView.isEditable
         if let band = tableBand, band.location == location { overlay.band = band.band }
+        if let mark = tableDeletion, mark.location == location, let grid = gridTable(at: location) {
+            overlay.deleting = mark.part
+            overlay.deleteTitle = deleteButtonTitle(mark.part, in: grid)
+        }
         #if os(macOS)
         let selection = self.selection
         if selection.length > 0, let block, selection.location >= location, selection.upperBound <= document.blocks[block].range.upperBound {
@@ -701,7 +813,8 @@ extension EditorController {
         context.saveGState()
         context.resetClip()
         context.clip(to: dirtyRect.intersection(textView.bounds))
-        drawn.model.drawRowHandle(in: drawn.rect, band: tableBand?.location == grid.range.location ? tableBand?.band : nil)
+        drawn.model.drawRowHandle(in: drawn.rect, band: tableBand?.location == grid.range.location ? tableBand?.band : nil,
+                                  deleting: tableDeletion?.location == grid.range.location ? tableDeletion?.part : nil)
         context.restoreGState()
     }
     #endif
@@ -723,6 +836,8 @@ extension TableEdit {
         case .addColumn: "Add Column"
         case .deleteRow: "Delete Row"
         case .deleteColumn: "Delete Column"
+        case .clearRow: "Clear Row"
+        case .clearColumn: "Clear Column"
         case .align: "Align Column"
         case .deleteTable: "Delete Table"
         }

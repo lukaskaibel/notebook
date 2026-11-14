@@ -5,8 +5,39 @@ versions follow [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- Delete in an empty row of a table marks the row in red, with a Delete Row button in it; Delete again, or the button,
+  deletes it, and the caret goes to the end of the row above, as Delete on an empty line takes you to the line above.
+  In a row that holds something, an empty column is marked instead, and in a table with nothing in it the whole table.
+  Typing, moving the caret, a click or Escape leaves it. On the Mac, iPhone and iPad; on the Mac, holding Delete down
+  doesn't go on to delete it.
+- ⌥⌘⌫ deletes the row you're in and ⌃⌘⌫ the column, as in Numbers, on the Mac and on an iPad with a keyboard. The
+  menus of a row's and a column's handle have Clear, which empties its cells and keeps the table as it is.
+- Arrows and dashes in Markdown notes look like what they stand for, as they already did in AsciiDoc notes: `->` shows
+  as →, `<-` as ←, `<->` as ↔, `-->` as a long ⟶, `=>` as ⇒ and `<=>` as ⇔; `--` between words as an en dash (–) and
+  `---` as an em dash (—); `...` as an ellipsis (…); and `<=`, `>=`, `!=` and `+-` as ≤, ≥, ≠ and ±. The file keeps
+  what you typed, and next to the caret it shows. Not in code, maths or a link's address, nor in a longer run such as
+  `--->` or an option like `--force`; a backslash in front keeps one as it is. `->` can start a line: the `>` takes
+  back the bullet that the `-` made.
+
+### Changed
+
+- A note you leave with no text in it, or only spaces and empty lines, is deleted, whatever its name and however
+  long it has been there, not only a new note left as it came. A new one goes as if you had never made it; any other
+  goes to the Trash, or Recently Deleted on iPhone and iPad, and Undo brings it back. Its card fades out of Recent as
+  you leave it, and the others close up; while the pointer is on the cards they wait until it has left, so the card
+  you clicked stays under it. A note with a reminder or a star stays, and so does one written in on another device
+  meanwhile. The switch in Settings is now Delete notes left empty, on as before.
+
 ### Fixed
 
+- Adding or deleting a table's row or column no longer moves the note: deleting the last row or column with the caret
+  in it scrolled the note by about the table's height, on the Mac, iPhone and iPad. The table's top now stays where it
+  is on the screen.
+- Recent starts at its first card again when the note you opened last has moved to the front, also when that
+  happened out of sight, as you read the note on the iPhone. Before, the row came back scrolled one card in, with the
+  note's card hidden before the edge.
 - On iPhone and iPad, touching and holding a card in Recent lifts only that card for its menu, as Files and Notes do,
   and leaves the others in place behind it. Before, the whole row of cards came out with it, though the menu was the
   one card's.

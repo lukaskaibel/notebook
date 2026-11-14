@@ -212,6 +212,9 @@ struct RecentCardRow: View {
     var open: ((URL) -> Void)?
     /// The row's width, which the cards' follows.
     @State private var rowWidth = HomeStyle.likelyRowWidth
+    /// Where the row is scrolled to. Left alone, the scroll view keeps the card in view that was first there, also as
+    /// another comes before it out of sight: back from a note on the iPhone, the row started one card in.
+    @State private var position = ScrollPosition(idType: URL.self, edge: .leading)
 
     var body: some View {
         let recents = Array(workspace.recentCardURLs.prefix(RecentCardRow.limit))
@@ -220,13 +223,23 @@ struct RecentCardRow: View {
             // Not lazy: eight cards at most, and each keeps its view as the row reorders, so it slides to its place.
             HStack(alignment: .top, spacing: HomeStyle.spacing) {
                 ForEach(recents, id: \.self) { url in
+                    // A note left empty that went while the pointer was here: gone, its place kept until it leaves.
+                    let faded = workspace.isFadedCard(url)
                     card(url, width: cardWidth)
+                        .opacity(faded ? 0 : 1)
+                        .allowsHitTesting(!faded)
+                        .accessibilityHidden(faded)
                         .zIndex(HomeStyle.zIndex(of: url, in: recents))
                 }
             }
             .scrollTargetLayout()
             .cardsClearEachOther()
             .animation(HomeStyle.reordering, value: recents)
+        }
+        .scrollPosition($position)
+        // Another card first, the file opened last or the one after a note that went: the row shows it from its start.
+        .onChange(of: recents.first) { _, _ in
+            withAnimation(HomeStyle.reordering) { position.scrollTo(edge: .leading) }
         }
         .contentMargins(.horizontal, margin, for: .scrollContent)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
@@ -389,6 +402,8 @@ struct FileThumbnailView: View {
         .clipShape(shape)
         .overlay(shape.strokeBorder(Color.black.opacity(0.08), lineWidth: 1 / scale))
         .task(id: key) {
+            // Gone, a note left empty whose card fades as it goes: it keeps its picture, rather than the symbol.
+            if image != nil, !FileManager.default.fileExists(atPath: url.path) { return }
             image = await FileThumbnails.shared.image(for: url, key: key, size: size, scale: scale)
         }
     }

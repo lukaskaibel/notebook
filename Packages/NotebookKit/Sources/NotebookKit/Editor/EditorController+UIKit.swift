@@ -425,7 +425,9 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
             return
         }
         handle.frame = rect.insetBy(dx: -1, dy: -1)
-        handle.isPicked = tableBand.map { $0.location == grid.range.location && $0.band == drawn.model.focus.map { TableBand.row($0.row) } } ?? false
+        let marked = tableDeletion.map { mark in mark.location == grid.range.location && (mark.part == .table || drawn.model.focus.map { TableDeletion.row($0.row) } == mark.part) } ?? false
+        handle.isDeleting = marked
+        handle.isPicked = marked || tableBand.map { $0.location == grid.range.location && $0.band == drawn.model.focus.map { TableBand.row($0.row) } } ?? false
         handle.isHidden = false
     }
 
@@ -496,6 +498,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
             case .rowHandle(let block, let row): showTableMenu(.row(row), block: block)
             case .addColumn(let block): addAtEdge(of: block, column: true)
             case .addRow(let block): addAtEdge(of: block, column: false)
+            case .deleteMarked: deleteMarkedPart()
             }
         case .headingLevel:
             break

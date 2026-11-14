@@ -205,8 +205,9 @@ public struct NotebookScene: Scene {
                     tableButton("Add Column Left", "arrow.left", #selector(MarkdownTextView.addTableColumnLeft(_:)), .leftArrow)
                     tableButton("Add Column Right", "arrow.right", #selector(MarkdownTextView.addTableColumnRight(_:)), .rightArrow)
                     Divider()
-                    tableButton("Delete Row", "minus.rectangle", #selector(MarkdownTextView.deleteTableRow(_:)))
-                    tableButton("Delete Column", "minus.rectangle.portrait", #selector(MarkdownTextView.deleteTableColumn(_:)))
+                    // Numbers' keys.
+                    tableButton("Delete Row", "minus.rectangle", #selector(MarkdownTextView.deleteTableRow(_:)), .delete, [.command, .option])
+                    tableButton("Delete Column", "minus.rectangle.portrait", #selector(MarkdownTextView.deleteTableColumn(_:)), .delete, [.command, .control])
                     tableButton("Delete Table", "trash", #selector(MarkdownTextView.deleteTable(_:)))
                 } label: {
                     Label("Table", systemImage: "tablecells")
@@ -236,10 +237,11 @@ public struct NotebookScene: Scene {
     /// Format › Table's rows and columns, there while the caret is in a table typed in as a grid; ⌥⌘ and an arrow add
     /// rows and columns, as in Notes.
     @ViewBuilder
-    private func tableButton(_ title: String, _ symbol: String, _ action: Selector, _ key: KeyEquivalent? = nil) -> some View {
+    private func tableButton(_ title: String, _ symbol: String, _ action: Selector, _ key: KeyEquivalent? = nil,
+                             _ modifiers: EventModifiers = [.command, .option]) -> some View {
         let button = Button { workspace.sendToNote(action) } label: { Label(title, systemImage: symbol) }
             .disabled(workspace.activeEditor()?.editor.caretContext.isInTable != true)
-        if let key { button.keyboardShortcut(key, modifiers: [.command, .option]) } else { button }
+        if let key { button.keyboardShortcut(key, modifiers: modifiers) } else { button }
     }
 
     private func formatButton(_ command: FormatCommand, _ action: Selector, _ key: Character, _ modifiers: EventModifiers, name: String? = nil) -> some View {
@@ -363,8 +365,8 @@ struct GeneralSettings: View {
                 Text("Notes made with ⌘N go next to the note you have open, or into the folder you selected in the sidebar. Without either, they go to \(folder.map(workspace.place(of:)) ?? "the default folder").")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
-                Toggle("Delete new notes left empty", isOn: Bindable(NotebookSettings.shared).deletesEmptyNewNotes)
-                Text("A new note you leave or quit without giving it a title or text goes to the Trash.")
+                Toggle("Delete notes left empty", isOn: Bindable(NotebookSettings.shared).deletesEmptyNotes)
+                Text("A note you leave or quit with no text in it, or only spaces, goes to the Trash, unless it has a reminder or is a favourite.")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }

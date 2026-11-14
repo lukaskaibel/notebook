@@ -291,6 +291,11 @@ extension EditorController: NSTextViewDelegate, NSTextFieldDelegate {
                 break
             }
         }
+        // Escape leaves a row or column Delete marked to go.
+        if selector == #selector(NSResponder.cancelOperation(_:)), tableDeletion != nil {
+            clearTableDeletion()
+            return true
+        }
         if let move = Self.gridMoves[selector], moveInGrid(move.move, extending: move.extending) { return true }
         switch selector {
         case #selector(NSResponder.insertNewline(_:)):
