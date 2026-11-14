@@ -236,7 +236,7 @@ enum FileActions {
         let isLinked = workspace.isLinkedFolder(url)
         let isLocation = workspace.locations.contains { $0.url == url.standardizedFileURL }
         // Kept on its own: Notebook has the file, not its folder, which renaming, moving, duplicating and deleting
-        // need, and a link to it would find nothing, as search doesn't read it.
+        // need. A reminder of a note is kept by its place in a location.
         let isKept = workspace.isKept(url)
         if isFolder {
             MenuEntry("New Note", "square.and.pencil") { workspace.newNote(in: url) }
@@ -279,7 +279,7 @@ enum FileActions {
         if !isLocation {
             MenuEntry("Copy", "doc.on.doc", keys: "⇧⌘C") { workspace.copyFile(url) }
         }
-        if !isFolder, !isKept {
+        if !isFolder {
             MenuEntry("Copy Link", "link") { workspace.copyLink(url) }
         }
         MenuEntry.share([url])

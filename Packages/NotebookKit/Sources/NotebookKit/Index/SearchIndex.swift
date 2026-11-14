@@ -102,6 +102,16 @@ public final class SearchIndex {
     /// Folders that changed while the index was being built, read again once it is.
     @ObservationIgnored private var changedWhileBuilding = Set<URL>()
     @ObservationIgnored private var locations: [Location] = []
+    /// Files kept on their own, outside every location (`Workspace+KeptFiles`): searched and linked to as files of a
+    /// place of their own, Files, as their section is called. Not in To-dos, Spotlight or the widgets, which take
+    /// the locations' notes.
+    @ObservationIgnored private(set) var files: [URL] = []
+    /// The files kept on their own changed while the index was being built: read again once it is.
+    @ObservationIgnored private var filesChangedWhileBuilding = false
+    nonisolated static let filesID = UUID(uuidString: "F11E5000-0000-4000-8000-000000000000")!
+    nonisolated static let filesPlace = "Files"
+    /// Stands in for their folder where the index is kept between launches (`KeptIndex`), which keeps a location's.
+    nonisolated private static let filesRoot = "notebook:files"
     /// The newest reading of each folder, so an older one finishing later doesn't undo it.
     @ObservationIgnored private var newestRefresh: [String: Int] = [:]
     @ObservationIgnored private var refreshes = 0
@@ -212,12 +222,15 @@ public final class SearchIndex {
     /// Reads every folder of the locations in the background, and puts what it found in place of what the index had.
     /// A file as it was when the index last read it (by its date and size) isn't read again: at launch, the index kept
     /// from the last run is shown at once and only what changed since is read.
-    func rebuild(_ locations: [Location]) {
+    func rebuild(_ locations: [Location], files: [URL]? = nil) {
         generation += 1
         let generation = generation
         self.locations = locations
+        if let files { self.files = files.map(\.standardizedFileURL) }
+        let files = self.files
         isBuilding = true
         changedWhileBuilding = []
+        filesChangedWhileBuilding = false
         pdfQueue = []
         let roots = locations.flatMap { location in location.folders.map { ($0.url, $0.place, location.id) } }
         let hidden = hiddenPaths, recognized = self.recognized, version = self.version
@@ -255,6 +268,10 @@ public final class SearchIndex {
                     }
                 }
             }
+            for entry in Self.fileEntries(files, known: known) {
+                found.add(entry)
+                if !(known[entry.path]?.isSame(as: entry) ?? false) { changes += 1 }
+            }
             let pdfs = found.byPath.values.filter { $0.kind == .pdf && !$0.isInCloud && $0.text == nil }.map { PDFJob(url: $0.url, path: $0.path, modified: $0.modified) }
             // Every file as the index had it, as after most launches: what it has stays, with what changed meanwhile.
             let isUnchanged = !known.isEmpty && changes == 0 && found.byPath.count == known.count
@@ -283,6 +300,14 @@ public final class SearchIndex {
                 let changed = self.changedWhileBuilding
                 self.changedWhileBuilding = []
                 if !changed.isEmpty { self.refresh(folders: Array(changed), locations: self.locations) }
+                if self.filesChangedWhileBuilding {
+                    self.filesChangedWhileBuilding = false
+                    if self.dropFiles(notIn: self.files) {
+                        self.changed()
+                        self.entriesChanged()
+                    }
+                    self.refreshFiles()
+                }
             }
         }
     }
@@ -561,6 +586,9 @@ public final class SearchIndex {
         self.locations = locations
         if isBuilding { changedWhileBuilding.formUnion(folders) }
         let paths = Set(folders.map { $0.standardizedFileURL.path })
+        // Files kept on their own in these folders, which no location reads.
+        let kept = files.filter { paths.contains($0.deletingLastPathComponent().path) }
+        if !kept.isEmpty { refreshFiles(kept) }
         let jobs: [(folder: URL, root: URL, place: String, locationID: UUID)] = paths.compactMap { path in
             for location in locations {
                 if let base = location.folder(containing: path) { return (URL(fileURLWithPath: path), base.url, base.place, location.id) }
@@ -657,6 +685,117 @@ public final class SearchIndex {
         if entry.kind == .folder, folderPaths.remove(entry.path) != nil { foldersChanged = true }
     }
 
+    // MARK: - Files kept on their own
+
+    /// The files kept on their own now: those no longer kept leave the index at once, and the rest are read in the
+    /// background, each only if it changed since the index last read it. Before the first build, which reads them,
+    /// only noted.
+    func setFiles(_ urls: [URL]) {
+        let urls = urls.map(\.standardizedFileURL)
+        guard urls != files else { return }
+        files = urls
+        if isBuilding {
+            filesChangedWhileBuilding = true
+            return
+        }
+        guard hasBuilt else { return }
+        if dropFiles(notIn: urls) {
+            changed()
+            entriesChanged()
+        }
+        refreshFiles()
+    }
+
+    /// Reads files kept on their own again (all of them by default), in the background, and merges in what changed:
+    /// after Notebook wrote one, and when the app comes back to the front, as the app a file comes from may have
+    /// changed it meanwhile. One that is gone, or can't be reached now, leaves the index.
+    func refreshFiles(_ urls: [URL]? = nil) {
+        let urls = (urls ?? files).map(\.standardizedFileURL).filter { url in files.contains { $0.path == url.path } }
+        guard !urls.isEmpty else { return }
+        if isBuilding {
+            filesChangedWhileBuilding = true
+            return
+        }
+        let generation = generation, known = byPath
+        Task.detached(priority: .utility) {
+            let entries = Self.fileEntries(urls, known: known)
+            await MainActor.run {
+                guard generation == self.generation else { return }
+                let found = Dictionary(entries.map { ($0.path, $0) }, uniquingKeysWith: { a, _ in a })
+                var changed: [String: Entry] = [:]
+                var removed = false
+                var pdfs: [PDFJob] = []
+                for url in urls {
+                    // Taken off Files meanwhile.
+                    guard self.files.contains(where: { $0.path == url.path }) else { continue }
+                    guard let entry = found[url.path] else {
+                        if self.byPath[url.path]?.locationID == Self.filesID { removed = self.removeFile(url.path) || removed }
+                        continue
+                    }
+                    if entry.kind == .pdf, entry.text == nil, !entry.isInCloud {
+                        pdfs.append(PDFJob(url: entry.url, path: entry.path, modified: entry.modified))
+                    }
+                    let old = self.byPath.updateValue(entry, forKey: entry.path)
+                    if old.map({ !$0.isSame(as: entry) }) ?? true { changed[entry.path] = entry }
+                    if old?.kind != entry.kind {
+                        if let old { self.forget(old) }
+                        for key in Self.nameKeys(of: entry) { self.byName[key, default: []].insert(entry.path) }
+                    }
+                    self.byFolder[entry.folder, default: []].insert(entry.path)
+                }
+                if !changed.isEmpty { self.onIndexed?(changed) }
+                if !changed.isEmpty || removed {
+                    self.changed()
+                    self.entriesChanged()
+                    self.onRefreshed?()
+                }
+                self.readPDFs(pdfs)
+            }
+        }
+    }
+
+    /// Takes the files once kept on their own and no longer, out of the index. True when one went.
+    @discardableResult
+    private func dropFiles(notIn urls: [URL]) -> Bool {
+        let paths = Set(urls.map(\.path))
+        let gone = byPath.values.filter { $0.locationID == Self.filesID && !paths.contains($0.path) }.map(\.path)
+        var removed = false
+        for path in gone { removed = removeFile(path) || removed }
+        return removed
+    }
+
+    /// Takes one file out of the lookups and out of its folder's. True when it was there.
+    private func removeFile(_ path: String) -> Bool {
+        guard let entry = byPath.removeValue(forKey: path) else { return false }
+        forget(entry)
+        byFolder[entry.folder]?.remove(path)
+        if byFolder[entry.folder]?.isEmpty == true { byFolder[entry.folder] = nil }
+        return true
+    }
+
+    /// The entries of files kept on their own, as the walk makes a location's: those that aren't there, or are folders,
+    /// are left out. A file as it was in `known` isn't read again.
+    nonisolated static func fileEntries(_ urls: [URL], known: [String: Entry]) -> [Entry] {
+        urls.compactMap { url in
+            let url = url.standardizedFileURL
+            var info = stat()
+            guard stat(url.path, &info) == 0, info.st_mode & S_IFMT != S_IFDIR else { return nil }
+            let name = url.lastPathComponent
+            let time = info.st_mtimespec
+            // As `walk` makes it, so dates read there and here compare equal.
+            let modified = Date(timeIntervalSinceReferenceDate: Double(time.tv_sec) - Date.timeIntervalBetween1970AndReferenceDate + 1.0e-9 * Double(time.tv_nsec))
+            let inCloud = info.st_flags & UInt32(SF_DATALESS) != 0
+            return makeEntry(path: url.path, name: name, folder: url.deletingLastPathComponent().path, place: filesPlace, locationID: filesID,
+                             kind: FileKind(name: name, isDirectory: false), modified: modified, size: Int(info.st_size), inCloud: inCloud,
+                             known: known[url.path])
+        }
+    }
+
+    /// The locations as the index is kept between launches, with the files kept on their own as one more.
+    static func keptRoots(_ locations: [Location]) -> [(id: UUID, path: String)] {
+        locations.map { (id: $0.id, path: $0.url.path) } + [(id: filesID, path: filesRoot)]
+    }
+
     // MARK: - PDFs
 
     private struct PDFJob: Sendable {
@@ -751,7 +890,7 @@ public final class SearchIndex {
     /// against. In the background, while the locations are looked up.
     func loadKept(for locations: [Location]) {
         guard let storeURL, kept == nil, !hasBuilt else { return }
-        let roots = locations.map { (id: $0.id, path: $0.url.path) }
+        let roots = Self.keptRoots(locations)
         #if DEBUG
         let started = CACurrentMediaTime()
         #endif
@@ -804,7 +943,7 @@ public final class SearchIndex {
         saveTimer?.cancel()
         saveTimer = nil
         unsavedSince = nil
-        let entries = byPath, roots = locations.map { (id: $0.id, path: $0.url.path) }, previous = lastSave
+        let entries = byPath, roots = Self.keptRoots(locations), previous = lastSave
         #if os(iOS)
         // Written even when the app goes to the background right now.
         let task = UIApplication.shared.beginBackgroundTask(withName: "Keeping the search index")

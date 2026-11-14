@@ -243,7 +243,8 @@ Kyoto trip) or with a letter wrong ("ryokna" for the ryokan); names that only ha
 last, under Similar Names. A result opens where it was found: the note scrolled to the words with them selected (they
 bounce as Find does in Safari), a PDF at its page, a heading, or the picture in a note. Return opens the first match,
 and the last suggestion is always a new note with what you typed as its name; with nothing but similar names found,
-Return makes that note. With an empty field, it lists what you opened last.
+Return makes that note. With an empty field, it lists what you opened last. On iPhone and iPad it finds the single files
+you keep under Files too.
 
 Search runs in the background on every core, a few milliseconds a letter even in a whole iCloud Drive, so typing never
 waits for it; the results stay until the new ones are there. Notebook keeps what it has read between launches, so search
@@ -505,7 +506,7 @@ follow it, a picture to look at it, a drawing to draw in it; touch and hold a pi
 note, or let go to copy, share or delete it. Swipe a file to move or delete it, or to make it a favourite; touch and
 hold it for everything else. Open File in the ⋯ menu opens single files from anywhere the Files app reaches, for apps
 such as Nextcloud that give other apps their files but not their folders; they show under Files, below the folders,
-and in Recent, and open from there in later runs too. Its menu is the system's own, as are those of buttons such as ⋯ and Attach, with a symbol
+in Recent and in search, and open from there in later runs too. Its menu is the system's own, as are those of buttons such as ⋯ and Attach, with a symbol
 beside each entry; Move To in them asks for the folder in a sheet, as Files does.
 
 The iPad has the Mac's layout: the sidebar, with the iPhone's first screen at its top and its folders opening in
@@ -561,7 +562,8 @@ screens.
   Files app's picker, and a file handed over by another app opens the same way. One in no folder you opened is kept
   under Files, below the folders, and in Recent, and opens again in later runs. Notebook has such a file, not its
   folder, so its menu has Remove from Notebook instead of Rename, Move To, Duplicate and Delete, and a new note made
-  while it is open goes to the default folder.
+  while it is open goes to the default folder. Search and ⌘K find these files by name and by what is in them, under
+  Files, and a `[[link]]` to one finds it; what you write in one, or the app it comes from changes, is read again.
 - **Sorted by name or by date.** View › Sort By, or Sort By in the ⋯ menu on iPhone and iPad, sorts every folder's
   notes and files by name, as the Finder does, or newest first by when they were last edited or made, as Notes does.
   Sorted by date, the note you write in moves to the top of its folder once it is saved, still selected; Keep Folders
@@ -981,8 +983,9 @@ Planned, and not built yet:
 - On iPhone and iPad there is no Settings › App Icon (iOS only switches between icons built into the app), no PNG
   export, no window of its own for a single file and no Paste into a folder in the list (#298). Before iOS 27.2,
   Quick Look there may show a note's Markdown instead.
-- **Single files kept under Files on iPhone and iPad** aren't in search or ⌘K yet (#376). Renaming one in its title,
-  or adding a picture to a note among them, asks for its folder, which apps such as Nextcloud don't give.
+- **Single files kept under Files on iPhone and iPad** are left out of To-dos and Spotlight, which take the notes in
+  your folders. Renaming one in its title, or adding a picture to a note among them, asks for its folder, which apps
+  such as Nextcloud don't give.
 - **Pictures in Quick Look on iPhone and iPad,** and on the Mac for notes outside the folders you opened: Quick Look
   lets Notebook read only the note itself, so a note's pictures and drawings show by their names there (#318).
 - **Sketches** as files of their own, next to your notes rather than in one.
