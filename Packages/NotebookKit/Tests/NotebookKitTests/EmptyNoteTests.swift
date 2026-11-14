@@ -160,6 +160,22 @@ final class EmptyNoteTests: XCTestCase {
         XCTAssertEqual(notes(), ["Draft.md", "Ideas.md", "Starred.md", "Trip.md"])
     }
 
+    /// A note kept on its own, from another app, stays: Notebook has it, not its folder.
+    func testANoteKeptOnItsOwnStays() async throws {
+        let (workspace, _) = try await makeWorkspace()
+        let elsewhere = library.deletingLastPathComponent().appendingPathComponent("notebook-empty-elsewhere-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: elsewhere, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: elsewhere) }
+        let kept = elsewhere.appendingPathComponent("Blank.md")
+        try "\n".write(to: kept, atomically: true, encoding: .utf8)
+        workspace.keep(kept)
+        workspace.open(kept)
+        workspace.open(draft)
+        await settle(workspace)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: kept.path))
+        XCTAssertTrue(isRecent(kept, in: workspace))
+    }
+
     func testSettingsCanKeepNotesLeftEmpty() async throws {
         NotebookSettings.shared.deletesEmptyNotes = false
         let (workspace, _) = try await makeWorkspace()

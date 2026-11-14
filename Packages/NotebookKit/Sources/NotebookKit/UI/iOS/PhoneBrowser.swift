@@ -154,8 +154,8 @@ struct PhoneBrowser: View {
     }
 }
 
-/// The first screen: To-dos and Favorites as tiles, what you opened last as cards, and what is in each location, as
-/// Notes lists its folders.
+/// The first screen: To-dos and Favorites as tiles, what you opened last as cards, what is in each location, as Notes
+/// lists its folders, and the files kept on their own.
 struct HomeScreen: View {
     @Bindable var workspace: Workspace
     @Binding var newFolderIn: URL?
@@ -185,9 +185,13 @@ struct HomeScreen: View {
                         LocationHeader(workspace: workspace, location: location) { newFolderIn = $0 }
                     }
                 }
+                KeptFileRows(workspace: workspace, newFolderIn: $newFolderIn)
                 Section {
                     Button { addsLocation = true } label: {
                         Label("Open Folder", systemImage: "plus")
+                    }
+                    Button { FileOpener.choose(for: workspace) } label: {
+                        Label("Open File", systemImage: "doc.badge.plus")
                     }
                 }
             }
@@ -202,6 +206,7 @@ struct HomeScreen: View {
             ToolbarItem(placement: .topBarTrailing) {
                 AppMenuButton {
                     MenuEntry("Open Folder", "plus.rectangle.on.folder") { addsLocation = true }
+                    MenuEntry("Open File", "doc.badge.plus", keys: "⌘O") { FileOpener.choose(for: workspace) }
                     if let folder = workspace.defaultFolder {
                         MenuEntry("Import from Apple Notes", "square.and.arrow.down.on.square") { workspace.appleNotesImportFolder = folder }
                     }

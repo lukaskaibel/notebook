@@ -82,6 +82,16 @@ enum DebugRemote {
             waitUntil = Date().addingTimeInterval(numbers.first ?? 0.5)
         case "open":
             if let url = url(argument) { workspace.open(url) }
+        case "openchosen":
+            // openchosen <path>[|<path>…]: what Open File's picker hands over, without the picker, which runs in a
+            // process of its own. "picker" shows the picker itself.
+            if argument == "picker" {
+                FileOpener.choose(for: workspace)
+            } else {
+                workspace.openChosen(argument.split(separator: "|").compactMap { url(String($0)) })
+            }
+        case "removekept":
+            if let url = url(argument) { workspace.removeKeptFile(url) }
         case "timeopen":
             // timeopen <path>: opens a note and logs how long the main thread was busy with it, until the screen had
             // been made and the main thread was free again, as on the Mac.
