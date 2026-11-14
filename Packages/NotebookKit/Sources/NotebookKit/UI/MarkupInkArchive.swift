@@ -7,9 +7,11 @@ import zlib
 /// they can change stroke by stroke, and draw them sharp. Strokes kept anywhere else are a picture to them, which they
 /// draw again as pixels whenever they save the page: written back and forth, the writing got blurrier every time.
 ///
-/// Apple writes it two ways: with the size of the canvas the strokes were drawn on, measured from the top left of the
-/// annotation's box (Markup in Files and Quick Look, with the page as the canvas); or with no canvas size, the strokes
-/// fitted into the box (PencilKit drawings that PDFKit puts on a page, as Preview on iPhone and iPad saves them).
+/// Apple writes it two ways: with the page as the canvas, the strokes measured from its top left and the box the
+/// annotation's own, tight around them (Markup in Preview, Files and Quick Look); or with no canvas size, the strokes
+/// fitted into the box (PencilKit drawings that PDFKit puts on a page). Apple's editors place the strokes by both the
+/// canvas and the box, so the box has to be the strokes' own: with the page's box in it, Quick Look put them off the
+/// page.
 enum MarkupInkArchive {
     /// What an entry holds: the strokes, where on the page they go, and how.
     struct Ink {
@@ -23,11 +25,14 @@ enum MarkupInkArchive {
     /// Apple's ink classes: the one Markup writes now and the one before it.
     static let classNames = ["AKInkAnnotation", "AKInkAnnotation2"]
 
-    /// The entry for strokes measured from the top left of `rectangle` (the page's crop box, for Notebook), in PDF
-    /// points, on a canvas of its size: Base64, as Apple writes it.
-    static func encoded(_ drawing: PKDrawing, in rectangle: CGRect) -> String? {
+    /// The entry for strokes measured from the top left of `page` (the page's crop box, for Notebook), in PDF points,
+    /// as Apple writes it: the page is the canvas, the box is the strokes' own. Base64.
+    static func encoded(_ drawing: PKDrawing, on page: CGRect) -> String? {
         guard let compressed = gzip(drawing.dataRepresentation()) else { return nil }
-        let writer = Writer(drawing: compressed, rectangle: rectangle, canvas: rectangle.size)
+        let strokes = drawing.bounds
+        let box = strokes.isNull || strokes.isEmpty ? CGRect(x: page.minX, y: page.maxY, width: 0, height: 0)
+            : CGRect(x: page.minX + strokes.minX, y: page.maxY - strokes.maxY, width: strokes.width, height: strokes.height)
+        let writer = Writer(drawing: compressed, rectangle: box, canvas: page.size)
         let archiver = NSKeyedArchiver(requiringSecureCoding: false)
         archiver.setClassName("AKInkAnnotation", for: Writer.self)
         archiver.encode(writer, forKey: NSKeyedArchiveRootObjectKey)

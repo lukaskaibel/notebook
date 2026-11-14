@@ -137,7 +137,7 @@ final class InkAnnotation: PDFAnnotation {
         let strokes = drawing.bounds.insetBy(dx: -2, dy: -2)
         super.init(bounds: CGRect(x: crop.minX + strokes.minX, y: crop.maxY - strokes.maxY, width: strokes.width, height: strokes.height),
                    forType: .stamp, withProperties: nil)
-        if let entry = MarkupInkArchive.encoded(drawing, in: crop) {
+        if let entry = MarkupInkArchive.encoded(drawing, on: crop) {
             setValue([MarkupDrawings.annotationKey: entry] as NSDictionary, forAnnotationKey: MarkupDrawings.extrasKey)
         } else {
             setValue(drawing.dataRepresentation().base64EncodedString() as NSString, forAnnotationKey: MarkupDrawings.notebookKey)

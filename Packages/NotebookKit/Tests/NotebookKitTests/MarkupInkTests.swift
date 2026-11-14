@@ -40,10 +40,13 @@ final class MarkupInkTests: XCTestCase {
         XCTAssertEqual(entry.page, 1)
         XCTAssertEqual(entry.subtype, "Stamp")
         try assertMatchingCopy(entry)
-        // Apple's ink class, the strokes measured on the crop box, which is the entry's box.
+        // As Preview writes its own: Apple's ink class, the page as the canvas, the strokes measured from its top left,
+        // and the box tight around them, in the PDF's points. (With the page's box there, Quick Look put the strokes
+        // off the page.)
         XCTAssertEqual(entry.ink.drawing.strokes.count, 2)
         XCTAssertEqual(entry.ink.canvas, CGSize(width: 595, height: 842))
-        XCTAssertEqual(entry.ink.rectangle, CGRect(x: 0, y: 0, width: 595, height: 842))
+        let bounds = drawing.bounds
+        XCTAssertEqual(entry.ink.rectangle, CGRect(x: bounds.minX, y: 842 - bounds.maxY, width: bounds.width, height: bounds.height))
         XCTAssertEqual(entry.className, "AKInkAnnotation")
         // And read back by Notebook where they were drawn.
         let page = try XCTUnwrap(readDocument(data).page(at: 1))
@@ -202,12 +205,18 @@ final class MarkupInkTests: XCTestCase {
     }
 
     func testAnArchiveIsReadBackAsWritten() throws {
-        let box = CGRect(x: 10, y: 20, width: 500, height: 700)
-        let ink = try XCTUnwrap(MarkupInkArchive.decoded(try XCTUnwrap(MarkupInkArchive.encoded(drawing, in: box))))
+        let page = CGRect(x: 10, y: 20, width: 500, height: 700)
+        let ink = try XCTUnwrap(MarkupInkArchive.decoded(try XCTUnwrap(MarkupInkArchive.encoded(drawing, on: page))))
         XCTAssertEqual(ink.drawing.strokes.count, 2)
         XCTAssertEqual(ink.drawing.bounds, drawing.bounds)
-        XCTAssertEqual(ink.rectangle, box)
-        XCTAssertEqual(ink.canvas, box.size)
+        let bounds = drawing.bounds
+        XCTAssertEqual(ink.rectangle, CGRect(x: 10 + bounds.minX, y: 720 - bounds.maxY, width: bounds.width, height: bounds.height))
+        XCTAssertEqual(ink.canvas, page.size)
+        // A page whose boxes aren't the canvas's size: where the canvas is follows from the box around the strokes.
+        let other = PDFPage()
+        other.setBounds(CGRect(x: 0, y: 0, width: 300, height: 300), for: .mediaBox)
+        let placed = try XCTUnwrap(MarkupDrawings.placed(ink, on: other))
+        XCTAssertEqual(placed.area, page)
         // Apple's own: PDFKit's square of a PencilKit drawing.
         let apple = try XCTUnwrap(MarkupInkArchive.decoded(Self.previewArchive))
         XCTAssertEqual(apple.canvas, .zero)

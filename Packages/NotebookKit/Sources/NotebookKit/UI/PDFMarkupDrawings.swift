@@ -175,17 +175,18 @@ enum MarkupDrawings {
     }
 
     /// The strokes where they go on the page, and the box they are measured in, from its top left. Apple writes them
-    /// on a canvas of the annotation box's size (Notebook, Markup in Files), on the page's box with an older Markup, or
-    /// fitted into the box with no canvas at all (PencilKit drawings that PDFKit puts on a page, as Preview does).
+    /// on the page as the canvas, the annotation's box tight around them (Markup in Preview, Files and Quick Look, and
+    /// Notebook), or fitted into the box with no canvas at all (PencilKit drawings that PDFKit puts on a page).
     nonisolated static func placed(_ ink: MarkupInkArchive.Ink, on page: PDFPage) -> (drawing: PKDrawing, area: CGRect)? {
         let canvas = ink.canvas
         if canvas.width > 0, canvas.height > 0 {
-            if let rect = ink.rectangle, rect.size.isClose(to: canvas) { return (ink.drawing, rect) }
             if let box = [PDFDisplayBox.cropBox, .mediaBox].lazy.map({ page.bounds(for: $0) }).first(where: { $0.size.isClose(to: canvas) }) {
                 return (ink.drawing, box)
             }
-            guard let rect = ink.rectangle, rect.width > 0, rect.height > 0 else { return nil }
-            return (ink.drawing.transformed(using: CGAffineTransform(scaleX: rect.width / canvas.width, y: rect.height / canvas.height)), rect)
+            // A canvas of another size than the page's boxes: where it is follows from the box around the strokes.
+            let strokes = ink.drawing.bounds
+            guard let rect = ink.rectangle, rect.width > 0, rect.height > 0, !strokes.isNull else { return nil }
+            return (ink.drawing, CGRect(x: rect.minX - strokes.minX, y: rect.maxY + strokes.minY - canvas.height, width: canvas.width, height: canvas.height))
         }
         let bounds = ink.drawing.bounds
         guard let rect = ink.rectangle, rect.width > 0, rect.height > 0, bounds.width > 0, bounds.height > 0 else { return nil }
