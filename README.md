@@ -666,7 +666,9 @@ A handwritten note is a PDF, and what Notebook adds to a PDF stays in it. The pa
 itself. The strokes on a page are one stamp annotation whose look is made of lines, with the PencilKit strokes in the
 entry Apple's Markup keeps its own in (`/AAPL:AKExtras`), next to the copy of the annotation that Apple's apps check
 before they take it for ink, and `/NotebookInk` marks it as Notebook's. Notebook before 1.4 kept the strokes in an
-entry of its own (`/NotebookDrawing`), which Notebook still reads and writes the new way with the next save. Preview's
+entry of its own (`/NotebookDrawing`), which Notebook still reads and writes the new way with the next save. Where
+Preview dropped that entry, Notebook reads the strokes back from the stamp's look: a stamp with no author whose look
+is only round lines and dots, their points 1 pt apart, as Notebook draws it. Preview's
 handwriting on iPhone and iPad, a square annotation with the same entry, stays as Preview wrote it on the pages you
 don't write on, and becomes part of Notebook's stamp on those you do. Each picture is a stamp of its own whose look
 is the picture, kept as a JPEG, with where it is and how far it is turned in `/NotebookPicture`. A hidden annotation on

@@ -61,12 +61,13 @@ enum PDFInk {
         }
     }
 
-    /// Strokes Notebook kept in its entry of before 1.4 (`MarkupDrawings.notebookKey`) put in Markup's entry, on every
-    /// page: Apple's apps take those for a picture, and draw it again as pixels when they save the page.
+    /// Strokes Notebook kept in its entry of before 1.4 (`MarkupDrawings.notebookKey`), or that Preview left only the
+    /// look of, put in Markup's entry, on every page: Apple's apps take those for a picture, and draw it again as pixels
+    /// when they save the page.
     nonisolated static func upgrade(_ document: PDFDocument) {
         for index in 0..<document.pageCount {
             guard let page = document.page(at: index) else { continue }
-            let old = page.annotations.filter { $0.value(forAnnotationKey: MarkupDrawings.notebookKey) != nil && $0.value(forAnnotationKey: MarkupDrawings.inkMarker) == nil }
+            let old = page.annotations.filter(MarkupDrawings.isEarlierNotebookInk)
             // Strokes that can't be placed (a turned page) stay as they are.
             let read = old.compactMap { MarkupDrawings.strokes(in: $0, on: page) }
             guard !old.isEmpty, read.count == old.count else { continue }

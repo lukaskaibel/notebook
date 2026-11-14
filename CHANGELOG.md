@@ -51,6 +51,12 @@ versions follow [semantic versioning](https://semver.org).
   blurry when zoomed and couldn't change it any more; and a save in Notebook could leave only a picture of what
   Preview had written. Now Notebook keeps its strokes where Preview keeps its own, and both stay strokes on both
   sides, on iPhone, iPad and the Mac.
+- Writing done with Notebook 1.3 or earlier, on a PDF that was then saved in Preview on iPhone or iPad, is sharp in
+  Notebook again and can be erased and changed with the pen. Preview had dropped the strokes and kept only how they
+  look, so Notebook showed that writing blurry when zoomed, couldn't change it, and put new writing on that page next
+  to it. Notebook now reads the strokes back from that look, as they were, in their colours and widths, and the next
+  change you make to the PDF stores them so Preview keeps them. What can't be read back is which pen drew them, and
+  the pressure and tilt.
 - Handwriting that Preview on iPhone and iPad adds to a PDF shows in Notebook as sharp as the text, at any zoom, and
   can be erased and changed with the pen. Notebook showed Preview's picture of it, a little blurry, and couldn't change
   it.
