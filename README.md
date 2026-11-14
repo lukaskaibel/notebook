@@ -90,8 +90,10 @@ a backslash keeps one as it is (`\->`).
 
 The title of a new note has the caret first, so you type its name straight away. Return, Tab, ↓, or → at its end go on
 into the text, and ↑, ←, or Delete at the very start of the text go back up into the title, on the Mac and on an iPad
-or iPhone with a keyboard alike. A new note you leave without a title or text is deleted again, as if you had never
-made it; turn off Delete new notes left empty in Settings to keep such notes.
+or iPhone with a keyboard alike. A note you leave with no text in it, or only spaces, is deleted, whatever its name:
+a new one as if you had never made it, any other to the Trash (Recently Deleted on iPhone and iPad), where Undo
+brings it back from. Its card leaves Recent as you go. One with a reminder or a star stays; turn off Delete notes
+left empty in Settings to keep them all.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/typing-dark.webp">

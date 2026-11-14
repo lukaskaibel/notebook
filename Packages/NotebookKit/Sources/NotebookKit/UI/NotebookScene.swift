@@ -365,8 +365,8 @@ struct GeneralSettings: View {
                 Text("Notes made with ⌘N go next to the note you have open, or into the folder you selected in the sidebar. Without either, they go to \(folder.map(workspace.place(of:)) ?? "the default folder").")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
-                Toggle("Delete new notes left empty", isOn: Bindable(NotebookSettings.shared).deletesEmptyNewNotes)
-                Text("A new note you leave or quit without giving it a title or text goes to the Trash.")
+                Toggle("Delete notes left empty", isOn: Bindable(NotebookSettings.shared).deletesEmptyNotes)
+                Text("A note you leave or quit with no text in it, or only spaces, goes to the Trash, unless it has a reminder or is a favourite.")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }

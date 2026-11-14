@@ -759,7 +759,7 @@ enum DebugRemote {
             case "dim": settings.dimsOtherFiles = bits[1] == "1"
             case "foldersfirst": settings.foldersFirst = bits[1] == "1"
             case "order": if let order = FileOrder(rawValue: bits[1]) { settings.fileOrders.set(order, for: workspace?.folderInView) }
-            case "deleteempty": settings.deletesEmptyNewNotes = bits[1] == "1"
+            case "deleteempty": settings.deletesEmptyNotes = bits[1] == "1"
             case let key where key.hasPrefix("color."):
                 guard let kind = FileKind(rawValue: String(key.dropFirst(6))), kind != .folder else { break }
                 settings.fileColors[kind] = FolderColor.allCases.first { $0.name.lowercased() == bits[1].lowercased() }

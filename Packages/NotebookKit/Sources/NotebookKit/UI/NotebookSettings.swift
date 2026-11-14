@@ -180,10 +180,11 @@ public final class NotebookSettings {
         didSet { UserDefaults.standard.set(paperSize.rawValue, forKey: "paperSize") }
     }
 
-    /// A new note left without a title or text, or a handwritten one left without anything written in it, goes away
-    /// again, as if it had never been made.
-    public var deletesEmptyNewNotes: Bool {
-        didSet { UserDefaults.standard.set(deletesEmptyNewNotes, forKey: "deletesEmptyNewNotes") }
+    /// A note left with no text in it, or only spaces and empty lines, goes to the Trash; a new handwritten one left
+    /// without anything written in it goes away again, as if it had never been made. Kept under the key of when only
+    /// new notes went, so a switch turned off stays off.
+    public var deletesEmptyNotes: Bool {
+        didSet { UserDefaults.standard.set(deletesEmptyNotes, forKey: "deletesEmptyNewNotes") }
     }
 
     #if os(macOS)
@@ -249,7 +250,7 @@ public final class NotebookSettings {
         headingMarks = Self.headingMarks(in: defaults)
         editsTablesAsMarkdown = defaults.bool(forKey: "editsTablesAsMarkdown")
         readsTextInPictures = defaults.object(forKey: "readsTextInPictures") as? Bool ?? true
-        deletesEmptyNewNotes = defaults.object(forKey: "deletesEmptyNewNotes") as? Bool ?? true
+        deletesEmptyNotes = defaults.object(forKey: "deletesEmptyNewNotes") as? Bool ?? true
         newNoteKind = NewNoteKind(rawValue: defaults.string(forKey: "newNoteKind") ?? "") ?? .standard
         paper = PaperStyle(rawValue: defaults.string(forKey: "paper") ?? "") ?? .lined
         paperSize = PaperSize(rawValue: defaults.string(forKey: "paperSize") ?? "") ?? .regional

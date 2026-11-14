@@ -21,11 +21,23 @@ versions follow [semantic versioning](https://semver.org).
   `--->` or an option like `--force`; a backslash in front keeps one as it is. `->` can start a line: the `>` takes
   back the bullet that the `-` made.
 
+### Changed
+
+- A note you leave with no text in it, or only spaces and empty lines, is deleted, whatever its name and however
+  long it has been there, not only a new note left as it came. A new one goes as if you had never made it; any other
+  goes to the Trash, or Recently Deleted on iPhone and iPad, and Undo brings it back. Its card fades out of Recent as
+  you leave it, and the others close up; while the pointer is on the cards they wait until it has left, so the card
+  you clicked stays under it. A note with a reminder or a star stays, and so does one written in on another device
+  meanwhile. The switch in Settings is now Delete notes left empty, on as before.
+
 ### Fixed
 
 - Adding or deleting a table's row or column no longer moves the note: deleting the last row or column with the caret
   in it scrolled the note by about the table's height, on the Mac, iPhone and iPad. The table's top now stays where it
   is on the screen.
+- Recent starts at its first card again when the note you opened last has moved to the front, also when that
+  happened out of sight, as you read the note on the iPhone. Before, the row came back scrolled one card in, with the
+  note's card hidden before the edge.
 - On iPhone and iPad, touching and holding a card in Recent lifts only that card for its menu, as Files and Notes do,
   and leaves the others in place behind it. Before, the whole row of cards came out with it, though the menu was the
   one card's.

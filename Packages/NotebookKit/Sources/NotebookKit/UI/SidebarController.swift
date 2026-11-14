@@ -284,9 +284,17 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             - scrollView.contentInsets.left - scrollView.contentInsets.right
     }
 
-    /// A file opened: Recent's cards follow by themselves, and the section comes with the first.
+    /// A file opened or one gone: Recent's cards follow by themselves. The section comes with the first card, and
+    /// fades away with the last.
     func recentsChanged() {
-        if !hasRecents, !workspace.recentCardURLs.isEmpty { reloadSections() }
+        let has = !workspace.recentCardURLs.isEmpty
+        guard has != hasRecents else { return }
+        guard !has, renaming == nil, let index = topItems.firstIndex(where: { ($0 as? SidebarEntry)?.children.first === recentEntry }) else {
+            return reloadSections()
+        }
+        hasRecents = false
+        topItems.remove(at: index)
+        outline.removeItems(at: [index], inParent: nil, withAnimation: .effectFade)
     }
 
     func reloadSections() {
