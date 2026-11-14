@@ -117,6 +117,72 @@ extension View {
     }
 }
 
+/// A view in a list's row next to others with menus of their own, such as one of Recent's cards. A list lifts its whole
+/// row for a menu touched and held anywhere in it (`appContextMenu`), so every card would come out for the one held.
+/// Hosted apart from the list, the view has a menu of its own, the system's, which lifts it alone, with its own
+/// corners, and leaves the others in place; SwiftUI's own menus don't open there. As big as `content` is. Out of the
+/// list's reach, `content` gets neither its environment nor its navigation links: what it needs comes in as arguments,
+/// and its buttons open screens through the workspace.
+struct HostedWithMenu<Content: View>: UIViewControllerRepresentable {
+    let cornerRadius: CGFloat
+    @MenuContent var entries: () -> [MenuEntry]
+    @ViewBuilder var content: Content
+
+    func makeCoordinator() -> ViewMenu { ViewMenu() }
+
+    func makeUIViewController(context: Context) -> UIHostingController<Content> {
+        let host = UIHostingController(rootView: content)
+        host.view.backgroundColor = .clear
+        // In a row, not at the screen's edges: keeping clear of the bars and the keyboard is the list's.
+        host.safeAreaRegions = []
+        host.view.addInteraction(UIContextMenuInteraction(delegate: context.coordinator))
+        return host
+    }
+
+    func updateUIViewController(_ host: UIHostingController<Content>, context: Context) {
+        host.rootView = content
+        context.coordinator.entries = entries
+        context.coordinator.cornerRadius = cornerRadius
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiViewController host: UIHostingController<Content>, context: Context) -> CGSize? {
+        host.sizeThatFits(in: CGSize(width: proposal.width ?? .infinity, height: .infinity))
+    }
+}
+
+/// The menu of a `HostedWithMenu`: its entries, made when it opens, and the view lifted out with its corners.
+@MainActor
+final class ViewMenu: NSObject, UIContextMenuInteractionDelegate {
+    var entries: () -> [MenuEntry] = { [] }
+    var cornerRadius: CGFloat = 0
+
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction,
+                                configurationForMenuAtLocation location: CGPoint) -> UIContextMenuConfiguration? {
+        let entries = entries
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak view = interaction.view] _ in
+            MainActor.assumeIsolated { UIMenu(children: SystemMenuElements.elements(of: entries(), from: view)) }
+        }
+    }
+
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration,
+                                highlightPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
+        preview(in: interaction)
+    }
+
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration,
+                                dismissalPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
+        preview(in: interaction)
+    }
+
+    private func preview(in interaction: UIContextMenuInteraction) -> UITargetedPreview? {
+        guard let view = interaction.view, view.window != nil else { return nil }
+        let parameters = UIPreviewParameters()
+        parameters.visiblePath = UIBezierPath(roundedRect: view.bounds, cornerRadius: cornerRadius)
+        parameters.backgroundColor = .clear
+        return UITargetedPreview(view: view, parameters: parameters)
+    }
+}
+
 /// Entries as the system's menus show them: the groups between lines as sections, a section's name over its group, a
 /// submenu as a menu in the menu. Made when the menu opens.
 private struct SystemMenuItems: View {

@@ -36,7 +36,7 @@ struct HomeTiles: View {
     }
 }
 
-/// What you opened last, as cards in a row that scrolls sideways (`RecentCardLabel`), each opening its file's screen.
+/// What you opened last, as cards in a row that scrolls sideways (`RecentCardRow`), each opening its file's screen.
 /// Each is as wide as a tile, so two sit under To-dos and Favorites. The row runs from one edge of the screen to the
 /// other, its section without the list's margins, so the next card peeks in at the edge and the row plainly scrolls;
 /// it stops at a card each time, in line with the tiles.
@@ -45,39 +45,18 @@ struct RecentCards: View {
     @Binding var newFolderIn: URL?
     /// The tiles' inset from the screen's edges (`HomeTiles.inset`).
     let inset: CGFloat
-    /// The row's width, the screen's, which the cards' follows.
-    @State private var rowWidth = HomeStyle.likelyRowWidth + 32
 
     var body: some View {
         // With the note you are in: going back to this screen doesn't put its card in at the start and push the others
         // along, unless you come back within a moment of opening it (`Workspace.recentCardURLs`).
-        let recents = Array(workspace.recentCardURLs.prefix(RecentCardRow.limit))
-        if !recents.isEmpty {
+        if !workspace.recentCardURLs.isEmpty {
+            let workspace = workspace
             Section {
-                ScrollView(.horizontal) {
-                    // Not lazy: each card keeps its view as the row reorders, so it slides to its place.
-                    HStack(alignment: .top, spacing: HomeStyle.spacing) {
-                        ForEach(recents, id: \.self) { url in
-                            // As wide as a tile: two under To-dos and Favorites, and the next one peeking in.
-                            NavigationLink(value: Page(url: url, isFolder: false)) {
-                                RecentCardLabel(workspace: workspace, url: url, width: HomeStyle.tileWidth(in: rowWidth - 2 * inset))
-                            }
-                            .buttonStyle(.plain)
-                            .navigationLinkIndicatorVisibility(.hidden)
-                            .appContextMenu(cornerRadius: HomeStyle.cardRadius) { FileActions.entries(workspace, url) { newFolderIn = $0 } }
-                            .zIndex(HomeStyle.zIndex(of: url, in: recents))
-                        }
-                    }
-                    .scrollTargetLayout()
-                    .animation(HomeStyle.reordering, value: recents)
-                }
-                .contentMargins(.horizontal, inset, for: .scrollContent)
-                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
-                .scrollIndicators(.hidden)
-                .scrollTargetBehavior(.viewAligned)
-                .scrollClipDisabled()
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
+                // Hosted apart from the list, a card can't be a link to its file's screen (`HostedWithMenu`): it opens
+                // the file, whose screen comes over this one, where you were in it, as the link's did.
+                RecentCardRow(workspace: workspace, margin: inset, newFolder: { newFolderIn = $0 }, open: { workspace.reopen($0) })
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
             } header: {
                 // Where the other sections' titles are, which the list sets in by the margins this one goes without.
                 Text("Recent").padding(.leading, inset)
