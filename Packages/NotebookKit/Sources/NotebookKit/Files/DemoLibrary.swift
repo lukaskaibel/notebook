@@ -725,7 +725,7 @@ enum DemoLibrary {
                     CGPoint(x: x + 14, y: y - 5), CGPoint(x: x + 17, y: y - 10)], 0x2FA84F)
         }
         PDFInk.put([0: PKDrawing(strokes: strokes)], in: document)
-        document.write(to: url)
+        try? PDFInk.written(document).write(to: url)
     }
 
     private static func makePDF(at url: URL, title: String, lines: [String]) {

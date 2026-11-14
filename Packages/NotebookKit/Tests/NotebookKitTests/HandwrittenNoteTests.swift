@@ -338,11 +338,12 @@ final class HandwrittenNoteTests: XCTestCase {
             try finish(begin(pages, content: content))
         }
 
-        /// Another device changes the file.
+        /// Another device changes the file, as Notebook writes it there.
         mutating func changeElsewhere(_ change: (PDFDocument) -> Void) throws {
             let document = try XCTUnwrap(PDFDocument(data: file))
+            MarkupDrawings.readInk(from: file, into: document)
             change(document)
-            file = try XCTUnwrap(document.dataRepresentation())
+            file = try PDFInk.written(document)
             changedElsewhere = true
         }
     }
@@ -681,7 +682,7 @@ final class HandwrittenNoteTests: XCTestCase {
         XCTAssertEqual(PDFPictures.pictures(on: page).map(\.picture.id), ["photo"])
         XCTAssertEqual(NotebookPaper.style(of: page), .lined)
         XCTAssertEqual(PDFPictures.images(in: try XCTUnwrap(CGPDFDocument(CGDataProvider(data: written as CFData)!)))["photo"]?.jpeg, image.jpeg)
-        XCTAssertEqual(MarkupDrawings.strokes(in: try XCTUnwrap(page.annotations.first { $0.value(forAnnotationKey: MarkupDrawings.notebookKey) != nil }), on: page)?.drawing.strokes.count, 2)
+        XCTAssertEqual(MarkupDrawings.strokes(in: try XCTUnwrap(page.annotations.first(where: MarkupDrawings.isNotebookInk)), on: page)?.drawing.strokes.count, 2)
         // The iPad's next save starts from that file.
         let again = try PDFPageWriter.make(PDFPlan(slots: [PDFPlan.Slot(origin: .base(0), size: PaperSize.a4.size, content: PageContent(drawing: drawing.appending(mac), pictures: [PDFPicture(id: "photo", frame: picture.frame)]))]), base: written)
         XCTAssertEqual(PDFPictures.images(in: try XCTUnwrap(CGPDFDocument(CGDataProvider(data: again as CFData)!)))["photo"]?.jpeg, image.jpeg)

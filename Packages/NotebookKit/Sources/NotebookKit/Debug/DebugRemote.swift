@@ -1133,7 +1133,7 @@ enum DebugRemote {
                 for annotation in page.annotations where annotation.type != "Link" {
                     let quads = annotation.quadrilateralPoints?.count ?? 0
                     let color = String(format: "%06X", annotation.color.hexValue)
-                    let notebook = annotation.value(forAnnotationKey: MarkupDrawings.notebookKey) != nil
+                    let notebook = MarkupDrawings.isNotebookInk(annotation)
                     lines.append("page \(index + 1) \(annotation.type ?? "?") \(annotation.bounds.integral) quads=\(quads) color=\(color) shown=\(annotation.shouldDisplay)\(notebook ? " notebook-strokes" : "")")
                 }
             }

@@ -329,6 +329,7 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
         guard let document = view?.document, let page = document.page(at: index), let entry = origins[HeldPage(page)] else { return }
         // Paper is made anew. A page of the file is copied, and saved as a copy of it; its canvas shows what is on it.
         guard let copy = entry.paper.flatMap({ NotebookPaper.page($0, size: entry.size) }) ?? page.copy() as? PDFPage else { return }
+        MarkupDrawings.copyInk(from: page, to: copy)
         // A copy draws its stamps as PDFKit does, unlike the page it was made from: not those of the strokes.
         for annotation in copy.annotations where MarkupDrawings.strokes(in: annotation, on: copy) != nil {
             annotation.shouldDisplay = false
@@ -859,6 +860,29 @@ final class PDFDrawingSession: NSObject, @preconcurrency PDFPageOverlayViewProvi
         session(edited: editor)
     }
 
+    /// For the debug remote: a pen stroke through `points` (page points from the crop box's top left) on the page in
+    /// view, as Apple Pencil would draw it.
+    func debugStroke(through points: [CGPoint]) {
+        guard let page = currentPage, points.count > 1 else { return }
+        let editor = editor(for: page)
+        guard var markup = editor.controller.markup else { return }
+        var dense: [CGPoint] = []
+        for (start, end) in zip(points, points.dropFirst()) {
+            let steps = max(1, Int(hypot(end.x - start.x, end.y - start.y) / 2))
+            for step in 0..<steps {
+                let t = CGFloat(step) / CGFloat(steps)
+                dense.append(CGPoint(x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t))
+            }
+        }
+        dense.append(points[points.count - 1])
+        let path = PKStrokePath(controlPoints: dense.enumerated().map { index, point in
+            PKStrokePoint(location: point, timeOffset: Double(index) / 60, size: CGSize(width: 3, height: 3), opacity: 1, force: 1, azimuth: 0, altitude: .pi / 2)
+        }, creationDate: Date())
+        markup.append(contentsOf: PKDrawing(strokes: [PKStroke(ink: PKInk(.pen, color: .black), path: path)]))
+        editor.controller.markup = markup
+        session(edited: editor)
+    }
+
     /// For the debug remote: a finger draws, as when no Apple Pencil was ever used.
     func debugFingerDraws() {
         for editor in editors.values { editor.controller.directTouchMode = .drawing }
@@ -962,7 +986,10 @@ private final class PageRenderer: @unchecked Sendable {
             NotebookPaper.draw(paper, size: size, in: context)
         case .file(let base, let version, let index, let withMarks):
             if document?.version != version {
-                document = PDFDocument(data: base).map { (version, $0) }
+                document = PDFDocument(data: base).map { read in
+                    MarkupDrawings.readInk(from: base, into: read)
+                    return (version, read)
+                }
                 marksByPage = [:]
             }
             guard let page = document?.document.page(at: index) else { break }

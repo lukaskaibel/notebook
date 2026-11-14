@@ -21,8 +21,21 @@ versions follow [semantic versioning](https://semver.org).
   `--->` or an option like `--force`; a backslash in front keeps one as it is. `->` can start a line: the `>` takes
   back the bullet that the `-` made.
 
+### Changed
+
+- What you write on a PDF in Notebook is ink in Preview, Files and Quick Look as well, as their own Markup's is: there
+  you can erase it stroke by stroke, and they draw it sharp. Before, they took it for a picture. Strokes written with
+  an earlier version become ink there with the next change you make to the PDF in Notebook.
+
 ### Fixed
 
+- Handwriting no longer gets blurrier each time a PDF goes back and forth between Notebook and Preview. Saving a PDF in
+  Notebook took the strokes out of what Preview had written on the pages you didn't write on, and left only a picture
+  of them, which Preview then drew again as pixels when it saved; and Preview took Notebook's strokes for a picture
+  too. Now both stay strokes on both sides, on iPhone, iPad and the Mac.
+- Handwriting that Preview on iPhone and iPad adds to a PDF shows in Notebook as sharp as the text, at any zoom, and
+  can be erased and changed with the pen. Notebook showed Preview's picture of it, a little blurry, and couldn't change
+  it.
 - Adding or deleting a table's row or column no longer moves the note: deleting the last row or column with the caret
   in it scrolled the note by about the table's height, on the Mac, iPhone and iPad. The table's top now stays where it
   is on the screen.
