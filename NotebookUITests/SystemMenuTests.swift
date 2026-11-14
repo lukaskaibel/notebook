@@ -94,6 +94,31 @@ final class SystemMenuTests: XCTestCase {
         XCTAssertTrue(labelled("Lined").waitForExistence(timeout: 5), "its submenus open\n" + app.debugDescription)
     }
 
+    /// A card of Recent, touched and held, brings up its note's menu, and Move To in it asks in a sheet. The cards share
+    /// one row of a list, which lifted the whole row for the menu (the iPhone, 2026-11-14): each card has a menu of its
+    /// own now, which lifts it alone.
+    func testHoldARecentCard() throws {
+        note().tap()
+        if !isPad {
+            // Back to the first screen, where Recent is.
+            for title in ["Personal", "Notebook"] {
+                app.navigationBars.buttons.element(boundBy: 0).tap()
+                XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5), app.debugDescription)
+            }
+        }
+        // The card, not the note's row in the iPad's sidebar: it is as tall as its picture.
+        let cards = app.buttons.matching(NSPredicate(format: "label == %@", "Weekend"))
+        let card = try XCTUnwrap(waitFor { cards.allElementsBoundByIndex.first { $0.frame.height > 100 && $0.isHittable } },
+                                 "Recent has a card for Weekend\n" + app.debugDescription)
+        card.press(forDuration: 0.8)
+        let moveTo = labelled("Move To")
+        XCTAssertTrue(moveTo.waitForExistence(timeout: 5), "touching and holding a card opens its menu\n" + app.debugDescription)
+        XCTAssertTrue(labelled("Remind Me…").exists, "the note's menu\n" + app.debugDescription)
+        keepPicture("recent-card-held")
+        moveTo.tap()
+        XCTAssertTrue(starting("Move “Weekend").waitForExistence(timeout: 5), "Move To opens the folder sheet\n" + app.debugDescription)
+    }
+
     // MARK: The bars' menus
 
     /// The ⋯ of the first screen (of the sidebar on the iPad), held: the finger slides down to Settings and lets go on it,
@@ -165,6 +190,16 @@ final class SystemMenuTests: XCTestCase {
         let weekend = starting("Weekend")
         XCTAssertTrue(weekend.waitForExistence(timeout: 10), app.debugDescription)
         return weekend
+    }
+
+    /// What `find` finds within `timeout` seconds, asked again every quarter of a second.
+    private func waitFor<T>(timeout: TimeInterval = 10, _ find: () -> T?) -> T? {
+        let end = Date().addingTimeInterval(timeout)
+        repeat {
+            if let found = find() { return found }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        } while Date() < end
+        return nil
     }
 
     private func labelled(_ label: String) -> XCUIElement {

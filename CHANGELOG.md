@@ -3,6 +3,14 @@
 Everything users would notice, newest first. The format follows [Keep a Changelog](https://keepachangelog.com), and
 versions follow [semantic versioning](https://semver.org).
 
+## [Unreleased]
+
+### Fixed
+
+- On iPhone and iPad, touching and holding a card in Recent lifts only that card for its menu, as Files and Notes do,
+  and leaves the others in place behind it. Before, the whole row of cards came out with it, though the menu was the
+  one card's.
+
 ## [1.3.0] – not released yet
 
 Tables you type in as in Notes; AsciiDoc notes; Quick Look and thumbnails that show a note as Notebook does; the

@@ -198,16 +198,18 @@ struct RecentCardLabel: View {
     }
 }
 
-/// What you opened last, as cards in a row that scrolls sideways, as the iPad and the Mac show them in the sidebar: a
-/// click opens one next to it, and the card stays where it is until a moment after the pointer has left the row. Each
-/// card is as wide as a tile, so two sit under To-dos and Favorites and the third peeks in at the edge; the row stops
-/// at a card each time it is scrolled.
+/// What you opened last, as cards in a row that scrolls sideways, on the iPhone's first screen and in the iPad's and
+/// the Mac's sidebar: a tap or click opens one, and the card stays where it is until a moment after the pointer has
+/// left the row. Each card is as wide as a tile, so two sit under To-dos and Favorites and the third peeks in at the
+/// edge; the row stops at a card each time it is scrolled.
 struct RecentCardRow: View {
     let workspace: Workspace
     /// From the row's edges to the tiles' column, where the cards stop: the Mac's row runs the sidebar's whole width.
     var margin: CGFloat = 0
     /// Asks for the name of a new folder, from a card's menu.
     var newFolder: ((URL) -> Void)?
+    /// Opens a card's file; by default as a link to it would.
+    var open: ((URL) -> Void)?
     /// The row's width, which the cards' follows.
     @State private var rowWidth = HomeStyle.likelyRowWidth
 
@@ -218,10 +220,7 @@ struct RecentCardRow: View {
             // Not lazy: eight cards at most, and each keeps its view as the row reorders, so it slides to its place.
             HStack(alignment: .top, spacing: HomeStyle.spacing) {
                 ForEach(recents, id: \.self) { url in
-                    Button { workspace.open(url) } label: { RecentCardLabel(workspace: workspace, url: url, width: cardWidth) }
-                        .buttonStyle(.plain)
-                        .clearsCardsBeneath()
-                        .appContextMenu(cornerRadius: HomeStyle.cardRadius) { RecentCardMenu.entries(workspace, url, newFolder: newFolder) }
+                    card(url, width: cardWidth)
                         .zIndex(HomeStyle.zIndex(of: url, in: recents))
                 }
             }
@@ -233,9 +232,29 @@ struct RecentCardRow: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
         .scrollIndicators(.hidden)
         .scrollTargetBehavior(.viewAligned)
+        #if os(iOS)
+        .scrollClipDisabled()
+        #endif
         // The cards keep their order while the pointer is on them (`Workspace.holdRecentCards`).
         .onHover { workspace.holdRecentCards($0) }
         .onDisappear { workspace.holdRecentCards(false) }
+    }
+
+    @ViewBuilder
+    private func card(_ url: URL, width: CGFloat) -> some View {
+        let workspace = workspace
+        let open = open ?? { workspace.open($0) }
+        let button = Button { open(url) } label: { RecentCardLabel(workspace: workspace, url: url, width: width) }
+            .buttonStyle(.plain)
+        #if os(iOS)
+        // On the iPhone and the iPad the row is in a list, which would lift all of it for the one card touched and
+        // held: each card has a menu of its own (`HostedWithMenu`).
+        HostedWithMenu(cornerRadius: HomeStyle.cardRadius) { RecentCardMenu.entries(workspace, url, newFolder: newFolder) } content: { button }
+        #else
+        button
+            .clearsCardsBeneath()
+            .appContextMenu(cornerRadius: HomeStyle.cardRadius) { RecentCardMenu.entries(workspace, url, newFolder: newFolder) }
+        #endif
     }
 
     /// As many as a few swipes go through.
