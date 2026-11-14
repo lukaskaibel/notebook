@@ -1,9 +1,9 @@
 import Foundation
 
 /// Files kept on their own, outside every location: chosen with Open File on iPhone and iPad, or handed over by another
-/// app. They show under Files below the folders, in Recent and in Favorites, and open again in later runs from the
-/// bookmark each keeps. What needs the file's folder (Rename, Move To, Duplicate, Delete, a new note next to it) isn't
-/// offered for them: Notebook has the file, not its folder.
+/// app. They show under Files below the folders, in Recent, in Favorites and in search, links find them, and they open
+/// again in later runs from the bookmark each keeps. What needs the file's folder (Rename, Move To, Duplicate, Delete, a
+/// new note next to it) isn't offered for them: Notebook has the file, not its folder.
 extension Workspace {
     /// The kept files that are there to open, by name: not those in a location now (a folder you opened since has
     /// them), gone, or on their way to the Trash.
@@ -11,6 +11,11 @@ extension Workspace {
         keptFiles.map(\.url)
             .filter { location(containing: $0) == nil && FileManager.default.fileExists(atPath: $0.path) && !isLeaving($0) }
             .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+    }
+
+    /// The kept files search reads: those in no location, which reads them itself.
+    var indexedKeptFiles: [URL] {
+        keptFiles.map(\.url).filter { location(containing: $0) == nil }
     }
 
     /// A file kept on its own, and not in a location.
@@ -86,6 +91,8 @@ extension Workspace {
             }
             for move in moved { replacePath(move.from, with: move.to) }
             saveKeptFiles()
+            // Search reads them now that it may: before, the first build may have found them out of reach.
+            index.refreshFiles()
             guard let last, currentURL == nil else { return }
             let url = moved.first { FileNode.samePath($0.from, last) }?.to ?? last
             if FileManager.default.fileExists(atPath: url.path) { open(url) }

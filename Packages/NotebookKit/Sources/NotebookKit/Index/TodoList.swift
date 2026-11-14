@@ -233,7 +233,8 @@ final class TodoList {
                                          cache: [String: Cached]) -> ([Item], [String: Cached]) {
         var fresh: [String: Cached] = [:]
         var notes: [(entry: SearchIndex.Entry, todos: [Todo])] = []
-        for (path, entry) in entries where entry.kind == .note {
+        // The locations' notes: not those kept on their own, which search has too (`SearchIndex.files`).
+        for (path, entry) in entries where entry.kind == .note && entry.locationID != SearchIndex.filesID {
             guard let text = entry.text, !SearchIndex.isHidden(path, in: hidden) else { continue }
             let todos: [Todo]
             if let kept = cache[path], kept.modified == entry.modified, kept.size == entry.size {

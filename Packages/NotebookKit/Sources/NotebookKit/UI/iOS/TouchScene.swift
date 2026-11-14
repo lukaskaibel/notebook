@@ -163,7 +163,7 @@ struct TouchCommands: Commands {
                 .keyboardShortcut("f", modifiers: [.command, .option])
             Button { workspace.togglePalette() } label: { Label("Command Palette", systemImage: "command") }
                 .keyboardShortcut("k", modifiers: .command)
-                .disabled(workspace.locations.isEmpty)
+                .disabled(workspace.locations.isEmpty && workspace.keptFiles.isEmpty)
             if NotebookSettings.shared.showsTodos {
                 Button { workspace.showTodos() } label: { Label("To-dos", systemImage: "checklist") }
                     .keyboardShortcut("r", modifiers: [.command, .shift])

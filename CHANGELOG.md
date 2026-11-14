@@ -14,6 +14,10 @@ versions follow [semantic versioning](https://semver.org).
   Notebook, which leaves the file where it is, instead of Rename, Move To, Duplicate and Delete, which need its
   folder, and a new note made while it is open goes to the default folder. Notebook shows them even with no folder
   opened, and when a folder you choose turns out to be such an app's, the alert now says to use Open File.
+- Search and ⌘K on iPhone and iPad find the files kept under Files, by name and by what is in them, under Files, and
+  a `[[link]]` to one of them finds it, so Copy Link is back in their menus. What you write in one, or the app it
+  comes from changes, is read again: as Notebook saves it, and as Notebook comes back to the front. To-dos still lists
+  only the notes in your folders.
 - Delete in an empty row of a table marks the row in red, with a Delete Row button in it; Delete again, or the button,
   deletes it, and the caret goes to the end of the row above, as Delete on an empty line takes you to the line above.
   In a row that holds something, an empty column is marked instead, and in a table with nothing in it the whole table.

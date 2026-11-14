@@ -252,9 +252,7 @@ struct DocumentScreen: View {
                 }
                 MenuEntry.divider
                 MenuEntry("Copy", "doc.on.doc", keys: "⇧⌘C") { workspace.copyFile(url) }
-                if !isKept {
-                    MenuEntry("Copy Link", "link") { workspace.copyLink(url) }
-                }
+                MenuEntry("Copy Link", "link") { workspace.copyLink(url) }
                 MenuEntry("Export as PDF", "doc.richtext", enabled: isLoaded) { export() }
                 MenuEntry("Print", "printer", keys: "⌘P", enabled: isLoaded) { NoteExporter.print(workspace.editor, title: name) }
                 MenuEntry.divider

@@ -37,7 +37,10 @@ public final class Workspace: NSObject {
     @ObservationIgnored private var places: [URL: EditorController.Place] = [:]
     private(set) var favorites: [String] = []
     /// Files kept on their own, outside every location, with the bookmarks that open them again (`Workspace+KeptFiles`).
-    var keptFiles: [KeptFile] = []
+    /// Search reads them too.
+    var keptFiles: [KeptFile] = [] {
+        didSet { if keptFiles.map(\.path) != oldValue.map(\.path) { index.setFiles(indexedKeptFiles) } }
+    }
     private(set) var recents: [String] = []
     /// `recents` in the order Recent's cards show them: a file you open moves to the front of the cards a moment later,
     /// and not while the pointer is on them (`holdRecentCards`), so the card you click stays where you clicked it.
@@ -574,7 +577,7 @@ public final class Workspace: NSObject {
             MainActor.assumeIsolated { self?.filesChanged(paths) }
         }
         updateHiddenPaths()
-        index.rebuild(locations)
+        index.rebuild(locations, files: indexedKeptFiles)
         scheduleReminders()
         #if os(iOS)
         if learnsFormerDocuments {
@@ -1041,6 +1044,8 @@ public final class Workspace: NSObject {
             document.onSave = { [weak self, weak document] in
                 guard let self, let document else { return }
                 self.noteSaved(document.url)
+                // No location watches a file kept on its own: search reads it again here.
+                if self.isKept(document.url) { self.index.refreshFiles([document.url]) }
             }
             document.onLoad = { [weak self, weak document] _ in
                 guard let self, let document, self.note === document else { return }
@@ -1168,7 +1173,11 @@ public final class Workspace: NSObject {
     public func refresh(thoroughly: Bool = false) {
         guard isStarted else { return }
         looseTodos.read()
-        guard !locations.isEmpty else { return }
+        guard !locations.isEmpty else {
+            // Only files kept on their own: the app they come from may have changed them meanwhile.
+            index.refreshFiles()
+            return
+        }
         var loaded: [FileNode] = []
         func visit(_ node: FileNode) {
             guard let children = node.children else { return }
@@ -1178,7 +1187,13 @@ public final class Workspace: NSObject {
         roots.values.forEach(visit)
         let folders = loaded.map(\.url)
         read(loaded, again: true)
-        if thoroughly { index.rebuild(locations) } else { index.refresh(folders: folders, locations: locations) }
+        if thoroughly {
+            index.rebuild(locations, files: indexedKeptFiles)
+        } else {
+            index.refresh(folders: folders, locations: locations)
+            // The app a kept file comes from may have changed it meanwhile.
+            index.refreshFiles()
+        }
         editor.refreshLinks()
     }
 
