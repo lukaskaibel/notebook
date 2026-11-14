@@ -13,7 +13,7 @@ import PencilKit
 /// draws annotations once at the page's size, and stretches them too.) Reading changes nothing in the file.
 ///
 /// Notebook before 1.4 kept its strokes in an entry of its own (`/NotebookDrawing`); those are read too, and written in
-/// Markup's entry with the next save.
+/// Markup's entry with the next save. So are those Preview left only the look of (`PDFInkLook`).
 enum MarkupDrawings {
     static let extrasKey = PDFAnnotationKey(rawValue: "/AAPL:AKExtras")
     static let annotationKey = "/AAPL:AKAnnotationV2"
@@ -27,7 +27,8 @@ enum MarkupDrawings {
     static func sharpen(_ document: PDFDocument, fileAt url: URL) {
         // Most PDFs have none: their bytes say so without reading a page. The entries are written uncompressed.
         guard let data = try? Data(contentsOf: url, options: .alwaysMapped) else { return }
-        let hasStrokes = data.range(of: Data("AAPL:AKAnnotationV2".utf8)) != nil || data.range(of: Data("NotebookDrawing".utf8)) != nil
+        // (Stamps for Notebook's strokes that Preview left only their look of.)
+        let hasStrokes = ["AAPL:AKAnnotationV2", "NotebookDrawing", "/Stamp"].contains { data.range(of: Data($0.utf8)) != nil }
         let hasPictures = data.range(of: Data("NotebookPicture".utf8)) != nil
         guard hasStrokes || hasPictures else { return }
         // Pages that can draw strokes, from the first one read.
@@ -78,11 +79,19 @@ enum MarkupDrawings {
 
     /// Whether the annotation is one of Notebook's own strokes, written by this version or an earlier one.
     nonisolated static func isNotebookInk(_ annotation: PDFAnnotation) -> Bool {
-        annotation.value(forAnnotationKey: inkMarker) != nil || annotation.value(forAnnotationKey: notebookKey) != nil
+        annotation.value(forAnnotationKey: inkMarker) != nil || isEarlierNotebookInk(annotation)
+    }
+
+    /// Whether the annotation is Notebook's strokes as Notebook before 1.4 wrote them: in Notebook's own entry, or with
+    /// only their look left, which Preview drops everything else of (`PDFInkLook`). Apple's apps take both for a
+    /// picture; Notebook writes them as ink with the next save.
+    nonisolated static func isEarlierNotebookInk(_ annotation: PDFAnnotation) -> Bool {
+        if (objc_getAssociatedObject(annotation, &inkKey) as? InkBox)?.isNotebook == true { return true }
+        return annotation.value(forAnnotationKey: notebookKey) != nil && annotation.value(forAnnotationKey: inkMarker) == nil
     }
 
     /// The ink entries in the file's own bytes put with their annotations, also where PDFKit doesn't hand the entry
-    /// out (squares). For a document just read from `file`.
+    /// out (squares), and Notebook's strokes that only their look is left of. For a document just read from `file`.
     nonisolated static func readInk(from file: CGPDFDocument?, into document: PDFDocument) {
         guard let file else { return }
         for (index, found) in PDFMarkupEntries.inks(in: file) {
@@ -92,7 +101,7 @@ enum MarkupDrawings {
                 guard let match = left.firstIndex(where: { $0.subtype == String((annotation.type ?? "").drop { $0 == "/" }) && $0.rect.isClose(to: annotation.bounds) }) else {
                     continue
                 }
-                objc_setAssociatedObject(annotation, &inkKey, InkBox(left[match].ink, archive: left[match].archive), .OBJC_ASSOCIATION_RETAIN)
+                objc_setAssociatedObject(annotation, &inkKey, InkBox(left[match].ink, archive: left[match].archive, isNotebook: left[match].isNotebook), .OBJC_ASSOCIATION_RETAIN)
                 left.remove(at: match)
             }
         }
@@ -116,9 +125,12 @@ enum MarkupDrawings {
     private final class InkBox: @unchecked Sendable {
         let ink: MarkupInkArchive.Ink
         let archive: String
-        init(_ ink: MarkupInkArchive.Ink, archive: String) {
+        /// Notebook's strokes read from their look.
+        let isNotebook: Bool
+        init(_ ink: MarkupInkArchive.Ink, archive: String, isNotebook: Bool) {
             self.ink = ink
             self.archive = archive
+            self.isNotebook = isNotebook
         }
     }
 

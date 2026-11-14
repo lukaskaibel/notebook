@@ -90,33 +90,59 @@ enum PDFMarkupEntries {
         /// The annotation's `/Rect`, in PDF points.
         var rect: CGRect
         var ink: MarkupInkArchive.Ink
-        /// The entry as it is in the file, to be written back as it was.
+        /// The entry as it is in the file, to be written back as it was; for strokes read from their look, the entry
+        /// they are to have.
         var archive: String
+        /// Notebook's strokes of before 1.4, read from their look: Preview dropped everything else of them.
+        var isNotebook = false
     }
 
-    /// The ink entries on stamps and squares, by page number.
+    /// The ink entries on stamps and squares, by page number, and Notebook's strokes on stamps that have nothing but
+    /// their look left (`PDFInkLook`).
     static func inks(in document: CGPDFDocument) -> [Int: [FoundInk]] {
         var found: [Int: [FoundInk]] = [:]
         guard document.numberOfPages > 0 else { return found }
         for number in 1...document.numberOfPages {
             var annotations: CGPDFArrayRef?
-            guard let page = document.page(at: number)?.dictionary, CGPDFDictionaryGetArray(page, "Annots", &annotations), let annotations else { continue }
+            guard let page = document.page(at: number), let dictionary = page.dictionary,
+                  CGPDFDictionaryGetArray(dictionary, "Annots", &annotations), let annotations else { continue }
             for index in 0..<CGPDFArrayGetCount(annotations) {
                 var annotation: CGPDFDictionaryRef?
                 var name: UnsafePointer<CChar>?
-                var extrasDictionary: CGPDFDictionaryRef?
-                var text: CGPDFStringRef?
                 guard CGPDFArrayGetDictionary(annotations, index, &annotation), let annotation,
                       CGPDFDictionaryGetName(annotation, "Subtype", &name), let name,
-                      ["Stamp", "Square"].contains(String(cString: name)),
-                      CGPDFDictionaryGetDictionary(annotation, String(extras.dropFirst()), &extrasDictionary), let extrasDictionary,
-                      CGPDFDictionaryGetString(extrasDictionary, String(entry.dropFirst()), &text), let text,
-                      let encoded = CGPDFStringCopyTextString(text) as String?,
-                      let ink = MarkupInkArchive.decoded(encoded), let rect = rect(of: annotation) else { continue }
-                found[number - 1, default: []].append(FoundInk(subtype: String(cString: name), rect: rect, ink: ink, archive: encoded))
+                      ["Stamp", "Square"].contains(String(cString: name)), let rect = rect(of: annotation) else { continue }
+                let subtype = String(cString: name)
+                if let (ink, encoded) = markupInk(of: annotation) {
+                    found[number - 1, default: []].append(FoundInk(subtype: subtype, rect: rect, ink: ink, archive: encoded))
+                } else if subtype == "Stamp", page.rotationAngle % 360 == 0, let (ink, encoded) = notebookInk(lookOf: annotation, rect: rect, crop: page.getBoxRect(.cropBox)) {
+                    found[number - 1, default: []].append(FoundInk(subtype: subtype, rect: rect, ink: ink, archive: encoded, isNotebook: true))
+                }
             }
         }
         return found
+    }
+
+    private static func markupInk(of annotation: CGPDFDictionaryRef) -> (MarkupInkArchive.Ink, String)? {
+        var extrasDictionary: CGPDFDictionaryRef?
+        var text: CGPDFStringRef?
+        guard CGPDFDictionaryGetDictionary(annotation, String(extras.dropFirst()), &extrasDictionary), let extrasDictionary,
+              CGPDFDictionaryGetString(extrasDictionary, String(entry.dropFirst()), &text), let text,
+              let encoded = CGPDFStringCopyTextString(text) as String?, let ink = MarkupInkArchive.decoded(encoded) else { return nil }
+        return (ink, encoded)
+    }
+
+    /// Notebook's strokes from the look of a stamp that has no other entry of Notebook's: its strokes in Notebook's
+    /// entry of before 1.4, a picture or paper are read as what they are.
+    private static func notebookInk(lookOf annotation: CGPDFDictionaryRef, rect: CGRect, crop: CGRect) -> (MarkupInkArchive.Ink, String)? {
+        var other: CGPDFObjectRef?
+        for key in [MarkupDrawings.notebookKey, PDFPictures.key, NotebookPaper.key] where CGPDFDictionaryGetObject(annotation, String(key.rawValue.dropFirst()), &other) {
+            return nil
+        }
+        guard let drawing = PDFInkLook.drawing(of: annotation, rect: rect, crop: crop),
+              let encoded = MarkupInkArchive.encoded(drawing, on: crop) else { return nil }
+        // Measured from the crop box's top left, which is the canvas.
+        return (MarkupInkArchive.Ink(drawing: drawing, rectangle: rect, canvas: crop.size), encoded)
     }
 
     private static func rect(of annotation: CGPDFDictionaryRef) -> CGRect? {

@@ -107,6 +107,92 @@ final class MarkupInkTests: XCTestCase {
         }
     }
 
+    // MARK: - Notebook's strokes Preview left only the look of
+
+    func testStrokesPreviewLeftOnlyTheLookOfAreReadBackFromIt() throws {
+        let original = mixedDrawing
+        let url = try strippedPDF(original)
+        let data = try Data(contentsOf: url)
+        let page = try XCTUnwrap(readDocument(data).page(at: 0))
+        let stamp = try XCTUnwrap(page.annotations.first { $0.type == "Stamp" })
+        XCTAssertTrue(MarkupDrawings.isNotebookInk(stamp))
+        let read = try XCTUnwrap(MarkupDrawings.strokes(in: stamp, on: page))
+        XCTAssertEqual(read.area, page.bounds(for: .cropBox))
+        // Each stroke as Notebook drew it: its points every 1 pt, their widths, its colour; a marker where see-through.
+        XCTAssertEqual(read.drawing.strokes.count, original.strokes.count)
+        for (number, (stroke, was)) in zip(read.drawing.strokes, original.strokes).enumerated() {
+            XCTAssertEqual(stroke.ink.inkType, was.ink.inkType == .marker ? .marker : .pen, "stroke \(number)")
+            assertClose(rgba(stroke.ink.color), rgba(was.ink.color), accuracy: 0.01, "stroke \(number)")
+            let drawn = was.path.interpolatedPoints(by: .distance(1)).map { $0 }
+            let points = Array(stroke.path)
+            XCTAssertEqual(points.count, drawn.count, "stroke \(number)")
+            for (point, shown) in zip(points, drawn) {
+                XCTAssertEqual(point.location.x, shown.location.x, accuracy: 0.01)
+                XCTAssertEqual(point.location.y, shown.location.y, accuracy: 0.01)
+                if was.ink.inkType != .marker { XCTAssertEqual(point.size.width, max(shown.size.width, 0.3), accuracy: 0.16) }
+            }
+        }
+        // Opened, the stamp is hidden and the page draws the strokes, sharp; a canvas over it starts with them.
+        let shown = try XCTUnwrap(PDFDocument(url: url))
+        MarkupDrawings.sharpen(shown, fileAt: url)
+        let shownPage = try XCTUnwrap(shown.page(at: 0))
+        XCTAssertEqual(shownPage.annotations.first { $0.type == "Stamp" }?.shouldDisplay, false)
+        XCTAssertEqual(MarkupDrawings.drawing(on: shownPage).strokes.count, original.strokes.count)
+    }
+
+    func testStrokesPreviewLeftOnlyTheLookOfAreInkAgainWithTheNextSave() throws {
+        let url = try strippedPDF(mixedDrawing, pages: 2)
+        // Something changed on another page: the stamp on the first one is Notebook's ink again too.
+        try PDFInk.change(url) { PDFInk.put([1: self.drawing], in: $0) }
+        let data = try Data(contentsOf: url)
+        try keep(data, as: "Ink again.pdf")
+        let entries = try notebookEntries(in: data)
+        XCTAssertEqual(entries.map(\.page), [0, 1])
+        XCTAssertEqual(entries.first?.ink.drawing.strokes.count, mixedDrawing.strokes.count)
+        for entry in entries { try assertMatchingCopy(entry) }
+        let page = try XCTUnwrap(readDocument(data).page(at: 0))
+        XCTAssertEqual(page.annotations.filter { $0.type == "Stamp" }.count, 1, "the stamp with only its look is gone")
+        // Read from its entry now, not from its look.
+        XCTAssertFalse(page.annotations.contains(where: MarkupDrawings.isEarlierNotebookInk))
+    }
+
+    func testWritingOnAPageWithStrokesPreviewLeftOnlyTheLookOfTakesThemIn() throws {
+        let url = try strippedPDF(mixedDrawing)
+        let shown = try XCTUnwrap(PDFDocument(url: url))
+        MarkupDrawings.sharpen(shown, fileAt: url)
+        let canvas = MarkupDrawings.drawing(on: try XCTUnwrap(shown.page(at: 0)))
+        try PDFInk.change(url) { PDFInk.put([0: canvas.appending(self.drawing)], in: $0) }
+        // One stamp with all the strokes, no stuck one beside it.
+        let data = try Data(contentsOf: url)
+        let page = try XCTUnwrap(readDocument(data).page(at: 0))
+        XCTAssertEqual(page.annotations.filter { $0.type == "Stamp" }.count, 1)
+        let entry = try XCTUnwrap(try notebookEntries(in: data).first)
+        XCTAssertEqual(entry.ink.drawing.strokes.count, mixedDrawing.strokes.count + 2)
+    }
+
+    func testOtherStampsMadeOfLinesStayAsTheyAre() throws {
+        // Notebook's look with an author: someone else's stamp.
+        var url = try strippedPDF(mixedDrawing) { $0.userName = "Someone" }
+        var page = try XCTUnwrap(readDocument(try Data(contentsOf: url)).page(at: 0))
+        XCTAssertNil(page.annotations.lazy.compactMap { MarkupDrawings.strokes(in: $0, on: page) }.first)
+        // Lines not drawn as Notebook draws them: square ends, points far apart.
+        let document = try XCTUnwrap(PDFDocument(url: try blankPDF(pages: 1)))
+        let lines = try XCTUnwrap(document.page(at: 0))
+        lines.addAnnotation(Lines(bounds: CGRect(x: 50, y: 500, width: 300, height: 200), round: false, step: 1))
+        lines.addAnnotation(Lines(bounds: CGRect(x: 50, y: 100, width: 300, height: 200), round: true, step: 20))
+        url = folder.appendingPathComponent("Lines.pdf")
+        XCTAssertTrue(document.write(to: url))
+        page = try XCTUnwrap(readDocument(try Data(contentsOf: url)).page(at: 0))
+        XCTAssertEqual(page.annotations.count, 2)
+        XCTAssertNil(page.annotations.lazy.compactMap { MarkupDrawings.strokes(in: $0, on: page) }.first)
+        // As control: the same drawn as Notebook draws, points 1 pt apart with round ends, is read.
+        lines.annotations.forEach(lines.removeAnnotation)
+        lines.addAnnotation(Lines(bounds: CGRect(x: 50, y: 500, width: 300, height: 200), round: true, step: 1))
+        XCTAssertTrue(document.write(to: url))
+        page = try XCTUnwrap(readDocument(try Data(contentsOf: url)).page(at: 0))
+        XCTAssertNotNil(page.annotations.lazy.compactMap { MarkupDrawings.strokes(in: $0, on: page) }.first)
+    }
+
     // MARK: - Preview's strokes
 
     func testAPencilKitDrawingSavedByPreviewShowsWhereItIsAndSharp() throws {
@@ -240,6 +326,88 @@ final class MarkupInkTests: XCTestCase {
 
     private var drawing: PKDrawing {
         PKDrawing(strokes: [stroke([CGPoint(x: 80, y: 120), CGPoint(x: 260, y: 140)]), stroke([CGPoint(x: 90, y: 200), CGPoint(x: 300, y: 260)])])
+    }
+
+    /// Strokes of all kinds Notebook draws: pens getting wider and narrower, in colour, a marker, a dot.
+    private var mixedDrawing: PKDrawing {
+        func path(_ points: [CGPoint], sizes: (Int) -> CGFloat) -> PKStrokePath {
+            PKStrokePath(controlPoints: points.enumerated().map { index, point in
+                PKStrokePoint(location: point, timeOffset: Double(index) / 60, size: CGSize(width: sizes(index), height: sizes(index)), opacity: 1, force: 1, azimuth: 0, altitude: .pi / 2)
+            }, creationDate: Date())
+        }
+        let wave = (0..<120).map { CGPoint(x: 60 + CGFloat($0) * 1.5, y: 300 + 20 * sin(CGFloat($0) / 10)) }
+        let line = (0..<80).map { CGPoint(x: 70 + CGFloat($0) * 2, y: 420 + CGFloat($0) * 0.5) }
+        let blue = NSColor(srgbRed: 0.1, green: 0.4, blue: 0.9, alpha: 1)
+        let yellow = NSColor(srgbRed: 1, green: 0.85, blue: 0.1, alpha: 1)
+        return PKDrawing(strokes: [
+            PKStroke(ink: PKInk(.pen, color: .black), path: path(wave) { 2 + CGFloat($0) / 40 }),
+            PKStroke(ink: PKInk(.pen, color: blue), path: path(line) { _ in 2.8 }),
+            PKStroke(ink: PKInk(.marker, color: yellow), path: path(line.map { CGPoint(x: $0.x, y: $0.y + 40) }) { _ in 14 }),
+            PKStroke(ink: PKInk(.pen, color: .black), path: path([CGPoint(x: 400, y: 500)]) { _ in 3 }),
+        ])
+    }
+
+    /// A PDF with `drawing` on its first page as Notebook 1.3 wrote it and Preview on iPhone and iPad saved it again:
+    /// the stamp and its look are left, Notebook's entry is gone, Preview's own is in its place.
+    private func strippedPDF(_ drawing: PKDrawing, pages: Int = 1, change: (PDFAnnotation) -> Void = { _ in }) throws -> URL {
+        let url = try blankPDF(pages: pages)
+        let document = try XCTUnwrap(PDFDocument(url: url))
+        let page = try XCTUnwrap(document.page(at: 0))
+        let stamp = InkAnnotation(drawing: drawing, on: page)
+        change(stamp)
+        page.addAnnotation(stamp)
+        XCTAssertTrue(document.write(to: url))
+        // Replaced in place, the same length, so the file's table of objects stays right.
+        var data = try Data(contentsOf: url)
+        for (key, replacement) in [("/AAPL:AKAnnotationV2", "/PPKID"), ("/\(PDFMarkupEntries.notebookMarker)", "/PPKHash")] {
+            let padded = Data((replacement + String(repeating: "x", count: key.count - replacement.count)).utf8)
+            while let range = data.range(of: Data(key.utf8)) { data.replaceSubrange(range, with: padded) }
+        }
+        XCTAssertNil(data.range(of: Data("NotebookDrawing".utf8)))
+        try data.write(to: url)
+        try keep(data, as: "Stripped.pdf")
+        return url
+    }
+
+    private func rgba(_ color: NSColor) -> [CGFloat] {
+        guard let srgb = color.usingColorSpace(.sRGB) else { return [] }
+        return [srgb.redComponent, srgb.greenComponent, srgb.blueComponent, srgb.alphaComponent]
+    }
+
+    private func assertClose(_ first: [CGFloat], _ second: [CGFloat], accuracy: CGFloat, _ message: String, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertEqual(first.count, second.count, message, file: file, line: line)
+        for (a, b) in zip(first, second) { XCTAssertEqual(a, b, accuracy: accuracy, message, file: file, line: line) }
+    }
+
+    /// A stamp of lines from point to point, `step` apart, round or square at their ends, with no author.
+    private final class Lines: PDFAnnotation {
+        let round: Bool
+        let step: CGFloat
+
+        init(bounds: CGRect, round: Bool, step: CGFloat) {
+            self.round = round
+            self.step = step
+            super.init(bounds: bounds, forType: .stamp, withProperties: nil)
+            userName = ""
+        }
+
+        required init?(coder: NSCoder) { nil }
+
+        override func draw(with box: PDFDisplayBox, in context: CGContext) {
+            context.setLineCap(round ? .round : .butt)
+            context.setLineJoin(round ? .round : .miter)
+            context.setStrokeColor(CGColor(colorSpace: CGColorSpaceCreateDeviceRGB(), components: [0.2, 0.2, 0.2, 1])!)
+            context.setLineWidth(2)
+            for row in 0..<3 {
+                context.move(to: CGPoint(x: bounds.minX + 10, y: bounds.minY + 30 + CGFloat(row) * 50))
+                var x = bounds.minX + 10
+                while x < bounds.maxX - 10 - step {
+                    x += step
+                    context.addLine(to: CGPoint(x: x, y: bounds.minY + 30 + CGFloat(row) * 50 + sin(x / 15) * 8))
+                }
+                context.strokePath()
+            }
+        }
     }
 
     private func blankPDF(pages: Int) throws -> URL {
