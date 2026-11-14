@@ -14,6 +14,12 @@ versions follow [semantic versioning](https://semver.org).
   doesn't go on to delete it.
 - ⌥⌘⌫ deletes the row you're in and ⌃⌘⌫ the column, as in Numbers, on the Mac and on an iPad with a keyboard. The
   menus of a row's and a column's handle have Clear, which empties its cells and keeps the table as it is.
+- Arrows and dashes in Markdown notes look like what they stand for, as they already did in AsciiDoc notes: `->` shows
+  as →, `<-` as ←, `<->` as ↔, `-->` as a long ⟶, `=>` as ⇒ and `<=>` as ⇔; `--` between words as an en dash (–) and
+  `---` as an em dash (—); `...` as an ellipsis (…); and `<=`, `>=`, `!=` and `+-` as ≤, ≥, ≠ and ±. The file keeps
+  what you typed, and next to the caret it shows. Not in code, maths or a link's address, nor in a longer run such as
+  `--->` or an option like `--force`; a backslash in front keeps one as it is. `->` can start a line: the `>` takes
+  back the bullet that the `-` made.
 
 ### Fixed
 

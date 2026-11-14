@@ -274,7 +274,9 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
         case .todoPill(let pill):
             return NSRect(x: 0, y: 0, width: pill.width(after: bodyFont(at: index)), height: 4)
         case .replacement(let shown):
-            return NSRect(x: 0, y: 0, width: ceil((shown as NSString).size(withAttributes: [.font: bodyFont(at: index)]).width), height: 4)
+            let face = bodyFont(at: index)
+            if let shape = SignShape.shape(shown, font: face) { return NSRect(x: 0, y: 0, width: ceil(shape.advance), height: 4) }
+            return NSRect(x: 0, y: 0, width: ceil((shown as NSString).size(withAttributes: [.font: face]).width), height: 4)
         case .listNumber(let label):
             // With the space after it, which is hidden with the rest of the marker.
             return NSRect(x: 0, y: 0, width: MarkdownStyler.numberWidth(label + " "), height: 4)
@@ -574,7 +576,11 @@ final class NotebookLayoutManager: NSLayoutManager, @preconcurrency NSLayoutMana
         case .replacement(let shown):
             let color = (textStorage?.attribute(.foregroundColor, at: objectRange.location, effectiveRange: nil) as? NSColor) ?? Theme.textBody
             let face = bodyFont(at: objectRange.location)
-            NSAttributedString(string: shown, attributes: [.font: face, .foregroundColor: color]).draw(at: CGPoint(x: rect.minX, y: baseline - face.ascender))
+            if let shape = SignShape.shape(shown, font: face) {
+                SignShape.draw(shape, at: CGPoint(x: rect.minX, y: baseline), color: color)
+            } else {
+                NSAttributedString(string: shown, attributes: [.font: face, .foregroundColor: color]).draw(at: CGPoint(x: rect.minX, y: baseline - face.ascender))
+            }
 
         case .listNumber(let label):
             let text = NSAttributedString(string: label, attributes: [.font: MarkdownStyler.numberFont, .foregroundColor: Theme.textTertiary])

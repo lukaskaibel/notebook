@@ -327,7 +327,8 @@ public struct InlineSpan: Equatable {
         /// AsciiDoc's `^super^` and `~sub~`.
         case superscript
         case `subscript`
-        /// AsciiDoc's typographic replacements: ` -- ` reads as an em dash, `->` as an arrow, `(C)` as ©.
+        /// A sign drawn for what is written: in AsciiDoc its replacements (` -- ` an em dash, `->` an arrow, `(C)` ©),
+        /// in Markdown arrows, dashes, an ellipsis and the signs of comparison (`->` →, `--` –, `<=` ≤).
         case replacement(String)
 
         var isStyle: Bool {

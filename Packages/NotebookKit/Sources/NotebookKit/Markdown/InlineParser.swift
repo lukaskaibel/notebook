@@ -30,6 +30,11 @@ enum InlineParser {
 
         while i < end {
             let c = u[i]
+            if isSignStart(c), let sign = sign(u, i, range) {
+                spans.append(sign)
+                i = sign.range.upperBound
+                continue
+            }
             switch c {
             case 92: // \ escape
                 if i + 1 < end, isASCIIPunctuation(u[i + 1]) {
@@ -128,6 +133,13 @@ enum InlineParser {
                 }
 
             case 60: // < autolink
+                // An HTML comment: nothing in it is Markdown, and the `-->` that ends it is no arrow.
+                if i + 3 < end, u[i + 1] == 33, u[i + 2] == 45, u[i + 3] == 45 {
+                    var j = i + 4
+                    while j + 2 < end, !(u[j] == 45 && u[j + 1] == 45 && u[j + 2] == 62) { j += 1 }
+                    i = j + 2 < end ? j + 3 : i + 4
+                    continue
+                }
                 if let close = (i + 1..<end).first(where: { u[$0] == 62 || u[$0] == 32 || u[$0] == 60 }), u[close] == 62, close > i + 1 {
                     let text = string(u, NSRange(location: i + 1, length: close - i - 1))
                     if text.hasPrefix("http://") || text.hasPrefix("https://") || text.hasPrefix("mailto:") || (text.contains("@") && !text.contains("/")) {
@@ -415,6 +427,49 @@ enum InlineParser {
         return j > i + prefix ? j : nil
     }
 
+    // MARK: - Signs
+
+    /// What some characters are drawn as, as many writing apps and AsciiDoc draw them: arrows, dashes (Pandoc's: `--`
+    /// an en dash, `---` an em dash), an ellipsis and the signs of comparison. The longest first. The file keeps what
+    /// was typed, and next to the caret it shows.
+    private static let signs: [(written: [UInt16], shown: String)] = {
+        let pairs: [(String, String)] = [
+            ("<-->", "⟷"), ("<->", "↔"), ("<--", "⟵"), ("-->", "⟶"), ("<=>", "⇔"), ("+/-", "±"),
+            ("<-", "←"), ("->", "→"), ("=>", "⇒"), ("<=", "≤"), (">=", "≥"), ("!=", "≠"), ("+-", "±"),
+            ("...", "…"), ("---", "—"), ("--", "–"),
+        ]
+        return pairs.map { (Array($0.0.utf16), $0.1) }
+    }()
+
+    /// `-`, `<`, `=`, `>`, `!`, `.` or `+`: a sign can start with it.
+    private static func isSignStart(_ c: UInt16) -> Bool {
+        c == 45 || c == 60 || c == 61 || c == 62 || c == 33 || c == 46 || c == 43
+    }
+
+    /// The sign written at `i`, if one is: not when it is part of a longer run of what signs are made of (`<==`,
+    /// `--->`, `!==`, `....`), and dashes only between spaces or between two words or numbers (`10--20`), so an option
+    /// such as `--force` stays as it is.
+    private static func sign(_ u: [UInt16], _ i: Int, _ range: NSRange) -> InlineSpan? {
+        let end = range.upperBound
+        let before: UInt16? = i > range.location ? u[i - 1] : nil
+        for (written, shown) in signs where written[0] == u[i] {
+            let count = written.count
+            guard i + count <= end, (1..<count).allSatisfy({ u[i + $0] == written[$0] }) else { continue }
+            let after: UInt16? = i + count < end ? u[i + count] : nil
+            let joins: (UInt16) -> Bool = written[0] == 46 ? { $0 == 46 } : { $0 == 45 || $0 == 60 || $0 == 61 || $0 == 62 || $0 == 43 }
+            if let before, joins(before) { return nil }
+            if let after, joins(after) { return nil }
+            if written.allSatisfy({ $0 == 45 }) {
+                let spaced = (before.map(isWhitespace) ?? true) && (after.map(isWhitespace) ?? true) && (before != nil || after != nil)
+                let joined = before.map(isWordCharacter) == true && after.map(isWordCharacter) == true
+                guard spaced || joined else { return nil }
+            }
+            return InlineSpan(kind: .replacement(shown), range: NSRange(location: i, length: count),
+                              markers: [NSRange(location: i, length: count)], content: NSRange(location: i + count, length: 0))
+        }
+        return nil
+    }
+
     // MARK: - Characters
 
     static func string(_ u: [UInt16], _ range: NSRange) -> String {
@@ -438,5 +493,12 @@ enum InlineParser {
 
     private static func isAlphanumeric(_ c: UInt16) -> Bool {
         (48...57).contains(c) || (65...90).contains(c) || (97...122).contains(c)
+    }
+
+    /// A letter or a digit, in any script.
+    private static func isWordCharacter(_ c: UInt16) -> Bool {
+        if isAlphanumeric(c) { return true }
+        guard c > 127, let scalar = UnicodeScalar(c) else { return false }
+        return scalar.properties.isAlphabetic || scalar.properties.numericType != nil
     }
 }

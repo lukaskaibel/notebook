@@ -557,12 +557,12 @@ enum MarkdownEditing {
         return State(result as String, caret: caret, syntax: document.syntax)
     }
 
-    /// The small things typing does: "-" at the start of a line becomes a bullet with its space, text typed right
-    /// after `##` gets the space a heading needs, a space typed after a list marker's own is left out, "- [" and "]"
-    /// make a checkbox, and a closing mark typed where the same mark is already steps over it. A `*` or `_` typed at
-    /// either end of italics goes on the other end too, which makes them bold, and one typed at either end of
-    /// `unmarked`, the text whose marks Delete just took off, styles it again: marks come back as they went, a pair at
-    /// a time.
+    /// The small things typing does: "-" at the start of a line becomes a bullet with its space (a "-" or ">" after it
+    /// takes the bullet back, for a rule or an arrow), text typed right after `##` gets the space a heading needs, a
+    /// space typed after a list marker's own is left out, "- [" and "]" make a checkbox, and a closing mark typed where
+    /// the same mark is already steps over it. A `*` or `_` typed at either end of italics goes on the other end too,
+    /// which makes them bold, and one typed at either end of `unmarked`, the text whose marks Delete just took off,
+    /// styles it again: marks come back as they went, a pair at a time.
     static func insert(_ typed: String, in state: State, unmarked: NSRange? = nil) -> State? {
         guard state.selection.length == 0, !typed.isEmpty else { return nil }
         let document = Document(state.text, syntax: state.syntax)
@@ -588,6 +588,11 @@ enum MarkdownEditing {
             // Three dashes still make a rule.
             if line.kind == .bullet, after.isEmpty, before.hasSuffix("- "), before.dropLast(2).allSatisfy({ $0 == " " || $0 == "\t" }) {
                 return document.replacing(NSRange(location: caret - 1, length: 1), with: "-", caret: caret)
+            }
+        case ">":
+            // And an arrow can start a line: `>` right after the dash that made a bullet takes the bullet back, `->`.
+            if line.kind == .bullet, after.isEmpty, before.hasSuffix("- "), before.dropLast(2).allSatisfy({ $0 == " " || $0 == "\t" }) {
+                return document.replacing(NSRange(location: caret - 1, length: 1), with: ">", caret: caret)
             }
         case "#":
             // #s typed in front of text: two or more make a heading, so the space after the last one goes in. The
