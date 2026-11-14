@@ -23,6 +23,8 @@ struct NewNoteButton: View {
             Label("New Note", systemImage: "square.and.pencil")
         }
         .modifier(Prominent(isOn: isProminent))
+        // Nowhere to put it: no folder is open in Notebook, only files kept on their own.
+        .disabled(folder == nil && workspace.folderForNewNote == nil)
         .popover(isPresented: $asks) {
             // Worked out as it opens, not kept in state by the button's action: a popover of a toolbar item is built
             // with the state's first value, so on the iPhone it came out side by side and ran off the screen.

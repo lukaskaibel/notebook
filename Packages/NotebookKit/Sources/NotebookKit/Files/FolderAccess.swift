@@ -181,7 +181,7 @@ enum FolderAccess {
     /// Puts `controller` in front once nothing is on its way in or out: a picker closed a moment ago, the camera's or
     /// Photos', is still leaving, and UIKit drops what is put over it meanwhile. True once it is in front; false when
     /// it can't be shown.
-    private static func present(_ controller: UIViewController) async -> Bool {
+    static func present(_ controller: UIViewController) async -> Bool {
         for _ in 0..<100 {
             guard let root = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.keyWindow?.rootViewController }).first else {
                 return false
@@ -216,7 +216,7 @@ enum FolderAccess {
 #if os(iOS)
 /// Resumes a continuation once: with the answer given, or with what says it couldn't be asked.
 @MainActor
-private final class Reply<Value> {
+final class Reply<Value> {
     private var continuation: CheckedContinuation<Value, Never>?
 
     init(_ continuation: CheckedContinuation<Value, Never>) {

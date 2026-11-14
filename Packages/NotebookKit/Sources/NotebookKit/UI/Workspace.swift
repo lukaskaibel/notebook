@@ -36,6 +36,8 @@ public final class Workspace: NSObject {
     /// Where you were in each note, to come back to.
     @ObservationIgnored private var places: [URL: EditorController.Place] = [:]
     private(set) var favorites: [String] = []
+    /// Files kept on their own, outside every location, with the bookmarks that open them again (`Workspace+KeptFiles`).
+    var keptFiles: [KeptFile] = []
     private(set) var recents: [String] = []
     /// `recents` in the order Recent's cards show them: a file you open moves to the front of the cards a moment later,
     /// and not while the pointer is on them (`holdRecentCards`), so the card you click stays where you clicked it.
@@ -405,6 +407,7 @@ public final class Workspace: NSObject {
             chosenDefaultFolder = nil
         } else {
             locations = LocationStore.load()
+            keptFiles = KeptFileStore.load()
             hidden = HiddenFolders()
             reminders = Reminders()
             // Your own notes: the days you use Notebook on count towards asking for a rating.
@@ -441,7 +444,12 @@ public final class Workspace: NSObject {
         tellAboutUnsavedNotes()
         let last = temporaryLocations ? nil : UserDefaults.standard.string(forKey: "lastOpened").map(Self.rerooted)
         locationsChanged(resolving: true, reading: last.map { [$0] } ?? [])
-        if let last, FileManager.default.fileExists(atPath: last) {
+        // A kept file opens once its bookmark has given access to it again (`resolveKeptFiles`).
+        let keptLast = last.map { URL(fileURLWithPath: $0) }.flatMap { isKept($0) ? $0 : nil }
+        resolveKeptFiles(thenOpen: keptLast)
+        if keptLast != nil {
+            return
+        } else if let last, FileManager.default.fileExists(atPath: last) {
             open(URL(fileURLWithPath: last))
         } else if let last {
             #if os(iOS)
@@ -627,18 +635,26 @@ public final class Workspace: NSObject {
         #else
         let device = Location.onDeviceName
         #endif
-        reportInFront("Notebook can’t open “\(name)”.", Self.noFolderReason + " Choose a folder in iCloud Drive or \(device) instead.")
+        reportInFront("Notebook can’t open “\(name)”.", Self.noFolderReason + " Choose a folder in iCloud Drive or \(device) instead."
+                      + Self.singleFilesHint)
     }
 
     /// The same for a location in the sidebar from before Notebook looked, with a button that takes it out of the
     /// sidebar there and then, rather than sending you to its menu.
     func unreadable(_ location: Location) -> Problem {
-        Problem(title: "Notebook can’t read “\(location.name)”.", message: Self.noFolderReason + " Removing it from the sidebar deletes nothing.",
-                removableLocation: location.id)
+        Problem(title: "Notebook can’t read “\(location.name)”.", message: Self.noFolderReason + " Removing it from the sidebar deletes nothing."
+                + Self.singleFilesHint, removableLocation: location.id)
     }
 
     private static let noFolderReason = "The app it comes from gives other apps only single files, not folders, so Notebook can’t "
         + "see what’s in it. Nextcloud is one of these apps."
+
+    /// What such an app does give: its files, which Open File keeps on their own (`Workspace+KeptFiles`).
+    #if os(iOS)
+    private static let singleFilesHint = " To keep its notes in Notebook one by one, use Open File."
+    #else
+    private static let singleFilesHint = ""
+    #endif
 
     /// Of folders dragged onto the sidebar, the ones it could add: folders it doesn't show yet. Nil when the drag
     /// has anything else in it, such as a file or a folder already in a location.
@@ -1131,13 +1147,15 @@ public final class Workspace: NSObject {
     }
 
     /// A file or folder handed over by another app (the Files app's Open With, a share): a folder becomes a location,
-    /// a file opens, from its folder if Notebook shows that.
+    /// a file opens, from its folder if Notebook shows that, or else kept on its own, to find again under Files.
     public func openFromOutside(_ url: URL) {
         start()
         guard url.isFileURL else { return }
         _ = url.startAccessingSecurityScopedResource()
         if (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
             if location(containing: url) == nil { addLocation(url) }
+        } else {
+            keep(url)
         }
         open(url)
     }
@@ -1601,11 +1619,12 @@ public final class Workspace: NSObject {
         recentCards.map { URL(fileURLWithPath: $0) }.filter(isListable)
     }
 
-    /// A favourite or recent file that is still there to open: in one of the locations, which Notebook can read. One
-    /// from a location you took out stays on the list, and comes back if you add the folder again, but the app can no
-    /// longer read it (on the Mac the sandbox lets it see that the file is there, not what is in it).
+    /// A favourite or recent file that is still there to open: in one of the locations, or kept on its own, which
+    /// Notebook can read. One from a location you took out stays on the list, and comes back if you add the folder
+    /// again, but the app can no longer read it (on the Mac the sandbox lets it see that the file is there, not what is
+    /// in it).
     private func isListable(_ url: URL) -> Bool {
-        location(containing: url) != nil && FileManager.default.fileExists(atPath: url.path) && !isLeaving(url)
+        (location(containing: url) != nil || isKept(url)) && FileManager.default.fileExists(atPath: url.path) && !isLeaving(url)
     }
 
     func clearRecents() {
@@ -1653,13 +1672,14 @@ public final class Workspace: NSObject {
         if hold { recentCardsUpdate?.cancel() } else { scheduleRecentCards() }
     }
 
-    private func replacePath(_ old: URL, with new: URL) {
+    func replacePath(_ old: URL, with new: URL) {
         func fix(_ path: String) -> String { Self.relocated(path, from: old.path, to: new.path) }
         func fix(_ url: URL) -> URL { Self.relocated(url, from: old, to: new) }
         hiddenFolderMoved(from: old, to: new)
         reminderMoved(from: old, to: new)
         defaultFolderMoved(from: old, to: new)
         widgetNoteMoved(from: old, to: new)
+        keptFileMoved(from: old, to: new)
         favorites = favorites.map(fix)
         recents = recents.map(fix)
         recentCards = recentCards.map(fix)
@@ -1689,7 +1709,8 @@ public final class Workspace: NSObject {
     /// Where a new note goes: next to the open one, into the folder selected in the sidebar, or the default folder.
     var folderForNewNote: URL? {
         if let selectedFolder { return selectedFolder }
-        if let currentURL { return currentURL.deletingLastPathComponent() }
+        // Not next to a file kept on its own: Notebook has that file, not its folder.
+        if let currentURL, !isKept(currentURL) { return currentURL.deletingLastPathComponent() }
         return defaultFolder
     }
 

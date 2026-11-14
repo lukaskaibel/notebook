@@ -44,7 +44,8 @@ struct TouchRootView: View {
 
     var body: some View {
         Group {
-            if workspace.locations.isEmpty {
+            // Files kept on their own are enough to show: Nextcloud, say, gives Notebook no folders.
+            if workspace.locations.isEmpty && workspace.keptFiles.isEmpty {
                 TouchWelcomeView(workspace: workspace)
             } else if sizeClass == .compact {
                 PhoneBrowser(workspace: workspace)
@@ -103,6 +104,9 @@ struct TouchCommands: Commands {
             Button { workspace.newFolderRequest += 1 } label: { Label("New Folder", systemImage: "folder.badge.plus") }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
                 .disabled(workspace.locations.isEmpty)
+            Divider()
+            Button { FileOpener.choose(for: workspace) } label: { Label("Open File…", systemImage: "doc.badge.plus") }
+                .keyboardShortcut("o", modifiers: .command)
         }
         CommandGroup(replacing: .printItem) {
             Button { NoteExporter.print(workspace.editor, title: workspace.currentTitle) } label: { Label("Print…", systemImage: "printer") }
@@ -241,6 +245,9 @@ struct TouchWelcomeView: View {
                 }
                 .font(.subheadline)
                 Button("Try Sample Notes") { workspace.addSampleNotes(in: Workspace.onDeviceFolder) }
+                    .font(.subheadline)
+                // For an app that gives single files but no folders, such as Nextcloud.
+                Button("Open a File") { FileOpener.choose(for: workspace) }
                     .font(.subheadline)
                 Text("Pick iCloud Drive to have the notes you write on your Mac here too.")
                     .font(.footnote)

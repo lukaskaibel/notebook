@@ -163,6 +163,32 @@ struct HomeFileRows: View {
     }
 }
 
+/// The files kept on their own, under the folders on the first screen: each opens its screen, and a swipe or its menu
+/// takes it off the list, leaving the file where it is.
+struct KeptFileRows: View {
+    let workspace: Workspace
+    @Binding var newFolderIn: URL?
+
+    var body: some View {
+        let kept = workspace.keptFileURLs
+        if !kept.isEmpty {
+            Section("Files") {
+                ForEach(kept, id: \.self) { url in
+                    NavigationLink(value: Page(url: url, isFolder: false)) { workspace.row(for: url) }
+                        .fileDragAndDrop(url, isFolder: false, workspace: workspace)
+                        .appContextMenu { FileActions.entries(workspace, url) { newFolderIn = $0 } }
+                        .swipeActions(edge: .trailing) {
+                            Button { withAnimation { workspace.removeKeptFile(url) } } label: {
+                                Label("Remove", systemImage: "minus.circle")
+                            }
+                            .tint(.red)
+                        }
+                }
+            }
+        }
+    }
+}
+
 /// Your favourites: on the iPhone a screen of their own, from their tile on the first screen; on the iPad next to the
 /// sidebar, in place of a note. Notes and folders you starred, in the order you starred them.
 struct FavoritesScreen: View {

@@ -159,8 +159,11 @@ struct PadBrowser: View {
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
                         AppMenuButton {
-                            MenuEntry("New Folder", "folder.badge.plus", keys: "⇧⌘N") { newFolderIn = newFolderParent }
+                            if !workspace.locations.isEmpty {
+                                MenuEntry("New Folder", "folder.badge.plus", keys: "⇧⌘N") { newFolderIn = newFolderParent }
+                            }
                             MenuEntry("Open Folder", "plus.rectangle.on.folder") { addsLocation = true }
+                            MenuEntry("Open File", "doc.badge.plus", keys: "⌘O") { FileOpener.choose(for: workspace) }
                             if let folder = workspace.selectedFolder ?? workspace.folderForNewNote {
                                 MenuEntry("Import from Apple Notes", "square.and.arrow.down.on.square") { workspace.appleNotesImportFolder = folder }
                             }
@@ -211,8 +214,8 @@ struct PadBrowser: View {
 }
 
 /// The sidebar: search results while you search; otherwise the iPhone's first screen, To-dos and Favorites as tiles,
-/// what you opened last as cards, and a section for every location, with its folders opening in place, as in the Mac's
-/// sidebar.
+/// what you opened last as cards, a section for every location, with its folders opening in place, as in the Mac's
+/// sidebar, and the files kept on their own under Files.
 struct PadSidebar: View {
     @Bindable var workspace: Workspace
     let query: String
@@ -248,6 +251,18 @@ struct PadSidebar: View {
                         } header: {
                             LocationHeader(workspace: workspace, location: location) { newFolderIn = $0 }
                                 .fileDragAndDrop(location.url, isFolder: true, workspace: workspace, canDrag: false)
+                        }
+                    }
+                    let kept = workspace.keptFileURLs
+                    if !kept.isEmpty {
+                        Section("Files", isExpanded: sectionBinding("Files")) {
+                            ForEach(kept, id: \.self) { url in
+                                workspace.row(for: url)
+                                    .tag(url)
+                                    .id(url)
+                                    .fileDragAndDrop(url, isFolder: false, workspace: workspace)
+                                    .appContextMenu { FileActions.entries(workspace, url) }
+                            }
                         }
                     }
                 }
