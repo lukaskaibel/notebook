@@ -135,6 +135,9 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     var hoveredTable: Int?
     /// A row or column picked by its handle while its menu is open.
     var tableBand: (location: Int, band: TableBand)?
+    /// What Delete in an empty cell marked to go, of the table by where it starts: Delete again, or its button, deletes
+    /// it; anything else leaves it (`EditorController+Tables`).
+    var tableDeletion: (location: Int, part: TableDeletion)?
     #if os(iOS)
     /// The edit menu a handle of a table opens on iPhone and iPad, and what it holds.
     var tableMenuInteraction: UIEditMenuInteraction?
@@ -1069,6 +1072,8 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     func selectionChanged() {
         flushGlyphs()
         if !isLoading { caretWasPlaced = true }
+        // A row or column marked by Delete stays only while nothing else happens.
+        clearTableDeletion()
         // ↑ and ↓ in a table keep their column only while they go on.
         gridColumnX = nil
         if selection.length == 0 { gridAnchor = nil }
@@ -1116,6 +1121,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     func textChanged() {
         guard !isLoading else { return }
         flushGlyphs()
+        clearTableDeletion()
         // An edit that didn't move the caret: the marks it showed or hid fold in or out now.
         if editedMarks != nil, !isTracking { updateReveal() }
         delegate?.editorTextDidChange(self)
@@ -1134,7 +1140,10 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             let focused = self.isFocused
-            if !focused { self.unwrapped = nil }
+            if !focused {
+                self.unwrapped = nil
+                self.clearTableDeletion()
+            }
             if self.isTypingIn != focused { self.readForTyping(focused) }
             self.updateReveal()
             if !focused { self.closeSuggestions() }
