@@ -225,7 +225,8 @@ struct DocumentScreen: View {
             }
             ToolbarSpacer(.flexible, placement: .bottomBar)
             ToolbarItem(placement: .bottomBar) {
-                NewNoteButton(workspace: workspace, folder: url.deletingLastPathComponent())
+                // Next to this file, unless it is kept on its own, without its folder: then where new notes go.
+                NewNoteButton(workspace: workspace, folder: workspace.isKept(url) ? nil : url.deletingLastPathComponent())
             }
         }
     }
@@ -241,17 +242,25 @@ struct DocumentScreen: View {
                 MenuEntry.divider
                 let favorite = workspace.isFavorite(url)
                 MenuEntry(favorite ? "Remove from Favorites" : "Add to Favorites", favorite ? "star.slash" : "star") { workspace.toggleFavorite(url) }
-                MenuEntry("Remind Me…", "bell") { workspace.askForReminder(url) }
-                MenuEntry("Rename", "pencil", enabled: isLoaded) { workspace.editor.focusTitle() }
-                SharedMenus.moveTo(url, workspace: workspace)
-                MenuEntry("Duplicate", "plus.square.on.square") { workspace.duplicate(url) }
+                // Kept on its own, without its folder: as in its row's menu (`FileActions`).
+                let isKept = workspace.isKept(url)
+                if !isKept {
+                    MenuEntry("Remind Me…", "bell") { workspace.askForReminder(url) }
+                    MenuEntry("Rename", "pencil", enabled: isLoaded) { workspace.editor.focusTitle() }
+                    SharedMenus.moveTo(url, workspace: workspace)
+                    MenuEntry("Duplicate", "plus.square.on.square") { workspace.duplicate(url) }
+                }
                 MenuEntry.divider
                 MenuEntry("Copy", "doc.on.doc", keys: "⇧⌘C") { workspace.copyFile(url) }
                 MenuEntry("Copy Link", "link") { workspace.copyLink(url) }
                 MenuEntry("Export as PDF", "doc.richtext", enabled: isLoaded) { export() }
                 MenuEntry("Print", "printer", keys: "⌘P", enabled: isLoaded) { NoteExporter.print(workspace.editor, title: name) }
                 MenuEntry.divider
-                MenuEntry("Delete", "trash", destructive: true) { workspace.trash(url) }
+                if isKept {
+                    MenuEntry("Remove from Notebook", "minus.circle", destructive: true) { workspace.removeKeptFile(url) }
+                } else {
+                    MenuEntry("Delete", "trash", destructive: true) { workspace.trash(url) }
+                }
             } else {
                 if !isInSplitView {
                     MenuEntry("Info", "info.circle") { showsOutline = true }

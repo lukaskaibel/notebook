@@ -44,7 +44,8 @@ struct TouchRootView: View {
 
     var body: some View {
         Group {
-            if workspace.locations.isEmpty {
+            // Files kept on their own are enough to show: Nextcloud, say, gives Notebook no folders.
+            if workspace.locations.isEmpty && workspace.keptFiles.isEmpty {
                 TouchWelcomeView(workspace: workspace)
             } else if sizeClass == .compact {
                 PhoneBrowser(workspace: workspace)
@@ -103,6 +104,9 @@ struct TouchCommands: Commands {
             Button { workspace.newFolderRequest += 1 } label: { Label("New Folder", systemImage: "folder.badge.plus") }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
                 .disabled(workspace.locations.isEmpty)
+            Divider()
+            Button { FileOpener.choose(for: workspace) } label: { Label("Open File…", systemImage: "doc.badge.plus") }
+                .keyboardShortcut("o", modifiers: .command)
         }
         CommandGroup(replacing: .printItem) {
             Button { NoteExporter.print(workspace.editor, title: workspace.currentTitle) } label: { Label("Print…", systemImage: "printer") }
@@ -159,7 +163,7 @@ struct TouchCommands: Commands {
                 .keyboardShortcut("f", modifiers: [.command, .option])
             Button { workspace.togglePalette() } label: { Label("Command Palette", systemImage: "command") }
                 .keyboardShortcut("k", modifiers: .command)
-                .disabled(workspace.locations.isEmpty)
+                .disabled(workspace.locations.isEmpty && workspace.keptFiles.isEmpty)
             if NotebookSettings.shared.showsTodos {
                 Button { workspace.showTodos() } label: { Label("To-dos", systemImage: "checklist") }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
@@ -242,6 +246,9 @@ struct TouchWelcomeView: View {
                 .font(.subheadline)
                 Button("Try Sample Notes") { workspace.addSampleNotes(in: Workspace.onDeviceFolder) }
                     .font(.subheadline)
+                // For an app that gives single files but no folders, such as Nextcloud.
+                Button("Open a File") { FileOpener.choose(for: workspace) }
+                    .font(.subheadline)
                 Text("Pick iCloud Drive to have the notes you write on your Mac here too.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -317,11 +324,11 @@ struct TouchSettings: View {
                     } else {
                         LabeledContent("Default Folder", value: "–")
                     }
-                    Toggle("Delete New Notes Left Empty", isOn: Bindable(NotebookSettings.shared).deletesEmptyNewNotes)
+                    Toggle("Delete Notes Left Empty", isOn: Bindable(NotebookSettings.shared).deletesEmptyNotes)
                 } header: {
                     Text("Notes")
                 } footer: {
-                    Text("New notes go into the folder you’re in; made anywhere else, they go to the default folder. A new note you leave without giving it a title or text, or without writing in it, is deleted.")
+                    Text("New notes go into the folder you’re in; made anywhere else, they go to the default folder. A note you leave with no text in it, or only spaces, is deleted, unless it has a reminder or is a favourite, and so is a new handwritten note you leave without writing in it.")
                 }
                 TodosSetting()
                 Section {

@@ -36,10 +36,18 @@ public final class Workspace: NSObject {
     /// Where you were in each note, to come back to.
     @ObservationIgnored private var places: [URL: EditorController.Place] = [:]
     private(set) var favorites: [String] = []
+    /// Files kept on their own, outside every location, with the bookmarks that open them again (`Workspace+KeptFiles`).
+    /// Search reads them too.
+    var keptFiles: [KeptFile] = [] {
+        didSet { if keptFiles.map(\.path) != oldValue.map(\.path) { index.setFiles(indexedKeptFiles) } }
+    }
     private(set) var recents: [String] = []
     /// `recents` in the order Recent's cards show them: a file you open moves to the front of the cards a moment later,
     /// and not while the pointer is on them (`holdRecentCards`), so the card you click stays where you clicked it.
     private(set) var recentCards: [String] = []
+    /// Cards of notes that went while the pointer was on Recent's cards: they fade where they are, and the others close
+    /// up once it has left, as they take a new order then.
+    private(set) var fadedCards: Set<String> = []
     @ObservationIgnored private var recentCardsHeld = false
     @ObservationIgnored private var recentCardsUpdate: Task<Void, Never>?
     /// The folder chosen in Settings for new notes made outside a folder, by its path. Without one they go to the Inbox.
@@ -405,6 +413,7 @@ public final class Workspace: NSObject {
             chosenDefaultFolder = nil
         } else {
             locations = LocationStore.load()
+            keptFiles = KeptFileStore.load()
             hidden = HiddenFolders()
             reminders = Reminders()
             // Your own notes: the days you use Notebook on count towards asking for a rating.
@@ -441,7 +450,12 @@ public final class Workspace: NSObject {
         tellAboutUnsavedNotes()
         let last = temporaryLocations ? nil : UserDefaults.standard.string(forKey: "lastOpened").map(Self.rerooted)
         locationsChanged(resolving: true, reading: last.map { [$0] } ?? [])
-        if let last, FileManager.default.fileExists(atPath: last) {
+        // A kept file opens once its bookmark has given access to it again (`resolveKeptFiles`).
+        let keptLast = last.map { URL(fileURLWithPath: $0) }.flatMap { isKept($0) ? $0 : nil }
+        resolveKeptFiles(thenOpen: keptLast)
+        if keptLast != nil {
+            return
+        } else if let last, FileManager.default.fileExists(atPath: last) {
             open(URL(fileURLWithPath: last))
         } else if let last {
             #if os(iOS)
@@ -563,7 +577,7 @@ public final class Workspace: NSObject {
             MainActor.assumeIsolated { self?.filesChanged(paths) }
         }
         updateHiddenPaths()
-        index.rebuild(locations)
+        index.rebuild(locations, files: indexedKeptFiles)
         scheduleReminders()
         #if os(iOS)
         if learnsFormerDocuments {
@@ -627,18 +641,26 @@ public final class Workspace: NSObject {
         #else
         let device = Location.onDeviceName
         #endif
-        reportInFront("Notebook can’t open “\(name)”.", Self.noFolderReason + " Choose a folder in iCloud Drive or \(device) instead.")
+        reportInFront("Notebook can’t open “\(name)”.", Self.noFolderReason + " Choose a folder in iCloud Drive or \(device) instead."
+                      + Self.singleFilesHint)
     }
 
     /// The same for a location in the sidebar from before Notebook looked, with a button that takes it out of the
     /// sidebar there and then, rather than sending you to its menu.
     func unreadable(_ location: Location) -> Problem {
-        Problem(title: "Notebook can’t read “\(location.name)”.", message: Self.noFolderReason + " Removing it from the sidebar deletes nothing.",
-                removableLocation: location.id)
+        Problem(title: "Notebook can’t read “\(location.name)”.", message: Self.noFolderReason + " Removing it from the sidebar deletes nothing."
+                + Self.singleFilesHint, removableLocation: location.id)
     }
 
     private static let noFolderReason = "The app it comes from gives other apps only single files, not folders, so Notebook can’t "
         + "see what’s in it. Nextcloud is one of these apps."
+
+    /// What such an app does give: its files, which Open File keeps on their own (`Workspace+KeptFiles`).
+    #if os(iOS)
+    private static let singleFilesHint = " To keep its notes in Notebook one by one, use Open File."
+    #else
+    private static let singleFilesHint = ""
+    #endif
 
     /// Of folders dragged onto the sidebar, the ones it could add: folders it doesn't show yet. Nil when the drag
     /// has anything else in it, such as a file or a folder already in a location.
@@ -1022,6 +1044,8 @@ public final class Workspace: NSObject {
             document.onSave = { [weak self, weak document] in
                 guard let self, let document else { return }
                 self.noteSaved(document.url)
+                // No location watches a file kept on its own: search reads it again here.
+                if self.isKept(document.url) { self.index.refreshFiles([document.url]) }
             }
             document.onLoad = { [weak self, weak document] _ in
                 guard let self, let document, self.note === document else { return }
@@ -1111,7 +1135,7 @@ public final class Workspace: NSObject {
         let wrote = wroteInOpenFile
         keepSnapshot()
         keepPlace()
-        leaveCurrentNote()
+        leaveCurrentNote(goingBack: true)
         currentURL = nil
         outline = []
         stats = NoteStats()
@@ -1131,13 +1155,15 @@ public final class Workspace: NSObject {
     }
 
     /// A file or folder handed over by another app (the Files app's Open With, a share): a folder becomes a location,
-    /// a file opens, from its folder if Notebook shows that.
+    /// a file opens, from its folder if Notebook shows that, or else kept on its own, to find again under Files.
     public func openFromOutside(_ url: URL) {
         start()
         guard url.isFileURL else { return }
         _ = url.startAccessingSecurityScopedResource()
         if (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
             if location(containing: url) == nil { addLocation(url) }
+        } else {
+            keep(url)
         }
         open(url)
     }
@@ -1147,7 +1173,11 @@ public final class Workspace: NSObject {
     public func refresh(thoroughly: Bool = false) {
         guard isStarted else { return }
         looseTodos.read()
-        guard !locations.isEmpty else { return }
+        guard !locations.isEmpty else {
+            // Only files kept on their own: the app they come from may have changed them meanwhile.
+            index.refreshFiles()
+            return
+        }
         var loaded: [FileNode] = []
         func visit(_ node: FileNode) {
             guard let children = node.children else { return }
@@ -1157,7 +1187,13 @@ public final class Workspace: NSObject {
         roots.values.forEach(visit)
         let folders = loaded.map(\.url)
         read(loaded, again: true)
-        if thoroughly { index.rebuild(locations) } else { index.refresh(folders: folders, locations: locations) }
+        if thoroughly {
+            index.rebuild(locations, files: indexedKeptFiles)
+        } else {
+            index.refresh(folders: folders, locations: locations)
+            // The app a kept file comes from may have changed it meanwhile.
+            index.refreshFiles()
+        }
         editor.refreshLinks()
     }
 
@@ -1296,8 +1332,9 @@ public final class Workspace: NSObject {
         (try? url.resourceValues(forKeys: [.isPackageKey]).isPackage) ?? false
     }
 
-    /// Saves the note being left; a new note left empty goes away, and pictures it no longer uses go to the Trash.
-    private func leaveCurrentNote() {
+    /// Saves the note being left; a note left empty goes away, and pictures it no longer uses go to the Trash.
+    /// `goingBack`: the iPhone's Back, to the screen under the note.
+    private func leaveCurrentNote(goingBack: Bool = false) {
         #if os(iOS)
         leaveNewHandwrittenNote()
         #endif
@@ -1306,9 +1343,11 @@ public final class Workspace: NSObject {
         if freshNote.map({ FileNode.samePath($0, note.url) }) == true { freshNote = nil }
         #endif
         editor.endDrawing()
-        // Back or ⌘N while typing a new name: the name counts, as it would once the title is left.
-        if editor.isEditingTitle { editor.commitTitle() }
         note.update(text: editor.text)
+        let goes = isLeftEmpty(note)
+        // Back or ⌘N while typing a new name: the name counts, as it would once the title is left, unless the note
+        // goes, empty.
+        if editor.isEditingTitle, !goes { editor.commitTitle() }
         // Saved off the main thread; the note is kept until it is written.
         note.close()
         let folder = note.url.deletingLastPathComponent()
@@ -1320,42 +1359,81 @@ public final class Workspace: NSObject {
                 Task.detached(priority: .utility) { FileOperations.cleanUpAssets(in: folder, candidates: dropped) }
             }
         }
-        if isLeftEmpty(note) {
-            let url = note.url
-            // Nothing was made that Undo could take back.
-            if let change = newNoteChange, change.after.map({ FileNode.samePath($0, url) }) == true { dropFromUndo(change) }
-            changeFiles { [self] follow in
-                await note.saved()
-                let url = follow(url)
-                let thrownAway = await Task.detached(priority: .userInitiated) { () -> Bool in
-                    #if os(iOS)
-                    // Where there is no Recently Deleted, an empty note made a moment ago goes for good: nothing is lost.
-                    return FileOperations.trash(url) || FileOperations.delete(url).done
-                    #else
-                    return FileOperations.trash(url)
-                    #endif
-                }.value
-                if thrownAway {
-                    // Copies of what was typed and taken away again go too.
-                    NoteHistory.shared.trash(url, as: NoteHistory.trashedName())
-                    forgetRecent(url)
-                    showChanges(in: [url.deletingLastPathComponent()], removing: [url])
-                }
-            }
-        }
+        if goes { throwAwayLeftEmpty(note, goingBack: goingBack) }
         self.note = nil
     }
 
-    /// A note made with New Note and left as it came, without a name or text, unless Settings keeps those.
+    /// A note left with no text in it, or only spaces and empty lines, whatever its name, unless Settings keep those.
+    /// Not one whose text hasn't come (still in iCloud, or unreadable), which only looks empty; nor one with a reminder
+    /// or a star, kept for something; nor one open in a window of its own as well; nor one kept on its own, from another
+    /// app, whose folder Notebook doesn't have.
     private func isLeftEmpty(_ note: NoteDocument) -> Bool {
         #if os(iOS)
         // Switched for one of the other kind, it goes whatever Settings say.
-        let goes = NotebookSettings.shared.deletesEmptyNewNotes || switchingFrom.map { FileNode.samePath($0, note.url) } == true
+        let goes = NotebookSettings.shared.deletesEmptyNotes || switchingFrom.map { FileNode.samePath($0, note.url) } == true
         #else
-        let goes = NotebookSettings.shared.deletesEmptyNewNotes
+        let goes = NotebookSettings.shared.deletesEmptyNotes
         #endif
-        return goes && note.isNew && note.isEmpty
-            && note.url.deletingPathExtension().lastPathComponent.hasPrefix("Untitled")
+        guard goes, note.isLoaded, note.conflict == nil, note.isEmpty else { return false }
+        if reminder(for: note.url) != nil || isFavorite(note.url) || isKept(note.url) { return false }
+        return !NoteDocument.documents(atOrInside: note.url).contains { $0 !== note && !$0.isClosed }
+    }
+
+    /// A note left empty goes once what was typed is written: to the Trash, or on iPhone and iPad, where a place has no
+    /// Recently Deleted, for good, as nothing is lost. It leaves Recent and the lists at once, and comes back to them if
+    /// it can't go, or was written in meanwhile on another device. One made a moment ago with New Note goes as if it had
+    /// never been made; any other, Undo brings back.
+    private func throwAwayLeftEmpty(_ note: NoteDocument, goingBack: Bool) {
+        let url = note.url
+        let change: FileChange?
+        if let made = newNoteChange, made.after.map({ FileNode.samePath($0, url) }) == true {
+            // Nothing was made that Undo could take back.
+            dropFromUndo(made)
+            change = nil
+        } else {
+            change = keepForUndo(FileChange(.trash, "Delete Empty Note", from: url))
+        }
+        // Out of Recent, the folder's count and search; on iPhone and iPad out of the lists too. At once, or back on the
+        // iPhone once the screen under the note is in view: what changes while it is out of sight just is so when it
+        // comes, and you wouldn't see the note go. The changes to files after it wait that moment.
+        func leaveLists(_ url: URL) {
+            takeOutOfRecent(url)
+            beginLeaving(url)
+        }
+        if !goingBack { leaveLists(url) }
+        changeFiles { [self] follow in
+            if goingBack {
+                try? await Task.sleep(for: Self.backTransition)
+                leaveLists(follow(url))
+            }
+            await note.saved()
+            let url = follow(url)
+            // Written in meanwhile, on another device or in another app, it stays.
+            let isEmpty = await Task.detached(priority: .userInitiated) { FileOperations.isEmptyNote(url) }.value
+            var gone: (done: Bool, place: URL?) = (false, nil)
+            let remembered = remembered(url)
+            // Opened again meanwhile, from its card before it went, say: it stays.
+            let isOpen = NoteDocument.documents(atOrInside: url).contains { !$0.isClosed }
+            if isEmpty, !isOpen {
+                gone = await trashNow(url)
+                #if os(iOS)
+                if !gone.done { gone = await deleteNow(url) }
+                #endif
+            }
+            endLeaving(url, animated: !gone.done)
+            guard gone.done else {
+                if let change { dropFromUndo(change) }
+                putBackInRecent(url)
+                return
+            }
+            // Copies of what was typed and taken away again go along, and come back with it.
+            NoteHistory.shared.trash(url, as: remembered.history)
+            if let change {
+                change.remembered = remembered
+                changeDone(change, from: url, to: gone.place)
+            }
+            forgetRecent(url)
+        }
     }
 
     #if os(iOS)
@@ -1366,7 +1444,7 @@ public final class Workspace: NSObject {
               freshNote.map({ FileNode.samePath($0, url) }) == true else { return }
         freshNote = nil
         let switching = switchingFrom.map { FileNode.samePath($0, url) } == true
-        guard switching || NotebookSettings.shared.deletesEmptyNewNotes else { return }
+        guard switching || NotebookSettings.shared.deletesEmptyNotes else { return }
         // Written in a moment ago, and not told yet: it stays.
         if let session = pdfEditing.session, FileNode.samePath(session.url, url), session.isTouched { return }
         if let change = newNoteChange, change.after.map({ FileNode.samePath($0, url) }) == true { dropFromUndo(change) }
@@ -1415,11 +1493,10 @@ public final class Workspace: NSObject {
     #endif
 
     #if os(macOS)
-    /// Quitting leaves the note too, and the next launch wouldn't know it was new: one left empty goes to the Trash
-    /// before the app does, which waits a moment for it at most. A name being typed counts, though it can't be given.
+    /// Quitting leaves the note too: one left empty goes to the Trash before the app does, which waits a moment for it
+    /// at most.
     private func trashAsQuitting(_ note: NoteDocument) {
-        let named = editor.isEditingTitle && !editor.titleText.trimmingCharacters(in: .whitespaces).isEmpty
-        guard isLeftEmpty(note), !named else { return }
+        guard isLeftEmpty(note) else { return }
         note.close()
         let url = note.url
         let history = NoteHistory.trashedName()
@@ -1598,29 +1675,71 @@ public final class Workspace: NSObject {
     /// Recent's cards, the open file's among them: the iPhone's first screen shows it while you are in it, so the screen
     /// you go back to has its card already. A file you open joins them, or moves to their front, a moment later.
     var recentCardURLs: [URL] {
-        recentCards.map { URL(fileURLWithPath: $0) }.filter(isListable)
+        recentCards.compactMap { path in
+            let url = URL(fileURLWithPath: path)
+            return fadedCards.contains(path) || isListable(url) ? url : nil
+        }
     }
 
-    /// A favourite or recent file that is still there to open: in one of the locations, which Notebook can read. One
-    /// from a location you took out stays on the list, and comes back if you add the folder again, but the app can no
-    /// longer read it (on the Mac the sandbox lets it see that the file is there, not what is in it).
+    /// A card that stays faded in its place until the pointer leaves Recent (`takeOutOfRecent`).
+    func isFadedCard(_ url: URL) -> Bool {
+        !fadedCards.isEmpty && fadedCards.contains(url.path)
+    }
+
+    /// A favourite or recent file that is still there to open: in one of the locations, or kept on its own, which
+    /// Notebook can read. One from a location you took out stays on the list, and comes back if you add the folder
+    /// again, but the app can no longer read it (on the Mac the sandbox lets it see that the file is there, not what is
+    /// in it).
     private func isListable(_ url: URL) -> Bool {
-        location(containing: url) != nil && FileManager.default.fileExists(atPath: url.path) && !isLeaving(url)
+        (location(containing: url) != nil || isKept(url)) && FileManager.default.fileExists(atPath: url.path) && !isLeaving(url)
     }
 
     func clearRecents() {
         recents = []
         recentCardsUpdate?.cancel()
         recentCards = []
+        fadedCards = []
+        if !temporaryLocations { UserDefaults.standard.set(recents, forKey: "recents") }
+        recentCardsChanged()
+    }
+
+    /// A note thrown away as it was left leaves the files opened last, which the iPhone shows without looking again.
+    private func forgetRecent(_ url: URL) {
+        recents.removeAll { FileNode.samePath(URL(fileURLWithPath: $0), url) }
+        takeOutOfRecent(url)
         if !temporaryLocations { UserDefaults.standard.set(recents, forKey: "recents") }
     }
 
-    /// A new note thrown away again leaves the files opened last, which the iPhone shows without looking again.
-    private func forgetRecent(_ url: URL) {
-        recents.removeAll { FileNode.samePath(URL(fileURLWithPath: $0), url) }
-        recentCards.removeAll { FileNode.samePath(URL(fileURLWithPath: $0), url) }
-        if !temporaryLocations { UserDefaults.standard.set(recents, forKey: "recents") }
+    /// A note left empty leaves Recent as it goes: its card fades and the others close up. While the pointer is on the
+    /// cards it only fades, and they close up once the pointer has left, so the card you clicked stays under it.
+    private func takeOutOfRecent(_ url: URL) {
+        guard let card = recentCards.first(where: { FileNode.samePath(URL(fileURLWithPath: $0), url) }) else { return }
+        if recentCardsHeld {
+            withAnimation(.easeOut(duration: 0.25)) { _ = fadedCards.insert(card) }
+        } else {
+            withAnimation(HomeStyle.reordering) { recentCards.removeAll { $0 == card } }
+            recentCardsChanged()
+        }
     }
+
+    /// The note left empty stays after all: its card comes back, as a moved card does, once the pointer isn't on them.
+    private func putBackInRecent(_ url: URL) {
+        if fadedCards.contains(where: { FileNode.samePath(URL(fileURLWithPath: $0), url) }) {
+            withAnimation(.easeOut(duration: 0.25)) { fadedCards = fadedCards.filter { !FileNode.samePath(URL(fileURLWithPath: $0), url) } }
+        }
+        scheduleRecentCards()
+    }
+
+    /// Recent's cards came or went: the Mac's sidebar has a section for them only while there are some.
+    private func recentCardsChanged() {
+        #if os(macOS)
+        sidebar?.recentsChanged()
+        #endif
+    }
+
+    /// How long the iPhone takes to go back from a note to the screen under it, for a note left empty to go from there
+    /// in view (`throwAwayLeftEmpty`).
+    static var backTransition = Duration.milliseconds(500)
 
     /// How long a file you opened waits to move to the front of Recent's cards, after you opened it or the pointer left
     /// them: long enough that clicking through cards doesn't shuffle them under the pointer. Shorter in tests.
@@ -1642,6 +1761,8 @@ public final class Workspace: NSObject {
             try? await Task.sleep(for: Self.recentCardsDelay)
             guard let self, !Task.isCancelled, !self.recentCardsHeld else { return }
             self.recentCards = self.recents
+            self.fadedCards = []
+            self.recentCardsChanged()
         }
     }
 
@@ -1653,13 +1774,14 @@ public final class Workspace: NSObject {
         if hold { recentCardsUpdate?.cancel() } else { scheduleRecentCards() }
     }
 
-    private func replacePath(_ old: URL, with new: URL) {
+    func replacePath(_ old: URL, with new: URL) {
         func fix(_ path: String) -> String { Self.relocated(path, from: old.path, to: new.path) }
         func fix(_ url: URL) -> URL { Self.relocated(url, from: old, to: new) }
         hiddenFolderMoved(from: old, to: new)
         reminderMoved(from: old, to: new)
         defaultFolderMoved(from: old, to: new)
         widgetNoteMoved(from: old, to: new)
+        keptFileMoved(from: old, to: new)
         favorites = favorites.map(fix)
         recents = recents.map(fix)
         recentCards = recentCards.map(fix)
@@ -1689,7 +1811,8 @@ public final class Workspace: NSObject {
     /// Where a new note goes: next to the open one, into the folder selected in the sidebar, or the default folder.
     var folderForNewNote: URL? {
         if let selectedFolder { return selectedFolder }
-        if let currentURL { return currentURL.deletingLastPathComponent() }
+        // Not next to a file kept on its own: Notebook has that file, not its folder.
+        if let currentURL, !isKept(currentURL) { return currentURL.deletingLastPathComponent() }
         return defaultFolder
     }
 

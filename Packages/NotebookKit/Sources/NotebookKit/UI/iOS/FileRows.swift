@@ -235,6 +235,9 @@ enum FileActions {
         let kind = FileKind(url: url, isDirectory: isFolder)
         let isLinked = workspace.isLinkedFolder(url)
         let isLocation = workspace.locations.contains { $0.url == url.standardizedFileURL }
+        // Kept on its own: Notebook has the file, not its folder, which renaming, moving, duplicating and deleting
+        // need. A reminder of a note is kept by its place in a location.
+        let isKept = workspace.isKept(url)
         if isFolder {
             MenuEntry("New Note", "square.and.pencil") { workspace.newNote(in: url) }
             MenuEntry.submenu("New Handwritten Note", "pencil.and.scribble") {
@@ -250,10 +253,10 @@ enum FileActions {
             MenuEntry("Quick Look", "eye") { workspace.quickLook(url) }
             MenuEntry.divider
         }
-        if kind == .note {
+        if kind == .note, !isKept {
             MenuEntry("Remind Me…", "bell") { workspace.askForReminder(url) }
         }
-        if !isLinked, !isLocation {
+        if !isLinked, !isLocation, !isKept {
             MenuEntry("Rename", "pencil") { workspace.renaming = url }
             SharedMenus.moveTo(url, workspace: workspace)
             MenuEntry("Duplicate", "plus.square.on.square") { workspace.duplicate(url) }
@@ -287,6 +290,9 @@ enum FileActions {
             }
             MenuEntry.divider
             MenuEntry("Remove from Notebook", "minus.circle", destructive: true) { workspace.removeLocation(location.id) }
+        } else if isKept {
+            MenuEntry.divider
+            MenuEntry("Remove from Notebook", "minus.circle", destructive: true) { withAnimation { workspace.removeKeptFile(url) } }
         } else if !isLinked {
             MenuEntry.divider
             MenuEntry("Delete", "trash", destructive: true) { workspace.trash(url) }

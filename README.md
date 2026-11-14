@@ -90,8 +90,10 @@ a backslash keeps one as it is (`\->`).
 
 The title of a new note has the caret first, so you type its name straight away. Return, Tab, ↓, or → at its end go on
 into the text, and ↑, ←, or Delete at the very start of the text go back up into the title, on the Mac and on an iPad
-or iPhone with a keyboard alike. A new note you leave without a title or text is deleted again, as if you had never
-made it; turn off Delete new notes left empty in Settings to keep such notes.
+or iPhone with a keyboard alike. A note you leave with no text in it, or only spaces, is deleted, whatever its name:
+a new one as if you had never made it, any other to the Trash (Recently Deleted on iPhone and iPad), where Undo
+brings it back from. Its card leaves Recent as you go. One with a reminder or a star stays; turn off Delete notes
+left empty in Settings to keep them all.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/typing-dark.webp">
@@ -241,7 +243,8 @@ Kyoto trip) or with a letter wrong ("ryokna" for the ryokan); names that only ha
 last, under Similar Names. A result opens where it was found: the note scrolled to the words with them selected (they
 bounce as Find does in Safari), a PDF at its page, a heading, or the picture in a note. Return opens the first match,
 and the last suggestion is always a new note with what you typed as its name; with nothing but similar names found,
-Return makes that note. With an empty field, it lists what you opened last.
+Return makes that note. With an empty field, it lists what you opened last. On iPhone and iPad it finds the single files
+you keep under Files too.
 
 Search runs in the background on every core, a few milliseconds a letter even in a whole iCloud Drive, so typing never
 waits for it; the results stay until the new ones are there. Notebook keeps what it has read between launches, so search
@@ -503,7 +506,9 @@ from the camera, the document scanner, your photos or the Files app. The pencil,
 bar, draws in the note with Apple's tool picker. Tap a checkbox to tick it, a link to
 follow it, a picture to look at it, a drawing to draw in it; touch and hold a picture and drag it to move it in the
 note, or let go to copy, share or delete it. Swipe a file to move or delete it, or to make it a favourite; touch and
-hold it for everything else. Its menu is the system's own, as are those of buttons such as ⋯ and Attach, with a symbol
+hold it for everything else. Open File in the ⋯ menu opens single files from anywhere the Files app reaches, for apps
+such as Nextcloud that give other apps their files but not their folders; they show under Files, below the folders,
+in Recent and in search, and open from there in later runs too. Its menu is the system's own, as are those of buttons such as ⋯ and Attach, with a symbol
 beside each entry; Move To in them asks for the folder in a sheet, as Files does.
 
 The iPad has the Mac's layout: the sidebar, with the iPhone's first screen at its top and its folders opening in
@@ -555,6 +560,12 @@ screens.
   Deleting moves to the Trash, never further, and Undo (⌘Z) puts it back, as it takes back a rename, a move or a new
   file. Favourites have a tile at the top of the sidebar, next to To-dos, that lists them; every folder says how many
   files are in it.
+- **Single files on iPhone and iPad.** Open File in the ⋯ menu (⌘O with a keyboard) picks one file or several in the
+  Files app's picker, and a file handed over by another app opens the same way. One in no folder you opened is kept
+  under Files, below the folders, and in Recent, and opens again in later runs. Notebook has such a file, not its
+  folder, so its menu has Remove from Notebook instead of Rename, Move To, Duplicate and Delete, and a new note made
+  while it is open goes to the default folder. Search and ⌘K find these files by name and by what is in them, under
+  Files, and a `[[link]]` to one finds it; what you write in one, or the app it comes from changes, is read again.
 - **Sorted by name or by date.** View › Sort By, or Sort By in the ⋯ menu on iPhone and iPad, sorts every folder's
   notes and files by name, as the Finder does, or newest first by when they were last edited or made, as Notes does.
   Sorted by date, the note you write in moves to the top of its folder once it is saved, still selected; Keep Folders
@@ -641,7 +652,8 @@ apps and Asciidoctor keep reading your notes. Notebook adds no files of its own 
 `.assets` folders for pictures and files you add to notes, and in them, next to each drawing's picture, a `.drawing`
 file with its strokes. A folder's symbol and colour are kept on the folder, as the Finder keeps them, not in a file.
 What isn't part of a note or a folder, such as the folders you hide, the reminders of notes you set and your Home and
-Work, is kept in the app's settings and iCloud's key-value store, not in your folders. A to-do's date and place are part of the
+Work, is kept in the app's settings and iCloud's key-value store, not in your folders. So are the files you keep on
+their own on iPhone and iPad, each with the bookmark that lets Notebook open it again. A to-do's date and place are part of the
 to-do, so they are in the note. The to-dos you add in To-dos without a note are a plain Markdown checklist,
 `To-dos.md`, in Notebook's own iCloud folder, in `To-dos` next to its `History` (on a Mac,
 `~/Library/Mobile Documents/iCloud~com~lukaskbl~Notebook/To-dos/To-dos.md`), so they reach your other devices without
@@ -783,7 +795,9 @@ folder, which the Files app shows under On My iPhone › Notebook and Notebook c
 with **Open Folder** in the ⋯ menu or in Settings. Folders of other apps in the picker work when the app gives other
 apps its folders; some, such as Nextcloud, give only single files, and Notebook says so instead of adding a folder
 that would stay empty. A folder like this added with an earlier version is pointed out, with a button that takes it out
-of the sidebar.
+of the sidebar. The notes of such an app open one by one with **Open File** in the ⋯ menu, or **Open a File** on the
+first screen: they stay under Files below the folders, and Remove from Notebook in a file's menu, or a swipe on the
+iPhone, takes one off the list and leaves the file where it is.
 
 To look around without your own notes, choose **Try Sample Notes…** on the first screen. It writes made-up notes, a
 drawing, pictures and PDFs to a new folder Sample Notes, in the folder you pick on the Mac and in Notebook's own folder
@@ -925,14 +939,14 @@ mark it in progress or cancelled, open its note or move one in no note into a no
 section's name, a folder with a plus comes up next to it for a new folder at its top, and, when the folder has hidden
 folders, an eye that shows them.
 
-On an iPad with a keyboard, ⌘N, ⌥⌘N for a handwritten note, ⇧⌘N, ⌘Z and ⇧⌘Z, ⌘K, ⇧⌘R, ⌘[ and ⌘], ⌃⌘S, ⌃⌘I, ⇧⌘., ⌘+, ⌘− and ⌘0, ⌘P and the
+On an iPad with a keyboard, ⌘N, ⌥⌘N for a handwritten note, ⇧⌘N, ⌘O for Open File, ⌘Z and ⇧⌘Z, ⌘K, ⇧⌘R, ⌘[ and ⌘], ⌃⌘S, ⌃⌘I, ⇧⌘., ⌘+, ⌘− and ⌘0, ⌘P and the
 shortcuts for writing work as on the Mac. While you type in a note, ⌘F finds in it and ⌥⌘F is the system's Find and
 Replace; otherwise ⌥⌘F searches. On iPhone and iPad:
 
 | Gesture | Action |
 | --- | --- |
 | Swipe from the left edge | Back to the folder or the note you came from (iPhone) |
-| Swipe a file to the left or right | Move or delete it, add it to your favourites, or hide a folder |
+| Swipe a file to the left or right | Move or delete it, add it to your favourites, or hide a folder; one under Files, take it off the list |
 | Touch and hold a file or folder | Set a reminder, rename, move, duplicate, copy a link, customize or hide a folder, share and more |
 | Tap or touch and hold a section's name | New note or folder at its top, add to favourites, share, show hidden folders, remove from Notebook |
 | Pull a list down | Read the folder again |
@@ -975,6 +989,9 @@ Planned, and not built yet:
 - On iPhone and iPad there is no Settings › App Icon (iOS only switches between icons built into the app), no PNG
   export, no window of its own for a single file and no Paste into a folder in the list (#298). Before iOS 27.2,
   Quick Look there may show a note's Markdown instead.
+- **Single files kept under Files on iPhone and iPad** are left out of To-dos and Spotlight, which take the notes in
+  your folders. Renaming one in its title, or adding a picture to a note among them, asks for its folder, which apps
+  such as Nextcloud don't give.
 - **Pictures in Quick Look on iPhone and iPad,** and on the Mac for notes outside the folders you opened: Quick Look
   lets Notebook read only the note itself, so a note's pictures and drawings show by their names there (#318).
 - **Sketches** as files of their own, next to your notes rather than in one.

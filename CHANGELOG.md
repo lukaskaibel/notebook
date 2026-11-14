@@ -7,6 +7,17 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- Open File on iPhone and iPad, in the ⋯ menu, as Open a File on the first screen, and with ⌘O on a keyboard, opens
+  one file or several from anywhere the Files app reaches, for apps such as Nextcloud that give other apps their files
+  but not their folders. A file in no folder you opened is kept under Files, below the folders, and in Recent, and
+  opens again after Notebook is quit; one handed over by another app is kept the same way. Its menu has Remove from
+  Notebook, which leaves the file where it is, instead of Rename, Move To, Duplicate and Delete, which need its
+  folder, and a new note made while it is open goes to the default folder. Notebook shows them even with no folder
+  opened, and when a folder you choose turns out to be such an app's, the alert now says to use Open File.
+- Search and ⌘K on iPhone and iPad find the files kept under Files, by name and by what is in them, under Files, and
+  a `[[link]]` to one of them finds it, so Copy Link is back in their menus. What you write in one, or the app it
+  comes from changes, is read again: as Notebook saves it, and as Notebook comes back to the front. To-dos still lists
+  only the notes in your folders.
 - Delete in an empty row of a table marks the row in red, with a Delete Row button in it; Delete again, or the button,
   deletes it, and the caret goes to the end of the row above, as Delete on an empty line takes you to the line above.
   In a row that holds something, an empty column is marked instead, and in a table with nothing in it the whole table.
@@ -23,22 +34,32 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Changed
 
+- A note you leave with no text in it, or only spaces and empty lines, is deleted, whatever its name and however
+  long it has been there, not only a new note left as it came. A new one goes as if you had never made it; any other
+  goes to the Trash, or Recently Deleted on iPhone and iPad, and Undo brings it back. Its card fades out of Recent as
+  you leave it, and the others close up; while the pointer is on the cards they wait until it has left, so the card
+  you clicked stays under it. A note with a reminder or a star stays, and so does one written in on another device
+  meanwhile. The switch in Settings is now Delete notes left empty, on as before.
 - What you write on a PDF in Notebook is ink in Preview, Files and Quick Look as well, as their own Markup's is: there
   you can erase it stroke by stroke, and they draw it sharp. Before, they took it for a picture. Strokes written with
   an earlier version become ink there with the next change you make to the PDF in Notebook.
 
 ### Fixed
 
-- Handwriting no longer gets blurrier each time a PDF goes back and forth between Notebook and Preview. Saving a PDF in
-  Notebook took the strokes out of what Preview had written on the pages you didn't write on, and left only a picture
-  of them, which Preview then drew again as pixels when it saved; and Preview took Notebook's strokes for a picture
-  too. Now both stay strokes on both sides, on iPhone, iPad and the Mac.
+- Handwriting no longer gets blurrier each time a PDF goes back and forth between Notebook and Preview. When Preview
+  saved, it kept only the look of what Notebook had written and dropped the strokes, so Notebook showed that writing
+  blurry when zoomed and couldn't change it any more; and a save in Notebook could leave only a picture of what
+  Preview had written. Now Notebook keeps its strokes where Preview keeps its own, and both stay strokes on both
+  sides, on iPhone, iPad and the Mac.
 - Handwriting that Preview on iPhone and iPad adds to a PDF shows in Notebook as sharp as the text, at any zoom, and
   can be erased and changed with the pen. Notebook showed Preview's picture of it, a little blurry, and couldn't change
   it.
 - Adding or deleting a table's row or column no longer moves the note: deleting the last row or column with the caret
   in it scrolled the note by about the table's height, on the Mac, iPhone and iPad. The table's top now stays where it
   is on the screen.
+- Recent starts at its first card again when the note you opened last has moved to the front, also when that
+  happened out of sight, as you read the note on the iPhone. Before, the row came back scrolled one card in, with the
+  note's card hidden before the edge.
 - On iPhone and iPad, touching and holding a card in Recent lifts only that card for its menu, as Files and Notes do,
   and leaves the others in place behind it. Before, the whole row of cards came out with it, though the menu was the
   one card's.
