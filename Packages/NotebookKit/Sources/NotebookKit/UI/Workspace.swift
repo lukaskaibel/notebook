@@ -1350,7 +1350,8 @@ public final class Workspace: NSObject {
 
     /// A note left with no text in it, or only spaces and empty lines, whatever its name, unless Settings keep those.
     /// Not one whose text hasn't come (still in iCloud, or unreadable), which only looks empty; nor one with a reminder
-    /// or a star, kept for something; nor one open in a window of its own as well.
+    /// or a star, kept for something; nor one open in a window of its own as well; nor one kept on its own, from another
+    /// app, whose folder Notebook doesn't have.
     private func isLeftEmpty(_ note: NoteDocument) -> Bool {
         #if os(iOS)
         // Switched for one of the other kind, it goes whatever Settings say.
@@ -1359,7 +1360,7 @@ public final class Workspace: NSObject {
         let goes = NotebookSettings.shared.deletesEmptyNotes
         #endif
         guard goes, note.isLoaded, note.conflict == nil, note.isEmpty else { return false }
-        if reminder(for: note.url) != nil || isFavorite(note.url) { return false }
+        if reminder(for: note.url) != nil || isFavorite(note.url) || isKept(note.url) { return false }
         return !NoteDocument.documents(atOrInside: note.url).contains { $0 !== note && !$0.isClosed }
     }
 
