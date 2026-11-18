@@ -54,6 +54,8 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- With a mouse connected, or scroll bars set to always show, Recent in the Mac's sidebar no longer has a scroll bar
+  under its cards, and the tops of the cards are no longer cut off.
 - Handwriting no longer gets blurrier each time a PDF goes back and forth between Notebook and Preview. When Preview
   saved, it kept only the look of what Notebook had written and dropped the strokes, so Notebook showed that writing
   blurry when zoomed and couldn't change it any more; and a save in Notebook could leave only a picture of what
