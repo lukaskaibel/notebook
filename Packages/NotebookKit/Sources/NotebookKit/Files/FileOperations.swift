@@ -403,6 +403,17 @@ enum FileOperations {
         return text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true
     }
 
+    /// Deletes a note that has nothing in it but spaces and empty lines, as it is on the disk now. Whether it did.
+    static func removeEmptyNote(_ url: URL) -> Bool {
+        var removed = false
+        NSFileCoordinator().coordinate(writingItemAt: url, options: .forDeleting, error: nil) { url in
+            guard let text = (try? Data(contentsOf: url)).flatMap(NoteDocument.decode),
+                  text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            removed = (try? FileManager.default.removeItem(at: url)) != nil
+        }
+        return removed
+    }
+
     /// Reads a note, bringing it down from iCloud first, in a coordinated read `coordinator.cancel()` calls off.
     static func read(_ url: URL, coordinator: NSFileCoordinator) -> String? {
         var error: NSError?

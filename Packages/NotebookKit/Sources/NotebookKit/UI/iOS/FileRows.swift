@@ -253,6 +253,9 @@ enum FileActions {
             MenuEntry("Quick Look", "eye") { workspace.quickLook(url) }
             MenuEntry.divider
         }
+        if isFolder, NotebookSettings.shared.showsTodos {
+            MenuEntry("Show To-dos", "checklist") { workspace.showTodos(in: url) }
+        }
         if kind == .note, !isKept {
             MenuEntry("Remind Me…", "bell") { workspace.askForReminder(url) }
         }

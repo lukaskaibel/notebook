@@ -40,9 +40,11 @@ extension Workspace {
         keepTodoChangeForUndo("New To-do") { [weak self] in self?.deleteTodo(todo) }
     }
 
-    /// A to-do just added that was left without words goes again, as if it had never been added.
+    /// A to-do just added that was left without words goes again, as if it had never been added, and so does the note
+    /// made for it in a folder.
     func dropNewTodo(_ todo: TodoReference) {
         deleteTodo(todo, undoable: false)
+        removeFolderTodosNoteIfEmpty(todo.url)
     }
 
     // MARK: - Moving into a note

@@ -11,7 +11,9 @@ import UserNotifications
 /// its words.
 ///
 ///     todos                                      the To-dos list as it shows: each group, its rows, and the count
-///     showtodos                                  To-dos, as the row at the top of the sidebar opens it
+///     showtodos [folder]                         To-dos, as the row at the top of the sidebar opens it, or limited to
+///                                                a folder (its path in the first location), as Show To-dos in its menu
+///     alltodos                                   the × next to the folder To-dos is limited to
 ///     ticktodo <words>                           ticks it in its note, as its circle in To-dos does
 ///     datetodo <yyyy-MM-dd[THH:mm] | none> <words>  gives it a day (and a time), or takes it away
 ///     placetodo <name> <latitude> <longitude> <words>  gives it a place to arrive at
@@ -74,7 +76,8 @@ enum DebugTodos {
         switch command {
         case "todos":
             let notes = workspace.reminders.all.map { NoteReminderRow(reminder: $0, url: workspace.url(for: $0, searching: false), name: $0.name) }
-            let sections = TodoGroups.sections(todos: workspace.todos.items, notes: notes)
+            let folder = workspace.todosFolder
+            let sections = TodoGroups.sections(todos: workspace.todos.items, notes: notes, in: folder)
             let lines = sections.flatMap { section in
                 [section.title + ":"] + section.rows.map { row in
                     switch row {
@@ -82,16 +85,19 @@ enum DebugTodos {
                         let when = item.todo.due.map { " | " + ReminderText.text($0.date(), time: $0.hasTime) } ?? ""
                         let place = item.todo.place.map { " | " + $0.phrase } ?? ""
                         let notes = item.todo.notes.isEmpty ? "" : " | notes: " + item.todo.notes.joined(separator: " / ")
-                        return "  ○ \(item.todo.text)\(when)\(place) | \(item.isLoose ? "in no note" : "in " + item.note)\(notes)"
+                        return "  ○ \(item.todo.text)\(when)\(place) | \(item.isLoose ? "in no note" : "in " + (folder.map(item.place(under:)) ?? item.note))\(notes)"
                     case .note(let note):
                         return "  ◻︎ \(note.name) | \(note.reminder.text) | note"
                     }
                 }
             }
-            log("todos (ready \(workspace.todos.isReady), \(workspace.todos.items.count) open, \(workspace.dueTodoCount) due, showing \(workspace.showsTodos)):\n" + lines.joined(separator: "\n"))
+            log("todos (ready \(workspace.todos.isReady), \(workspace.todos.items.count) open, \(workspace.dueTodoCount) due, showing \(workspace.showsTodos), folder \(folder?.lastPathComponent ?? "none")):\n" + lines.joined(separator: "\n"))
         case "showtodos":
-            workspace.showTodos()
-            log("showtodos: \(workspace.showsTodos)")
+            workspace.showTodos(in: argument.isEmpty ? nil : workspace.locations.first?.url.appendingPathComponent(argument))
+            log("showtodos: \(workspace.showsTodos), folder \(workspace.todosFolder?.lastPathComponent ?? "none")")
+        case "alltodos":
+            workspace.stopLimitingTodos()
+            log("alltodos: folder \(workspace.todosFolder?.lastPathComponent ?? "none")")
         case "ticktodo":
             guard let item = find(argument) else { log("ticktodo: no to-do “\(argument)”"); break }
             workspace.setTodoDone(item.reference, true)

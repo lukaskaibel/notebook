@@ -5,7 +5,8 @@ import SwiftUI
 /// Reminders edits a reminder in place, with a line for notes and buttons for its date, time and place coming in under
 /// it; click its note's name to open the note there; drag it into another group, or choose a day in its menu, and its
 /// date changes in the note. New To-do at the end of a group, or in the toolbar for today, adds one in no note
-/// (`LooseTodos`), which Move to Note… puts into a note later.
+/// (`LooseTodos`), which Move to Note… puts into a note later. Limited to a folder (`Workspace.todosFolder`), it lists
+/// what is in the folder and the folders in it, says so under its title, and adds to the folder's own To-dos note.
 struct TodosView: View {
     let workspace: Workspace
     /// On the iPad, next to the sidebar: Back and Forward in the bar, as a note has them.
@@ -115,6 +116,13 @@ struct TodosView: View {
         .onChange(of: editing?.focusRequest) { applyFocus() }
         // New To-do in the toolbar: one for today.
         .onChange(of: workspace.newTodoRequest) { newTodo(in: .today, proxy: proxy) }
+        // Another list: what was being edited or selected may not be in it.
+        .onChange(of: workspace.todosFolder) {
+            endEditing(animated: false)
+            #if os(macOS)
+            selected = nil
+            #endif
+        }
         .onChange(of: workspace.todos.items) { _, items in
             // Done, or gone from its note: no longer edited.
             if let editing, !items.contains(where: editing.isEditing) { endEditing() }
@@ -182,7 +190,7 @@ struct TodosView: View {
             }
         }
         // In the bar once the page's own title has scrolled up under it, as a note's.
-        .navigationTitle(workspace.isTitleScrolledAway ? "To-dos" : "")
+        .navigationTitle(workspace.isTitleScrolledAway ? workspace.todosTitle : "")
         .navigationBarTitleDisplayMode(.inline)
         // Shaken, Undo, as in Reminders: nothing in To-dos takes the focus but a to-do being edited.
         .onAppear { workspace.takeUndoFocusIfFree() }
@@ -267,13 +275,15 @@ struct TodosView: View {
             let url = workspace.url(for: reminder, searching: false)
             return NoteReminderRow(reminder: reminder, url: url, name: url.map(SearchSection.displayName) ?? reminder.name)
         }
-        return TodoGroups.sections(todos: workspace.todos.items, notes: notes)
+        return TodoGroups.sections(todos: workspace.todos.items, notes: notes, in: workspace.todosFolder)
     }
 
     /// The groups with rows just ticked kept in theirs, and while a row is dragged, the empty groups it can go to.
     private var shownSections: [TodoSection] {
         var byKind = Dictionary(uniqueKeysWithValues: sections.map { ($0.kind, $0) })
-        for (id, kept) in ticked.sorted(by: { $0.key < $1.key }) where byKind.values.allSatisfy({ !$0.rows.contains { $0.id == id } }) {
+        let folder = workspace.todosFolder
+        for (id, kept) in ticked.sorted(by: { $0.key < $1.key })
+        where byKind.values.allSatisfy({ !$0.rows.contains { $0.id == id } }) && folder.map(kept.row.isInside) ?? true {
             TodoGroups.keep(kept.row, in: &byKind[kept.section, default: TodoSection(kind: kept.section, rows: [])].rows, order: kept.order)
         }
         if isDragging {
@@ -308,13 +318,20 @@ struct TodosView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("To-dos")
-                .font(.system(size: Self.headerSize, weight: .bold))
-                .foregroundStyle(Color.theme(Theme.text))
-            Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)))
-                .font(.system(size: Self.dateSize))
-                .foregroundStyle(Color.theme(Theme.textTertiary))
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("To-dos")
+                    .font(.system(size: Self.headerSize, weight: .bold))
+                    .foregroundStyle(Color.theme(Theme.text))
+                Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                    .font(.system(size: Self.dateSize))
+                    .foregroundStyle(Color.theme(Theme.textTertiary))
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+            if let folder = workspace.todosFolder {
+                TodosFolderChip(name: workspace.folderName(folder)) { workspace.stopLimitingTodos() }
+            }
         }
         #if os(macOS)
         .padding(.top, 44)
@@ -322,17 +339,22 @@ struct TodosView: View {
         .padding(.top, 12)
         #endif
         .padding(.bottom, 14)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
     }
 
     private func emptyState(_ proxy: ScrollViewProxy) -> some View {
         ContentUnavailableView {
-            Label("No To-dos", systemImage: "checklist")
+            Label(workspace.todosFolder.map { "No To-dos in \(workspace.folderName($0))" } ?? "No To-dos", systemImage: "checklist")
         } description: {
-            Text("Checkboxes in your notes show here, and to-dos you add here. Give one a date, a time or a place, and Notebook reminds you of it.")
+            if workspace.todosFolder == nil {
+                Text("Checkboxes in your notes show here, and to-dos you add here. Give one a date, a time or a place, and Notebook reminds you of it.")
+            } else {
+                Text("Checkboxes in the notes of this folder and the folders in it show here. To-dos you add here go into a note called To-dos in this folder.")
+            }
         } actions: {
             Button("New To-do") { newTodo(in: .today, proxy: proxy) }
+            if workspace.todosFolder != nil {
+                Button("Show All To-dos") { workspace.stopLimitingTodos() }
+            }
         }
         .padding(.top, 80)
     }
@@ -401,15 +423,17 @@ struct TodosView: View {
         editing = session
     }
 
-    /// New To-do: a to-do in no note at the end of a group, due as the group says, to type in, as Reminders' New
-    /// Reminder. It comes into view first: a row that doesn't show isn't made, nor is its field.
+    /// New To-do: a to-do at the end of a group, due as the group says, to type in, as Reminders' New Reminder: in no
+    /// note, or limited to a folder in the folder's To-dos note, so it stays in the list. It comes into view first: a
+    /// row that doesn't show isn't made, nor is its field.
     private func newTodo(in kind: TodoSection.Kind, proxy: ScrollViewProxy) {
         guard let day = TodoSection.day(for: kind) else { return }
         endEditing(animated: false)
         #if os(iOS)
         swiped = nil
         #endif
-        guard let item = workspace.addTodo(due: day) else { return }
+        let added = if let folder = workspace.todosFolder { workspace.addTodo(due: day, in: folder) } else { workspace.addTodo(due: day) }
+        guard let item = added else { return }
         startEditing(item, at: nil, added: kind)
         DispatchQueue.main.async {
             withAnimation(Theme.spring) { proxy.scrollTo(item.id, anchor: UnitPoint(x: 0.5, y: 0.6)) }
@@ -1066,7 +1090,10 @@ struct TodoRowView: View {
             switch row {
             case .todo(let item):
                 // One in no note shows none.
-                if !item.isLoose { TodoNoteLink(name: item.note) { open() } }
+                if !item.isLoose {
+                    // Limited to a folder, the folders on the way too: their end, with the note, matters most.
+                    TodoNoteLink(name: workspace.todosFolder.map(item.place(under:)) ?? item.note, truncation: workspace.todosFolder == nil ? .tail : .middle) { open() }
+                }
             case .note:
                 TodoNoteLink(name: "Note") { open() }
             }
@@ -1230,10 +1257,12 @@ struct TodoNoteLink: View {
     var action: () -> Void
     /// Move to Note… for a to-do in no note, rather than its note's name.
     var isMove = false
+    var truncation = Text.TruncationMode.tail
     @State private var isHovered = false
 
-    init(name: String, action: @escaping () -> Void) {
+    init(name: String, truncation: Text.TruncationMode = .tail, action: @escaping () -> Void) {
         self.name = name
+        self.truncation = truncation
         self.action = action
     }
 
@@ -1248,6 +1277,7 @@ struct TodoNoteLink: View {
             Label(name, systemImage: isMove ? TodoRowView.moveSymbol : "doc.text")
                 .labelStyle(TodoMetaLabelStyle())
                 .lineLimit(1)
+                .truncationMode(truncation)
                 .foregroundStyle(isHovered ? Color.accentColor : Color.theme(Theme.textTertiary))
                 .padding(.horizontal, 5)
                 .padding(.vertical, 2)
@@ -1346,6 +1376,43 @@ extension View {
         accessibilityElement(children: .ignore)
             .accessibilityLabel(words)
             .accessibilityAddTraits(opensPicker ? .isButton : [])
+    }
+}
+
+/// The folder To-dos is limited to, under its title; × shows every to-do again.
+struct TodosFolderChip: View {
+    let name: String
+    var clear: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "folder.fill")
+                .foregroundStyle(Color.accentColor)
+                .accessibilityHidden(true)
+            Text(name)
+                .lineLimit(1)
+                .foregroundStyle(Color.theme(Theme.text))
+                .accessibilityLabel("Only in \(name)")
+            Button(action: clear) {
+                Image(systemName: "xmark.circle.fill")
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(Color.theme(Theme.textTertiary))
+                    // Easier to hit than it looks, above all with a finger.
+                    .padding(8)
+                    .contentShape(.rect)
+                    .padding(-8)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Show All To-dos")
+            #if os(macOS)
+            .help("Show all to-dos")
+            #endif
+        }
+        .font(.system(size: TodosView.metaSize + 1, weight: .medium))
+        .padding(.leading, 10)
+        .padding(.trailing, 7)
+        .padding(.vertical, 6)
+        .background(Color.primary.opacity(0.06), in: .capsule)
     }
 }
 
