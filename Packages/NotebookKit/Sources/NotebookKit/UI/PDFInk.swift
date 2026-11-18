@@ -127,17 +127,25 @@ enum PDFInk {
 /// Markup's entry, measured from the top left of the page's crop box, which is the entry's box and canvas; once PDFKit
 /// has written the file, `PDFMarkupEntries` puts the copy of the annotation next to it that Apple's apps need.
 final class InkAnnotation: PDFAnnotation {
-    private let drawing: PKDrawing
-    /// The page's crop box, whose top left the strokes are measured from.
-    private let crop: CGRect
+    /// A line of the look, on the page: its colour, and its points with how wide it is at each.
+    private struct Line {
+        var color: CGColor
+        var points: [(location: CGPoint, width: CGFloat)]
+    }
+
+    private let lines: [Line]
     private static let rgb = CGColorSpaceCreateDeviceRGB()
 
     init(drawing: PKDrawing, on page: PDFPage) {
-        self.drawing = drawing
-        crop = page.bounds(for: .cropBox)
-        let strokes = drawing.bounds.insetBy(dx: -2, dy: -2)
-        super.init(bounds: CGRect(x: crop.minX + strokes.minX, y: crop.maxY - strokes.maxY, width: strokes.width, height: strokes.height),
-                   forType: .stamp, withProperties: nil)
+        let crop = page.bounds(for: .cropBox)
+        lines = Self.lines(of: drawing, on: crop)
+        // Other apps cut the look off at the box. It can be wider than the strokes are in PencilKit, which draws a
+        // marker or a fountain pen narrower than its points' size, so the box goes around both.
+        let strokes = drawing.bounds
+        let box = CGRect(x: crop.minX + strokes.minX, y: crop.maxY - strokes.maxY, width: strokes.width, height: strokes.height)
+            .union(Self.extent(of: lines))
+            .insetBy(dx: -2, dy: -2)
+        super.init(bounds: box, forType: .stamp, withProperties: nil)
         if let entry = MarkupInkArchive.encoded(drawing, on: crop) {
             setValue([MarkupDrawings.annotationKey: entry] as NSDictionary, forAnnotationKey: MarkupDrawings.extrasKey)
         } else {
@@ -156,19 +164,27 @@ final class InkAnnotation: PDFAnnotation {
         defer { context.restoreGState() }
         context.setLineCap(.round)
         context.setLineJoin(.round)
-        for stroke in drawing.strokes {
-            var (red, green, blue, alpha) = Self.paperColor(of: stroke.ink)
-            if stroke.ink.inkType == .marker { alpha *= 0.5 }
-            // Plain RGB: a colour space of its own would put a colour profile into the PDF with every save.
-            let ink = CGColor(colorSpace: Self.rgb, components: [red, green, blue, alpha].map { min(max($0, 0), 1) })
-                ?? CGColor(gray: 0, alpha: 1)
+        for line in lines {
             context.setStrokeColorSpace(Self.rgb)
             context.setFillColorSpace(Self.rgb)
-            context.setStrokeColor(ink)
-            context.setFillColor(ink)
+            context.setStrokeColor(line.color)
+            context.setFillColor(line.color)
+            draw(line.points, in: context)
+        }
+    }
+
+    /// The strokes as the lines of the look.
+    private static func lines(of drawing: PKDrawing, on crop: CGRect) -> [Line] {
+        var lines: [Line] = []
+        for stroke in drawing.strokes {
+            var (red, green, blue, alpha) = paperColor(of: stroke.ink)
+            if stroke.ink.inkType == .marker { alpha *= 0.5 }
+            // Plain RGB: a colour space of its own would put a colour profile into the PDF with every save.
+            let color = CGColor(colorSpace: rgb, components: [red, green, blue, alpha].map { min(max($0, 0), 1) })
+                ?? CGColor(gray: 0, alpha: 1)
             let scale = hypot(stroke.transform.a, stroke.transform.b)
             for range in stroke.maskedPathRanges {
-                let points = stroke.path.interpolatedPoints(in: range, by: .distance(1)).map { point in
+                var points = stroke.path.interpolatedPoints(in: range, by: .distance(1)).map { point in
                     let location = point.location.applying(stroke.transform)
                     return (location: CGPoint(x: crop.minX + location.x, y: crop.maxY - location.y), width: max(point.size.width * scale, 0.3))
                 }
@@ -176,12 +192,23 @@ final class InkAnnotation: PDFAnnotation {
                 // be darker where they meet. (A layer to draw it in doesn't survive PDFKit's writing.)
                 if alpha < 1 {
                     let widths = points.map(\.width).sorted()
-                    draw(points.map { ($0.location, widths.isEmpty ? 1 : widths[widths.count / 2]) }, in: context)
-                } else {
-                    draw(points, in: context)
+                    points = points.map { ($0.location, widths.isEmpty ? 1 : widths[widths.count / 2]) }
                 }
+                lines.append(Line(color: color, points: points))
             }
         }
+        return lines
+    }
+
+    /// What the lines cover, their round ends included.
+    private static func extent(of lines: [Line]) -> CGRect {
+        var extent = CGRect.null
+        for line in lines {
+            for point in line.points {
+                extent = extent.union(CGRect(x: point.location.x - point.width / 2, y: point.location.y - point.width / 2, width: point.width, height: point.width))
+            }
+        }
+        return extent
     }
 
     /// The ink's colour as on paper, in Light Mode: black ink stays black.
