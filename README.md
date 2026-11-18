@@ -133,7 +133,9 @@ doesn't move: in the drawing on screen, or in a new one below the line you're wr
 it's on screen, or else below the line in the middle of the screen. A new drawing is as wide as the text and grows as
 you draw near its lower edge, so you can keep going down. As in Notes, there's no frame around it: you draw in the space
 between the lines of text, and at the end of the note anywhere below the text. Text stays text: you draw in the
-drawings, never over the words. On iPhone and iPad it is PencilKit with Apple's own tool picker, so Apple Pencil with
+drawings, never over the words. On iPad you don't need the pencil at all: write with Apple Pencil anywhere in the text
+and a drawing starts there, with your stroke in it, on an empty line or below the line or table you touched, while a
+tap with Apple Pencil still puts the caret. On iPhone and iPad it is PencilKit with Apple's own tool picker, so Apple Pencil with
 its pressure and tilt, the ruler and the lasso work as they do in Notes; one finger draws and two scroll, or, where only
 Apple Pencil draws, a finger scrolls. On the iPhone, Undo is in the bar at the top while you draw, as in Notes; touch
 and hold it for Redo. On the Mac you draw with the mouse, the trackpad or a tablet's pen, with a pen, pencil, marker or
@@ -972,6 +974,7 @@ Replace; otherwise ⌥⌘F searches. On iPhone and iPad:
 | Swipe a to-do in To-dos to the left | Delete; all the way across deletes it at once |
 | Shake the iPhone in To-dos | Undo or Redo what you last did to a to-do |
 | Tap a drawing | Draw in it |
+| Write with Apple Pencil in a note (iPad) | Start a drawing there, or go on in the drawing you touched |
 | Tap the pen above a PDF | Write and draw on its pages; what you write is saved into the PDF as you go |
 | While writing on a PDF: pull past the last page and let go | A new page, of the paper and size of the page before it |
 | While writing on a PDF: Add, Page | Pictures and new pages; the page in view's paper, or Delete Page (on the iPhone both are in Add) |

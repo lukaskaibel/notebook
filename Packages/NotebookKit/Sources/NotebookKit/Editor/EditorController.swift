@@ -238,6 +238,7 @@ public final class EditorController: NSObject, @preconcurrency NSTextStorageDele
     var writingBar: UIView?
     /// Touching and holding pictures, and dragging them.
     var pictureInteractions: PictureInteractions?
+    var pencilWriting: PencilWriting?
     #endif
     /// Where the `[[` the popup completes starts (just after the brackets). While it is set, that link is drawn as
     /// the text being typed rather than as a finished link.

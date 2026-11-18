@@ -34,6 +34,11 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         // would show the text view's, which it is inside of.
         view.titleField.inputAccessoryView = UIView(frame: .zero)
 
+        // Apple Pencil draws in the note (`PencilWriting`), and Scribble writes only in the title, while not drawing.
+        view.addInteraction(UIScribbleInteraction(delegate: self))
+        view.titleField.addInteraction(UIScribbleInteraction(delegate: self))
+        pencilWriting = PencilWriting(editor: self)
+
         view.textDragDelegate = self
         view.textDropDelegate = self
         let pictures = PictureInteractions(editor: self)
@@ -72,7 +77,7 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
     var isTracking: Bool {
         func active(_ view: UIView) -> Bool {
             (view.gestureRecognizers ?? []).contains { recognizer in
-                recognizer !== textView.panGestureRecognizer && recognizer !== textView.pinchGestureRecognizer
+                recognizer !== textView.panGestureRecognizer && recognizer !== textView.pinchGestureRecognizer && !(recognizer is PencilStrokeRecognizer)
                     && (recognizer.state == .began || recognizer.state == .changed)
             }
         }

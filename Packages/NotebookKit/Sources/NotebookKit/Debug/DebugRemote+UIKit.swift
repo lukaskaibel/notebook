@@ -770,6 +770,15 @@ enum DebugRemote {
                 log("barscroll \(type(of: controller)): \(view === editor.textView ? "the note's text view" : view.map { "\(type(of: $0))" } ?? "none")"
                     + (view === editor.textView && editor.textView.window == nil ? ", not in a window" : ""))
             }
+        case "scribbleat":
+            // scribbleat <x> <y>: whether Scribble may start there, in the text and in the title, as the system asks.
+            let point = CGPoint(x: numbers.first ?? 0, y: numbers.count > 1 ? numbers[1] : 0)
+            let answers = ([editor.textView, editor.textView.titleField] as [UIView]).map { view in
+                view.interactions.compactMap { $0 as? UIScribbleInteraction }.map { $0.delegate?.scribbleInteraction?($0, shouldBeginAt: point) ?? true }
+            }
+            log("scribble text \(answers[0]) title \(answers[1])")
+        case "scribblefuzz":
+            editor.debugScribbleFuzz(seed: Int(numbers.first ?? 1), steps: Int(numbers.count > 1 ? numbers[1] : 200), log: log)
         case "drawing", "drawstroke", "drawinfo", "drawundo", "drawredo":
             log(editor.debugDrawing(command, argument))
         case "drawpolicy":

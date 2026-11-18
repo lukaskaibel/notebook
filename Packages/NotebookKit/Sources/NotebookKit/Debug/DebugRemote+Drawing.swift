@@ -69,6 +69,12 @@ extension EditorController {
                 #endif
             }
             lines.append(line)
+            #if os(iOS)
+            for stroke in drawingSession?.canvases[picture]?.drawing.strokes ?? [] {
+                let point = stroke.path[stroke.path.count / 2]
+                lines.append("    stroke \(stroke.ink.inkType.rawValue) tool width \((drawingSession?.canvases[picture]?.tool as? PKInkingTool)?.width ?? 0), \(stroke.path.count) points, bounds \(stroke.renderBounds.integral), size \(point.size.width), force \(point.force), altitude \(point.altitude), opacity \(point.opacity)")
+            }
+            #endif
         }
         #if os(iOS)
         if let paused = drawingSession?.pausedGestures { lines.append("paused gestures: \(paused.map { String(describing: type(of: $0)) })") }
