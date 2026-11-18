@@ -19,6 +19,11 @@ final class DrawingSession {
     var bottoms: [URL: CGFloat] = [:]
     var saveWork: DispatchWorkItem?
     #if os(iOS)
+    /// Strokes Apple Pencil wrote outside a canvas, shown over the note until they can go into their drawings.
+    var waitingStrokes: [URL: [WaitingPencilStroke]] = [:]
+    var waitingStrokesWork: DispatchWorkItem?
+    /// A canvas is taking a stroke now.
+    var isStrokeUnderWay = false
     let toolPicker = PKToolPicker()
     /// Gestures of the screen that would take a stroke for themselves, off while drawing.
     var pausedGestures: [UIGestureRecognizer] = []
@@ -51,21 +56,22 @@ extension EditorController {
     }
 
     /// Starts drawing mode where you are, without moving the note: in `picture`, in the drawing at the caret, in the
-    /// drawing on screen, or in a new drawing put in at the caret or on screen.
-    public func beginDrawing(in picture: URL? = nil) {
+    /// drawing on screen, or in a new drawing put in at the caret or on screen; with `character`, in a new drawing at
+    /// the line of that character.
+    public func beginDrawing(in picture: URL? = nil, atCharacter character: Int? = nil) {
         // Not while the note is between screens: the canvases and the tools need it on one.
         guard !isDrawing, !isLoading, !isWaitingForText, isInWindow, assetsFolder != nil else { return }
         closeSuggestions()
         let top = scrollTop
         let session = DrawingSession()
         let writing = isWritingInView
-        var target = picture ?? (writing ? drawingAtCaret() : drawingInView())
+        var target = picture ?? (character != nil ? nil : writing ? drawingAtCaret() : drawingInView())
         if target == nil {
             #if os(iOS)
             // A new drawing's files go into `.assets`, which a note opened from another app needs its folder for.
-            guard mayStoreAssets(orRetry: { [weak self] in self?.beginDrawing(in: picture) }) else { return }
+            guard mayStoreAssets(orRetry: { [weak self] in self?.beginDrawing(in: picture, atCharacter: character) }) else { return }
             #endif
-            guard let (url, insertion) = insertDrawing(at: writing ? selection.location : lineInView(), writing: writing) else { return beep() }
+            guard let (url, insertion) = insertDrawing(at: character ?? (writing ? selection.location : lineInView()), writing: character == nil && writing) else { return beep() }
             session.created[url] = insertion
             target = url
         }
@@ -87,6 +93,9 @@ extension EditorController {
     public func endDrawing(keeping anchor: Int? = nil) {
         guard let session = drawingSession else { return }
         session.saveWork?.cancel()
+        #if os(iOS)
+        addWaitingPencilStrokes()
+        #endif
         let empty = session.created.filter { picture, _ in session.canvases[picture]?.file.drawing.strokes.isEmpty ?? true }
         let dark = isDarkAppearance
         for (picture, canvas) in session.canvases {
@@ -135,6 +144,9 @@ extension EditorController {
 
     /// Writes what was drawn now: the app is going to the background, or (`waiting` until it is written) quitting.
     public func saveDrawingsNow(waiting: Bool = false) {
+        #if os(iOS)
+        addWaitingPencilStrokes()
+        #endif
         drawingSession?.saveWork?.cancel()
         saveDrawings()
         if waiting { DrawingFile.writing.sync {} }
@@ -245,7 +257,7 @@ extension EditorController {
     /// Writes an empty drawing as wide as the text and puts it in on a line of its own, at the line of `caret`: on it
     /// if it is empty, above it when you are `writing` with the caret at its start, below it otherwise, so no text is
     /// split. At the end of the note a line follows it to go on writing in.
-    private func insertDrawing(at caret: Int, writing: Bool) -> (URL, (location: Int, inserted: String, replaced: String))? {
+    func insertDrawing(at caret: Int, writing: Bool) -> (URL, (location: Int, inserted: String, replaced: String))? {
         guard let picture = newDrawingURL() else { return nil }
         let width = floor(max(40, container.size.width - 2))
         let height = min(max(visibleRect.height * 0.42, 220), 420).rounded()
@@ -349,6 +361,9 @@ extension EditorController {
             var area = rect
             if endsNote(index) { area.size.height = max(rect.height, pageBottom - rect.minY) }
             canvas.place(in: area)
+            #if os(iOS)
+            if session.waitingStrokes[picture] != nil { scheduleWaitingPencilStrokes() }
+            #endif
         }
         for (picture, canvas) in session.canvases where !seen.contains(picture) {
             if canvas.hasUnsavedChanges { save(canvas) }

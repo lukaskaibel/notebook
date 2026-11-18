@@ -7,6 +7,10 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- On iPad, write with Apple Pencil anywhere in a note and a drawing starts there, without pressing the pencil first:
+  on an empty line, below the line or table you wrote on, or in the drawing you touched. A tap with Apple Pencil still
+  puts the caret in the text. Scribble no longer turns writing in a note's text into typed text, or pulls a stroke
+  into the text while you draw; it still works in the title.
 - Show To-dos in a folder's menu lists only the to-dos in that folder and the folders in it, by day as To-dos always
   does, on the Mac, iPhone and iPad. The folder's name shows under the title, each row says which folder and note it is
   in, and the × next to the name, the To-dos tile, ⇧⌘R and ⌘K show every to-do again. New To-do there adds to a note
@@ -50,8 +54,6 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
-- On iPad, Apple Pencil stays in the drawing while drawing is on. Scribble could take a stroke for handwriting and put
-  it into the note's text, which also ended drawing under the stroke.
 - Handwriting no longer gets blurrier each time a PDF goes back and forth between Notebook and Preview. When Preview
   saved, it kept only the look of what Notebook had written and dropped the strokes, so Notebook showed that writing
   blurry when zoomed and couldn't change it any more; and a save in Notebook could leave only a picture of what

@@ -128,7 +128,14 @@ final class DrawingCanvas: PKCanvasView {
     fileprivate func beganUsingTool() {
         // The tool picker goes with the drawing drawn in.
         if !isFirstResponder { _ = becomeFirstResponder() }
+        editor?.drawingSession?.isStrokeUnderWay = true
+        editor?.drawingSession?.waitingStrokesWork?.cancel()
         editor?.canvasDidBeginStroke(self)
+    }
+
+    fileprivate func endedUsingTool() {
+        editor?.drawingSession?.isStrokeUnderWay = false
+        editor?.scheduleWaitingPencilStrokes()
     }
 
     /// Adds a stroke as if it had been drawn, through `points` in the drawing's points (the debug remote's).
@@ -139,6 +146,50 @@ final class DrawingCanvas: PKCanvasView {
         var drawing = self.drawing
         drawing.strokes.append(PKStroke(ink: ink, path: PKStrokePath(controlPoints: strokePoints, creationDate: Date())))
         replaceDrawing(with: drawing)
+    }
+
+    /// Where a stroke Apple Pencil wrote outside the canvas goes, in the drawing's points, and how far that moves it
+    /// on screen: it stays where it was written, moved only as far as it takes to lie on the drawing.
+    func placement(of samples: [PencilSample]) -> (points: [CGPoint], moved: CGPoint) {
+        let scale = frame.width / max(1, file.size.width)
+        let points = samples.map { CGPoint(x: ($0.location.x - frame.minX) / scale, y: ($0.location.y - frame.minY) / scale) }
+        let margin: CGFloat = 8
+        let minX = points.map(\.x).min() ?? 0, maxX = points.map(\.x).max() ?? 0, minY = points.map(\.y).min() ?? 0
+        var shift = CGPoint(x: 0, y: max(0, margin - minY))
+        if minX < margin { shift.x = margin - minX } else if maxX > file.size.width - margin { shift.x = max(margin - minX, file.size.width - margin - maxX) }
+        return (points.map { CGPoint(x: $0.x + shift.x, y: $0.y + shift.y) }, CGPoint(x: shift.x * scale, y: shift.y * scale))
+    }
+
+    /// Adds a stroke Apple Pencil wrote outside the canvas, with `tool`.
+    func addPencilStroke(_ samples: [PencilSample], tool: PKInkingTool) {
+        guard let first = samples.first else { return }
+        let size = Self.pointSize(of: tool)
+        let strokePoints = zip(placement(of: samples).points, samples).map { point, sample in
+            PKStrokePoint(location: point, timeOffset: sample.time - first.time, size: CGSize(width: size, height: size),
+                          opacity: 1, force: sample.force, azimuth: sample.azimuth, altitude: sample.altitude)
+        }
+        var drawing = self.drawing
+        drawing.strokes.append(PKStroke(ink: tool.ink, path: PKStrokePath(controlPoints: strokePoints, creationDate: Date())))
+        replaceDrawing(with: drawing)
+        // At once, for drawing mode ending right now to find it.
+        drawingChanged()
+    }
+
+    /// How big PencilKit makes the points of a stroke drawn with `tool`, which isn't the tool's width: measured on its
+    /// own strokes, per ink, so that the stroke that starts a drawing looks like the ones after it.
+    private static func pointSize(of tool: PKInkingTool) -> CGFloat {
+        let (base, scale): (CGFloat, CGFloat) = switch tool.inkType.rawValue.components(separatedBy: ".").last {
+        case "pen": (2.74, 0.17)
+        case "monoline": (2.5, 0)
+        case "marker": (0, 2.0 / 3)
+        case "pencil": (0, 0.5)
+        case "crayon": (0, 0.62)
+        case "watercolor": (0, 0.65)
+        case "fountainpen": (0, 1.13)
+        case "reedcalligraphy": (0, 0.96)
+        default: (0, 1)
+        }
+        return base + scale * tool.width
     }
 
     private func replaceDrawing(with new: PKDrawing) {
@@ -166,13 +217,9 @@ private final class CanvasEvents: NSObject, PKCanvasViewDelegate {
     func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
         canvas?.beganUsingTool()
     }
-}
 
-/// Apple Pencil on a canvas inside a text view: the text view would take the stroke for handwriting, which Scribble
-/// turns into text there, and taking the focus for it would end drawing under the stroke. So no Scribble while drawing.
-extension EditorController: UIScribbleInteractionDelegate {
-    public func scribbleInteraction(_ interaction: UIScribbleInteraction, shouldBeginAt location: CGPoint) -> Bool {
-        !isDrawing
+    func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) {
+        canvas?.endedUsingTool()
     }
 }
 
