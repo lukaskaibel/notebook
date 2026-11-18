@@ -232,7 +232,7 @@ struct MoreMenu: View {
                 MenuEntry("Print…", "printer", keys: "⌘P", enabled: note.isLoaded) { workspace.printNote() }
             }
             MenuEntry.divider
-            MenuEntry("Move to Trash", "trash", destructive: true) { workspace.trash(url) }
+            MenuEntry("Move to Trash", "trash", destructive: true) { workspace.trashAfterAsking(url) }
         } label: {
             Label("More", systemImage: "ellipsis")
         }

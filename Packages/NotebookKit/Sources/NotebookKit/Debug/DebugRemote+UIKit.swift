@@ -514,10 +514,13 @@ enum DebugRemote {
             // notrash on|off: every place as one without Recently Deleted, or as it is.
             UserDefaults.standard.set(argument != "off", forKey: "NotebookNoRecentlyDeleted")
         case "asking":
-            // asking: the file "Delete immediately?" asks about now, and those after it.
-            log("asking \(workspace.deleting?.lastPathComponent ?? "-") then \(workspace.deleteQuestions.waiting.map(\.lastPathComponent))")
+            // asking: the file "Delete?" or "Delete immediately?" asks about now, and those after it.
+            log("asking \(workspace.deleting?.lastPathComponent ?? "-") confirming \(workspace.deleteQuestions.isConfirming) then \(workspace.deleteQuestions.waiting.map(\.lastPathComponent))")
         case "trash":
             if let url = url(argument) { workspace.trash(url) }
+        case "delete":
+            // delete <path>: what Delete in a menu does, which asks about a note with something in it.
+            if let url = url(argument) { workspace.trashAfterAsking(url) }
         case "keyundo", "keyredo":
             // keyundo, keyredo: ⌘Z and ⇧⌘Z on a keyboard, as UIKit sends them: from the first responder, or the window
             // without one, up to what takes them. Says where they went and what Undo would have said.

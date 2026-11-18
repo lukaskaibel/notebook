@@ -101,7 +101,7 @@ public struct NotebookScene: Scene {
                 Button { workspace.renameInFront() } label: { Label("Rename", systemImage: "pencil") }
                     .disabled(!workspace.hasNoteInFront)
                 // Without ⌘⌫, which deletes to the start of the line as you type; the sidebar takes it.
-                Button { if let file { workspace.trash(file) } } label: { Label("Move to Trash", systemImage: "trash") }
+                Button { if let file { workspace.trashAfterAsking(file) } } label: { Label("Move to Trash", systemImage: "trash") }
                     .disabled(file == nil)
                 if workspace.revertNote != nil {
                     Menu {
@@ -352,7 +352,7 @@ struct GeneralSettings: View {
                 }
                 Button("Open Folder…") { workspace.chooseLocation(iCloud: false) }
             }
-            Section("New notes") {
+            Section("Notes") {
                 let folder = workspace.defaultFolder
                 LabeledContent("Default folder") {
                     if folder != nil {
@@ -367,6 +367,10 @@ struct GeneralSettings: View {
                     .foregroundStyle(.secondary)
                 Toggle("Delete notes left empty", isOn: Bindable(NotebookSettings.shared).deletesEmptyNotes)
                 Text("A note you leave or quit with no text in it, or only spaces, goes to the Trash, unless it has a reminder or is a favourite.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                Toggle("Ask before deleting notes", isOn: Bindable(NotebookSettings.shared).asksBeforeDeletingNotes)
+                Text("Notebook asks before a note with something in it goes to the Trash. Empty notes go right away.")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }

@@ -103,7 +103,7 @@ extension Workspace {
             #endif
             #if os(macOS)
             list.append(PaletteCommand(id: "trash", title: "Move to Trash", symbol: "trash", section: section, keys: ["⌘", "⌫"], keywords: ["delete", "remove"]) { [self] in
-                trash(url)
+                trashAfterAsking(url)
             })
             #else
             // As the ⋯ menu says it: there is no Trash here, and no ⌘⌫, which deletes text in a note.
@@ -113,7 +113,7 @@ extension Workspace {
                 })
             }
             list.append(PaletteCommand(id: "trash", title: "Delete", symbol: "trash", section: section, keywords: ["trash", "remove"]) { [self] in
-                trash(url)
+                trashAfterAsking(url)
             })
             #endif
         }

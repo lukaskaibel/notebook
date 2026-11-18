@@ -259,7 +259,7 @@ struct DocumentScreen: View {
                 if isKept {
                     MenuEntry("Remove from Notebook", "minus.circle", destructive: true) { workspace.removeKeptFile(url) }
                 } else {
-                    MenuEntry("Delete", "trash", destructive: true) { workspace.trash(url) }
+                    MenuEntry("Delete", "trash", destructive: true) { workspace.trashAfterAsking(url) }
                 }
             } else {
                 if !isInSplitView {

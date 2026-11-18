@@ -325,10 +325,11 @@ struct TouchSettings: View {
                         LabeledContent("Default Folder", value: "–")
                     }
                     Toggle("Delete Notes Left Empty", isOn: Bindable(NotebookSettings.shared).deletesEmptyNotes)
+                    Toggle("Ask Before Deleting Notes", isOn: Bindable(NotebookSettings.shared).asksBeforeDeletingNotes)
                 } header: {
                     Text("Notes")
                 } footer: {
-                    Text("New notes go into the folder you’re in; made anywhere else, they go to the default folder. A note you leave with no text in it, or only spaces, is deleted, unless it has a reminder or is a favourite, and so is a new handwritten note you leave without writing in it.")
+                    Text("New notes go into the folder you’re in; made anywhere else, they go to the default folder. A note you leave with no text in it, or only spaces, is deleted, unless it has a reminder or is a favourite, and so is a new handwritten note you leave without writing in it. Notebook asks before deleting a note with something in it; empty notes go right away.")
                 }
                 TodosSetting()
                 Section {

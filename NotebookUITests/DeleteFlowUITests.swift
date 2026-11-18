@@ -228,6 +228,108 @@ final class DeleteFlowUITests: XCTestCase {
         assertShown("Shared link", within: 3)
     }
 
+    // MARK: - Asking first
+
+    /// A note with something in it stays where it is until you say so, and Cancel leaves it.
+    func testDeletingANoteWithSomethingInItAsks() throws {
+        launch(slowWrites: 0, asks: true)
+        tap("Inbox")
+        row("Errands").press(forDuration: 1.2)
+        tap("Delete")
+        let cancel = app.alerts.buttons["Cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.alerts.staticTexts["Delete “Errands”?"].exists, app.debugDescription)
+        assertShown("Errands", within: 0.1)
+        pause()
+        cancel.tap()
+        XCTAssertTrue(app.alerts.firstMatch.waitForNonExistence(timeout: 3), app.debugDescription)
+        assertShown("Errands", within: 0.1)
+        pause()
+        row("Errands").press(forDuration: 1.2)
+        tap("Delete")
+        let delete = app.alerts.buttons["Delete"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 10), app.debugDescription)
+        pause()
+        delete.tap()
+        assertGone("Errands", within: 3)
+    }
+
+    /// A swipe asks too, with the row back in its place behind the question.
+    func testASwipeAsks() throws {
+        try XCTSkipIf(isPad, "the iPad's sidebar has no swipes")
+        launch(slowWrites: 0, asks: true)
+        tap("Inbox")
+        row("Gift ideas").swipeLeft()
+        pause(0.5)
+        tap("Delete")
+        let cancel = app.alerts.buttons["Cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10), app.debugDescription)
+        assertShown("Gift ideas", within: 0.1)
+        pause()
+        cancel.tap()
+        XCTAssertTrue(app.alerts.firstMatch.waitForNonExistence(timeout: 3), app.debugDescription)
+        assertShown("Gift ideas", within: 1)
+        assertShown("Errands", within: 0.1)
+    }
+
+    /// From the ⋯ menu of the note you are in: you stay in it until you say so.
+    func testDeletingTheOpenNoteAsks() throws {
+        launch(slowWrites: 0, asks: true)
+        tap("Inbox")
+        tap("Errands")
+        waitForNote()
+        func deleteFromMenu() {
+            let more = app.buttons.matching(NSPredicate(format: "label == %@", "More")).allElementsBoundByIndex.filter(isOnScreen)
+            more.max { $0.frame.minX < $1.frame.minX }?.tap()
+            pause(0.5)
+            tap("Delete")
+        }
+        deleteFromMenu()
+        let cancel = app.alerts.buttons["Cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10), app.debugDescription)
+        pause()
+        cancel.tap()
+        XCTAssertTrue(app.alerts.firstMatch.waitForNonExistence(timeout: 3), app.debugDescription)
+        waitForNote()
+        deleteFromMenu()
+        let delete = app.alerts.buttons["Delete"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 10), app.debugDescription)
+        delete.tap()
+        if !isPad { XCTAssertTrue(app.navigationBars["Inbox"].waitForExistence(timeout: 5), app.debugDescription) }
+        assertGone("Errands", within: 3)
+    }
+
+    /// An empty note goes as it always did.
+    func testAnEmptyNoteGoesWithoutAsking() throws {
+        launch(slowWrites: 0, inReach: true, asks: true)
+        XCTAssertTrue(row("Inbox").waitForExistence(timeout: 10), app.debugDescription)
+        let empty = try XCTUnwrap(library).appendingPathComponent("Inbox/Nothing yet.md")
+        try "  \n\n".write(to: empty, atomically: true, encoding: .utf8)
+        tap("Inbox")
+        assertShown("Nothing yet", within: 10)
+        row("Nothing yet").press(forDuration: 1.2)
+        tap("Delete")
+        assertGone("Nothing yet", within: 3)
+        XCTAssertFalse(app.alerts.firstMatch.exists, app.debugDescription)
+    }
+
+    /// Where there is no Recently Deleted, agreeing to it isn't the end of it: the note can't come back from there, and
+    /// the second question says so, after the first has gone.
+    func testWithoutRecentlyDeletedBothQuestionsShow() throws {
+        launch(slowWrites: 0, recentlyDeleted: false, asks: true)
+        tap("Inbox")
+        row("Errands").press(forDuration: 1.2)
+        tap("Delete")
+        let first = app.alerts.staticTexts["Delete “Errands”?"]
+        XCTAssertTrue(first.waitForExistence(timeout: 10), app.debugDescription)
+        app.alerts.buttons["Delete"].tap()
+        let second = app.alerts.staticTexts["Delete “Errands” immediately?"]
+        XCTAssertTrue(second.waitForExistence(timeout: 10), app.debugDescription)
+        pause()
+        app.alerts.buttons["Delete"].tap()
+        assertGone("Errands", within: 3)
+    }
+
     // MARK: - Undo of what Notebook made
 
     /// Undo of a copy, where a place has no Recently Deleted: as it was made, it is deleted without a question. Changed
@@ -299,7 +401,9 @@ final class DeleteFlowUITests: XCTestCase {
 
     /// `inReach`: the sample notes in a folder of the test's own, where it can change them as another app would; else
     /// in the app's home.
-    private func launch(slowWrites: Double, recentlyDeleted: Bool = true, inReach: Bool = false, slowDrawingSaves: Double = 0) {
+    /// `asks`: as Settings have it unless you turn it off, Delete asks about a note with something in it. Off for the
+    /// tests of what deleting does, which don't want to answer every time.
+    private func launch(slowWrites: Double, recentlyDeleted: Bool = true, inReach: Bool = false, slowDrawingSaves: Double = 0, asks: Bool = false) {
         app = XCUIApplication()
         // A `~` is the app's home in the Simulator, which has no sandbox to keep the app out of the test's folders.
         var path = "~/Documents/UITests-\(UUID().uuidString)"
@@ -311,6 +415,7 @@ final class DeleteFlowUITests: XCTestCase {
         app.launchArguments = ["-NotebookLibrary", path, "-NotebookLibraryName", "Library",
                                "-NotebookDemo", "YES", "-NotebookTips", "hide", "-NotebookSlowWrites", "\(slowWrites)",
                                "-NotebookNoRecentlyDeleted", recentlyDeleted ? "NO" : "YES",
+                               "-asksBeforeDeletingNotes", asks ? "YES" : "NO",
                                "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         if slowDrawingSaves > 0 {
             FileManager.default.createFile(atPath: commands.path, contents: nil)

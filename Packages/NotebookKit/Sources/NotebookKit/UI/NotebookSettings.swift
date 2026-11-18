@@ -187,6 +187,11 @@ public final class NotebookSettings {
         didSet { UserDefaults.standard.set(deletesEmptyNotes, forKey: "deletesEmptyNewNotes") }
     }
 
+    /// Deleting a note with something in it asks first. An empty one goes right away either way.
+    public var asksBeforeDeletingNotes: Bool {
+        didSet { UserDefaults.standard.set(asksBeforeDeletingNotes, forKey: "asksBeforeDeletingNotes") }
+    }
+
     #if os(macOS)
     /// Spelling in notes, as Edit › Spelling and Grammar sets it for every note: underlined as you type, grammar with
     /// it, and corrected as you go.
@@ -251,6 +256,8 @@ public final class NotebookSettings {
         editsTablesAsMarkdown = defaults.bool(forKey: "editsTablesAsMarkdown")
         readsTextInPictures = defaults.object(forKey: "readsTextInPictures") as? Bool ?? true
         deletesEmptyNotes = defaults.object(forKey: "deletesEmptyNewNotes") as? Bool ?? true
+        // Not `as? Bool`: given on the command line, as the UI tests do, it is text.
+        asksBeforeDeletingNotes = defaults.object(forKey: "asksBeforeDeletingNotes") == nil || defaults.bool(forKey: "asksBeforeDeletingNotes")
         newNoteKind = NewNoteKind(rawValue: defaults.string(forKey: "newNoteKind") ?? "") ?? .standard
         paper = PaperStyle(rawValue: defaults.string(forKey: "paper") ?? "") ?? .lined
         paperSize = PaperSize(rawValue: defaults.string(forKey: "paperSize") ?? "") ?? .regional

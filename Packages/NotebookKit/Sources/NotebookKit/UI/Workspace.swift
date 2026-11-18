@@ -223,8 +223,8 @@ public final class Workspace: NSObject {
     /// The folder Import from Apple Notes puts the notes in, while the Files app's picker asks for them.
     var appleNotesImportFolder: URL?
     #endif
-    /// The files to delete for good, once you said so, where there is no Recently Deleted to put them in: asked about
-    /// one at a time.
+    /// The files to delete once you said so, notes with something in them, and where there is no Recently Deleted to
+    /// put them in, for good: asked about one at a time.
     var deleteQuestions = DeleteQuestions()
     /// The file asked about now.
     var deleting: URL? { deleteQuestions.asking }
@@ -312,6 +312,8 @@ public final class Workspace: NSObject {
     @ObservationIgnored lazy var ownUndoManager = UndoManager()
     /// The new note that is open, made a moment ago: left empty, it goes away, and so does its New Note in Undo.
     @ObservationIgnored weak var newNoteChange: FileChange?
+    /// The notes being looked at or asked about before they go to the Trash, by path.
+    @ObservationIgnored var askingBeforeTrashing = Set<String>()
     #if os(iOS)
     /// What Notebook knew about files it couldn't put in the Trash, before it closed them, by path: for deleting them
     /// for good.
@@ -2542,12 +2544,19 @@ public final class Workspace: NSObject {
         return deleted
     }
 
-    /// The answer to "Delete immediately?": deleted for good, or back in the lists where it was. Then the next file
-    /// waiting for the question, once this alert has gone.
+    /// The answer to "Delete?", which sends the note to the Trash or leaves it, or to "Delete immediately?": deleted for
+    /// good, or back in the lists where it was. Then the next file waiting for a question, once this alert has gone.
     func answerDeleting(_ url: URL, delete: Bool) {
+        let confirming = deleteQuestions.isConfirming
         deleteQuestions.answered(url)
-        if delete { deleteImmediately(url) } else { rememberedForDeleting[url.path] = nil }
-        endLeaving(url, animated: !delete)
+        if confirming {
+            askingBeforeTrashing.remove(url.standardizedFileURL.path)
+            // Where it can't go to the Trash, "Delete immediately?" comes next, after this alert.
+            if delete { trash(url) }
+        } else {
+            if delete { deleteImmediately(url) } else { rememberedForDeleting[url.path] = nil }
+            endLeaving(url, animated: !delete)
+        }
         Task {
             // Once the alert has gone: one asked for meanwhile wouldn't show.
             try? await Task.sleep(for: .seconds(0.5))

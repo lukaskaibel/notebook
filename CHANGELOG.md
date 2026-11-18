@@ -7,6 +7,10 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- Deleting a note with something in it now asks first, on the Mac, iPhone and iPad, from a menu, a swipe, ⌘⌫ or ⌘K, and
+  the note stays where it is until you answer. An empty note, or one with only spaces, goes right away as before, and
+  so does a handwritten note with nothing on its page. Turn off Ask before deleting notes in Settings to delete every
+  note at once.
 - On iPad, write with Apple Pencil anywhere in a note and a drawing starts there, without pressing the pencil first:
   on an empty line, below the line or table you wrote on, or in the drawing you touched. A tap with Apple Pencil still
   puts the caret in the text. Scribble no longer turns writing in a note's text into typed text, or pulls a stroke
