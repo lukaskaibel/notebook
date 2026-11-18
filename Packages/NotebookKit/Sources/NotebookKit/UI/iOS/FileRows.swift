@@ -298,7 +298,7 @@ enum FileActions {
             MenuEntry("Remove from Notebook", "minus.circle", destructive: true) { withAnimation { workspace.removeKeptFile(url) } }
         } else if !isLinked {
             MenuEntry.divider
-            MenuEntry("Delete", "trash", destructive: true) { workspace.trash(url) }
+            MenuEntry("Delete", "trash", destructive: true) { workspace.trashAfterAsking(url) }
         }
     }
 }
@@ -423,7 +423,8 @@ struct SearchResultsList: View {
     }
 }
 
-/// The alerts every screen needs: renaming, naming a new folder, deleting for good, and things that went wrong.
+/// The alerts every screen needs: renaming, naming a new folder, deleting a note with something in it or for good,
+/// and things that went wrong.
 struct FileAlerts: ViewModifier {
     @Bindable var workspace: Workspace
     @Binding var newFolderIn: URL?
@@ -487,7 +488,9 @@ struct FileAlerts: ViewModifier {
                 Button("Cancel", role: .cancel) { workspace.answerDeleting(url, delete: false) }
                 Button("Delete", role: .destructive) { workspace.answerDeleting(url, delete: true) }
             } message: { _ in
-                Text("This place has no Recently Deleted folder, so it is deleted right away.")
+                Text(workspace.deleteQuestions.isConfirming
+                     ? "You can get it back from Recently Deleted in the Files app."
+                     : "This place has no Recently Deleted folder, so it is deleted right away.")
             }
             .alert(workspace.problem?.title ?? "", isPresented: Binding(get: { workspace.problem != nil }, set: { if !$0 { workspace.problem = nil } }), presenting: workspace.problem) { problem in
                 if problem.removableLocation != nil {
@@ -521,7 +524,8 @@ struct FileAlerts: ViewModifier {
 
     private var deleteTitle: String {
         guard let url = workspace.deleting else { return "" }
-        return "Delete “\(SearchSection.displayName(url))” immediately?"
+        let name = SearchSection.displayName(url)
+        return workspace.deleteQuestions.isConfirming ? "Delete “\(name)”?" : "Delete “\(name)” immediately?"
     }
 
     private func rename(_ url: URL) {

@@ -938,7 +938,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         add(menu, "Show in Finder", "folder") { [weak self] in self?.workspace.revealInFinder(url) }
         if !isLinked {
             menu.addItem(.separator())
-            let trash = add(menu, "Move to Trash", "trash") { [weak self] in self?.workspace.trash(url, next: self?.nextFile(after: row)) }
+            let trash = add(menu, "Move to Trash", "trash") { [weak self] in self?.workspace.trashAfterAsking(url, next: self?.nextFile(after: row)) }
             trash.isDestructive = true
             trash.keyEquivalent = "\u{8}"
             trash.keyEquivalentModifierMask = .command
@@ -1268,7 +1268,7 @@ final class SidebarOutlineView: NSOutlineView {
         case (36, []), (76, []):
             controller.beginRenaming(url)
         case (51, .command):
-            controller.workspace.trash(url, next: controller.nextFile(after: selectedRow))
+            controller.workspace.trashAfterAsking(url, next: controller.nextFile(after: selectedRow))
         case (49, []):
             if FileKind(url: url, isDirectory: false) == .note { super.keyDown(with: event) } else { controller.workspace.quickLook(url) }
         default:

@@ -599,6 +599,10 @@ enum DebugRemote {
             // trash <path>: what Move to Trash does with a file or folder.
             guard let workspace else { break }
             Task { log("trash \(argument): \(await workspace.trash(URL(fileURLWithPath: argument)).value ? "done" : "failed")") }
+        case "delete":
+            // delete <path>: what Move to Trash in a menu does, which asks about a note with something in it.
+            workspace?.trashAfterAsking(URL(fileURLWithPath: argument))
+            log("delete \(argument)")
         case "placesearch":
             // placesearch <words>: what typing a place in Remind Me finds in Apple Maps, and where the first one is.
             let search = PlaceSearch()
@@ -760,6 +764,7 @@ enum DebugRemote {
             case "foldersfirst": settings.foldersFirst = bits[1] == "1"
             case "order": if let order = FileOrder(rawValue: bits[1]) { settings.fileOrders.set(order, for: workspace?.folderInView) }
             case "deleteempty": settings.deletesEmptyNotes = bits[1] == "1"
+            case "askdelete": settings.asksBeforeDeletingNotes = bits[1] == "1"
             case let key where key.hasPrefix("color."):
                 guard let kind = FileKind(rawValue: String(key.dropFirst(6))), kind != .folder else { break }
                 settings.fileColors[kind] = FolderColor.allCases.first { $0.name.lowercased() == bits[1].lowercased() }

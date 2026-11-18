@@ -315,8 +315,11 @@ struct FolderScreen: View {
                     .appContextMenu { FileActions.entries(workspace, node.url) { newFolderIn = $0 } }
                     .swipeActions(edge: .trailing) {
                         if !node.isLinked {
-                            // Red as in Notes and Mail: a destructive swipe would take the app's ink instead.
-                            Button(role: .destructive) { workspace.trash(node.url) } label: { Label("Delete", systemImage: "trash") }
+                            // Red as in Notes and Mail: a destructive swipe would take the app's ink instead. It would
+                            // also take the row away at once, which stays for a question about it.
+                            Button(role: workspace.mayAskBeforeTrashing(node.url, isFolder: node.isFolder) ? nil : .destructive) {
+                                workspace.trashAfterAsking(node.url)
+                            } label: { Label("Delete", systemImage: "trash") }
                                 .tint(.red)
                             Button { workspace.moving = MovingFile(url: node.url) } label: { Label("Move", systemImage: "folder") }
                                 .tint(.indigo)

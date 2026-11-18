@@ -93,7 +93,9 @@ into the text, and ↑, ←, or Delete at the very start of the text go back up 
 or iPhone with a keyboard alike. A note you leave with no text in it, or only spaces, is deleted, whatever its name:
 a new one as if you had never made it, any other to the Trash (Recently Deleted on iPhone and iPad), where Undo
 brings it back from. Its card leaves Recent as you go. One with a reminder or a star stays; turn off Delete notes
-left empty in Settings to keep them all.
+left empty in Settings to keep them all. Deleting a note yourself asks first if there is something in it, typed or
+handwritten, and an empty one goes right away; turn off Ask before deleting notes in Settings to delete without the
+question.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Design/screenshots/typing-dark.webp">
