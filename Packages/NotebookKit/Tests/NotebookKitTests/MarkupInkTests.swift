@@ -82,6 +82,52 @@ final class MarkupInkTests: XCTestCase {
         XCTAssertEqual(PDFMarkupEntries.completed(again), again)
     }
 
+    /// Apps that draw the stamp's look cut it off at the annotation's box. PencilKit draws a marker or a fountain pen
+    /// narrower than the look does, so a box around PencilKit's strokes alone cut off their edges and ends.
+    func testTheStampsBoxHoldsAllOfItsLook() throws {
+        for (type, size) in [(PKInk.InkType.marker, CGFloat(30)), (.fountainPen, 12), (.marker, 15)] {
+            let wide = line(type, size: size)
+            let url = try blankPDF(pages: 1)
+            try PDFInk.change(url) { PDFInk.put([0: wide], in: $0) }
+            let data = try Data(contentsOf: url)
+            let entry = try XCTUnwrap(try notebookEntries(in: data).first)
+            try assertMatchingCopy(entry)
+            let rect = try box(of: entry.annotation, "Rect")
+            // The line runs from 150 to 350, 200 down the page, and is `size` wide with round ends.
+            let look = CGRect(x: 150 - size / 2, y: 642 - size / 2, width: 200 + size, height: size)
+            XCTAssertTrue(rect.contains(look), "\(type) \(size): \(rect) around \(look)")
+            // The look fills the box one to one.
+            var appearances: CGPDFDictionaryRef?
+            var form: CGPDFStreamRef?
+            XCTAssertTrue(CGPDFDictionaryGetDictionary(entry.annotation, "AP", &appearances))
+            XCTAssertTrue(CGPDFDictionaryGetStream(try XCTUnwrap(appearances), "N", &form))
+            let bounding = try box(of: try XCTUnwrap(CGPDFStreamGetDictionary(try XCTUnwrap(form))), "BBox")
+            XCTAssertEqual(bounding.width, rect.width, accuracy: 0.01)
+            XCTAssertEqual(bounding.height, rect.height, accuracy: 0.01)
+            // Markup's own box stays tight around the strokes, and they are read back where they were.
+            let bounds = wide.bounds
+            XCTAssertEqual(entry.ink.rectangle, CGRect(x: bounds.minX, y: 842 - bounds.maxY, width: bounds.width, height: bounds.height))
+            let page = try XCTUnwrap(readDocument(data).page(at: 0))
+            let read = try XCTUnwrap(page.annotations.lazy.compactMap { MarkupDrawings.strokes(in: $0, on: page) }.first)
+            XCTAssertEqual(read.drawing.bounds, bounds)
+            // With only the look left, its line comes back as it was drawn.
+            let stripped = try XCTUnwrap(readDocument(try Data(contentsOf: try strippedPDF(wide))).page(at: 0))
+            let fromLook = try XCTUnwrap(stripped.annotations.lazy.compactMap { MarkupDrawings.strokes(in: $0, on: stripped) }.first)
+            let point = try XCTUnwrap(fromLook.drawing.strokes.first?.path.first)
+            XCTAssertEqual(point.location.x, 150, accuracy: 0.01)
+            XCTAssertEqual(point.location.y, 200, accuracy: 0.01)
+            XCTAssertEqual(point.size.width, size, accuracy: 0.16)
+        }
+    }
+
+    func testThePensBoxStaysCloseAroundItsStrokes() throws {
+        let url = try blankPDF(pages: 1)
+        try PDFInk.change(url) { PDFInk.put([0: self.drawing], in: $0) }
+        let entry = try XCTUnwrap(try notebookEntries(in: try Data(contentsOf: url)).first)
+        let bounds = drawing.bounds
+        XCTAssertEqual(try box(of: entry.annotation, "Rect"), CGRect(x: bounds.minX, y: 842 - bounds.maxY, width: bounds.width, height: bounds.height).insetBy(dx: -2, dy: -2))
+    }
+
     func testStrokesOfEarlierVersionsBecomeMarkupInkWithTheNextSave() throws {
         // As Notebook 1.3 wrote them: a stamp with Notebook's own entry, which Apple's apps take for a picture.
         let url = try blankPDF(pages: 2)
@@ -326,6 +372,23 @@ final class MarkupInkTests: XCTestCase {
 
     private var drawing: PKDrawing {
         PKDrawing(strokes: [stroke([CGPoint(x: 80, y: 120), CGPoint(x: 260, y: 140)]), stroke([CGPoint(x: 90, y: 200), CGPoint(x: 300, y: 260)])])
+    }
+
+    /// A level line from 150 to 350, 200 down the page.
+    private func line(_ type: PKInk.InkType, size: CGFloat) -> PKDrawing {
+        let path = PKStrokePath(controlPoints: (0...200).map { index in
+            PKStrokePoint(location: CGPoint(x: 150 + CGFloat(index), y: 200), timeOffset: Double(index) / 60, size: CGSize(width: size, height: size), opacity: 1, force: 1, azimuth: 0, altitude: .pi / 2)
+        }, creationDate: Date())
+        return PKDrawing(strokes: [PKStroke(ink: PKInk(type, color: .black), path: path)])
+    }
+
+    /// A box in a PDF dictionary.
+    private func box(of dictionary: CGPDFDictionaryRef, _ key: String) throws -> CGRect {
+        var array: CGPDFArrayRef?
+        XCTAssertTrue(CGPDFDictionaryGetArray(dictionary, key, &array))
+        var values = [CGPDFReal](repeating: 0, count: 4)
+        for index in 0..<4 { XCTAssertTrue(CGPDFArrayGetNumber(try XCTUnwrap(array), index, &values[index])) }
+        return CGRect(x: min(values[0], values[2]), y: min(values[1], values[3]), width: abs(values[2] - values[0]), height: abs(values[3] - values[1]))
     }
 
     /// Strokes of all kinds Notebook draws: pens getting wider and narrower, in colour, a marker, a dot.

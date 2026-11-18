@@ -57,6 +57,8 @@ versions follow [semantic versioning](https://semver.org).
   to it. Notebook now reads the strokes back from that look, as they were, in their colours and widths, and the next
   change you make to the PDF stores them so Preview keeps them. What can't be read back is which pen drew them, and
   the pressure and tilt.
+- Broad marker and fountain pen strokes at the outer edge of your writing on a PDF are no longer cut off in other PDF
+  apps. Writing already in a PDF is put right with the next change you make to the PDF in Notebook.
 - Handwriting that Preview on iPhone and iPad adds to a PDF shows in Notebook as sharp as the text, at any zoom, and
   can be erased and changed with the pen. Notebook showed Preview's picture of it, a little blurry, and couldn't change
   it.
