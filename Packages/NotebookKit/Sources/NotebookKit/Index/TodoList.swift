@@ -21,6 +21,15 @@ final class TodoList {
         /// In no note and without words or lines under it: just added, or left so.
         var isNewAndEmpty: Bool { isLoose && todo.text.isEmpty && todo.lines.isEmpty }
         var reference: TodoReference { TodoReference(url: url, line: todo.line, source: todo.source) }
+
+        /// Where it is under a folder, for To-dos limited to that folder: the folders on the way and its note,
+        /// "Challenge Roth 2027 › Logistics", or only its note when that is right in the folder.
+        func place(under folder: URL) -> String {
+            let top = HiddenFolders.withoutPrivate(folder.standardizedFileURL.path)
+            let parent = HiddenFolders.withoutPrivate(url.standardizedFileURL.deletingLastPathComponent().path)
+            guard parent.hasPrefix(top + "/") else { return note }
+            return (parent.dropFirst(top.count + 1).split(separator: "/").map(String.init) + [note]).joined(separator: " › ")
+        }
     }
 
     /// Every open to-do, by note (most recently changed first) and in each note in order.
@@ -296,6 +305,14 @@ enum TodoRow: Identifiable, Hashable {
         }
     }
 
+    /// Whether it is in a folder or a folder in it. One in no note is in none.
+    func isInside(_ folder: URL) -> Bool {
+        switch self {
+        case .todo(let item): !item.isLoose && FileNode.isSameOrInside(item.url, folder)
+        case .note(let note): note.url.map { FileNode.isSameOrInside($0, folder) } ?? false
+        }
+    }
+
     /// When it is due: a to-do's day (its start) or time, a note's time.
     var date: Date? {
         switch self {
@@ -367,9 +384,10 @@ struct TodoSection: Identifiable, Hashable {
 enum TodoGroups {
     /// The groups that have something in them, in order. Dated rows go by their time (a day without a time first on
     /// its day), the rest by note, as the notes were last changed.
-    static func sections(todos: [TodoList.Item], notes: [NoteReminderRow], now: Date = .now, calendar: Calendar = .current) -> [TodoSection] {
+    static func sections(todos: [TodoList.Item], notes: [NoteReminderRow], in folder: URL? = nil, now: Date = .now,
+                         calendar: Calendar = .current) -> [TodoSection] {
         var groups: [TodoSection.Kind: [TodoRow]] = [:]
-        for row in notes.map(TodoRow.note) + todos.map(TodoRow.todo) {
+        for row in notes.map(TodoRow.note) + todos.map(TodoRow.todo) where folder.map(row.isInside) ?? true {
             groups[kind(of: row, now: now, calendar: calendar), default: []].append(row)
         }
         return TodoSection.Kind.allCases.compactMap { kind in

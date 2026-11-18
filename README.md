@@ -294,6 +294,15 @@ notes with checklists and those you opened last: it goes after the note's last t
 the end of a note without one, and Undo takes it back out. Notebook keeps these to-dos in a checklist of its own (see
 [How notes are stored](#how-notes-are-stored)).
 
+To see what is open for one project, choose Show To-dos in a folder's menu: right-click it or use its ⋯ in the sidebar
+on the Mac, touch and hold it on iPhone and iPad, or use the ⋯ of the folder you are in on iPhone. To-dos then lists only
+what is in that folder and the folders in it, in the same groups by day, with the folder's name under the title and,
+on each row, the way to its note ("Challenge Roth 2027 › Logistics"). The × next to the name shows every to-do again,
+as the To-dos tile, ⇧⌘R and ⌘K do, and on iPhone Back goes to the folder. The list follows the folder when you rename
+or move it, and shows every to-do once the folder is deleted or hidden. To-dos in no note are in no folder, so they
+aren't in it, and New To-do there adds to a note called To-dos in the folder, made the first time. The number on the
+tile, notifications and widgets stay about all your to-dos.
+
 Click a to-do's words to change them where they are, as in Reminders. A Notes line slides in under them, in smaller
 letters: what you type there becomes a line indented under the to-do, its notes. Shift-Return starts a line under the
 words; Return in that line starts the next one of the same kind, Tab and ⇧Tab move it in and out, and `[ ] ` or `- `
@@ -593,7 +602,8 @@ screens.
   other apps read them too, and shows them as pills; Obsidian's Tasks, Reminder, Kanban and Dataview dates and its
   `[/]` and `[-]` checkboxes are understood. A to-do with the Tasks plugin's `🔁 every week` makes the next one when
   you tick it, as the plugin does. Add a to-do in To-dos without a note, as in Reminders, and move it into a note
-  later. Settings turns To-dos off.
+  later. Show To-dos in a folder's menu lists only what is in that folder and the folders in it. Settings turns To-dos
+  off.
 - **Reminders.** Remind Me… brings a note or a to-do back at a time you choose, picked or typed in a few words ("friday
   evening", "in 3 weeks"), or when you arrive at or leave a place, with a notification of its first points or the
   to-do's notes that gets through a Focus. A note's reminder follows it when you rename or move it in Notebook, goes
@@ -658,7 +668,8 @@ to-do, so they are in the note. The to-dos you add in To-dos without a note are 
 `To-dos.md`, in Notebook's own iCloud folder, in `To-dos` next to its `History` (on a Mac,
 `~/Library/Mobile Documents/iCloud~com~lukaskbl~Notebook/To-dos/To-dos.md`), so they reach your other devices without
 a Notebook folder in iCloud Drive; without iCloud, and in builds from source, it is in the app's Application Support
-folder. It never shows among your notes, and Spotlight leaves it out. What search knows, the text of your notes and
+folder. It never shows among your notes, and Spotlight leaves it out. A to-do added while To-dos shows one folder goes
+into `To-dos.md` in that folder instead, an ordinary note like the others there. What search knows, the text of your notes and
 PDFs and the words read in pictures, is kept in the app's caches on each device, from where it can always be read again.
 The list of the notes Spotlight has is kept in the app's own folder on each device.
 

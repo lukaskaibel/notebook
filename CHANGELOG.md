@@ -7,6 +7,10 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- Show To-dos in a folder's menu lists only the to-dos in that folder and the folders in it, by day as To-dos always
+  does, on the Mac, iPhone and iPad. The folder's name shows under the title, each row says which folder and note it is
+  in, and the × next to the name, the To-dos tile, ⇧⌘R and ⌘K show every to-do again. New To-do there adds to a note
+  called To-dos in the folder, made the first time.
 - Open File on iPhone and iPad, in the ⋯ menu, as Open a File on the first screen, and with ⌘O on a keyboard, opens
   one file or several from anywhere the Files app reaches, for apps such as Nextcloud that give other apps their files
   but not their folders. A file in no folder you opened is kept under Files, below the folders, and in Recent, and
@@ -59,6 +63,8 @@ versions follow [semantic versioning](https://semver.org).
   to it. Notebook now reads the strokes back from that look, as they were, in their colours and widths, and the next
   change you make to the PDF stores them so Preview keeps them. What can't be read back is which pen drew them, and
   the pressure and tilt.
+- Broad marker and fountain pen strokes at the outer edge of your writing on a PDF are no longer cut off in other PDF
+  apps. Writing already in a PDF is put right with the next change you make to the PDF in Notebook.
 - Handwriting that Preview on iPhone and iPad adds to a PDF shows in Notebook as sharp as the text, at any zoom, and
   can be erased and changed with the pen. Notebook showed Preview's picture of it, a little blurry, and couldn't change
   it.

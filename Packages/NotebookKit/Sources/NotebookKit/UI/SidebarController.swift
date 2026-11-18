@@ -872,6 +872,9 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             add(menu, "New Note", "square.and.pencil") { [weak self] in self?.workspace.newNote(in: location.url) }
             add(menu, "New Folder", "folder.badge.plus") { [weak self] in self?.workspace.newFolder(in: location.url) }
             menu.addItem(.separator())
+            if NotebookSettings.shared.showsTodos {
+                add(menu, "Show To-dos", "checklist") { [weak self] in self?.workspace.showTodos(in: location.url) }
+            }
             add(menu, "Show in Finder", "folder") { [weak self] in self?.workspace.revealInFinder(location.url) }
             if workspace.hasHiddenFolders(in: location) {
                 let shows = workspace.showsHiddenFolders(in: location)
@@ -897,6 +900,9 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         add(menu, "New Note in “\(workspace.folderName(folder))”", "square.and.pencil") { [weak self] in self?.workspace.newNote(in: folder) }
         add(menu, "New Folder", "folder.badge.plus") { [weak self] in self?.workspace.newFolder(in: folder) }
         menu.addItem(.separator())
+        if isFolder, NotebookSettings.shared.showsTodos {
+            add(menu, "Show To-dos", "checklist") { [weak self] in self?.workspace.showTodos(in: url) }
+        }
         if !isFolder, FileKind(url: url, isDirectory: false) == .note {
             add(menu, "Open in New Window", "macwindow.badge.plus") { [weak self] in self?.workspace.openOnItsOwn(url) }
         } else if !isFolder {
