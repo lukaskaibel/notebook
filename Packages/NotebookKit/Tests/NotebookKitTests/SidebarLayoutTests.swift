@@ -85,5 +85,47 @@ final class SidebarLayoutTests: XCTestCase {
         XCTAssertLessThan(cramped.width, roomy.width, "the scroll bar takes room")
         XCTAssertEqual(cramped.recent, roomy.recent, "Recent is as tall either way")
     }
+
+    /// With a mouse attached Recent's row, which scrolls sideways, has no scroll bar under its cards: one took its room
+    /// from the row's height and cut off the top of the cards.
+    func testRecentHasNoScrollBarWithAMouseAttached() async throws {
+        UserDefaults.standard.set("Always", forKey: "AppleShowScrollBars")
+        let delay = Workspace.recentCardsDelay
+        Workspace.recentCardsDelay = .zero
+        defer {
+            UserDefaults.standard.removeObject(forKey: "AppleShowScrollBars")
+            Workspace.recentCardsDelay = delay
+        }
+        let (workspace, sidebar, window) = try await makeSidebar()
+        for index in 2...4 { workspace.open(library.appendingPathComponent("Note \(index).md")) }
+        try await until("Recent has four cards") { workspace.recentCardURLs.count >= 4 }
+
+        func cards() -> (cell: NSView, scrollView: NSScrollView)? {
+            guard let row = recentRow(in: sidebar),
+                  let cell = sidebar.outline.view(atColumn: 0, row: row, makeIfNecessary: true) else { return nil }
+            window.layoutIfNeeded()
+            window.displayIfNeeded()
+            return Self.descendants(of: cell).lazy.compactMap { $0 as? NSScrollView }.first.map { (cell, $0) }
+        }
+        try await until("the cards run past the row's edge") {
+            guard let scrollView = cards()?.scrollView, let content = scrollView.documentView else { return false }
+            return content.frame.width > scrollView.contentView.bounds.width
+        }
+        let (cell, scrollView) = try XCTUnwrap(cards())
+        let bars = Self.descendants(of: scrollView).compactMap { $0 as? NSScroller }.filter { !$0.isHiddenOrHasHiddenAncestor && $0.frame.width > $0.frame.height }
+        XCTAssertEqual(bars.count, 0, "style \(scrollView.scrollerStyle.rawValue), has bar \(scrollView.hasHorizontalScroller)")
+        let content = try XCTUnwrap(scrollView.documentView)
+        XCTAssertGreaterThanOrEqual(scrollView.contentView.bounds.height, content.frame.height, "the cards fit, nothing cut off")
+        XCTAssertLessThanOrEqual(scrollView.frame.height, cell.frame.height, "the row holds them")
+
+        // It still scrolls, with two fingers or a mouse's side wheel.
+        let wheel = try XCTUnwrap(CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: 0, wheel2: -120, wheel3: 0))
+        scrollView.scrollWheel(with: try XCTUnwrap(NSEvent(cgEvent: wheel)))
+        try await until("the row scrolled") { scrollView.contentView.bounds.minX > 0 }
+    }
+
+    private static func descendants(of view: NSView) -> [NSView] {
+        view.subviews + view.subviews.flatMap(descendants)
+    }
 }
 #endif

@@ -243,7 +243,8 @@ struct RecentCardRow: View {
         }
         .contentMargins(.horizontal, margin, for: .scrollContent)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
-        .scrollIndicators(.hidden)
+        // Not `.hidden`, which still shows a bar with a mouse attached: it would take its room from the cards' height.
+        .scrollIndicators(.never)
         .scrollTargetBehavior(.viewAligned)
         #if os(iOS)
         .scrollClipDisabled()
