@@ -23,6 +23,7 @@ extension Workspace {
         // Ready only once every file has been read, not with the index kept from the last run: until then a to-do left
         // out would take its notification with it.
         todos.update(entries: index.byPathSnapshot, hidden: index.hiddenPaths, built: index.hasBuilt && !index.isBuilding)
+        checkTodosFolder()
         widgets.refresh?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.publishWidgetNotes(catalog: false) }
         widgets.refresh = work
@@ -718,7 +719,7 @@ extension Workspace {
     func todoJobs() -> [ReminderNotifications.TodoJob] {
         var seen: [String: Int] = [:]
         // One in no note without words yet is being added: it reminds once it has them.
-        return todos.items.filter { $0.todo.hasReminder && !$0.isNewAndEmpty }.map { item in
+        return todos.items.filter { $0.todo.hasReminder && !$0.isNewAndEmpty && !isBeingAdded($0) }.map { item in
             let todo = item.todo
             let notes = todo.notes.joined(separator: "\n")
             // The same words twice in a note are two to-dos.

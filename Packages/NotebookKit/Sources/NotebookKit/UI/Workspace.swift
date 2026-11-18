@@ -17,6 +17,8 @@ public final class Workspace: NSObject {
     public private(set) var currentURL: URL?
     /// The To-dos list is shown on the right, in place of a file.
     public private(set) var showsTodos = false
+    /// To-dos lists only what is in this folder and the folders in it. Nil: every to-do.
+    private(set) var todosFolder: URL?
     /// Your favourites are shown on the right, in place of a file: from their tile at the top of the sidebar on iPad and
     /// Mac. The iPhone has a screen of its own for them.
     public private(set) var showsFavorites = false
@@ -1547,9 +1549,11 @@ public final class Workspace: NSObject {
 
     /// Back or Forward to a place in the history, if it is still there.
     private func goTo(_ url: URL) -> Bool {
-        if url == Self.todosURL {
+        if Self.isTodos(url) {
             guard NotebookSettings.shared.showsTodos else { return false }
-            showTodos(recordHistory: false)
+            let folder = Self.todosFolder(of: url)
+            if let folder, !FileManager.default.fileExists(atPath: folder.path) { return false }
+            showTodos(in: folder, recordHistory: false)
             return true
         }
         if url == Self.favoritesURL {
@@ -1563,17 +1567,60 @@ public final class Workspace: NSObject {
 
     /// The To-dos list's place in the history, among the files you opened.
     static let todosURL = URL(string: "notebook:to-dos")!
+    /// The place of To-dos limited to a folder; without one, of To-dos.
+    static func todosURL(in folder: URL?) -> URL {
+        guard let folder else { return todosURL }
+        var parts = URLComponents()
+        parts.scheme = todosURL.scheme
+        parts.path = "to-dos"
+        parts.queryItems = [URLQueryItem(name: "folder", value: folder.standardizedFileURL.path)]
+        return parts.url ?? todosURL
+    }
+
+    /// The folder a place of To-dos is limited to.
+    static func todosFolder(of list: URL) -> URL? {
+        guard list.scheme == todosURL.scheme, let parts = URLComponents(url: list, resolvingAgainstBaseURL: false), parts.path == "to-dos",
+              let path = parts.queryItems?.first(where: { $0.name == "folder" })?.value else { return nil }
+        return URL(fileURLWithPath: path, isDirectory: true)
+    }
+
+    /// Whether a place in the history is To-dos, of every to-do or of a folder.
+    static func isTodos(_ url: URL) -> Bool { url == todosURL || todosFolder(of: url) != nil }
+
     /// The favourites' place in the history.
     static let favoritesURL = URL(string: "notebook:favorites")!
 
     /// To-dos or Favorites: a list shown in place of a file, with a place in the history but not on disk.
-    static func isList(_ url: URL) -> Bool { url == todosURL || url == favoritesURL }
+    static func isList(_ url: URL) -> Bool { isTodos(url) || url == favoritesURL }
 
-    /// Shows the To-dos list in place of the file that is open, which is saved and left as when you open another.
+    /// Shows the To-dos list with every to-do in place of the file that is open, which is saved and left as when you
+    /// open another.
     public func showTodos(recordHistory: Bool = true) {
-        guard !showsTodos, NotebookSettings.shared.showsTodos else { return }
-        showList(Self.todosURL, recordHistory: recordHistory)
+        showTodos(in: nil, recordHistory: recordHistory)
+    }
+
+    /// Shows the To-dos list limited to a folder and the folders in it, or with every to-do. Already showing, it only
+    /// changes what it lists, which is a step in the history too.
+    func showTodos(in folder: URL?, recordHistory: Bool = true) {
+        guard NotebookSettings.shared.showsTodos else { return }
+        let list = Self.todosURL(in: folder)
+        guard !showsTodos || list != Self.todosURL(in: todosFolder) else { return }
+        todosFolder = Self.todosFolder(of: list)
+        if !showsTodos {
+            showList(list, recordHistory: recordHistory)
+        } else if recordHistory {
+            addToHistory(list)
+        }
         sidebarSelectList()
+        checkTodosFolder()
+    }
+
+    /// To-dos lists every to-do again, where it is: no step in the history, as a filter taken off isn't. From the ×
+    /// next to the folder, and when the folder is gone.
+    func stopLimitingTodos() {
+        guard todosFolder != nil else { return }
+        todosFolder = nil
+        if showsTodos, history.indices.contains(historyIndex), Self.isTodos(history[historyIndex]) { history[historyIndex] = Self.todosURL }
     }
 
     /// Shows your favourites in place of the file that is open, as To-dos is shown.
@@ -1599,14 +1646,16 @@ public final class Workspace: NSObject {
         currentHeading = nil
         isTitleScrolledAway = false
         selectedFolder = nil
-        showsTodos = list == Self.todosURL
+        showsTodos = Self.isTodos(list)
         showsFavorites = list == Self.favoritesURL
-        if recordHistory {
-            if historyIndex < history.count - 1 { history.removeSubrange((historyIndex + 1)...) }
-            history.append(list)
-            historyIndex = history.count - 1
-        }
+        if recordHistory { addToHistory(list) }
         if wrote { leftWhatYouWrote() }
+    }
+
+    private func addToHistory(_ list: URL) {
+        if historyIndex < history.count - 1 { history.removeSubrange((historyIndex + 1)...) }
+        history.append(list)
+        historyIndex = history.count - 1
     }
 
     /// To-dos turned off or on in Settings. Off, the list goes back to what was open before it, and the notifications
@@ -1626,6 +1675,7 @@ public final class Workspace: NSObject {
     /// Leaves the To-dos list: the iPhone's Back.
     public func closeTodos() {
         showsTodos = false
+        todosFolder = nil
     }
     #endif
 
@@ -1785,7 +1835,8 @@ public final class Workspace: NSObject {
         favorites = favorites.map(fix)
         recents = recents.map(fix)
         recentCards = recentCards.map(fix)
-        history = history.map(fix)
+        history = history.map { place in Self.todosFolder(of: place).map { Self.todosURL(in: fix($0)) } ?? fix(place) }
+        if let folder = todosFolder { todosFolder = fix(folder) }
         relocation = (old.standardizedFileURL, new.standardizedFileURL, UUID())
         if let current = currentURL { currentURL = fix(current) }
         #if os(iOS)
@@ -2670,7 +2721,7 @@ public final class Workspace: NSObject {
 
     /// The open file's name as you read it: notes without their extension.
     var currentTitle: String {
-        if showsTodos { return "To-dos" }
+        if showsTodos { return todosTitle }
         if showsFavorites { return "Favorites" }
         guard let currentURL else { return "Notebook" }
         if let name = newName(for: currentURL) { return name }

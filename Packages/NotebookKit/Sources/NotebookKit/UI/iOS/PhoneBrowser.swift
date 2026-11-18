@@ -15,9 +15,9 @@ final class Page: Hashable {
         self.isFolder = isFolder
     }
 
-    /// The To-dos list's screen.
-    static func todos() -> Page { Page(url: Workspace.todosURL, isFolder: false) }
-    var isTodos: Bool { url == Workspace.todosURL }
+    /// The To-dos list's screen, of every to-do or limited to a folder.
+    static func todos(in folder: URL? = nil) -> Page { Page(url: Workspace.todosURL(in: folder), isFolder: false) }
+    var isTodos: Bool { Workspace.isTodos(url) }
 
     /// The favourites' screen, from their tile on the first screen. A list of files, so leaving a note for it closes
     /// the note as a folder does.
@@ -70,7 +70,11 @@ struct PhoneBrowser: View {
         .onChange(of: path) { _, path in pathChanged(path) }
         .onChange(of: workspace.currentURL) { _, url in fileChanged(url) }
         .onChange(of: workspace.showsTodos) { _, shows in
-            if shows, path.last?.isTodos != true { path.append(.todos()) }
+            if shows, path.last?.isTodos != true { path.append(.todos(in: workspace.todosFolder)) }
+        }
+        // The list on the screen is limited to another folder, or no longer: Back still leads to where it was opened.
+        .onChange(of: workspace.todosFolder) { _, folder in
+            if workspace.showsTodos, let top = path.last, top.isTodos { top.url = Workspace.todosURL(in: folder) }
         }
         .onChange(of: workspace.folderRequest?.id) { _, _ in
             guard let folder = workspace.folderRequest?.url, path.last?.url != folder else { return }
@@ -97,7 +101,7 @@ struct PhoneBrowser: View {
     /// Back to a folder leaves the note (it is saved); back to a note opens it again where you were.
     private func pathChanged(_ path: [Page]) {
         if let top = path.last, top.isTodos {
-            if !workspace.showsTodos { workspace.showTodos(recordHistory: false) }
+            workspace.showTodos(in: Workspace.todosFolder(of: top.url), recordHistory: false)
             return
         }
         if workspace.showsTodos { workspace.closeTodos() }
@@ -139,6 +143,7 @@ struct PhoneBrowser: View {
 
     /// Where a file is after `from` became `to`: itself, or a folder it is in.
     static func relocated(_ url: URL, _ from: URL, _ to: URL) -> URL {
+        if let folder = Workspace.todosFolder(of: url) { return Workspace.todosURL(in: relocated(folder, from, to)) }
         let old = from.standardizedFileURL.path
         let path = url.standardizedFileURL.path
         if path == old { return to.standardizedFileURL }
@@ -368,6 +373,10 @@ struct FolderScreen: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 AppMenuButton {
+                    if settings.showsTodos {
+                        MenuEntry("Show To-dos", "checklist") { workspace.showTodos(in: page.url) }
+                        MenuEntry.divider
+                    }
                     MenuEntry.submenu("New Handwritten Note", "pencil.and.scribble") {
                         for paper in PaperStyle.allCases {
                             MenuEntry(paper.name, paper.symbol) { workspace.newHandwrittenNote(in: page.url, paper: paper) }

@@ -7,6 +7,10 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Added
 
+- Show To-dos in a folder's menu lists only the to-dos in that folder and the folders in it, by day as To-dos always
+  does, on the Mac, iPhone and iPad. The folder's name shows under the title, each row says which folder and note it is
+  in, and the × next to the name, the To-dos tile, ⇧⌘R and ⌘K show every to-do again. New To-do there adds to a note
+  called To-dos in the folder, made the first time.
 - Open File on iPhone and iPad, in the ⋯ menu, as Open a File on the first screen, and with ⌘O on a keyboard, opens
   one file or several from anywhere the Files app reaches, for apps such as Nextcloud that give other apps their files
   but not their folders. A file in no folder you opened is kept under Files, below the folders, and in Recent, and
