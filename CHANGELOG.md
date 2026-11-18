@@ -46,6 +46,8 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- On iPad, Apple Pencil stays in the drawing while drawing is on. Scribble could take a stroke for handwriting and put
+  it into the note's text, which also ended drawing under the stroke.
 - Handwriting no longer gets blurrier each time a PDF goes back and forth between Notebook and Preview. When Preview
   saved, it kept only the look of what Notebook had written and dropped the strokes, so Notebook showed that writing
   blurry when zoomed and couldn't change it any more; and a save in Notebook could leave only a picture of what

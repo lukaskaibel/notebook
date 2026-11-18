@@ -168,6 +168,14 @@ private final class CanvasEvents: NSObject, PKCanvasViewDelegate {
     }
 }
 
+/// Apple Pencil on a canvas inside a text view: the text view would take the stroke for handwriting, which Scribble
+/// turns into text there, and taking the focus for it would end drawing under the stroke. So no Scribble while drawing.
+extension EditorController: UIScribbleInteractionDelegate {
+    public func scribbleInteraction(_ interaction: UIScribbleInteraction, shouldBeginAt location: CGPoint) -> Bool {
+        !isDrawing
+    }
+}
+
 /// What the shared drawing mode asks of iPhone and iPad: the keyboard goes and the system's tool picker comes, for
 /// whichever canvas was drawn in last; the note keeps room under the tool picker to scroll the drawing above it.
 extension EditorController: PKToolPickerObserver {

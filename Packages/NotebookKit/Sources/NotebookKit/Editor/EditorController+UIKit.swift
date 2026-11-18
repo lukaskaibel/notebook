@@ -34,6 +34,10 @@ extension EditorController: UITextViewDelegate, UITextFieldDelegate, UIGestureRe
         // would show the text view's, which it is inside of.
         view.titleField.inputAccessoryView = UIView(frame: .zero)
 
+        // While drawing, Apple Pencil draws: neither the text around the drawings nor the title takes it for writing.
+        view.addInteraction(UIScribbleInteraction(delegate: self))
+        view.titleField.addInteraction(UIScribbleInteraction(delegate: self))
+
         view.textDragDelegate = self
         view.textDropDelegate = self
         let pictures = PictureInteractions(editor: self)
