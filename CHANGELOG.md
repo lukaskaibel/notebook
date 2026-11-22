@@ -58,6 +58,8 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- In Dark Mode, the notes in Recent's cards are dark too, as the notes themselves are, instead of bright white pages.
+  On iPhone and iPad the cards also follow a switch between light and dark at once, where they kept the look they had.
 - On iPhone, a tap on the To-dos tile opened Favorites; it opens To-dos now.
 - On iPhone, going back to the first screen with a swipe no longer makes Recent's cards grow and shrink as the finger
   moves: they keep their size and slide in with the screen.

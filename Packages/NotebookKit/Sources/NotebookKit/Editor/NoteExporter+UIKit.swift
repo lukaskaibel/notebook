@@ -85,10 +85,12 @@ public enum NoteExporter {
     }
 
     /// The top of the note on a page `size` points big, `scale` pixels to the point: its PDF's first page, cut off where
-    /// the page ends, on white. For thumbnails (NoteThumbnail).
-    static func top(of editor: EditorController, title: String, size: CGSize, scale: CGFloat) async -> (image: CGImage, copy: Copy)? {
+    /// the page ends, on white. For thumbnails (NoteThumbnail). `dark`, for the app's own cards in Dark Mode: on the
+    /// note's dark background, in the colours the note has there.
+    static func top(of editor: EditorController, title: String, size: CGSize, scale: CGFloat, dark: Bool = false) async -> (image: CGImage, copy: Copy)? {
         let width = paper.width - margin * 2
-        let copy = await layOut(editor, width: width)
+        let style: UIUserInterfaceStyle = dark ? .dark : .light
+        let copy = await layOut(editor, width: width, style: style)
         let page = CGSize(width: paper.width, height: (paper.width * size.height / size.width).rounded())
         let format = UIGraphicsImageRendererFormat()
         // The page's points on the picture's pixels: the page drawn smaller.
@@ -96,8 +98,8 @@ public enum NoteExporter {
         format.opaque = true
         var image: CGImage?
         EditorStyle.unscaled {
-            let heading = settle(copy, title: title, width: width)
-            UITraitCollection(userInterfaceStyle: .light).performAsCurrent {
+            UITraitCollection(userInterfaceStyle: style).performAsCurrent {
+                let heading = settle(copy, title: title, width: width)
                 image = UIGraphicsImageRenderer(size: page, format: format).image { context in
                     Theme.panel.setFill()
                     context.fill(CGRect(origin: .zero, size: page))
@@ -159,15 +161,15 @@ public enum NoteExporter {
         let delegate: ResolvingDelegate
     }
 
-    /// A light copy of the note, laid out `width` wide, once its pictures and diagrams are there (a few seconds at
-    /// most).
-    static func layOut(_ editor: EditorController, width: CGFloat) async -> Copy {
+    /// A light copy of the note (or `style`), laid out `width` wide, once its pictures and diagrams are there (a few
+    /// seconds at most).
+    static func layOut(_ editor: EditorController, width: CGFloat, style: UIUserInterfaceStyle = .light) async -> Copy {
         let copy = EditorController()
         copy.layoutManager.hidesEditingControls = true
         copy.layoutManager.picturesOutOfReach = editor.layoutManager.picturesOutOfReach
         let delegate = ResolvingDelegate(source: editor)
         copy.delegate = delegate
-        copy.textView.overrideUserInterfaceStyle = .light
+        copy.textView.overrideUserInterfaceStyle = style
         copy.container.widthTracksTextView = false
         copy.container.size = CGSize(width: width, height: .greatestFiniteMagnitude)
         EditorStyle.unscaled { copy.load(text: editor.text, folder: editor.folder, title: "", meta: "", syntax: editor.syntax) }

@@ -215,6 +215,7 @@ struct RecentCardRow: View {
     /// Where the row is scrolled to. Left alone, the scroll view keeps the card in view that was first there, also as
     /// another comes before it out of sight: back from a note on the iPhone, the row started one card in.
     @State private var position = ScrollPosition(idType: URL.self, edge: .leading)
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         let recents = Array(workspace.recentCardURLs.prefix(RecentCardRow.limit))
@@ -263,7 +264,7 @@ struct RecentCardRow: View {
         #if os(iOS)
         // On the iPhone and the iPad the row is in a list, which would lift all of it for the one card touched and
         // held: each card has a menu of its own (`HostedWithMenu`).
-        HostedWithMenu(cornerRadius: HomeStyle.cardRadius) { RecentCardMenu.entries(workspace, url, newFolder: newFolder) } content: { button }
+        HostedWithMenu(cornerRadius: HomeStyle.cardRadius, colorScheme: colorScheme) { RecentCardMenu.entries(workspace, url, newFolder: newFolder) } content: { button }
         #else
         button
             .clearsCardsBeneath()
@@ -355,7 +356,9 @@ struct FileThumbnailView: View {
     /// The frame it fills.
     let shownSize: CGSize
     let scale: CGFloat
-    @State private var image: CGImage?
+    /// The picture last made, and whether it is the dark one.
+    @State private var made: (image: CGImage, dark: Bool)?
+    @Environment(\.colorScheme) private var colorScheme
     private var size: CGSize { HomeStyle.thumbnailSize }
 
     var body: some View {
@@ -383,12 +386,17 @@ struct FileThumbnailView: View {
     }
 
     private var page: some View {
-        let key = FileThumbnails.Key(path: url.standardizedFileURL.path, modified: workspace.index.entry(for: url)?.modified, width: size.width)
+        // A note is drawn as it looks in the appearance shown, on its own background, so in Dark Mode it isn't a white
+        // page among dark cards. Anything else as Quick Look draws it: a PDF's page or a picture, on white.
+        let isNote = FileKind(url: url, isDirectory: false) == .note
+        let dark = isNote && colorScheme == .dark
+        let key = FileThumbnails.Key(path: url.standardizedFileURL.path, modified: workspace.index.entry(for: url)?.modified, width: size.width, dark: dark)
         let shape = RoundedRectangle(cornerRadius: HomeStyle.pictureRadius, style: .continuous)
+        // The picture of an older version until the new one is there, but not the other appearance's.
+        let shown = FileThumbnails.shared.cached(key) ?? made.flatMap { $0.dark == dark ? $0.image : nil }
         return ZStack(alignment: .top) {
-            // A page is white, as thumbnails are in either appearance.
-            Color.white
-            if let image = image ?? FileThumbnails.shared.cached(key) {
+            isNote ? Color.theme(Theme.panel) : Color.white
+            if let image = shown {
                 Image(decorative: image, scale: scale)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
@@ -404,8 +412,8 @@ struct FileThumbnailView: View {
         .overlay(shape.strokeBorder(Color.black.opacity(0.08), lineWidth: 1 / scale))
         .task(id: key) {
             // Gone, a note left empty whose card fades as it goes: it keeps its picture, rather than the symbol.
-            if image != nil, !FileManager.default.fileExists(atPath: url.path) { return }
-            image = await FileThumbnails.shared.image(for: url, key: key, size: size, scale: scale)
+            if made != nil, !FileManager.default.fileExists(atPath: url.path) { return }
+            if let image = await FileThumbnails.shared.image(for: url, key: key, size: size, scale: scale) { made = (image, key.dark) }
         }
     }
 }
@@ -422,6 +430,8 @@ final class FileThumbnails {
         let path: String
         let modified: Date?
         let width: CGFloat
+        /// Drawn as the note looks in Dark Mode.
+        let dark: Bool
     }
 
     private var images: [Key: CGImage] = [:]
@@ -443,7 +453,7 @@ final class FileThumbnails {
                 await previous.value
                 try? await Task.sleep(for: .milliseconds(20))
             }
-            return await Self.make(url, size: size, scale: scale)
+            return await Self.make(url, size: size, scale: scale, dark: key.dark)
         }
         if isNote { notes = Task { _ = await task.value } }
         making[key] = task
@@ -451,18 +461,18 @@ final class FileThumbnails {
         making[key] = nil
         if let image {
             // The picture of an older version goes.
-            images = images.filter { $0.key.path != key.path || $0.key.width != key.width }
+            images = images.filter { $0.key.path != key.path || $0.key.width != key.width || $0.key.dark != key.dark }
             images[key] = image
         }
         return image
     }
 
-    private static func make(_ url: URL, size: CGSize, scale: CGFloat) async -> CGImage? {
+    private static func make(_ url: URL, size: CGSize, scale: CGFloat, dark: Bool) async -> CGImage? {
         if FileKind(url: url, isDirectory: false) == .note {
             // The page is as wide as the card, and as tall as a page that wide.
             let page = CGSize(width: size.width, height: (size.width * 1.3).rounded())
             // The app can read what is next to the note, as the Finder's thumbnails don't: its pictures show.
-            return try? await NoteThumbnail.image(of: url, size: page, scale: scale, withPictures: true)
+            return try? await NoteThumbnail.image(of: url, size: page, scale: scale, withPictures: true, dark: dark)
         }
         let request = QLThumbnailGenerator.Request(fileAt: url, size: CGSize(width: size.width, height: size.width * 1.4), scale: scale,
                                                    representationTypes: .thumbnail)

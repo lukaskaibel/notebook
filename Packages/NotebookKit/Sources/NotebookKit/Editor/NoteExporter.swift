@@ -77,10 +77,12 @@ public enum NoteExporter {
     }
 
     /// The top of the note on a page `size` points big, `scale` pixels to the point: as a picture of it is laid out
-    /// (`data(for:title:as: .png)`), but on white and cut off where the page ends. For thumbnails (NoteThumbnail).
-    static func top(of editor: EditorController, title: String, size: CGSize, scale: CGFloat) async -> (image: CGImage, copy: Copy)? {
+    /// (`data(for:title:as: .png)`), but on white and cut off where the page ends. For thumbnails (NoteThumbnail). `dark`,
+    /// for the app's own cards in Dark Mode: on the note's dark background, in the colours the note has there.
+    static func top(of editor: EditorController, title: String, size: CGSize, scale: CGFloat, dark: Bool = false) async -> (image: CGImage, copy: Copy)? {
         let width = EditorStyle.contentWidth + 96
-        let copy = await layOut(editor, title: title, width: width, margin: 48)
+        let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)!
+        let copy = await layOut(editor, title: title, width: width, margin: 48, appearance: appearance)
         let page = NSRect(x: 0, y: 0, width: width, height: (width * size.height / size.width).rounded())
         let view = copy.view
         view.drawsBackground = true
@@ -125,14 +127,15 @@ public enum NoteExporter {
         func editorNoteName(_ editor: EditorController) -> String { "" }
     }
 
-    static func layOut(_ editor: EditorController, title: String, width: CGFloat, margin: CGFloat) async -> Copy {
+    static func layOut(_ editor: EditorController, title: String, width: CGFloat, margin: CGFloat,
+                       appearance: NSAppearance = NSAppearance(named: .aqua)!) async -> Copy {
         let copy = EditorController()
         copy.layoutManager.hidesEditingControls = true
         copy.layoutManager.picturesOutOfReach = editor.layoutManager.picturesOutOfReach
         let delegate = ResolvingDelegate(source: editor)
         copy.delegate = delegate
         let view = copy.textView
-        view.appearance = NSAppearance(named: .aqua)
+        view.appearance = appearance
         view.exportMargin = margin
         view.setFrameSize(NSSize(width: width, height: 200))
         copy.load(text: editor.text, folder: editor.folder, title: title, meta: "", syntax: editor.syntax)
