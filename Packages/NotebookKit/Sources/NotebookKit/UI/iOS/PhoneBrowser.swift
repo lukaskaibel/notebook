@@ -38,7 +38,7 @@ struct PhoneBrowser: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            HomeScreen(workspace: workspace, newFolderIn: $newFolderIn)
+            HomeScreen(workspace: workspace, newFolderIn: $newFolderIn) { path.append($0) }
                 .navigationDestination(for: Page.self) { page in
                     if page.isTodos {
                         TodosView(workspace: workspace)
@@ -164,20 +164,29 @@ struct PhoneBrowser: View {
 struct HomeScreen: View {
     @Bindable var workspace: Workspace
     @Binding var newFolderIn: URL?
+    /// A screen pushed over this one, for the tiles (`HomeTiles`).
+    let push: (Page) -> Void
     @State private var query = ""
     @State private var isSearching = false
     @State private var showsSettings = false
     @State private var addsLocation = false
-    /// From the screen's edges to the tiles, as the list sets its sections in: Recent's cards line up with them.
-    @State private var tilesInset: CGFloat = 16
+    /// The list's width and the tiles' (`HomeTiles.width`).
+    @State private var listWidth: CGFloat = 0
+    @State private var tilesWidth: CGFloat = 0
     @Bindable private var settings = NotebookSettings.shared
+
+    /// From the screen's edges to the tiles, as the list sets its sections in, the same on either side: Recent's cards
+    /// line up with them.
+    private var tilesInset: CGFloat {
+        listWidth > 0 && tilesWidth > 0 ? max(0, ((listWidth - tilesWidth) / 2).rounded()) : 16
+    }
 
     var body: some View {
         List {
             if isSearching {
                 SearchResultsList(workspace: workspace, query: query) { open($0) }
             } else {
-                HomeTiles(workspace: workspace, inset: $tilesInset)
+                HomeTiles(workspace: workspace, width: $tilesWidth, open: push)
                 RecentCards(workspace: workspace, newFolderIn: $newFolderIn, inset: tilesInset)
                 ForEach(workspace.locations) { location in
                     Section {
@@ -201,7 +210,7 @@ struct HomeScreen: View {
                 }
             }
         }
-        .coordinateSpace(.named(HomeTiles.listSpace))
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { listWidth = $0 }
         .navigationTitle("Notebook")
         .searchable(text: $query, isPresented: $isSearching, prompt: "Search")
         .onChange(of: query, initial: true) { _, query in workspace.searchSession.update(query) }
