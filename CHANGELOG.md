@@ -58,6 +58,9 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- On iPhone, a tap on the To-dos tile opened Favorites; it opens To-dos now.
+- On iPhone, going back to the first screen with a swipe no longer makes Recent's cards grow and shrink as the finger
+  moves: they keep their size and slide in with the screen.
 - With a mouse connected, or scroll bars set to always show, Recent in the Mac's sidebar no longer has a scroll bar
   under its cards, and the tops of the cards are no longer cut off.
 - Handwriting no longer gets blurrier each time a PDF goes back and forth between Notebook and Preview. When Preview

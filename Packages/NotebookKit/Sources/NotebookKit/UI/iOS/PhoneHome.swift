@@ -6,10 +6,11 @@ import SwiftUI
 /// is starred too, and its screen says how to star something.
 struct HomeTiles: View {
     let workspace: Workspace
-    /// Where the list sets the tiles in from the screen's edge, for Recent's cards to line up with.
-    @Binding var inset: CGFloat
-
-    static let listSpace = "home"
+    /// How wide the tiles are together: the list sets them in from the screen's edges by what is left on either side,
+    /// for Recent's cards to line up with (`HomeScreen.tilesInset`).
+    @Binding var width: CGFloat
+    /// Pushes the tile's screen.
+    let open: (Page) -> Void
 
     var body: some View {
         let showsTodos = NotebookSettings.shared.showsTodos
@@ -22,17 +23,21 @@ struct HomeTiles: View {
                     HomeTileLabel(title: "Favorites", symbol: "star.fill", color: HomeStyle.favoritesColor, count: workspace.favoriteURLs.count)
                 }
             }
-            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.listSpace)).minX } action: { inset = $0 }
+            // Their width, not where they are: going back to this screen by a swipe, the screen slides in from the side, and
+            // where the tiles are in it changed with every frame, and the cards' size with it.
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             .listRowInsets(EdgeInsets())
             .listRowBackground(Color.clear)
         }
     }
 
-    private func tile(_ page: Page, label: () -> HomeTileLabel) -> some View {
-        NavigationLink(value: page, label: label)
+    /// A button rather than a link: both tiles are in one row of the list, and a tap anywhere on a row with links in it
+    /// follows the row's last link, so To-dos opened Favorites.
+    private func tile(_ page: @autoclosure @escaping () -> Page, label: () -> HomeTileLabel) -> some View {
+        Button { open(page()) } label: { label() }
+            // Each its own button, not the row's.
             .buttonStyle(.plain)
-            // Two links share the row: the list would give each the row's chevron, after the tile.
-            .navigationLinkIndicatorVisibility(.hidden)
+            .accessibilityAddTraits(.isLink)
     }
 }
 
@@ -43,7 +48,7 @@ struct HomeTiles: View {
 struct RecentCards: View {
     let workspace: Workspace
     @Binding var newFolderIn: URL?
-    /// The tiles' inset from the screen's edges (`HomeTiles.inset`).
+    /// The tiles' inset from the screen's edges (`HomeScreen.tilesInset`).
     let inset: CGFloat
 
     var body: some View {
