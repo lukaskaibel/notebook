@@ -125,13 +125,16 @@ extension View {
 /// and its buttons open screens through the workspace.
 struct HostedWithMenu<Content: View>: UIViewControllerRepresentable {
     let cornerRadius: CGFloat
+    /// The appearance of the screen around it, which the hosted view doesn't follow by itself: given by the view that
+    /// shows it, which reads it, so that a switch between light and dark updates this one.
+    var colorScheme: ColorScheme?
     @MenuContent var entries: () -> [MenuEntry]
     @ViewBuilder var content: Content
 
     func makeCoordinator() -> ViewMenu { ViewMenu() }
 
-    func makeUIViewController(context: Context) -> UIHostingController<Content> {
-        let host = UIHostingController(rootView: content)
+    func makeUIViewController(context: Context) -> UIHostingController<HostedContent<Content>> {
+        let host = UIHostingController(rootView: HostedContent(content: content, colorScheme: scheme(in: context)))
         host.view.backgroundColor = .clear
         // In a row, not at the screen's edges: keeping clear of the bars and the keyboard is the list's.
         host.safeAreaRegions = []
@@ -139,14 +142,34 @@ struct HostedWithMenu<Content: View>: UIViewControllerRepresentable {
         return host
     }
 
-    func updateUIViewController(_ host: UIHostingController<Content>, context: Context) {
-        host.rootView = content
+    func updateUIViewController(_ host: UIHostingController<HostedContent<Content>>, context: Context) {
+        // Light or dark as the screen around it: left to itself, the hosted view kept the appearance it was made in when
+        // the phone switched, a dark card on a light screen. Both the view's traits and SwiftUI's environment, which
+        // didn't follow the traits alone.
+        let scheme = scheme(in: context)
+        let style: UIUserInterfaceStyle = scheme == .dark ? .dark : .light
+        if host.overrideUserInterfaceStyle != style { host.overrideUserInterfaceStyle = style }
+        host.rootView = HostedContent(content: content, colorScheme: scheme)
         context.coordinator.entries = entries
         context.coordinator.cornerRadius = cornerRadius
     }
 
-    func sizeThatFits(_ proposal: ProposedViewSize, uiViewController host: UIHostingController<Content>, context: Context) -> CGSize? {
+    func sizeThatFits(_ proposal: ProposedViewSize, uiViewController host: UIHostingController<HostedContent<Content>>, context: Context) -> CGSize? {
         host.sizeThatFits(in: CGSize(width: proposal.width ?? .infinity, height: .infinity))
+    }
+
+    private func scheme(in context: Context) -> ColorScheme {
+        colorScheme ?? context.environment.colorScheme
+    }
+}
+
+/// A `HostedWithMenu`'s view, in the appearance of the screen around it.
+struct HostedContent<Content: View>: View {
+    let content: Content
+    let colorScheme: ColorScheme
+
+    var body: some View {
+        content.environment(\.colorScheme, colorScheme)
     }
 }
 
